@@ -3,93 +3,97 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { FaClock, FaTrophy, FaMedal } from 'react-icons/fa';
 
-// --- 子组件：曲绘卡片 (带文字) ---
+// --- 自定义 Hook：监听窗口大小以适配 3D 位移 ---
+const useWindowSize = () => {
+  const [windowSize, setWindowSize] = useState({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1200,
+  });
+
+  useEffect(() => {
+    const handleResize = () => setWindowSize({ width: window.innerWidth });
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return windowSize;
+};
+
+// --- 子组件：曲绘卡片 ---
 const SongCard = ({ position, status, img, delay, title, artist }) => {
+  const { width } = useWindowSize();
+  const isMobile = width < 768;
   const isHidden = status === 'pending' || status === 'loading';
   
-  // 1. 位置定义 (大幅增加了 x 的间距，确保不重叠)
+  // 核心适配逻辑：根据屏幕宽度计算位移
+  // 电脑端偏移 360px，手机端仅偏移 40-60px 形成堆叠效果
+  const xOffset = isMobile ? (position === 'left' ? -60 : 360) : (position === 'left' ? -360 : 360);
+  
+  // 如果是左侧卡片，手机端通过简单的位移实现轻微重叠；右侧卡片在手机端可以暂时隐藏或大幅缩小
   const variants = {
-    center: { x: 0, scale: 1.1, zIndex: 20, rotateY: 0, filter: "brightness(1)" },
-    left: { x: -360, scale: 0.95, zIndex: 10, rotateY: 20, filter: "brightness(0.7)" }, // x: -360
-    right: { x: 360, scale: 0.95, zIndex: 10, rotateY: -20, filter: "brightness(0.7)" } // x: 360
+    center: { x: 0, scale: isMobile ? 0.85 : 1.1, zIndex: 20, rotateY: 0, filter: "brightness(1)", opacity: 1 },
+    left: { 
+      x: isMobile ? -50 : -360, 
+      scale: isMobile ? 0.65 : 0.95, 
+      zIndex: 10, 
+      rotateY: isMobile ? 10 : 20, 
+      filter: "brightness(0.7)",
+      opacity: isMobile ? 0.6 : 1
+    },
+    right: { 
+      x: isMobile ? 50 : 360, 
+      scale: isMobile ? 0.65 : 0.95, 
+      zIndex: 10, 
+      rotateY: isMobile ? -10 : -20, 
+      filter: "brightness(0.7)",
+      opacity: isMobile ? 0.6 : 1
+    }
   };
 
-  // 2. 文字显示逻辑
   const displayTitle = isHidden ? "???" : title;
   const displayArtist = isHidden ? "???" : artist;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 100 }}
+      initial={{ opacity: 0, y: 50 }}
       animate={{ 
-        opacity: 1, 
         y: 0, 
         ...variants[position] 
       }}
-      // 整体悬停放大
-      whileHover={{
-        scale: 1.2,
-        zIndex: 50,
-        rotateY: 0,
-        filter: "brightness(1.1)",
-        y: -10,
-        transition: { type: "spring", stiffness: 300, damping: 20 }
-      }}
       transition={{ delay: delay, duration: 0.8 }}
-      className="absolute flex flex-col items-center gap-4 cursor-pointer" // Flex布局：上图下文
-      style={{ transformStyle: 'preserve-3d', width: '300px' }} // 设定宽度基准
+      className="absolute flex flex-col items-center gap-2 md:gap-4 cursor-pointer"
+      style={{ transformStyle: 'preserve-3d', width: isMobile ? '200px' : '300px' }}
     >
       
       {/* A. 封面区域 */}
-      <div className="w-[300px] h-[300px] rounded-xl shadow-2xl overflow-hidden bg-black border border-white/10 relative group">
+      <div className="w-[180px] h-[180px] md:w-[300px] md:h-[300px] rounded-xl shadow-2xl overflow-hidden bg-black border border-white/10 relative group">
         <AnimatePresence mode='wait'>
           {isHidden ? (
             <motion.div
               key="hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
               className="w-full h-full flex items-center justify-center bg-black relative"
             >
-              <motion.div 
-                animate={{ opacity: [0.3, 0.6, 0.3], scale: [0.9, 1.1, 0.9] }}
-                transition={{ repeat: Infinity, duration: 2 }}
-                className="absolute w-32 h-32 bg-blue-500/30 rounded-full blur-2xl"
-              />
-              <span className="text-8xl font-bold text-white/80 drop-shadow-[0_0_10px_rgba(255,255,255,0.8)] z-10">?</span>
+              <span className="text-5xl md:text-8xl font-bold text-white/80 drop-shadow-[0_0_10px_rgba(255,255,255,0.8)] z-10">?</span>
             </motion.div>
           ) : (
             <motion.img
               key="revealed"
               src={img}
               alt="Song Jacket"
-              initial={{ opacity: 0, scale: 1.1 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5 }}
               className="w-full h-full object-cover"
             />
           )}
         </AnimatePresence>
-        {/* 光泽遮罩 */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-white/5 pointer-events-none" />
       </div>
 
-      {/* B. 文字区域 (曲名 & 曲师) */}
+      {/* B. 文字区域 */}
       <div className="text-center w-full px-2 space-y-1">
-        <motion.div 
-          layout 
-          className="text-xl font-bold text-white tracking-wide truncate drop-shadow-md"
-        >
+        <div className="text-sm md:text-xl font-bold text-white tracking-wide truncate">
           {displayTitle}
-        </motion.div>
-        <motion.div 
-          layout 
-          className="text-sm font-light text-gray-400 truncate"
-        >
+        </div>
+        <div className="text-[10px] md:text-sm font-light text-gray-400 truncate">
           {displayArtist}
-        </motion.div>
+        </div>
       </div>
-
     </motion.div>
   );
 };
@@ -99,6 +103,8 @@ const Qualifiers = () => {
   const [status, setStatus] = useState('loading');
   const [timeLeft, setTimeLeft] = useState('-- 天 -- 小时 -- 分 -- 秒');
   const [leaderboard, setLeaderboard] = useState([]);
+  const { width } = useWindowSize();
+  const isMobile = width < 768;
   
   const START_TIME = new Date('2026-04-30T10:00:00').getTime();
   const END_TIME = new Date('2026-07-03T21:30:00').getTime();
@@ -111,12 +117,10 @@ const Qualifiers = () => {
 
         const timeRes = await axios.get('/api/time');
         const serverTime = new Date(timeRes.data.serverTime).getTime();
-        const localTime = Date.now();
-        const timeOffset = serverTime - localTime;
+        const timeOffset = serverTime - Date.now();
 
         const timer = setInterval(() => {
           const now = Date.now() + timeOffset;
-
           if (now < START_TIME) {
             setStatus('pending');
             calcTimeLeft(START_TIME - now);
@@ -135,114 +139,73 @@ const Qualifiers = () => {
         console.error("初始化失败", err);
       }
     };
-
     initData();
   }, []);
 
   const calcTimeLeft = (ms) => {
-    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((ms % (1000 * 60)) / 1000);
-    setTimeLeft(`${days}天 ${hours}时 ${minutes}分 ${seconds}秒`);
+    const d = Math.floor(ms / (1000 * 60 * 60 * 24));
+    const h = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const m = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    const s = Math.floor((ms % (1000 * 60)) / 1000);
+    setTimeLeft(`${d}天 ${h}时 ${m}分 ${s}秒`);
   };
 
   return (
-    <div className="w-full min-h-screen flex flex-col items-center pt-10 pb-20 overflow-x-hidden perspective-1000">
+    <div className="w-full min-h-screen flex flex-col items-center pt-6 md:pt-10 pb-20 overflow-x-hidden">
       
-      {/* 倒计时抬头 */}
-      <motion.div 
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="text-center mb-12 z-20"
-      >
-        <h2 className="text-xl text-blue-300 tracking-[0.5em] mb-2 uppercase">Qualifiers Stage</h2>
-        <div className="text-4xl md:text-6xl font-mono font-bold text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">
+      {/* 1. 倒计时抬头 */}
+      <motion.div className="text-center mb-6 md:mb-12 z-20 px-4">
+        <h2 className="text-xs md:text-xl text-blue-300 tracking-[0.3em] md:tracking-[0.5em] mb-2 uppercase">Qualifiers Stage</h2>
+        <div className="text-2xl md:text-6xl font-mono font-bold text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
           {timeLeft}
-        </div>
-        <div className="mt-4 flex items-center justify-center gap-2 text-gray-400 text-sm">
-           <FaClock /> 
-           <span>{status === 'pending' ? '距离开赛' : status === 'active' ? '距离结束' : '状态'}</span>
         </div>
       </motion.div>
 
-      {/* 3张曲绘 (舞台区域加宽到 max-w-7xl 以容纳更宽的间距) */}
-      <div className="relative w-full max-w-7xl h-[450px] flex justify-center items-center mb-16 perspective-[1200px]">
-        
-        {/* 这里填入真实的曲名和曲师 
-           未开始时会自动显示 ???
-        */}
-        <SongCard 
-          position="left" 
-          status={status} 
-          img="/assets/pre1.png" 
-          delay={0.2} 
-          title="Ultra Synergy Matrix" 
-          artist="t+pazolite"
-        />
-        
-        <SongCard 
-          position="right" 
-          status={status} 
-          img="/assets/pre3.png" 
-          delay={0.4} 
-          title="Oshama Scramble!" 
-          artist="t+pazolite"
-        />
-        
-        <SongCard 
-          position="center" 
-          status={status} 
-          img="/assets/pre2.png" 
-          delay={0} 
-          title="PANDORA PARADOXXX" 
-          artist="Gram"
-        />
+      {/* 2. 3张曲绘 (舞台区域) 
+          - 手机端高度从 450px 降至 280px
+      */}
+      <div className="relative w-full max-w-7xl h-[280px] md:h-[450px] flex justify-center items-center mb-10 md:mb-16">
+        <SongCard position="left" status={status} img="/assets/pre1.png" delay={0.2} title="Ultra Synergy Matrix" artist="t+pazolite" />
+        <SongCard position="right" status={status} img="/assets/pre3.png" delay={0.4} title="Oshama Scramble!" artist="t+pazolite" />
+        <SongCard position="center" status={status} img={isMobile ? "/assets/pre2.png" : "/assets/pre2.png"} delay={0} title="PANDORA PARADOXXX" artist="Gram" />
       </div>
 
-      {/* 榜单区域 */}
+      {/* 3. 榜单区域 */}
       <div className="w-full max-w-4xl px-4 z-10">
         <div className="flex items-center gap-3 mb-6 border-b border-white/20 pb-4">
-          <FaTrophy className="text-yellow-400 text-2xl" />
-          <h3 className="text-2xl font-light tracking-widest">实时排名 (Live Ranking)</h3>
+          <FaTrophy className="text-yellow-400 text-xl md:text-2xl" />
+          <h3 className="text-lg md:text-2xl font-light tracking-widest text-white">实时排名 (Live Ranking)</h3>
         </div>
 
         <div className="flex flex-col gap-2">
-          {/* 表头 */}
-          <div className="grid grid-cols-12 text-gray-500 text-sm px-4 pb-2 uppercase tracking-wider">
-            <div className="col-span-1">Rank</div>
-            <div className="col-span-5">Player</div>
-            <div className="col-span-3 text-right">Achievement</div>
-            <div className="col-span-3 text-right">DX Score</div>
+          {/* 表头适配：手机端隐藏不重要的列 */}
+          <div className="grid grid-cols-12 text-gray-500 text-[10px] md:text-sm px-4 pb-2 uppercase tracking-wider">
+            <div className="col-span-2 md:col-span-1">Rank</div>
+            <div className="col-span-6 md:col-span-5">Player</div>
+            <div className="col-span-4 md:col-span-3 text-right">Achievement</div>
+            <div className="hidden md:block col-span-3 text-right">DX Score</div>
           </div>
 
-          {/* 列表内容 */}
           {leaderboard.length === 0 ? (
-            <div className="text-center py-10 text-gray-500 bg-white/5 rounded">暂无数据 / 虚位以待</div>
+            <div className="text-center py-10 text-gray-500 bg-white/5 rounded text-sm">暂无数据 / 虚位以待</div>
           ) : (
             leaderboard.map((score, index) => (
               <motion.div
                 key={index}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className={`grid grid-cols-12 items-center px-4 py-4 rounded bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all group ${
+                className={`grid grid-cols-12 items-center px-3 md:px-4 py-3 md:py-4 rounded bg-white/5 border border-white/5 ${
                   index === 0 ? 'bg-yellow-500/10 border-yellow-500/30' : ''
                 }`}
               >
-                <div className="col-span-1 font-mono font-bold text-xl">
-                  {index === 0 ? <FaMedal className="text-yellow-400" /> : 
-                   index === 1 ? <FaMedal className="text-gray-300" /> :
-                   index === 2 ? <FaMedal className="text-orange-400" /> : 
-                   `#${index + 1}`}
+                <div className="col-span-2 md:col-span-1 font-mono font-bold text-base md:text-xl">
+                  {index < 3 ? <FaMedal className={index === 0 ? 'text-yellow-400' : index === 1 ? 'text-gray-300' : 'text-orange-400'} /> : `#${index + 1}`}
                 </div>
-                <div className="col-span-5 font-bold text-lg text-white group-hover:text-blue-300 transition-colors">
+                <div className="col-span-6 md:col-span-5 font-bold text-sm md:text-lg text-white truncate pr-2">
                   {score.nickname}
                 </div>
-                <div className="col-span-3 text-right font-mono text-xl text-green-400">
-                  {score.achievement.toFixed(4)}%
+                <div className="col-span-4 md:col-span-3 text-right font-mono text-base md:text-xl text-green-400">
+                  {score.achievement.toFixed(2)}%
                 </div>
-                <div className="col-span-3 text-right font-mono text-gray-400">
+                <div className="hidden md:block col-span-3 text-right font-mono text-gray-400">
                   {score.dxScore}
                 </div>
               </motion.div>
