@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 全局重置 */
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden; /* 防止左右滑动 */
+  background-color: #000; /* 图片加载前的底色 */
+  color: white;
+  font-family: 'Noto Sans SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 核心背景设置 */
+#root {
+  min-height: 100vh;
+  /* 引用 public/assets 下的图片 */
+  background-image: url('/assets/bg.png'); 
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed; /* 关键：背景固定，内容滚动，制造视觉平滑感 */
+  background-repeat: no-repeat;
+}
+
+/* 自定义滚动条 (可选，为了更好看) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* 去除输入框默认聚焦轮廓 */
+input:focus, textarea:focus {
+  outline: none;
+}
