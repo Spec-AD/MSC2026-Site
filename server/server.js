@@ -1,3 +1,13 @@
+process.on('uncaughtException', (err) => {
+  console.error('🔥 致命错误 (Uncaught Exception):', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🔥 未处理的 Promise 拒绝:', reason);
+});
+
+console.log("🚀 服务器脚本开始执行...");
+
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -227,4 +237,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📅 Current Server Time: ${new Date().toLocaleString()}`);
+
 });
