@@ -192,11 +192,9 @@ app.get('/api/leaderboard', async (req, res) => {
         const now = Date.now();
 
         // 检查缓存是否有效
-        if (leaderboardCache.data && (now - leaderboardCache.lastUpdated < CACHE_DURATION)) {
-            // console.log('Using Cached Leaderboard'); // 调试用，嫌吵可以注释掉
-            return res.json(leaderboardCache.data);
-        }
-
+        // if (leaderboardCache.data && (now - leaderboardCache.lastUpdated < CACHE_DURATION)) {
+        // return res.json(leaderboardCache.data);
+        // }
         // console.log('Fetching Leaderboard from DB...');
         // 排序逻辑：完成率降序 > DX分降序 > 完成时间升序
         const scores = await Score.find()
@@ -204,8 +202,8 @@ app.get('/api/leaderboard', async (req, res) => {
             .limit(100); 
 
         // 更新缓存
-        leaderboardCache.data = scores;
-        leaderboardCache.lastUpdated = now;
+        // leaderboardCache.data = scores;
+        // leaderboardCache.lastUpdated = now;
 
         res.json(scores);
     } catch (err) {
@@ -237,5 +235,4 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📅 Current Server Time: ${new Date().toLocaleString()}`);
-
 });
