@@ -203,7 +203,7 @@ const Qualifiers = () => {
                   {score.nickname}
                 </div>
                 <div className="col-span-4 md:col-span-3 text-right font-mono text-base md:text-xl text-green-400">
-                  {score.achievement.toFixed(2)}%
+                  {score.achievement.toFixed(4)}%
                 </div>
                 <div className="hidden md:block col-span-3 text-right font-mono text-gray-400">
                   {score.dxScore}
