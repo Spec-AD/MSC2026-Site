@@ -162,7 +162,7 @@ const Qualifiers = () => {
     const achB = Number(b.achievement);
     
     // 如果差值大于 0.0001，则认为不相等，按达成率排
-    if (Math.abs(achB - achA) > 0.0001) {
+    if (Math.abs(achB - achA) != 0) {
       return achB - achA;
     }
     
