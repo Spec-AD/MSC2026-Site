@@ -8,7 +8,20 @@ import axios from 'axios';
 
 const Home = () => {
   const { user } = useAuth();
-  const [announcements, setAnnouncements] = useState([]);
+  const [announcements, setAnnouncements] = useState([]); // 存放真实公告数据
+
+  // 页面加载时拉取数据
+  useEffect(() => {
+    const fetchAnnouncements = async () => {
+      try {
+        const res = await axios.get('/api/announcements');
+        setAnnouncements(res.data);
+      } catch (err) {
+        console.error('拉取公告失败', err);
+      }
+    };
+    fetchAnnouncements();
+  }, []);
 
   let buttonText = "立即报名 MSC 2026";
   let buttonLink = "/register";
@@ -26,32 +39,12 @@ const Home = () => {
     buttonLink = "/login";
   }
 
-  // --- 模拟的公告数据（后续我们可以把它抽离到后端 API） ---
-  const mockAnnouncements = [
-    {
-      id: 1,
-      date: "02.24",
-      year: "2026",
-      title: "MSC 2026 预选赛正式打响",
-      type: "TOURNAMENT",
-      content: "[size=20][b]登塔。登塔。[/b][/size]\n\n在这座由音符构筑的通天塔前，没有人可以永远驻足。各位挑战者，MSC 2026 预选赛通道已全面开启！\n\n[img]https://i.ibb.co/6803h7Z/msc-banner.jpg[/img]\n\n请前往 [b]报名[/b] 页面绑定您的查分器，用实力证明你的席位。"
-    },
-    {
-      id: 2,
-      date: "02.20",
-      year: "2026",
-      title: "DS 日常监察组第一期招募",
-      type: "RECRUITMENT",
-      content: "为了维护高塔的秩序，我们需要新鲜的血液。\n\nDS（Daily Supervisioner）组现面向全站开放申请。如果你热爱音游社区，并且拥有充足的在线时间，请联系 [color=#ef4444][b]ADM[/b][/color] 获取考核表。"
-    }
-  ];
-
   return (
-    // 外层容器：支持滚动，隐藏横向溢出
-    <div className="w-full min-h-screen text-white flex flex-col items-center overflow-x-hidden bg-gradient-to-b from-transparent to-black/80">
+    // 外层容器：支持滚动，隐藏横向溢出，带有从上到下的半透明遮罩防止下方文字看不清
+    <div className="w-full min-h-screen text-white flex flex-col items-center overflow-x-hidden relative bg-gradient-to-b from-transparent to-black/80">
       
       {/* ==================================================== */}
-      {/* 1. 英雄区域 (Hero Section) - 原有功能完全保留 */}
+      {/* 1. 英雄区域 (Hero Section) */}
       {/* ==================================================== */}
       <div className="relative w-full h-full min-h-screen flex flex-col items-center justify-center overflow-hidden px-6">
         
@@ -123,7 +116,7 @@ const Home = () => {
       {/* ==================================================== */}
       <div className="w-full max-w-6xl mx-auto px-4 md:px-8 py-24 z-10 relative">
         
-        {/* 大气感标题：极致的字间距和倾斜，带一点背景渐变透字 */}
+        {/* 大气感标题 */}
         <motion.div 
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -140,47 +133,55 @@ const Home = () => {
 
         {/* 公告流 */}
         <div className="space-y-16 md:space-y-24">
-          {mockAnnouncements.map((announcement, index) => (
-            <motion.div 
-              key={announcement.id}
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.6, delay: index * 0.1 }}
-              className="flex flex-col md:flex-row gap-6 md:gap-12 relative group"
-            >
-              {/* 左侧：巨大的日期排版 */}
-              <div className="md:w-1/4 flex-shrink-0 flex md:flex-col items-baseline md:items-start gap-3 md:gap-0 border-b border-white/10 md:border-none pb-4 md:pb-0">
-                <div className="text-5xl md:text-7xl font-black italic tracking-tighter text-gray-300 group-hover:text-white transition-colors duration-500">
-                  {announcement.date}
-                </div>
-                <div className="text-xl md:text-2xl font-bold text-gray-600 font-mono">
-                  {announcement.year}
-                </div>
-                {/* 标签 */}
-                <div className="mt-0 md:mt-4 ml-auto md:ml-0 bg-white/5 border border-white/10 px-3 py-1 rounded-full text-[10px] md:text-xs tracking-widest uppercase text-blue-400 font-bold">
-                  {announcement.type}
-                </div>
-              </div>
+          {announcements.length > 0 ? (
+            announcements.map((announcement, index) => {
+              // 🔥 动态计算时间，格式化为 "02.24" 和 "2026"
+              const d = new Date(announcement.createdAt);
+              const dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+              const yearStr = d.getFullYear().toString();
 
-              {/* 右侧：图文并茂的玻璃卡片内容 */}
-              <div className="md:w-3/4">
-                <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl group-hover:bg-white/[0.03] transition-colors duration-500">
-                  
-                  {/* 公告标题 */}
-                  <h3 className="text-2xl md:text-4xl font-bold mb-6 md:mb-8 text-white tracking-tight">
-                    {announcement.title}
-                  </h3>
-                  
-                  {/* BBCode 渲染内容区 */}
-                  <div className="text-gray-300 leading-loose text-sm md:text-base bbcode-content whitespace-pre-wrap break-words">
-                    {bbcode.toReact(announcement.content)}
+              return (
+                <motion.div 
+                  key={announcement._id}
+                  initial={{ opacity: 0, y: 40 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                  transition={{ duration: 0.6, delay: index * 0.1 }}
+                  className="flex flex-col md:flex-row gap-6 md:gap-12 relative group"
+                >
+                  {/* 左侧：巨大的日期排版 */}
+                  <div className="md:w-1/4 flex-shrink-0 flex md:flex-col items-baseline md:items-start gap-3 md:gap-0 border-b border-white/10 md:border-none pb-4 md:pb-0">
+                    <div className="text-5xl md:text-7xl font-black italic tracking-tighter text-gray-300 group-hover:text-white transition-colors duration-500">
+                      {dateStr}
+                    </div>
+                    <div className="text-xl md:text-2xl font-bold text-gray-600 font-mono">
+                      {yearStr}
+                    </div>
+                    <div className="mt-0 md:mt-4 ml-auto md:ml-0 bg-white/5 border border-white/10 px-3 py-1 rounded-full text-[10px] md:text-xs tracking-widest uppercase text-blue-400 font-bold">
+                      {announcement.type}
+                    </div>
                   </div>
 
-                </div>
-              </div>
-            </motion.div>
-          ))}
+                  {/* 右侧：玻璃卡片内容 */}
+                  <div className="md:w-3/4">
+                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl group-hover:bg-white/[0.03] transition-colors duration-500">
+                      <h3 className="text-2xl md:text-4xl font-bold mb-6 md:mb-8 text-white tracking-tight">
+                        {announcement.title}
+                      </h3>
+                      <div className="text-gray-300 leading-loose text-sm md:text-base bbcode-content whitespace-pre-wrap break-words">
+                        {bbcode.toReact(announcement.content)}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })
+          ) : (
+            // 如果还没发公告，显示酷炫的等待画面
+            <div className="text-center py-20 text-gray-500 border border-white/5 rounded-3xl bg-black/20 backdrop-blur-md">
+               <span className="font-mono tracking-widest">AWAITING DIRECTIVES...</span>
+            </div>
+          )}
         </div>
         
       </div>
