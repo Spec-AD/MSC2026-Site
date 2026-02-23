@@ -320,7 +320,8 @@ app.get('/api/users/search', async (req, res) => {
           username: 1, 
           uid: 1, 
           avatarUrl: 1, 
-          isRegistered: 1 
+          isRegistered: 1,
+	  role: 1 
         } 
       }
     ]);
