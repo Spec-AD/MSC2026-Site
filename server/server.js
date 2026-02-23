@@ -495,7 +495,7 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
     const payload = isQQ ? { qq: proberUsername } : { username: proberUsername };
 
     // 🔥 2. 将你刚才在水鱼官网申请到的 Developer Token 填入这里 (保留双引号)
-    const DEVELOPER_TOKEN = "把你的Token粘贴在这里";
+    const DEVELOPER_TOKEN = "u1XGtb7pVZ8AaDyKLM3IjT4CEnHrckvf";
 
     // 3. 向水鱼发送带 Token 的请求
     const response = await axios.post('https://www.diving-fish.com/api/maimaidxprober/query/player', payload, {
