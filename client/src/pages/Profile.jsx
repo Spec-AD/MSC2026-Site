@@ -31,7 +31,7 @@ const Profile = () => {
   const avatarInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
-  // --- 🔥 更健壮的身份判定 ---
+  // --- 🔥 身份判定 ---
   const targetUsername = routeUsername || currentUser?.username;
   const isOwnProfile = profile && currentUser && (
     profile.username.toLowerCase() === currentUser.username.toLowerCase()
@@ -306,7 +306,7 @@ const Profile = () => {
               )}
             </motion.div>
 
-            {/* B: 比赛成绩记录 (荣誉陈列架模式) */}
+            {/* B: 荣誉陈列架 (独立于具体打歌成绩) */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-xl"
@@ -314,24 +314,24 @@ const Profile = () => {
               <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
                 <FaTrophy className="text-yellow-400 text-xl" />
                 <h3 className="text-gray-400 text-xs md:text-sm uppercase tracking-[0.2em] font-bold">
-                  Tournament Records
+                  Tournament Honors
                 </h3>
               </div>
               
-              <div className="space-y-4"> {/* 每一层陈列架的间距 */}
-                {profile.topScores && profile.topScores.length > 0 ? (
-                  profile.topScores.map((score, index) => (
+              <div className="space-y-4">
+                {/* 直接遍历从 User 表传来的荣誉图片数组 */}
+                {profile.honors && profile.honors.length > 0 ? (
+                  profile.honors.map((imgUrl, index) => (
                     <motion.div
-                      key={score._id || index}
+                      key={index}
                       whileHover={{ scale: 1.02 }}
                       className="relative w-full overflow-hidden rounded-xl border border-white/5 shadow-lg group cursor-pointer"
                     >
-                      {/* aspect-[4/1] 强制图片容器比例为长:宽 = 4:1 */}
+                      {/* aspect-[4/1] 强制图片容器比例为长宽比 4:1 */}
                       <div className="aspect-[4/1] w-full bg-gray-800/50">
-                        {/* 如果后端传来的是纯图片 URL 则渲染图片，这里做了一个防空处理 */}
                         <img 
-                          src={score.imageUrl || 'https://via.placeholder.com/800x200/1f2937/ffffff?text=Tournament+Record'} 
-                          alt={score.tournamentName || "Tournament Record"}
+                          src={imgUrl} 
+                          alt={`Honor Badge ${index + 1}`}
                           className="w-full h-full object-cover"
                         />
                         {/* 扫光特效：鼠标悬停时触发 */}
