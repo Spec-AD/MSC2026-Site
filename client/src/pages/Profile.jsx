@@ -10,15 +10,15 @@ const Profile = () => {
   // 🚧 Mock 数据区 (开发前期占位，后期替换为 API 请求)
   // ==========================================
   const mockProfileData = {
-    uid: "10025", // 唯一的数字ID
-    username: "天冉",
+    uid: "10001", // 唯一的数字ID
+    username: "Magix",
     avatarUrl: "/assets/logos.png", // 临时拿 logo 顶替一下头像
     bannerUrl: "/assets/bg.png",    // 临时拿全站背景顶替一下 Banner
     bio: "这里是个人介绍。\n\n[b]MSC 2026 参赛选手[/b]\n坐标泗洪，目前正在努力练习 14 级曲目，希望能打进决赛！\n\n[color=#60a5fa]Let's Climb the Tower together.[/color]",
     friendsCount: 12,
     topScores: [
-      { id: 1, song: "PANDORA PARADOXXX", artist: "Gram", achievement: 100.8500, dxScore: 2450, rank: "SS+" },
-      { id: 2, song: "Ultra Synergy Matrix", artist: "t+pazolite", achievement: 100.5000, dxScore: 2410, rank: "SS" },
+      { id: 1, song: "PANDORA PARADOXXXx", artist: "Sakuzyo", achievement: 100.8500, dxScore: 2450, rank: "SS+" },
+      { id: 2, song: "Ultra Synergy Matrix", artist: "Tanchiky", achievement: 100.5000, dxScore: 2410, rank: "SS" },
       { id: 3, song: "Oshama Scramble!", artist: "t+pazolite", achievement: 99.8000, dxScore: 2300, rank: "S+" },
       { id: 4, song: "QZKago Requiem", artist: "t+pazolite", achievement: 99.5000, dxScore: 2200, rank: "S" },
       { id: 5, song: "Grievous Lady", artist: "Team Grimoire vs Laur", achievement: 98.0000, dxScore: 2100, rank: "AAA" }
@@ -208,5 +208,6 @@ const Profile = () => {
     </div>
   );
 };
+
 
 export default Profile;
