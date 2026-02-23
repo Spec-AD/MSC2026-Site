@@ -362,7 +362,7 @@ const Profile = () => {
               <label className="text-sm font-bold text-blue-400 uppercase tracking-widest block mb-1">
                 Diving Fish / 核心数据同步
               </label>
-              <div className="text-gray-400 text-xs">绑定查分器账号，生成专属舞萌 DX 战力面板与 B50 成绩单。</div>
+              <div className="text-gray-400 text-xs">绑定查分器账号以查看B50和其他成绩。</div>
             </div>
             
             <div className="flex w-full md:w-auto gap-2">
@@ -581,4 +581,5 @@ const Profile = () => {
 
 
 export default Profile;
+
 
