@@ -75,11 +75,20 @@ app.post('/api/auth/register', async (req, res) => {
         // 密码加密
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
+        // 注意：生产环境中最好用原子计数器防止重复，但小规模比赛随机碰撞概率极低
+        let randomUid;
+        let uidExists = true;
+        while (uidExists) {
+            randomUid = Math.floor(10000 + Math.random() * 90000);
+            const checkUid = await User.findOne({ uid: randomUid });
+            if (!checkUid) uidExists = false;
+        }
 
         // 创建新用户
         const newUser = new User({
             username,
-            password: hashedPassword
+            password: hashedPassword,
+	    uid: randomUid,
         });
 
         const savedUser = await newUser.save();
@@ -235,4 +244,68 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📅 Current Server Time: ${new Date().toLocaleString()}`);
+});
+
+// server/server.js 添加到文件末尾或路由区域
+
+// --- E. 个人资料模块 (Profile) ---
+
+// 1. 获取特定用户的公开资料 (包含成绩)
+// 路由: GET /api/users/:username
+app.get('/api/users/:username', async (req, res) => {
+    try {
+        // A. 查用户基础信息
+        // 使用 .select('-password') 排除密码等敏感信息
+        const user = await User.findOne({ username: req.params.username })
+            .select('-password -contactValue -contactType'); 
+        
+        if (!user) return res.status(404).json({ msg: '用户不存在' });
+
+        // B. 查该用户的历史最佳成绩 (Top 5)
+        // 假设 Score 模型里有 userId 字段关联
+        const topScores = await Score.find({ userId: user._id })
+            .sort({ achievement: -1 }) // 按达成率降序
+            .limit(5);
+
+        // C. 查好友 (暂时只返回空数组或简单的计数，后续完善)
+        // const friends = await User.find({ '_id': { $in: user.friends } }).select('username avatarUrl');
+
+        // D. 组装数据返回
+        res.json({
+            ...user.toObject(),
+            topScores: topScores || [], // 如果没成绩就返回空数组
+            friendsCount: user.friends ? user.friends.length : 0,
+            friends: [] // 暂时留空
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: '服务器错误' });
+    }
+});
+
+// 2. 更新我的资料 (需要登录)
+// 路由: PUT /api/users/profile
+app.put('/api/users/profile', authMiddleware, async (req, res) => {
+    try {
+        const { bio, avatarUrl, bannerUrl } = req.body;
+
+        // 构建更新对象 (只允许更新这几个字段，防止恶意篡改 UID 或成绩)
+        const updateFields = {};
+        if (bio !== undefined) updateFields.bio = bio;
+        if (avatarUrl !== undefined) updateFields.avatarUrl = avatarUrl;
+        if (bannerUrl !== undefined) updateFields.bannerUrl = bannerUrl;
+
+        const updatedUser = await User.findByIdAndUpdate(
+            req.user.id,
+            { $set: updateFields },
+            { new: true } // 返回更新后的数据
+        ).select('-password');
+
+        res.json(updatedUser);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: '更新失败' });
+    }
 });
