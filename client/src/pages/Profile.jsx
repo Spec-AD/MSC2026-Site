@@ -72,7 +72,7 @@ const Profile = () => {
   // --- 处理水鱼 B50 数据同步 ---
   const handleSyncMaimai = async () => {
     if (!proberId.trim()) {
-      alert('请输入有效的水鱼查分器用户名！');
+      alert('请输入有效的水鱼查分器用户名或 QQ！');
       return;
     }
     setIsSyncingMaimai(true);
@@ -279,31 +279,6 @@ const Profile = () => {
                  <span className="bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">参赛选手</span>
               )}
             </div>
-
-            {/* 🔥 新增：水鱼数据同步模块 (仅本人可见) */}
-            {isOwnProfile && (
-              <div className="mt-4 md:mt-6 p-4 md:p-5 bg-blue-500/10 border border-blue-500/20 rounded-2xl max-w-xl mx-auto md:mx-0 backdrop-blur-md">
-                <label className="text-xs font-bold text-blue-400 uppercase tracking-widest block mb-2 md:mb-3">
-                  Diving Fish 数据同步 (B50)
-                </label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input 
-                    type="text" 
-                    value={proberId}
-                    onChange={(e) => setProberId(e.target.value)}
-                    placeholder="输入水鱼查分器用户名"
-                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
-                  />
-                  <button 
-                    onClick={handleSyncMaimai}
-                    disabled={isSyncingMaimai}
-                    className="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap shadow-lg shadow-blue-500/20"
-                  >
-                    {isSyncingMaimai ? '跨服同步中...' : '同步 B50 数据'}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* 按钮控制区 */}
@@ -353,6 +328,38 @@ const Profile = () => {
             )}
           </div>
         </div>
+
+        {/* 🔥 全新位置：水鱼数据同步模块 (独立一行，横向排版更美观) 🔥 */}
+        {isOwnProfile && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="mt-8 p-5 bg-blue-500/10 border border-blue-500/20 rounded-2xl w-full backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4 z-20"
+          >
+            <div className="text-center md:text-left">
+              <label className="text-sm font-bold text-blue-400 uppercase tracking-widest block mb-1">
+                Diving Fish / 核心数据同步
+              </label>
+              <div className="text-gray-400 text-xs">绑定查分器账号，生成专属舞萌 DX 战力面板与 B50 成绩单。</div>
+            </div>
+            
+            <div className="flex w-full md:w-auto gap-2">
+              <input 
+                type="text" 
+                value={proberId}
+                onChange={(e) => setProberId(e.target.value)}
+                placeholder="输入水鱼用户名或 QQ"
+                className="flex-1 md:w-64 bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition-colors"
+              />
+              <button 
+                onClick={handleSyncMaimai}
+                disabled={isSyncingMaimai}
+                className="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap shadow-lg shadow-blue-500/20"
+              >
+                {isSyncingMaimai ? '同步中...' : '同步 B50'}
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* --- 3. 详细内容网格区 --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mt-8 md:mt-12">
