@@ -39,6 +39,12 @@ const UserSchema = new mongoose.Schema({
         type: String 
     }],
 
+    role: { 
+        type: String, 
+        enum: ['user', 'ADM', 'TO', 'DS'], // 限制只能填这四个值
+        default: 'user' // 默认注册的都是普通玩家
+    },
+
     // 3. 头像与背景 (暂时存 URL 字符串)
     avatarUrl: { type: String, default: '/assets/logos.png' }, // 默认头像
     bannerUrl: { type: String, default: '/assets/bg.png' },    // 默认背景
