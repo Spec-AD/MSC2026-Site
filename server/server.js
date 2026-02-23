@@ -272,6 +272,65 @@ app.listen(PORT, () => {
 // server/server.js 添加到文件末尾或路由区域
 
 // --- E. 个人资料模块 (Profile) ---
+// POST /api/upload
+app.post('/api/upload', authMiddleware, upload.single('image'), (req, res) => {
+  try {
+    // req.file.path 就是 Cloudinary 返回的图片 URL
+    res.json({ url: req.file.path });
+  } catch (err) {
+    res.status(500).json({ msg: '图片上传失败' });
+  }
+});
+
+// GET /api/users/search - 玩家模糊搜索接口
+app.get('/api/users/search', async (req, res) => {
+  try {
+    const { q } = req.query; // 获取前端传来的搜索词
+    
+    // 如果搜索词为空，直接返回空数组
+    if (!q || q.trim() === '') {
+      return res.json([]);
+    }
+
+    // 使用聚合管道进行跨类型模糊搜索
+    const users = await User.aggregate([
+      {
+        // 1. 临时将数字型 uid 转换为字符串型 uidString
+        $addFields: { 
+          uidString: { $toString: "$uid" } 
+        }
+      },
+      {
+        // 2. 匹配逻辑：用户名 或 UID 字符串 包含搜索词（忽略大小写）
+        $match: {
+          $or: [
+            { username: { $regex: q, $options: 'i' } }, // i 代表忽略大小写
+            { uidString: { $regex: q, $options: 'i' } }
+          ]
+        }
+      },
+      { 
+        // 3. 限制返回结果数量，防止搜索 "a" 导致服务器卡死
+        $limit: 10 
+      },
+      { 
+        // 4. 数据清洗：坚决不能把密码等隐私返回给前端！只返回必要展示字段
+        $project: { 
+          _id: 1, 
+          username: 1, 
+          uid: 1, 
+          avatarUrl: 1, 
+          isRegistered: 1 
+        } 
+      }
+    ]);
+
+    res.json(users);
+  } catch (err) {
+    console.error('搜索接口错误:', err);
+    res.status(500).json({ msg: '服务器搜索错误' });
+  }
+});
 
 // 1. 获取特定用户的公开资料 (包含成绩)
 // 路由: GET /api/users/:username
@@ -331,64 +390,4 @@ app.put('/api/users/profile', authMiddleware, async (req, res) => {
         console.error(err);
         res.status(500).json({ msg: '更新失败' });
     }
-});
-
-// POST /api/upload
-app.post('/api/upload', authMiddleware, upload.single('image'), (req, res) => {
-  try {
-    // req.file.path 就是 Cloudinary 返回的图片 URL
-    res.json({ url: req.file.path });
-  } catch (err) {
-    res.status(500).json({ msg: '图片上传失败' });
-  }
-});
-
-// GET /api/users/search - 玩家模糊搜索接口
-app.get('/api/users/search', async (req, res) => {
-  try {
-    const { q } = req.query; // 获取前端传来的搜索词
-    
-    // 如果搜索词为空，直接返回空数组
-    if (!q || q.trim() === '') {
-      return res.json([]);
-    }
-
-    // 使用聚合管道进行跨类型模糊搜索
-    const users = await User.aggregate([
-      {
-        // 1. 临时将数字型 uid 转换为字符串型 uidString
-        $addFields: { 
-          uidString: { $toString: "$uid" } 
-        }
-      },
-      {
-        // 2. 匹配逻辑：用户名 或 UID 字符串 包含搜索词（忽略大小写）
-        $match: {
-          $or: [
-            { username: { $regex: q, $options: 'i' } }, // i 代表忽略大小写
-            { uidString: { $regex: q, $options: 'i' } }
-          ]
-        }
-      },
-      { 
-        // 3. 限制返回结果数量，防止搜索 "a" 导致服务器卡死
-        $limit: 10 
-      },
-      { 
-        // 4. 数据清洗：坚决不能把密码等隐私返回给前端！只返回必要展示字段
-        $project: { 
-          _id: 1, 
-          username: 1, 
-          uid: 1, 
-          avatarUrl: 1, 
-          isRegistered: 1 
-        } 
-      }
-    ]);
-
-    res.json(users);
-  } catch (err) {
-    console.error('搜索接口错误:', err);
-    res.status(500).json({ msg: '服务器搜索错误' });
-  }
 });
