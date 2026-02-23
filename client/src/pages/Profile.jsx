@@ -71,19 +71,30 @@ const Profile = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // 格式校验
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-    if (!validTypes.includes(file.type)) {
-      alert('仅支持 jpg, jpeg, png, gif 格式的图片');
+// 🔥 1. 新增：体积限制 (3MB)
+    const MAX_SIZE = 3 * 1024 * 1024; // 3MB in bytes
+    if (file.size > MAX_SIZE) {
+      alert(`上传失败：图片体积太大啦！当前文件 ${(file.size / 1024 / 1024).toFixed(2)}MB，不能超过 3MB。`);
+      e.target.value = ''; // 清空选择，防止用户卡死在错误状态
       return;
     }
 
+    // 🔥 2. 原有的格式校验
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      alert('仅支持 jpg, jpeg, png, gif 格式的图片');
+      e.target.value = '';
+      return;
+    }
+
+    // 存入真实 File 对象，等待上传
     if (type === 'avatar') {
       setNewAvatarFile(file);
     } else {
       setNewBannerFile(file);
     }
 
+    // 转 Base64 仅供前端即时预览
     const reader = new FileReader();
     reader.onloadend = () => {
       setEditData(prev => ({
