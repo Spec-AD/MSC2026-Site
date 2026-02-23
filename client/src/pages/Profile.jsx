@@ -280,7 +280,7 @@ const Profile = () => {
           
           <div className="md:col-span-2 space-y-6 md:space-y-8">
             
-            {/* A: 个人介绍 (集成 bbcode-to-react) */}
+            {/* A: 个人介绍 (集成 bbcode-to-react，带换行支持) */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-xl"
@@ -294,8 +294,8 @@ const Profile = () => {
                   <textarea 
                     value={editData.bio}
                     onChange={(e) => setEditData({...editData, bio: e.target.value})}
-                    placeholder="在这里介绍一下你自己..."
-                    className="w-full h-48 bg-black/50 border border-white/20 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition-colors font-mono text-sm resize-none"
+                    placeholder="在这里介绍一下你自己，支持 BBCode 语法，例如 [b]加粗[/b] 或 [color=red]红字[/color]"
+                    className="w-full h-48 bg-black/50 border border-white/20 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition-colors font-mono text-sm resize-none whitespace-pre-wrap"
                   />
                   <div className="absolute right-4 bottom-4 text-xs text-gray-500 font-mono pointer-events-none">BBCode Supported</div>
                 </div>
@@ -306,46 +306,43 @@ const Profile = () => {
               )}
             </motion.div>
 
-            {/* B: 比赛成绩记录 */}
+            {/* B: 比赛成绩记录 (荣誉陈列架模式) */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-xl"
             >
-              <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-2">
+              <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
                 <FaTrophy className="text-yellow-400 text-xl" />
                 <h3 className="text-gray-400 text-xs md:text-sm uppercase tracking-[0.2em] font-bold">
                   Tournament Records
                 </h3>
               </div>
               
-              <div className="space-y-3">
+              <div className="space-y-4"> {/* 每一层陈列架的间距 */}
                 {profile.topScores && profile.topScores.length > 0 ? (
                   profile.topScores.map((score, index) => (
-                    <div key={score._id || index} className="flex items-center justify-between p-3 md:p-4 bg-white/5 hover:bg-white/10 transition-colors rounded-xl border border-white/5">
-                      <div className="flex items-center gap-4">
-                        <div className="w-8 md:w-10 text-center font-mono font-bold text-gray-500 text-sm md:text-base">
-                          #{index + 1}
-                        </div>
-                        <div>
-                          <div className="font-bold text-sm md:text-lg text-white">MSC 2026 预选赛成绩</div>
-                          <div className="text-[10px] md:text-xs text-gray-400">
-                            录入时间: {new Date(score.finishTime).toLocaleDateString()}
-                          </div>
-                        </div>
+                    <motion.div
+                      key={score._id || index}
+                      whileHover={{ scale: 1.02 }}
+                      className="relative w-full overflow-hidden rounded-xl border border-white/5 shadow-lg group cursor-pointer"
+                    >
+                      {/* aspect-[4/1] 强制图片容器比例为长:宽 = 4:1 */}
+                      <div className="aspect-[4/1] w-full bg-gray-800/50">
+                        {/* 如果后端传来的是纯图片 URL 则渲染图片，这里做了一个防空处理 */}
+                        <img 
+                          src={score.imageUrl || 'https://via.placeholder.com/800x200/1f2937/ffffff?text=Tournament+Record'} 
+                          alt={score.tournamentName || "Tournament Record"}
+                          className="w-full h-full object-cover"
+                        />
+                        {/* 扫光特效：鼠标悬停时触发 */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
                       </div>
-                      <div className="text-right">
-                        <div className="font-mono font-bold text-green-400 text-sm md:text-xl">
-                          {Number(score.achievement).toFixed(4)}%
-                        </div>
-                        <div className="font-mono text-xs md:text-sm text-gray-400">
-                          DX: {score.dxScore}
-                        </div>
-                      </div>
-                    </div>
+                    </motion.div>
                   ))
                 ) : (
-                  <div className="text-center py-6 text-gray-500 text-sm">
-                    该玩家暂无比赛成绩记录
+                  <div className="text-center py-12 border-2 border-dashed border-white/5 rounded-2xl">
+                    <div className="text-gray-600 text-4xl mb-2">🧊</div>
+                    <div className="text-gray-500 text-sm italic">暂无荣誉陈列</div>
                   </div>
                 )}
               </div>
