@@ -1,3 +1,26 @@
+const cloudinary = require('cloudinary').v2;
+const multer = require('multer');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// 配置 Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// 配置 Multer 存储策略
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'msc2026_profiles', // 自动在云端创建的文件夹名
+    allowed_formats: ['jpg', 'png', 'jpeg'],
+    transformation: [{ width: 1000, crop: 'limit' }] // 自动调整大图尺寸
+  }
+});
+
+const upload = multer({ storage: storage });
+
 process.on('uncaughtException', (err) => {
   console.error('🔥 致命错误 (Uncaught Exception):', err);
 });
@@ -308,4 +331,14 @@ app.put('/api/users/profile', authMiddleware, async (req, res) => {
         console.error(err);
         res.status(500).json({ msg: '更新失败' });
     }
+});
+
+// POST /api/upload
+app.post('/api/upload', authMiddleware, upload.single('image'), (req, res) => {
+  try {
+    // req.file.path 就是 Cloudinary 返回的图片 URL
+    res.json({ url: req.file.path });
+  } catch (err) {
+    res.status(500).json({ msg: '图片上传失败' });
+  }
 });
