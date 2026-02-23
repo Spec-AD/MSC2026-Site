@@ -72,13 +72,13 @@ const Profile = () => {
   // --- 处理水鱼 B50 数据同步 ---
   const handleSyncMaimai = async () => {
     if (!proberId.trim()) {
-      alert('请输入有效的水鱼查分器用户名或 QQ！');
+      alert('请输入有效的水鱼查分器用户名！');
       return;
     }
     setIsSyncingMaimai(true);
     try {
       const res = await axios.post('/api/users/sync-maimai', { proberUsername: proberId });
-      alert('✅ 数据同步成功！您的当前 Rating 为: ' + res.data.rating);
+      alert('数据同步成功！您的当前 Rating 为: ' + res.data.rating);
       // 刷新页面以拉取最新成绩数据
       window.location.reload();
     } catch (err) {
@@ -339,7 +339,7 @@ const Profile = () => {
               <label className="text-sm font-bold text-blue-400 uppercase tracking-widest block mb-1">
                 Diving Fish / 核心数据同步
               </label>
-              <div className="text-gray-400 text-xs">绑定查分器账号，生成专属舞萌 DX 战力面板与 B50 成绩单。</div>
+              <div className="text-gray-400 text-xs">绑定查分器账号以解锁更多功能。</div>
             </div>
             
             <div className="flex w-full md:w-auto gap-2">
@@ -473,5 +473,6 @@ const Profile = () => {
     </div>
   );
 };
+
 
 export default Profile;
