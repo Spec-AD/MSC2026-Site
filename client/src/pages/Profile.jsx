@@ -71,7 +71,7 @@ const Profile = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-// 🔥 1. 新增：体积限制 (3MB)
+    // 🔥 1. 新增：体积限制 (3MB)
     const MAX_SIZE = 3 * 1024 * 1024; // 3MB in bytes
     if (file.size > MAX_SIZE) {
       alert(`上传失败：图片体积太大啦！当前文件 ${(file.size / 1024 / 1024).toFixed(2)}MB，不能超过 3MB。`);
@@ -187,6 +187,17 @@ const Profile = () => {
     </div>
   );
 
+  // --- 👑 头衔系统配置 ---
+  const ROLE_CONFIG = {
+    ADM: { color: 'text-red-500', badgeUrl: '/assets/badges/adm.png', label: 'Administrator' },
+    TO:  { color: 'text-yellow-400', badgeUrl: '/assets/badges/to.png', label: 'Tournament Officer' },
+    DS:  { color: 'text-green-500', badgeUrl: '/assets/badges/ds.png', label: 'Daily Supervisioner' },
+    user:{ color: 'text-white', badgeUrl: null, label: 'Player' } 
+  };
+  
+  // 获取当前用户的头衔配置 (兼容未设置 role 的老数据)
+  const userRole = profile.role ? (ROLE_CONFIG[profile.role] || ROLE_CONFIG.user) : ROLE_CONFIG.user;
+
   return (
     <div className="w-full min-h-screen pb-24 overflow-x-hidden text-white relative">
       
@@ -239,9 +250,23 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* 身份文字 */}
+          {/* 身份文字 (🔥 集成头衔变色与图标) */}
           <div className="flex-1 pb-2 md:pb-4 z-20">
-            <h1 className="text-4xl md:text-6xl font-black italic tracking-tighter drop-shadow-2xl">{profile.username}</h1>
+            <div className="flex items-end gap-3 md:gap-4 flex-wrap justify-center md:justify-start">
+              <h1 className={`text-4xl md:text-6xl font-black italic tracking-tighter drop-shadow-2xl transition-colors ${userRole.color}`}>
+                {profile.username}
+              </h1>
+              {/* 如果有专属 badgeUrl，则渲染头衔图片 */}
+              {userRole.badgeUrl && (
+                 <img 
+                   src={userRole.badgeUrl} 
+                   alt={userRole.label} 
+                   title={userRole.label} // 鼠标悬停显示全称
+                   className="h-6 md:h-8 object-contain mb-1 md:mb-2 drop-shadow-lg"
+                 />
+              )}
+            </div>
+            
             <div className="mt-1 md:mt-2 text-blue-400 font-mono text-sm md:text-base font-bold drop-shadow flex items-center justify-center md:justify-start gap-3">
               <span>UID: {profile.uid || '未分配'}</span>
               {profile.isRegistered && (
