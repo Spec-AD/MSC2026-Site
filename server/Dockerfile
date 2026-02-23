@@ -15,8 +15,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # 5. 安装生产环境依赖
-# --production 参数会忽略 devDependencies（如 nodemon），减小包体积
-RUN npm install --production
+RUN npm install --legacy-peer-deps
 
 # 6. 复制项目所有剩余文件
 COPY . .
