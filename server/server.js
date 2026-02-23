@@ -483,3 +483,51 @@ app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
     res.status(500).json({ msg: '曲库同步失败，请检查服务器网络或水鱼接口状态' });
   }
 });
+
+// === 玩家成绩同步 API ===
+app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
+  try {
+    const { proberUsername } = req.body;
+    if (!proberUsername) return res.status(400).json({ msg: '请输入水鱼查分器账号' });
+
+    // 1. 从水鱼服务器拉取该玩家的 B50 数据
+    // 接口文档参考：https://www.diving-fish.com/api/maimaidxprober/query/player
+    const response = await axios.post('https://www.diving-fish.com/api/maimaidxprober/query/player', {
+      username: proberUsername
+    });
+
+    const data = response.data;
+    // 水鱼返回的成绩通常在 data.records 中
+    if (!data.records) return res.status(404).json({ msg: '未找到该玩家的成绩，请检查账号或隐私设置' });
+
+    // 2. 更新用户的查分器账号记录
+    await User.findByIdAndUpdate(req.user.id, { proberUsername });
+
+    // 3. 清洗并存储成绩 (这里我们取前 50 名，即 B50)
+    // 注意：实际开发中你可能需要根据 DX2024/2025 的 B35+B15 规则逻辑进行排序
+    const topRecords = data.records
+      .sort((a, b) => b.ra - a.ra) // 按单曲 Rating 降序
+      .slice(0, 50);
+
+    // 4. 将成绩关联到 Score 模型
+    // 先删除该用户旧的比赛/练习成绩（或者根据需求保留）
+    await Score.deleteMany({ userId: req.user.id });
+
+    const scoreOps = topRecords.map(rec => ({
+      userId: req.user.id,
+      songId: rec.song_id, // 对应 Song 模型的 id
+      achievement: rec.achievements,
+      dxScore: rec.dxScore,
+      rating: rec.ra,
+      level: rec.level_index, // 0-4 分别对应 绿/黄/红/紫/白
+      finishTime: new Date()
+    }));
+
+    await Score.insertMany(scoreOps);
+
+    res.json({ msg: 'B50 数据同步成功！', rating: data.rating });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: '同步失败，请确保您在水鱼查分器开启了“允许第三方查询”' });
+  }
+});
