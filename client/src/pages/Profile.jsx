@@ -294,13 +294,13 @@ const Profile = () => {
                   <textarea 
                     value={editData.bio}
                     onChange={(e) => setEditData({...editData, bio: e.target.value})}
-                    placeholder="在这里介绍一下你自己，支持 BBCode 语法，例如 [b]加粗[/b] 或 [color=red]红字[/color]"
+                    placeholder="在这里介绍一下你自己..."
                     className="w-full h-48 bg-black/50 border border-white/20 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition-colors font-mono text-sm resize-none"
                   />
                   <div className="absolute right-4 bottom-4 text-xs text-gray-500 font-mono pointer-events-none">BBCode Supported</div>
                 </div>
               ) : (
-                <div className="text-sm md:text-base leading-relaxed text-gray-200 bbcode-content break-words">
+                <div className="text-sm md:text-base leading-relaxed text-gray-200 bbcode-content break-words whitespace-pre-wrap">
                   {profile.bio ? bbcode.toReact(profile.bio) : <span className="text-gray-500 italic">这个人很懒，什么都没写...</span>}
                 </div>
               )}
