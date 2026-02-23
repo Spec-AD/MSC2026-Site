@@ -221,13 +221,13 @@ const Profile = () => {
 
   // --- 📊 模拟的 B50 数据 (等待水鱼 Token 审核通过后，这里将替换为真实的 profile.scores) ---
   const mockB50 = [
-    { songId: '11253', title: 'Pandora Paradoxxx', level: 4, achievement: 100.4500, rating: 334, type: 'DX' },
-    { songId: '11200', title: 'QZKago Requiem', level: 3, achievement: 100.8200, rating: 326, type: 'SD' },
-    { songId: '11172', title: 'Grievous Lady', level: 3, achievement: 100.6000, rating: 322, type: 'DX' },
-    { songId: '11000', title: 'Glorious Crown', level: 4, achievement: 99.8500, rating: 310, type: 'SD' },
-    { songId: '834', title: 'Oshama Scramble!', level: 4, achievement: 100.9500, rating: 308, type: 'DX' },
-    { songId: '731', title: 'Garakuta Doll Play', level: 3, achievement: 100.5000, rating: 305, type: 'SD' },
-    { songId: '11270', title: 'Lia=Fail', level: 2, achievement: 100.9999, rating: 280, type: 'DX' },
+    { songId: '834', title: 'PANDORA PARADOXXX', level: 4, achievement: 100.5000, rating: 337, type: 'SD' },
+    { songId: '799', title: 'QZKago Requiem', level: 3, achievement: 100.8200, rating: 333, type: 'SD' },
+    { songId: '11209', title: 'Grievous Lady', level: 3, achievement: 100.6000, rating: 319, type: 'DX' },
+    { songId: '456', title: 'Glorious Crown', level: 3, achievement: 99.8500, rating: 311, type: 'SD' },
+    { songId: '10363', title: 'Oshama Scramble!', level: 3, achievement: 100.9500, rating: 306, type: 'DX' },
+    { songId: '227', title: 'Garakuta Doll Play', level: 2, achievement: 100.5000, rating: 294, type: 'SD' },
+    { songId: '11364', title: 'Lia=Fail', level: 2, achievement: 101.0000, rating: 288, type: 'DX' },
   ];
 
   return (
@@ -578,5 +578,6 @@ const Profile = () => {
     </div>
   );
 };
+
 
 export default Profile;
