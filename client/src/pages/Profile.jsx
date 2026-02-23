@@ -16,9 +16,11 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // --- 编辑状态 ---
+  // --- 编辑与同步状态 ---
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [proberId, setProberId] = useState('');
+  const [isSyncingMaimai, setIsSyncingMaimai] = useState(false);
   
   // 保存文本和本地预览的 Base64 URL
   const [editData, setEditData] = useState({ bio: '', avatarUrl: '', bannerUrl: '' });
@@ -53,6 +55,7 @@ const Profile = () => {
       setError('');
       const res = await axios.get(`/api/users/${targetUsername}`);
       setProfile(res.data);
+      setProberId(res.data.proberUsername || ''); // 初始化水鱼账号
       // 初始化编辑框的数据
       setEditData({
         bio: res.data.bio || '',
@@ -66,20 +69,39 @@ const Profile = () => {
     }
   };
 
+  // --- 处理水鱼 B50 数据同步 ---
+  const handleSyncMaimai = async () => {
+    if (!proberId.trim()) {
+      alert('请输入有效的水鱼查分器用户名或 QQ 号！');
+      return;
+    }
+    setIsSyncingMaimai(true);
+    try {
+      const res = await axios.post('/api/users/sync-maimai', { proberUsername: proberId });
+      alert('✅ 数据同步成功！您的当前 Rating 为: ' + res.data.rating);
+      // 刷新页面以拉取最新成绩数据
+      window.location.reload();
+    } catch (err) {
+      alert('❌ ' + (err.response?.data?.msg || '同步失败，请检查账号并确保水鱼已开启允许第三方查询'));
+    } finally {
+      setIsSyncingMaimai(false);
+    }
+  };
+
   // --- 处理文件选择与预览 ---
   const handleFileChange = (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // 🔥 1. 新增：体积限制 (3MB)
-    const MAX_SIZE = 3 * 1024 * 1024; // 3MB in bytes
+    // 体积限制 (3MB)
+    const MAX_SIZE = 3 * 1024 * 1024; 
     if (file.size > MAX_SIZE) {
       alert(`上传失败：图片体积太大啦！当前文件 ${(file.size / 1024 / 1024).toFixed(2)}MB，不能超过 3MB。`);
-      e.target.value = ''; // 清空选择，防止用户卡死在错误状态
+      e.target.value = ''; 
       return;
     }
 
-    // 🔥 2. 原有的格式校验
+    // 格式校验
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     if (!validTypes.includes(file.type)) {
       alert('仅支持 jpg, jpeg, png, gif 格式的图片');
@@ -87,14 +109,12 @@ const Profile = () => {
       return;
     }
 
-    // 存入真实 File 对象，等待上传
     if (type === 'avatar') {
       setNewAvatarFile(file);
     } else {
       setNewBannerFile(file);
     }
 
-    // 转 Base64 仅供前端即时预览
     const reader = new FileReader();
     reader.onloadend = () => {
       setEditData(prev => ({
@@ -105,30 +125,23 @@ const Profile = () => {
     reader.readAsDataURL(file);
   };
 
-  // --- 上传图片辅助函数 ---
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append('image', file);
-    
     const res = await axios.post('/api/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
     return res.data.url; 
   };
 
-  // --- 保存所有资料 ---
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
       let finalAvatarUrl = editData.avatarUrl;
       let finalBannerUrl = editData.bannerUrl;
 
-      if (newAvatarFile) {
-        finalAvatarUrl = await uploadImage(newAvatarFile);
-      }
-      if (newBannerFile) {
-        finalBannerUrl = await uploadImage(newBannerFile);
-      }
+      if (newAvatarFile) finalAvatarUrl = await uploadImage(newAvatarFile);
+      if (newBannerFile) finalBannerUrl = await uploadImage(newBannerFile);
 
       const res = await axios.put('/api/users/profile', {
         bio: editData.bio,
@@ -156,7 +169,6 @@ const Profile = () => {
     }
   };
 
-  // --- 取消编辑 ---
   const handleCancelEdit = () => {
     setEditData({
       bio: profile.bio || '',
@@ -168,14 +180,12 @@ const Profile = () => {
     setIsEditing(false);
   };
 
-  // --- 视图：加载中 ---
   if (loading) return (
     <div className="w-full min-h-screen flex items-center justify-center text-white pb-20">
       <FaSpinner className="animate-spin text-4xl text-blue-500 mb-4" />
     </div>
   );
 
-  // --- 视图：报错或不存在 ---
   if (error || !profile) return (
     <div className="w-full min-h-screen flex flex-col items-center justify-center text-white pb-20">
       <div className="text-6xl mb-4">📭</div>
@@ -195,13 +205,11 @@ const Profile = () => {
     user:{ color: 'text-white', badgeUrl: null, label: 'Player' } 
   };
   
-  // 获取当前用户的头衔配置 (兼容未设置 role 的老数据)
   const userRole = profile.role ? (ROLE_CONFIG[profile.role] || ROLE_CONFIG.user) : ROLE_CONFIG.user;
 
   return (
     <div className="w-full min-h-screen pb-24 overflow-x-hidden text-white relative">
       
-      {/* 隐藏的文件输入框 */}
       <input type="file" ref={avatarInputRef} className="hidden" accept=".jpg,.jpeg,.png,.gif" onChange={(e) => handleFileChange(e, 'avatar')} />
       <input type="file" ref={bannerInputRef} className="hidden" accept=".jpg,.jpeg,.png,.gif" onChange={(e) => handleFileChange(e, 'banner')} />
 
@@ -212,7 +220,6 @@ const Profile = () => {
           alt="Profile Banner" 
           className={`w-full h-full object-cover transition-all duration-500 ${isEditing ? 'opacity-30 blur-sm scale-105' : 'opacity-60'}`}
         />
-        {/* 防止渐变层遮挡点击事件 */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent pointer-events-none" />
         
         {isOwnProfile && isEditing && (
@@ -250,18 +257,17 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* 身份文字 (🔥 集成头衔变色与图标) */}
-          <div className="flex-1 pb-2 md:pb-4 z-20">
+          {/* 身份文字 */}
+          <div className="flex-1 pb-2 md:pb-4 z-20 w-full">
             <div className="flex items-end gap-3 md:gap-4 flex-wrap justify-center md:justify-start">
               <h1 className={`text-4xl md:text-6xl font-black italic tracking-tighter drop-shadow-2xl transition-colors ${userRole.color}`}>
                 {profile.username}
               </h1>
-              {/* 如果有专属 badgeUrl，则渲染头衔图片 */}
               {userRole.badgeUrl && (
                  <img 
                    src={userRole.badgeUrl} 
                    alt={userRole.label} 
-                   title={userRole.label} // 鼠标悬停显示全称
+                   title={userRole.label}
                    className="h-6 md:h-8 object-contain mb-1 md:mb-2 drop-shadow-lg"
                  />
               )}
@@ -273,18 +279,55 @@ const Profile = () => {
                  <span className="bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">参赛选手</span>
               )}
             </div>
+
+            {/* 🔥 新增：水鱼数据同步模块 (仅本人可见) */}
+            {isOwnProfile && (
+              <div className="mt-4 md:mt-6 p-4 md:p-5 bg-blue-500/10 border border-blue-500/20 rounded-2xl max-w-xl mx-auto md:mx-0 backdrop-blur-md">
+                <label className="text-xs font-bold text-blue-400 uppercase tracking-widest block mb-2 md:mb-3">
+                  Diving Fish 数据同步 (B50)
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input 
+                    type="text" 
+                    value={proberId}
+                    onChange={(e) => setProberId(e.target.value)}
+                    placeholder="输入水鱼查分器用户名或 QQ"
+                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
+                  />
+                  <button 
+                    onClick={handleSyncMaimai}
+                    disabled={isSyncingMaimai}
+                    className="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap shadow-lg shadow-blue-500/20"
+                  >
+                    {isSyncingMaimai ? '跨服同步中...' : '同步 B50 数据'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 按钮控制区 */}
-          <div className="pb-2 md:pb-4 w-full md:w-auto flex justify-center z-20">
+          <div className="pb-2 md:pb-4 w-full md:w-auto flex flex-wrap justify-center gap-3 z-20">
             {isOwnProfile ? (
               !isEditing ? (
-                <button 
-                  onClick={() => setIsEditing(true)} 
-                  className="px-6 py-3 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-full font-bold transition-all flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center shadow-lg"
-                >
-                  <FaUserEdit /> 编辑资料
-                </button>
+                <>
+                  <button 
+                    onClick={() => setIsEditing(true)} 
+                    className="px-6 py-3 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-full font-bold transition-all flex items-center gap-2 text-sm md:text-base shadow-lg"
+                  >
+                    <FaUserEdit /> 编辑资料
+                  </button>
+
+                  {/* 🔥 ADM 中控台暗门入口 */}
+                  {currentUser && currentUser.role === 'ADM' && (
+                    <button 
+                      onClick={() => navigate('/admin')}
+                      className="px-6 py-3 bg-red-600/20 hover:bg-red-600/40 text-red-500 border border-red-500/50 rounded-full font-bold transition-all flex items-center gap-2 text-sm md:text-base shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+                    >
+                      进入 ADM 中控台
+                    </button>
+                  )}
+                </>
               ) : (
                 <div className="flex gap-2 w-full md:w-auto">
                   <button 
@@ -316,7 +359,7 @@ const Profile = () => {
           
           <div className="md:col-span-2 space-y-6 md:space-y-8">
             
-            {/* A: 个人介绍 (集成 bbcode-to-react，带换行支持) */}
+            {/* A: 个人介绍 */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-xl"
@@ -342,7 +385,7 @@ const Profile = () => {
               )}
             </motion.div>
 
-            {/* B: 荣誉陈列架 (独立于具体打歌成绩) */}
+            {/* B: 荣誉陈列架 */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-xl"
@@ -355,7 +398,6 @@ const Profile = () => {
               </div>
               
               <div className="space-y-4">
-                {/* 直接遍历从 User 表传来的荣誉图片数组 */}
                 {profile.honors && profile.honors.length > 0 ? (
                   profile.honors.map((imgUrl, index) => (
                     <motion.div
@@ -363,14 +405,12 @@ const Profile = () => {
                       whileHover={{ scale: 1.02 }}
                       className="relative w-full overflow-hidden rounded-xl border border-white/5 shadow-lg group cursor-pointer"
                     >
-                      {/* aspect-[4/1] 强制图片容器比例为长宽比 4:1 */}
                       <div className="aspect-[4/1] w-full bg-gray-800/50">
                         <img 
                           src={imgUrl} 
                           alt={`Honor Badge ${index + 1}`}
                           className="w-full h-full object-cover"
                         />
-                        {/* 扫光特效：鼠标悬停时触发 */}
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
                       </div>
                     </motion.div>
