@@ -56,16 +56,25 @@ const Sidebar = () => {
         })}
       </div>
 
-      {/* 底部用户入口 */}
-      <Link to="/login" className="flex flex-col items-center justify-center w-16 h-full md:h-auto md:mb-8 group relative">
-        <div className={`text-2xl md:text-3xl transition-colors ${user ? 'text-green-400' : 'text-gray-500'}`}>
+      {/* 🔥 核心修改：底部用户入口 🔥 */}
+      <Link 
+        /* 1. 动态路由：有用户 -> 去 /profile；无用户 -> 去 /login */
+        to={user ? '/profile' : '/login'} 
+        className="flex flex-col items-center justify-center w-16 h-full md:h-auto md:mb-8 group relative"
+      >
+        {/* 图标：登录后变成亮蓝色 (text-blue-400)，未登录是灰色 */}
+        <div className={`text-2xl md:text-3xl transition-colors ${user ? 'text-blue-400 drop-shadow-[0_0_5px_rgba(96,165,250,0.5)]' : 'text-gray-500'}`}>
           <FaUserCircle />
         </div>
+        
+        {/* 手机端文字：登录显示“我的”，未登录显示“登录” */}
         <span className="mt-1 md:hidden text-[10px] text-gray-600 scale-90">
           {user ? '我的' : '登录'}
         </span>
-        <span className="hidden md:block absolute left-14 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/80 px-2 py-1 rounded text-xs whitespace-nowrap border border-white/10 text-white">
-            {user ? user.nickname : '点击登录'}
+        
+        {/* 电脑端 Hover 提示：显示昵称或用户名 */}
+        <span className="hidden md:block absolute left-14 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/80 px-2 py-1 rounded text-xs whitespace-nowrap border border-white/10 text-white z-50">
+            {user ? (user.nickname || user.username) : '点击登录'}
         </span>
       </Link>
     </div>
