@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import FallingIcons from '../components/FallingIcons'; 
 import { useAuth } from '../context/AuthContext'; 
 import bbcode from 'bbcode-to-react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 
 const Home = () => {
   const { user } = useAuth();
+  const [announcements, setAnnouncements] = useState([]);
 
   let buttonText = "立即报名 MSC 2026";
   let buttonLink = "/register";
