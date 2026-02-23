@@ -72,13 +72,13 @@ const Profile = () => {
   // --- 处理水鱼 B50 数据同步 ---
   const handleSyncMaimai = async () => {
     if (!proberId.trim()) {
-      alert('请输入有效的水鱼查分器用户名！');
+      alert('请输入有效的水鱼查分器用户名或 QQ！');
       return;
     }
     setIsSyncingMaimai(true);
     try {
       const res = await axios.post('/api/users/sync-maimai', { proberUsername: proberId });
-      alert('数据同步成功！您的当前 Rating 为: ' + res.data.rating);
+      alert('✅ 数据同步成功！您的当前 Rating 为: ' + res.data.rating);
       // 刷新页面以拉取最新成绩数据
       window.location.reload();
     } catch (err) {
@@ -206,6 +206,29 @@ const Profile = () => {
   };
   
   const userRole = profile.role ? (ROLE_CONFIG[profile.role] || ROLE_CONFIG.user) : ROLE_CONFIG.user;
+
+  // --- 🎨 舞萌 DX 难度颜色映射 ---
+  const getDifficultyColor = (levelIndex) => {
+    const colors = [
+      'border-green-400 shadow-[0_0_10px_rgba(74,222,128,0.3)] text-green-400',   // 0: Basic (绿)
+      'border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.3)] text-yellow-400', // 1: Advanced (黄)
+      'border-red-400 shadow-[0_0_10px_rgba(248,113,113,0.3)] text-red-400',      // 2: Expert (红)
+      'border-purple-400 shadow-[0_0_10px_rgba(192,132,252,0.3)] text-purple-400',// 3: Master (紫)
+      'border-purple-200 shadow-[0_0_10px_rgba(233,213,255,0.5)] text-purple-200' // 4: Re:Master (白)
+    ];
+    return colors[levelIndex] || 'border-gray-500 text-gray-400';
+  };
+
+  // --- 📊 模拟的 B50 数据 (等待水鱼 Token 审核通过后，这里将替换为真实的 profile.scores) ---
+  const mockB50 = [
+    { songId: '11253', title: 'Pandora Paradoxxx', level: 4, achievement: 100.4500, rating: 334, type: 'DX' },
+    { songId: '11200', title: 'QZKago Requiem', level: 3, achievement: 100.8200, rating: 326, type: 'SD' },
+    { songId: '11172', title: 'Grievous Lady', level: 3, achievement: 100.6000, rating: 322, type: 'DX' },
+    { songId: '11000', title: 'Glorious Crown', level: 4, achievement: 99.8500, rating: 310, type: 'SD' },
+    { songId: '834', title: 'Oshama Scramble!', level: 4, achievement: 100.9500, rating: 308, type: 'DX' },
+    { songId: '731', title: 'Garakuta Doll Play', level: 3, achievement: 100.5000, rating: 305, type: 'SD' },
+    { songId: '11270', title: 'Lia=Fail', level: 2, achievement: 100.9999, rating: 280, type: 'DX' },
+  ];
 
   return (
     <div className="w-full min-h-screen pb-24 overflow-x-hidden text-white relative">
@@ -339,7 +362,7 @@ const Profile = () => {
               <label className="text-sm font-bold text-blue-400 uppercase tracking-widest block mb-1">
                 Diving Fish / 核心数据同步
               </label>
-              <div className="text-gray-400 text-xs">绑定查分器账号以解锁更多功能。</div>
+              <div className="text-gray-400 text-xs">绑定查分器账号，生成专属舞萌 DX 战力面板与 B50 成绩单。</div>
             </div>
             
             <div className="flex w-full md:w-auto gap-2">
@@ -469,10 +492,91 @@ const Profile = () => {
             
           </div>
         </div>
+
+        {/* ========================================================= */}
+        {/* 🔥 4. 史诗级 B50 成绩面板 (Best 50 Records) 🔥 */}
+        {/* ========================================================= */}
+        <div className="mt-16 md:mt-24 z-20 relative">
+          
+          {/* 大气感标题头 */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 border-b border-white/10 pb-4">
+            <div>
+              <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 drop-shadow-lg">
+                BEST 50.
+              </h2>
+              <div className="text-gray-400 font-mono text-sm tracking-[0.3em] uppercase mt-2">
+                Diving Fish / Maimai DX Records
+              </div>
+            </div>
+            
+            {/* 战力总评 */}
+            <div className="mt-4 md:mt-0 flex items-center gap-4 bg-black/40 backdrop-blur-md border border-white/10 px-6 py-3 rounded-2xl">
+              <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">DX Rating</span>
+              <span className="text-3xl font-black italic text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
+                {profile.rating || 15000} {/* 暂时写死一个大佬分数过过瘾 */}
+              </span>
+            </div>
+          </div>
+
+          {/* 成绩卡片矩阵 */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+            {mockB50.map((record, index) => {
+              // 获取当前难度的颜色边框
+              const colorClasses = getDifficultyColor(record.level);
+
+              return (
+                <motion.div 
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-50px" }}
+                  transition={{ delay: index * 0.05 }}
+                  whileHover={{ y: -5, scale: 1.02 }}
+                  className={`relative aspect-[4/3] rounded-2xl overflow-hidden border-2 bg-gray-900 group cursor-default transition-all duration-300 ${colorClasses}`}
+                >
+                  {/* 背景封面图 (直连水鱼图库) */}
+                  <img 
+                    src={`https://www.diving-fish.com/covers/${record.songId}.png`} 
+                    alt={record.title}
+                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
+                    onError={(e) => { e.target.src = '/assets/bg.png'; }} // 防裂图机制
+                  />
+                  
+                  {/* 底部渐变遮罩 (确保文字清晰) */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
+
+                  {/* 顶部标签 */}
+                  <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm border border-white/20 px-2 py-0.5 rounded text-[10px] font-black italic text-white z-10">
+                    {record.type}
+                  </div>
+
+                  {/* 底部数据区 */}
+                  <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
+                    {/* 曲名 (单行防溢出) */}
+                    <div className="text-xs md:text-sm font-bold text-white truncate drop-shadow-md mb-1">
+                      {record.title}
+                    </div>
+                    
+                    {/* 成绩与单曲 Rating */}
+                    <div className="flex items-end justify-between">
+                      <div className="text-lg md:text-xl font-black italic tracking-tighter text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                        {record.achievement.toFixed(4)}<span className="text-[10px] text-gray-300 ml-0.5">%</span>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-md border border-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-white flex items-center gap-1 shadow-lg">
+                        <span className="text-[8px] opacity-70">➔</span> {record.rating}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+          
+        </div>
+
       </div>
     </div>
   );
 };
-
 
 export default Profile;
