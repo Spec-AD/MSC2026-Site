@@ -45,7 +45,7 @@ const Home = () => {
 
   return (
     // 外层容器：支持滚动，隐藏横向溢出
-    <div className="w-full min-h-screen bg-gray-900 text-white flex flex-col items-center overflow-x-hidden">
+    <div className="w-full min-h-screen text-white flex flex-col items-center overflow-x-hidden bg-gradient-to-b from-transparent to-black/80">
       
       {/* ==================================================== */}
       {/* 1. 英雄区域 (Hero Section) - 原有功能完全保留 */}
