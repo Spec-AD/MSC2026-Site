@@ -221,12 +221,12 @@ const Profile = () => {
 
   // --- 📊 模拟的 B50 数据 (等待水鱼 Token 审核通过后，这里将替换为真实的 profile.scores) ---
   const mockB50 = [
-    { songId: '834', title: 'PANDORA PARADOXXX', level: 4, achievement: 100.5000, rating: 337, type: 'SD' },
-    { songId: '799', title: 'QZKago Requiem', level: 3, achievement: 100.8200, rating: 333, type: 'SD' },
+    { songId: '00834', title: 'PANDORA PARADOXXX', level: 4, achievement: 100.5000, rating: 337, type: 'SD' },
+    { songId: '00799', title: 'QZKago Requiem', level: 3, achievement: 100.8200, rating: 333, type: 'SD' },
     { songId: '11209', title: 'Grievous Lady', level: 3, achievement: 100.6000, rating: 319, type: 'DX' },
-    { songId: '456', title: 'Glorious Crown', level: 3, achievement: 99.8500, rating: 311, type: 'SD' },
+    { songId: '00456', title: 'Glorious Crown', level: 3, achievement: 99.8500, rating: 311, type: 'SD' },
     { songId: '10363', title: 'Oshama Scramble!', level: 3, achievement: 100.9500, rating: 306, type: 'DX' },
-    { songId: '227', title: 'Garakuta Doll Play', level: 2, achievement: 100.5000, rating: 294, type: 'SD' },
+    { songId: '00227', title: 'Garakuta Doll Play', level: 2, achievement: 100.5000, rating: 294, type: 'SD' },
     { songId: '11364', title: 'Lia=Fail', level: 2, achievement: 101.0000, rating: 288, type: 'DX' },
   ];
 
@@ -581,3 +581,4 @@ const Profile = () => {
 
 
 export default Profile;
+
