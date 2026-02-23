@@ -38,5 +38,4 @@ const ScoreSchema = new mongoose.Schema({
 });
 
 // 导出模型
-
 module.exports = mongoose.model('Score', ScoreSchema);

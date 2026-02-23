@@ -1,5 +1,6 @@
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
+const Announcement = require('./models/Announcement'); 
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 // 配置 Cloudinary
@@ -391,4 +392,45 @@ app.put('/api/users/profile', authMiddleware, async (req, res) => {
         console.error(err);
         res.status(500).json({ msg: '更新失败' });
     }
+});
+
+// === 公告系统 API ===
+
+// 1. 获取所有公告 (所有人都能看)
+app.get('/api/announcements', async (req, res) => {
+  try {
+    // 按时间倒序排列，最新的在最前面
+    const announcements = await Announcement.find().sort({ createdAt: -1 });
+    res.json(announcements);
+  } catch (err) {
+    res.status(500).json({ msg: '获取公告失败' });
+  }
+});
+
+// 2. 发布新公告 (只有 ADM 能发)
+// 注意：这里需要用到你的 authMiddleware 来验证用户是否登录
+app.post('/api/announcements', authMiddleware, async (req, res) => {
+  try {
+    // 绝对安全防御：检查发布者是不是真的 ADM
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'ADM') {
+      return res.status(403).json({ msg: '🚨 权限不足：只有管理员可以发布公告！' });
+    }
+
+    const { title, type, content } = req.body;
+    if (!title || !content) return res.status(400).json({ msg: '标题和内容不能为空' });
+
+    const newAnnouncement = new Announcement({
+      title,
+      type: type || 'NEWS',
+      content,
+      author: user._id
+    });
+    
+    await newAnnouncement.save();
+    res.json({ msg: '公告发布成功！', data: newAnnouncement });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: '发布失败，服务器错误' });
+  }
 });
