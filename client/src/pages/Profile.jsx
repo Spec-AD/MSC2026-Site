@@ -72,7 +72,7 @@ const Profile = () => {
   // --- 处理水鱼 B50 数据同步 ---
   const handleSyncMaimai = async () => {
     if (!proberId.trim()) {
-      alert('请输入有效的水鱼查分器用户名或 QQ 号！');
+      alert('请输入有效的水鱼查分器用户名！');
       return;
     }
     setIsSyncingMaimai(true);
@@ -291,7 +291,7 @@ const Profile = () => {
                     type="text" 
                     value={proberId}
                     onChange={(e) => setProberId(e.target.value)}
-                    placeholder="输入水鱼查分器用户名或 QQ"
+                    placeholder="输入水鱼查分器用户名"
                     className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
                   />
                   <button 
