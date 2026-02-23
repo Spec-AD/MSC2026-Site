@@ -13,6 +13,16 @@ const SearchBar = () => {
   const wrapperRef = useRef(null);
   const navigate = useNavigate();
 
+  // --- 🔥 动态获取头衔颜色 ---
+  const getRoleColor = (role) => {
+    switch(role) {
+      case 'ADM': return 'text-red-500';
+      case 'TO':  return 'text-yellow-400';
+      case 'DS':  return 'text-green-500';
+      default:    return 'text-white group-hover:text-blue-400';
+    }
+  };
+
   // --- 核心机制：防抖搜索 ---
   useEffect(() => {
     if (!query.trim()) {
@@ -101,7 +111,8 @@ const SearchBar = () => {
                     
                     {/* 身份信息 */}
                     <div className="flex-1 overflow-hidden">
-                      <div className="text-white font-bold truncate group-hover:text-blue-400 transition-colors">
+                      {/* 🔥 根据角色的不同赋予不同的名字颜色 */}
+                      <div className={`font-bold truncate transition-colors ${getRoleColor(user.role)}`}>
                         {user.username}
                       </div>
                       <div className="text-gray-400 text-xs font-mono">UID: {user.uid}</div>
