@@ -2,6 +2,8 @@ const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const Announcement = require('./models/Announcement'); 
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const axios = require('axios');
+const Song = require('./models/Song');
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -432,5 +434,52 @@ app.post('/api/announcements', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: '发布失败，服务器错误' });
+  }
+});
+
+// === ADM 专属：从水鱼同步全量曲库 ===
+app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
+  try {
+    // 1. 权限校验
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'ADM') {
+      return res.status(403).json({ msg: '权限不足：仅限 ADM 执行高危操作' });
+    }
+
+    console.log('[Sync] 正在从水鱼服务器拉取全量曲库...');
+    
+    // 2. 发起拉取请求
+    const response = await axios.get('https://www.diving-fish.com/api/maimaidxprober/music_data');
+    const songsData = response.data; // 这是一个包含上千首歌的巨型数组
+
+    console.log(`[Sync] 成功拉取到 ${songsData.length} 首曲目，开始写入数据库...`);
+
+    // 3. 批量写入/更新数据库 (使用 BulkWrite 提升性能)
+    // 核心逻辑：如果库里没这首歌就插入，如果有就更新（Upsert），防止产生重复数据
+    const bulkOps = songsData.map(song => ({
+      updateOne: {
+        filter: { id: song.id },
+        update: {
+          $set: {
+            title: song.title,
+            type: song.type,
+            ds: song.ds,
+            level: song.level,
+            basic_info: song.basic_info,
+            lastUpdated: new Date()
+          }
+        },
+        upsert: true // 找不到就新建
+      }
+    }));
+
+    await Song.bulkWrite(bulkOps);
+
+    console.log('[Sync] 曲库同步/更新完成！');
+    res.json({ msg: `曲库同步成功！共收录 ${songsData.length} 首曲目数据。` });
+
+  } catch (err) {
+    console.error('[Sync Error]', err.message);
+    res.status(500).json({ msg: '曲库同步失败，请检查服务器网络或水鱼接口状态' });
   }
 });
