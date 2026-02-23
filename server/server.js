@@ -488,38 +488,44 @@ app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
 app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
   try {
     const { proberUsername } = req.body;
-    if (!proberUsername) return res.status(400).json({ msg: '请输入水鱼查分器账号' });
+    if (!proberUsername) return res.status(400).json({ msg: '请输入水鱼查分器账号或QQ号' });
 
-    // 1. 从水鱼服务器拉取该玩家的 B50 数据
-    // 接口文档参考：https://www.diving-fish.com/api/maimaidxprober/query/player
-    const response = await axios.post('https://www.diving-fish.com/api/maimaidxprober/query/player', {
-      username: proberUsername
+    // 🔥 1. 智能识别：全是数字就当作 QQ 号，否则是用户名
+    const isQQ = /^\d+$/.test(proberUsername);
+    const payload = isQQ ? { qq: proberUsername } : { username: proberUsername };
+
+    // 🔥 2. 将你刚才在水鱼官网申请到的 Developer Token 填入这里 (保留双引号)
+    const DEVELOPER_TOKEN = "把你的Token粘贴在这里";
+
+    // 3. 向水鱼发送带 Token 的请求
+    const response = await axios.post('https://www.diving-fish.com/api/maimaidxprober/query/player', payload, {
+      headers: {
+        'Developer-Token': DEVELOPER_TOKEN // 核心通行证！
+      }
     });
 
     const data = response.data;
-    // 水鱼返回的成绩通常在 data.records 中
-    if (!data.records) return res.status(404).json({ msg: '未找到该玩家的成绩，请检查账号或隐私设置' });
+    if (!data.records) return res.status(404).json({ msg: '水鱼返回成功，但未找到成绩数据' });
 
-    // 2. 更新用户的查分器账号记录
+    // 更新用户绑定的账号
     await User.findByIdAndUpdate(req.user.id, { proberUsername });
 
-    // 3. 清洗并存储成绩 (这里我们取前 50 名，即 B50)
-    // 注意：实际开发中你可能需要根据 DX2024/2025 的 B35+B15 规则逻辑进行排序
+    // 提取并清理 B50 数据
     const topRecords = data.records
-      .sort((a, b) => b.ra - a.ra) // 按单曲 Rating 降序
+      .sort((a, b) => b.ra - a.ra) 
       .slice(0, 50);
 
-    // 4. 将成绩关联到 Score 模型
-    // 先删除该用户旧的比赛/练习成绩（或者根据需求保留）
+    // 先清空旧数据
     await Score.deleteMany({ userId: req.user.id });
 
+    // 批量写入新数据
     const scoreOps = topRecords.map(rec => ({
       userId: req.user.id,
-      songId: rec.song_id, // 对应 Song 模型的 id
+      songId: rec.song_id, 
       achievement: rec.achievements,
       dxScore: rec.dxScore,
       rating: rec.ra,
-      level: rec.level_index, // 0-4 分别对应 绿/黄/红/紫/白
+      level: rec.level_index, 
       finishTime: new Date()
     }));
 
@@ -527,7 +533,10 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
 
     res.json({ msg: 'B50 数据同步成功！', rating: data.rating });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: '同步失败，请确保您在水鱼查分器开启了“允许第三方查询”' });
+    console.error('[水鱼同步报错]', err.response?.data || err.message);
+    
+    // 🔥 精准捕获水鱼抛出的原本中文报错信息 (水鱼返回字段是 message)
+    const dfError = err.response?.data?.message; 
+    res.status(500).json({ msg: dfError ? `水鱼服务器拒绝: ${dfError}` : '同步失败，请检查网络或账号' });
   }
 });
