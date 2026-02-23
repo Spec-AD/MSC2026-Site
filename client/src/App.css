@@ -58,3 +58,10 @@
 .bbcode-content a:hover {
   color: #93c5fd;
 }
+
+/* 添加扫光动画的关键帧 */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
