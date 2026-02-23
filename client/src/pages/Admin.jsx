@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 const Admin = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-
+  const [isSyncing, setIsSyncing] = useState(false);
   const [formData, setFormData] = useState({ title: '', type: 'NEWS', content: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -21,12 +21,13 @@ const Admin = () => {
     );
   }
 
+  // --- 处理公告发布 ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
       await axios.post('/api/announcements', formData);
-      alert('✅ 史诗级公告发布成功！全站已同步。');
+      alert('发布成功！全站已同步。');
       setFormData({ title: '', type: 'NEWS', content: '' }); // 清空表单
       navigate('/'); // 发完跳回主页看效果
     } catch (err) {
@@ -36,11 +37,29 @@ const Admin = () => {
     }
   };
 
+  // --- 处理曲库同步 ---
+  const handleSyncSongs = async () => {
+    if (!window.confirm('确定要全量同步水鱼曲库吗？这可能需要几秒钟的时间。')) return;
+    setIsSyncing(true);
+    try {
+      const res = await axios.post('/api/admin/sync-songs');
+      alert('✅ ' + res.data.msg);
+    } catch (err) {
+      alert('❌ ' + (err.response?.data?.msg || '同步失败'));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen pt-24 pb-12 px-4 max-w-4xl mx-auto text-white">
-      <div className="bg-black/40 backdrop-blur-xl border border-red-500/30 rounded-3xl p-8 shadow-[0_0_50px_rgba(239,68,68,0.1)]">
+      
+      {/* ========================================================= */}
+      {/* 模块 1：发布公告指令 */}
+      {/* ========================================================= */}
+      <div className="bg-black/40 backdrop-blur-xl border border-red-500/30 rounded-3xl p-8 shadow-[0_0_50px_rgba(239,68,68,0.1)] mb-12">
         <h2 className="text-3xl font-black italic tracking-tight text-red-500 mb-6 border-b border-red-500/20 pb-4">
-          ADM 控制台 / 发布全新指令
+          ADM 控制台 / 发布指令
         </h2>
         
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -88,6 +107,32 @@ const Admin = () => {
           </button>
         </form>
       </div>
+
+      {/* ========================================================= */}
+      {/* 模块 2：高危操作 - 数据同步 */}
+      {/* ========================================================= */}
+      <div className="bg-black/40 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-8 shadow-[0_0_50px_rgba(59,130,246,0.1)]">
+        <h2 className="text-3xl font-black italic tracking-tight text-blue-500 mb-6 border-b border-blue-500/20 pb-4">
+          SYSTEM SYNC / 核心数据同步
+        </h2>
+        
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="text-gray-400 text-sm leading-relaxed max-w-lg">
+            <p className="font-bold text-white mb-1">» 舞萌 DX 全量曲库 (Diving-Fish API)</p>
+            将从水鱼查分器同步最新的曲目列表、定数 (DS) 以及等级信息。
+            <span className="text-red-400 ml-1">执行此操作需要消耗大量服务器资源，请勿频繁点击。当游戏有大版本更新或新歌实装时执行即可。</span>
+          </div>
+          
+          <button 
+            onClick={handleSyncSongs}
+            disabled={isSyncing}
+            className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-black tracking-[0.2em] rounded-xl transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50 whitespace-nowrap"
+          >
+            {isSyncing ? '正在同步数据中...' : '开始同步全量曲库'}
+          </button>
+        </div>
+      </div>
+
     </div>
   );
 };
