@@ -26,7 +26,7 @@ const UserSchema = new mongoose.Schema({
     intro: { type: String, default: '' },
     
     // 报名提交时间
-    regTime: { type: Date }
+    regTime: { type: Date },
         
     // 1. 数字 UID (类似 osu! 的 #10025)
     uid: { type: Number, unique: true }, 
@@ -44,3 +44,4 @@ const UserSchema = new mongoose.Schema({
 
 
 module.exports = mongoose.model('User', UserSchema);
+
