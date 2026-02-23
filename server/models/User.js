@@ -28,5 +28,18 @@ const UserSchema = new mongoose.Schema({
     // 报名提交时间
     regTime: { type: Date }
 });
+    // 1. 数字 UID (类似 osu! 的 #10025)
+    uid: { type: Number, unique: true }, 
+
+    // 2. 个人介绍 (支持 BBCode)
+    bio: { type: String, default: '' },
+
+    // 3. 头像与背景 (暂时存 URL 字符串)
+    avatarUrl: { type: String, default: '/assets/logos.png' }, // 默认头像
+    bannerUrl: { type: String, default: '/assets/bg.png' },    // 默认背景
+
+    // 4. 好友列表 (存 User 的 ObjectId)
+    friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+});
 
 module.exports = mongoose.model('User', UserSchema);
