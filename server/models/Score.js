@@ -31,6 +31,10 @@ const ScoreSchema = new mongoose.Schema({
         type: Date, 
         default: Date.now 
     }
+
+    imageUrl: { type: String, required: true }, // 🔥 存放赛事成绩图片的 URL
+    tournamentName: { type: String }, 
+    finishTime: { type: Date, default: Date.now }
 });
 
 // 导出模型
