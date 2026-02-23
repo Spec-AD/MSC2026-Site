@@ -8,6 +8,7 @@ import Intro from './pages/Intro';
 import Rules from './pages/Rules';
 import Qualifiers from './pages/Qualifiers';
 import Login from './pages/Login';
+import Profile from './pages/Profile';
 
 function App() {
   return (
@@ -24,6 +25,8 @@ function App() {
           <Route path="intro" element={<Intro />} />
           <Route path="rules" element={<Rules />} />
           <Route path="qualifiers" element={<Qualifiers />} />
+          <Route path="/profile" element={<Profile />} />
+	  <Route path="/profile/:username" element={<Profile />} />
           
           {/* 登录页 */}
           <Route path="login" element={<Login />} />
