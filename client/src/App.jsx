@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
+import Admin from './pages/Admin';
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -27,6 +28,7 @@ function App() {
           <Route path="qualifiers" element={<Qualifiers />} />
           <Route path="/profile" element={<Profile />} />
 	  <Route path="/profile/:username" element={<Profile />} />
+	  <Route path="/admin" element={<Admin />} />
           
           {/* 登录页 */}
           <Route path="login" element={<Login />} />
