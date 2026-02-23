@@ -4,7 +4,7 @@ const UserSchema = new mongoose.Schema({
     // --- 账户基本信息 ---
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    
+    proberUsername: { type: String, default: '' },
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
     
