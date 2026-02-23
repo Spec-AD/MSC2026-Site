@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import axios from 'axios';
 import { FaCamera, FaUserPlus, FaUserEdit, FaTrophy, FaUsers, FaSpinner, FaSave, FaTimes } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
+import bbcode from 'bbcode-to-react';
 
 const Profile = () => {
   const { username: routeUsername } = useParams();
@@ -71,9 +72,9 @@ const Profile = () => {
     if (!file) return;
 
     // 格式校验
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      alert('仅支持 jpg, jpeg, png 格式的图片');
+      alert('仅支持 jpg, jpeg, png, gif 格式的图片');
       return;
     }
 
@@ -156,17 +157,6 @@ const Profile = () => {
     setIsEditing(false);
   };
 
-  // --- BBCode 渲染器 ---
-  const renderBBCode = (text) => {
-    if (!text) return <span className="text-gray-500 italic">这个人很懒，什么都没写...</span>;
-    let html = text
-      .replace(/\[b\](.*?)\[\/b\]/gi, '<strong>$1</strong>')
-      .replace(/\[i\](.*?)\[\/i\]/gi, '<em>$1</em>')
-      .replace(/\[color=(.*?)\](.*?)\[\/color\]/gi, '<span style="color:$1">$2</span>')
-      .replace(/\n/g, '<br/>');
-    return <div dangerouslySetInnerHTML={{ __html: html }} />;
-  };
-
   // --- 视图：加载中 ---
   if (loading) return (
     <div className="w-full min-h-screen flex items-center justify-center text-white pb-20">
@@ -190,8 +180,8 @@ const Profile = () => {
     <div className="w-full min-h-screen pb-24 overflow-x-hidden text-white relative">
       
       {/* 隐藏的文件输入框 */}
-      <input type="file" ref={avatarInputRef} className="hidden" accept=".jpg,.jpeg,.png" onChange={(e) => handleFileChange(e, 'avatar')} />
-      <input type="file" ref={bannerInputRef} className="hidden" accept=".jpg,.jpeg,.png" onChange={(e) => handleFileChange(e, 'banner')} />
+      <input type="file" ref={avatarInputRef} className="hidden" accept=".jpg,.jpeg,.png,.gif" onChange={(e) => handleFileChange(e, 'avatar')} />
+      <input type="file" ref={bannerInputRef} className="hidden" accept=".jpg,.jpeg,.png,.gif" onChange={(e) => handleFileChange(e, 'banner')} />
 
       {/* --- 1. Banner 区域 --- */}
       <div className="relative h-[25vh] md:h-[40vh] w-full overflow-hidden bg-gray-900 group z-0">
@@ -200,7 +190,7 @@ const Profile = () => {
           alt="Profile Banner" 
           className={`w-full h-full object-cover transition-all duration-500 ${isEditing ? 'opacity-30 blur-sm scale-105' : 'opacity-60'}`}
         />
-        {/* 🔥 核心修复：添加 pointer-events-none 防止渐变层遮挡点击事件 */}
+        {/* 防止渐变层遮挡点击事件 */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent pointer-events-none" />
         
         {isOwnProfile && isEditing && (
@@ -290,7 +280,7 @@ const Profile = () => {
           
           <div className="md:col-span-2 space-y-6 md:space-y-8">
             
-            {/* A: 个人介绍 */}
+            {/* A: 个人介绍 (集成 bbcode-to-react) */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-xl"
@@ -307,11 +297,11 @@ const Profile = () => {
                     placeholder="在这里介绍一下你自己，支持 BBCode 语法，例如 [b]加粗[/b] 或 [color=red]红字[/color]"
                     className="w-full h-48 bg-black/50 border border-white/20 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition-colors font-mono text-sm resize-none"
                   />
-                  <div className="absolute right-4 bottom-4 text-xs text-gray-500 font-mono pointer-events-none">支持 BBCode</div>
+                  <div className="absolute right-4 bottom-4 text-xs text-gray-500 font-mono pointer-events-none">BBCode Supported</div>
                 </div>
               ) : (
-                <div className="text-sm md:text-base leading-relaxed text-gray-200">
-                  {renderBBCode(profile.bio)}
+                <div className="text-sm md:text-base leading-relaxed text-gray-200 bbcode-content break-words">
+                  {profile.bio ? bbcode.toReact(profile.bio) : <span className="text-gray-500 italic">这个人很懒，什么都没写...</span>}
                 </div>
               )}
             </motion.div>
