@@ -7,6 +7,14 @@ const UserSchema = new mongoose.Schema({
     proberUsername: { type: String, default: '' },
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
+    divingFishUsername: { 
+       type: String, 
+       default: '' 
+    },
+    totalPf: { 
+       type: Number, 
+       default: 0 
+    }, // 记录 Top 50 的 PF 总和
     
     // 参赛昵称
     nickname: { type: String, default: '' },

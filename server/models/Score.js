@@ -31,6 +31,13 @@ const ScoreSchema = new mongoose.Schema({
         type: Date, 
         default: Date.now 
     },
+    // 在 ScoreSchema 中新增：
+    pf: { type: Number, default: 0 },
+    dxScore: { type: Number, required: true },
+    dxRatio: { type: Number, required: true }, // 例如 0.95 (95%)
+    achievementRate: { type: Number, required: true }, // 例如 100.5000
+    // 建议也存一下水鱼的定数，方便验证
+    constant: { type: Number },
 
     imageUrl: { type: String, required: true }, // 🔥 存放赛事成绩图片的 URL
     tournamentName: { type: String }, 
