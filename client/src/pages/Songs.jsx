@@ -40,7 +40,7 @@ export default function Songs() {
       {/* 头部与搜索栏 */}
       <div className="mb-6 flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-bold text-white">曲目图鉴</h1>
+          <h1 className="text-3xl font-bold text-white">曲目</h1>
           <p className="text-gray-400 text-sm mt-1">已收录 {filteredSongs.length} 首曲目</p>
         </div>
         <input 
@@ -86,4 +86,5 @@ export default function Songs() {
       />
     </div>
   );
+
 }
