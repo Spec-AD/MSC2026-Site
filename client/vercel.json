@@ -1,12 +1,12 @@
 {
   "rewrites": [
     {
-      "source": "/proxy/diving-fish/:match*",
-      "destination": "https://www.diving-fish.com/api/maimaidxprober/:match*"
+      "source": "/proxy/diving-fish/:path*",
+      "destination": "https://www.diving-fish.com/api/maimaidxprober/:path*"
     },
     {
-      "source": "/api/:match*",
-      "destination": "https://magix.zeabur.app/api/:match*"
+      "source": "/api/:path*",
+      "destination": "https://magix.zeabur.app/api/:path*"
     },
     {
       "source": "/(.*)",
