@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   FaHome, FaPenNib, FaInfoCircle, FaScroll, 
-  FaTrophy, FaUserCircle, FaSearch, FaSpinner, FaTimes 
+  FaTrophy, FaUserCircle, FaSearch, FaSpinner, FaTimes, 
+  FaCompactDisc // 🔥 新增：引入光盘图标作为曲目图鉴的 icon
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -20,12 +21,14 @@ const Sidebar = () => {
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef(null);
 
+  // 🔥 修改：在导航数组中加入曲目图鉴
   const navItems = [
     { path: '/', icon: <FaHome />, label: '主页' },
     { path: '/register', icon: <FaPenNib />, label: '报名' },
     { path: '/intro', icon: <FaInfoCircle />, label: '介绍' },
     { path: '/rules', icon: <FaScroll />, label: '须知' },
     { path: '/qualifiers', icon: <FaTrophy />, label: '预选' },
+    { path: '/songs', icon: <FaCompactDisc />, label: '曲目' }, // <- 新增这行
   ];
 
   // --- 搜索核心机制：防抖与请求 ---
@@ -107,7 +110,7 @@ const Sidebar = () => {
             );
           })}
 
-          {/* 🔥 新增：唤出搜索面板的按钮 🔥 */}
+          {/* 唤出搜索面板的按钮 */}
           <button 
             onClick={() => setIsSearchOpen(true)}
             className="group relative flex flex-col items-center justify-center w-full h-full md:w-16 md:h-16"
@@ -148,7 +151,6 @@ const Sidebar = () => {
             initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
             animate={{ opacity: 1, backdropFilter: 'blur(16px)' }}
             exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
-            // 超高层级，确保遮住全站所有元素
             className="fixed inset-0 z-[200] bg-black/60 flex flex-col items-center pt-24 md:pt-32 px-4"
           >
             {/* 巨大的关闭按钮 */}
