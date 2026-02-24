@@ -4,6 +4,7 @@ const Announcement = require('./models/Announcement');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const axios = require('axios');
 const Song = require('./models/Song');
+const { calculatePF } = require('./utils/pfCalculator');
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -175,6 +176,101 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     } catch (err) {
         res.status(500).json({ msg: '服务器错误' });
     }
+});
+
+// ==========================================
+// [新增] 同步水鱼查分器成绩并结算 PF 分
+// ==========================================
+app.post('/api/users/sync-diving-fish', async (req, res) => {
+  // 1. JWT 鉴权验证 (完全复用你项目现有的鉴权逻辑)
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: '请先登录' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+    const user = await User.findById(userId);
+
+    if (!user.divingFishUsername) {
+      return res.status(400).json({ message: '请先在个人主页绑定水鱼查分器用户名！' });
+    }
+
+    // 2. 请求水鱼 API
+    const dfResponse = await axios.post('https://www.diving-fish.com/api/maimaidxprober/query/player', {
+      username: user.divingFishUsername
+    });
+
+    const allRecords = [...dfResponse.data.records, ...dfResponse.data.records_new];
+    let processedScores = [];
+
+    // 3. 遍历计算每首歌的 PF
+    for (const record of allRecords) {
+      // 在本地找这首歌，获取 notes 以计算满分 DX
+      const song = await Song.findOne({ id: record.song_id.toString() });
+      if (!song) continue; 
+
+      const chartInfo = song.charts[record.level_index];
+      if (!chartInfo) continue;
+
+      const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
+      const maxDxScore = totalNotes * 3;
+
+      // 如果水鱼自带 ds 则使用，否则用本地的 ds
+      const constant = record.ds || song.ds[record.level_index];
+
+      // ✨ 调用我们写的计算器 ✨
+      const dxRatio = maxDxScore > 0 ? (record.dxScore / maxDxScore) : 0;
+      const pf = calculatePF(constant, record.achievements, record.dxScore, maxDxScore);
+
+      processedScores.push({
+        user: userId,
+        songId: song.id,
+        songName: record.title,
+        difficulty: record.level_index,
+        level: record.level,
+        achievements: record.achievements,
+        dxScore: record.dxScore,
+        fc: record.fc,
+        fs: record.fs,
+        // 新增的 PF 字段
+        pf: pf,
+        dxRatio: dxRatio,
+        constant: constant
+      });
+    }
+
+    // 4. 更新数据库：先删旧成绩，再插新成绩
+    await Score.deleteMany({ user: userId });
+    await Score.insertMany(processedScores);
+
+    // 5. 结算玩家的 Total PF (取 PF 最高的 50 首歌)
+    const top50 = processedScores
+      .sort((a, b) => b.pf - a.pf)
+      .slice(0, 50);
+    
+    const totalPf = top50.reduce((sum, score) => sum + score.pf, 0);
+
+    // 6. 更新用户总分并保存
+    user.totalPf = Number(totalPf.toFixed(2));
+    await user.save();
+
+    res.json({ 
+      message: '数据同步成功！', 
+      totalPf: user.totalPf,
+      syncedCount: processedScores.length 
+    });
+
+  } catch (error) {
+    console.error('同步失败:', error);
+    if (error.response && error.response.status === 400) {
+      return res.status(400).json({ message: '无法获取数据。请确保水鱼账号存在，且在查分器设置中开启了“数据公开”。' });
+    }
+    // 捕获 JWT 过期等异常
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: '登录已过期，请重新登录' });
+    }
+    res.status(500).json({ message: '服务器内部错误' });
+  }
 });
 
 
