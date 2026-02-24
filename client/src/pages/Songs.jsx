@@ -18,10 +18,15 @@ export default function Songs() {
     const fetchSongs = async () => {
       try {
         setIsLoading(true);
-        // 直接请求水鱼的公开全量曲目接口
-        const res = await axios.get('https://www.diving-fish.com/api/maimaidxprober/music_data');
-        // 水鱼的数据默认是旧歌在前，我们可以把它反转一下，让新歌/高定数在前面，或者保持原样
-        setSongs(res.data.reverse()); 
+        // 【修改点1】弃用 axios，改用原生 fetch 避免携带全局 Authorization header
+        // 【修改点2】使用我们即将配置的代理路径 /proxy/diving-fish
+        const response = await fetch('/proxy/diving-fish/music_data');
+        
+        if (!response.ok) throw new Error('网络请求失败');
+        
+        const data = await response.json();
+        // 水鱼的数据默认是旧歌在前，反转一下让新歌在前面
+        setSongs(data.reverse()); 
       } catch (err) {
         console.error("获取曲目数据失败:", err);
         setError("无法连接到查分器服务器，请检查网络或跨域设置");
