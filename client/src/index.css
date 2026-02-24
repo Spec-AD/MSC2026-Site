@@ -30,9 +30,15 @@ body {
   font-display: swap;
 }
 
+body {
+  /* 600 对应 Semibold */
+  font-family: 'Noto Sans SC', sans-serif;
+  font-weight: 600; 
+}
+
 /* --- 设置全局默认字体 --- */
 body {
-  font-family: 'EIms_Sans', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: 'EIms_Sans', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 /* 核心背景设置 */
