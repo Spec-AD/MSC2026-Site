@@ -7,8 +7,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        // 这里顺便帮你定义好中文字体栈
-        sans: ['"Noto Sans SC"', 'sans-serif'],
+        sans: ['EIms_Sans', '-apple-system', 'BlinkMacSystemFont', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif'],
+        mono: ['EIms_Sans', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'monospace'],
       }
     },
   },
