@@ -13,6 +13,28 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* --- 引入本地 EIms_Sans 字体 --- */
+@font-face {
+  font-family: 'EIms_Sans';
+  src: url('/fonts/EIms_Sans-Regular.ttf') format('truetype');
+  font-weight: 400; 
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'EIms_Sans';
+  src: url('/fonts/EIms_Sans-Bold.ttf') format('truetype');
+  font-weight: 700; 
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- 设置全局默认字体 --- */
+body {
+  font-family: 'EIms_Sans', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
 /* 核心背景设置 */
 #root {
   min-height: 100vh;
