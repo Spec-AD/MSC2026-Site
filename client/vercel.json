@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/proxy/diving-fish/:match*",
+      "destination": "https://www.diving-fish.com/api/maimaidxprober/:match*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
