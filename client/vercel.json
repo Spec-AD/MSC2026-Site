@@ -5,6 +5,10 @@
       "destination": "https://www.diving-fish.com/api/maimaidxprober/:match*"
     },
     {
+      "source": "/api/:match*",
+      "destination": "https://magix.zeabur.app/api/:match*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
