@@ -5,6 +5,7 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const axios = require('axios');
 const Song = require('./models/Song');
 const { calculatePF } = require('./utils/pfCalculator');
+const Feedback = require('./models/Feedback');
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -583,6 +584,119 @@ app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('[Sync Error]', err.message);
     res.status(500).json({ msg: '曲库同步失败，请检查服务器网络或水鱼接口状态' });
+  }
+});
+
+// ==========================================
+// 反馈大厅 API (Feedback System)
+// ==========================================
+
+// 1. 获取所有反馈 (自动处理 90 天 Closed 逻辑)
+app.get('/api/feedback', async (req, res) => {
+  try {
+    // 自动清理：距上次状态变更超过 90 天且未 Closed 的，静默更新为 CLOSED
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    await Feedback.updateMany(
+      { status: { $ne: 'CLOSED' }, statusUpdatedAt: { $lt: ninetyDaysAgo } },
+      { $set: { status: 'CLOSED', statusUpdatedAt: new Date() } }
+    );
+
+    const feedbacks = await Feedback.find()
+      .populate('author', 'username avatarUrl role') // 关联查询作者头像和用户名
+      .sort({ updatedAt: -1 }); // 最近更新的在最前面
+      
+    res.json(feedbacks);
+  } catch (err) {
+    res.status(500).json({ message: '获取反馈失败' });
+  }
+});
+
+// 2. 提交新反馈 (需登录)
+app.post('/api/feedback', authMiddleware, async (req, res) => {
+  try {
+    const { title, content, type } = req.body;
+    if (!title || !content || !type) return res.status(400).json({ message: '请填写完整信息' });
+
+    const newFeedback = new Feedback({
+      author: req.user.id,
+      title,
+      content,
+      type
+    });
+    await newFeedback.save();
+    res.status(201).json(newFeedback);
+  } catch (err) {
+    res.status(500).json({ message: '发布反馈失败' });
+  }
+});
+
+// 3. 重编/修改反馈 (仅限作者本人)
+app.put('/api/feedback/:id', authMiddleware, async (req, res) => {
+  try {
+    const feedback = await Feedback.findById(req.params.id);
+    if (!feedback) return res.status(404).json({ message: '反馈不存在' });
+    if (feedback.author.toString() !== req.user.id) return res.status(403).json({ message: '无权修改' });
+
+    // 更新内容，状态强制重置为 PENDING
+    feedback.title = req.body.title || feedback.title;
+    feedback.content = req.body.content || feedback.content;
+    feedback.type = req.body.type || feedback.type;
+    feedback.status = 'PENDING';
+    feedback.statusUpdatedAt = Date.now();
+    
+    await feedback.save();
+    res.json(feedback);
+  } catch (err) {
+    res.status(500).json({ message: '修改失败' });
+  }
+});
+
+// 4. 删除反馈 (作者本人 或 ADM)
+app.delete('/api/feedback/:id', authMiddleware, async (req, res) => {
+  try {
+    const feedback = await Feedback.findById(req.params.id);
+    if (!feedback) return res.status(404).json({ message: '反馈不存在' });
+    
+    const user = await User.findById(req.user.id);
+    if (feedback.author.toString() !== req.user.id && user.role !== 'ADM') {
+      return res.status(403).json({ message: '无权删除' });
+    }
+
+    await Feedback.findByIdAndDelete(req.params.id);
+    res.json({ message: '反馈已删除' });
+  } catch (err) {
+    res.status(500).json({ message: '删除失败' });
+  }
+});
+
+// 5. 状态流转操作 (ADM解决 / 作者重申)
+app.patch('/api/feedback/:id/status', authMiddleware, async (req, res) => {
+  try {
+    const { action } = req.body; // 'SOLVE' or 'REAPPEAL'
+    const feedback = await Feedback.findById(req.params.id);
+    const user = await User.findById(req.user.id);
+    if (!feedback) return res.status(404).json({ message: '反馈不存在' });
+
+    if (action === 'SOLVE') {
+      if (user.role !== 'ADM') return res.status(403).json({ message: '仅管理员可标记为已解决' });
+      feedback.status = 'SOLVED';
+      feedback.statusUpdatedAt = Date.now();
+    } 
+    else if (action === 'REAPPEAL') {
+      if (feedback.author.toString() !== req.user.id) return res.status(403).json({ message: '仅发起者可要求重申' });
+      if (feedback.status !== 'SOLVED') return res.status(400).json({ message: '当前状态不可重申' });
+      
+      const hoursSinceSolved = (Date.now() - new Date(feedback.statusUpdatedAt).getTime()) / (1000 * 60 * 60);
+      if (hoursSinceSolved < 2) return res.status(400).json({ message: '标记为已解决至少 2 小时后才可申请重申' });
+
+      feedback.status = 'PENDING';
+      feedback.statusUpdatedAt = Date.now();
+    }
+    
+    await feedback.save();
+    res.json(feedback);
+  } catch (err) {
+    res.status(500).json({ message: '状态更新失败' });
   }
 });
 
