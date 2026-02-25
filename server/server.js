@@ -591,10 +591,9 @@ app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
 // 反馈大厅 API (Feedback System)
 // ==========================================
 
-// 1. 获取所有反馈 (自动处理 90 天 Closed 逻辑)
+// 1. 获取所有反馈 (处理 90 天 Closed，按置顶和时间排序，并带出回复者的信息)
 app.get('/api/feedback', async (req, res) => {
   try {
-    // 自动清理：距上次状态变更超过 90 天且未 Closed 的，静默更新为 CLOSED
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     await Feedback.updateMany(
       { status: { $ne: 'CLOSED' }, statusUpdatedAt: { $lt: ninetyDaysAgo } },
@@ -602,8 +601,9 @@ app.get('/api/feedback', async (req, res) => {
     );
 
     const feedbacks = await Feedback.find()
-      .populate('author', 'username avatarUrl role') // 关联查询作者头像和用户名
-      .sort({ updatedAt: -1 }); // 最近更新的在最前面
+      .populate('author', 'username avatarUrl role')
+      .populate('replies.author', 'username avatarUrl role') // 联表查询回复者的信息
+      .sort({ isPinned: -1, updatedAt: -1 }); // 先按置顶降序排列，再按时间降序
       
     res.json(feedbacks);
   } catch (err) {
@@ -697,6 +697,45 @@ app.patch('/api/feedback/:id/status', authMiddleware, async (req, res) => {
     res.json(feedback);
   } catch (err) {
     res.status(500).json({ message: '状态更新失败' });
+  }
+});
+
+// 6. 切换置顶状态 (仅限 ADM)
+app.patch('/api/feedback/:id/pin', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (user.role !== 'ADM') return res.status(403).json({ message: '权限不足' });
+
+    const feedback = await Feedback.findById(req.params.id);
+    if (!feedback) return res.status(404).json({ message: '反馈不存在' });
+
+    feedback.isPinned = !feedback.isPinned; // 切换置顶状态
+    await feedback.save();
+    
+    res.json(feedback);
+  } catch (err) {
+    res.status(500).json({ message: '置顶操作失败' });
+  }
+});
+
+// 7. 添加回复 (需登录)
+app.post('/api/feedback/:id/reply', authMiddleware, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) return res.status(400).json({ message: '回复内容不能为空' });
+
+    const feedback = await Feedback.findById(req.params.id);
+    if (!feedback) return res.status(404).json({ message: '反馈不存在' });
+
+    feedback.replies.push({
+      author: req.user.id,
+      content: content.trim()
+    });
+
+    await feedback.save();
+    res.status(201).json({ message: '回复成功' });
+  } catch (err) {
+    res.status(500).json({ message: '回复失败' });
   }
 });
 
