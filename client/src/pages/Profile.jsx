@@ -15,6 +15,7 @@ const Profile = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [proberId, setProberId] = useState('');
   
   // --- 编辑与同步状态 ---
   const [isEditing, setIsEditing] = useState(false);
@@ -73,8 +74,13 @@ const Profile = () => {
     }
   };
 
-  // --- 处理水鱼 B50 数据同步 (纯 Import-Token 版本) ---
+// --- 处理水鱼 B50 数据同步 (需 Import-Token 和 Username) ---
   const handleSyncMaimai = async () => {
+    // 强制验证两个输入框
+    if (!proberId.trim()) {
+      alert('请输入有效的水鱼查分器用户名或 QQ！');
+      return;
+    }
     if (!importToken.trim()) {
       alert('请提供有效的 Import-Token！（前往水鱼查分器获取）');
       return;
@@ -82,15 +88,15 @@ const Profile = () => {
     
     setIsSyncingMaimai(true);
     try {
-      // 仅发送 importToken
+      // 同时把查分器账号和 Token 传给后端
       const res = await axios.post('/api/users/sync-maimai', { 
+        proberUsername: proberId,
         importToken: importToken 
       });
       alert('✅ 数据同步成功！您的当前 Rating 为: ' + res.data.rating);
-      // 刷新页面以拉取最新成绩数据
       window.location.reload();
     } catch (err) {
-      alert('❌ ' + (err.response?.data?.msg || '同步失败，请检查 Token 是否正确'));
+      alert('❌ ' + (err.response?.data?.msg || '同步失败，请检查账号和 Token 是否匹配'));
     } finally {
       setIsSyncingMaimai(false);
     }
@@ -420,7 +426,7 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* --- 水鱼数据同步模块 (仅本人可见) --- */}
+{/* --- 水鱼数据同步模块 (仅本人可见) --- */}
         {isOwnProfile && (
           <motion.div 
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -431,19 +437,28 @@ const Profile = () => {
                 Data Synchronization
               </label>
               <div className="text-gray-400 text-xs leading-relaxed">
-                绑定 Import-Token，生成专属舞萌 DX 战力面板与 B50 成绩单。<br/>
+                绑定查分器账号并提供 Import-Token即可获取您的B50<br/>
                 <a 
                   href="https://www.diving-fish.com/maimaidx/prober/" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-blue-400 underline hover:text-blue-300 mt-1 inline-block"
                 >
-                  不知道怎么获取？点击前往水鱼查分器主页生成 Import-Token
+                  不知道怎么获取？点击前往水鱼查分器主页 > 编辑个人资料 > 成绩导入Token（复制即可）
                 </a>
               </div>
             </div>
             
             <div className="flex flex-col md:flex-row w-full gap-3">
+              {/* 输入框 1：水鱼账号 */}
+              <input 
+                type="text" 
+                value={proberId}
+                onChange={(e) => setProberId(e.target.value)}
+                placeholder="水鱼用户名或QQ"
+                className="w-full md:w-48 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
+              />
+              {/* 输入框 2：超长 Token */}
               <input 
                 type="password" 
                 value={importToken}
