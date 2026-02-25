@@ -6,6 +6,7 @@ const axios = require('axios');
 const Song = require('./models/Song');
 const { calculatePF } = require('./utils/pfCalculator');
 const Feedback = require('./models/Feedback');
+const Message = require('./models/Message');
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -591,7 +592,7 @@ app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
 // 好友系统 API (Friend System)
 // ==========================================
 
-// 1. 发送好友请求
+// 1. 发送好友请求 (并同步发送站内信)
 app.post('/api/users/:username/friend-request', authMiddleware, async (req, res) => {
   try {
     const sender = await User.findById(req.user.id);
@@ -630,8 +631,20 @@ app.post('/api/users/:username/friend-request', authMiddleware, async (req, res)
     receiver.friendRequests.push(sender._id);
     await receiver.save();
 
-    res.json({ message: '好友申请已发送！' });
+    // 🔥 核心新增：向对方的收件箱发送一封带按钮的“好友请求邮件”
+    const friendRequestMsg = new Message({
+      receiver: receiver._id,
+      sender: sender._id,
+      type: 'FRIEND_REQUEST',
+      title: '📬 新的好友申请',
+      content: `玩家 [${sender.username}] 觉得你的实力很强，希望添加你为好友！`,
+      actionData: { senderId: sender._id } // 绑定发送者的 ID，供前端展示“同意/拒绝”按钮使用
+    });
+    await friendRequestMsg.save();
+
+    res.json({ message: '好友申请已发送，请等待对方查收信件！' });
   } catch (err) {
+    console.error('发送请求失败:', err);
     res.status(500).json({ message: '请求发送失败，请稍后重试' });
   }
 });
