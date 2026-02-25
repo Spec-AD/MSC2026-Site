@@ -430,8 +430,8 @@ app.get('/api/users/:username', async (req, res) => {
         // A. 查用户基础信息
         // 使用 .select('-password') 排除密码等敏感信息
         const user = await User.findOne({ username: req.params.username })
-            .select('-password -contactValue -contactType'); 
-	    .populate('friends', 'username uid avatarUrl totalPf rating');
+            .select('-password -contactValue -contactType')
+	        .populate('friends', 'username uid avatarUrl totalPf rating');
         
         if (!user) return res.status(404).json({ msg: '用户不存在' });
 
@@ -1015,4 +1015,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📅 Current Server Time: ${new Date().toLocaleString()}`);
+
 });
