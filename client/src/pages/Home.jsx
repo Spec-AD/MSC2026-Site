@@ -11,7 +11,7 @@ const Home = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [announcements, setAnnouncements] = useState([]); 
-  const [unreadCount, setUnreadCount] = useState(0); // 新增：未读消息数状态
+  const [unreadCount, setUnreadCount] = useState(0); // 未读消息数状态
 
   // 页面加载时拉取公告数据
   useEffect(() => {
@@ -26,7 +26,7 @@ const Home = () => {
     fetchAnnouncements();
   }, []);
 
-  // 新增：如果用户已登录，拉取未读消息数（小红点）
+  // 如果用户已登录，拉取未读消息数（小红点）
   useEffect(() => {
     if (user) {
       const fetchUnread = async () => {
@@ -40,22 +40,6 @@ const Home = () => {
       fetchUnread();
     }
   }, [user]);
-
-  let buttonText = "立即报名 MSC 2026";
-  let buttonLink = "/register";
-
-  if (user) {
-    if (user.isRegistered) {
-      buttonText = "查看预选赛成绩 →";
-      buttonLink = "/qualifiers";
-    } else {
-      buttonText = "前往填写报名表";
-      buttonLink = "/register";
-    }
-  } else {
-    buttonText = "登录 / 注册参赛";
-    buttonLink = "/login";
-  }
 
   return (
     // 外层容器：支持滚动，隐藏横向溢出
@@ -124,7 +108,7 @@ const Home = () => {
         
         <FallingIcons />
 
-        <div className="z-10 flex flex-col items-center text-center">
+        <div className="z-10 flex flex-col items-center text-center w-full">
           
           <motion.div
             initial={{ scale: 0.8, opacity: 0, y: 30 }}
@@ -143,24 +127,41 @@ const Home = () => {
 
           <div className="h-10 md:h-16"></div>
 
-          <Link to={buttonLink} className="w-full flex justify-center">
-            <motion.button
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+          {/* 🚀 核心替换：osu! 风格长图广告位 Banner 🚀 */}
+          <Link to="/register" className="w-full max-w-[850px] px-4 group">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1, duration: 1 }}
-              whileHover={{ scale: 1.05, textShadow: "0 0 8px rgb(255,255,255)" }}
-              whileTap={{ scale: 0.95 }}
-              className="text-xl md:text-3xl font-light tracking-[0.15em] md:tracking-[0.2em] text-white border-b border-white/30 pb-2 hover:border-white transition-all duration-300 whitespace-nowrap"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="relative w-full aspect-[5/1] md:aspect-[8/1] rounded-2xl md:rounded-3xl overflow-hidden border border-white/10 shadow-2xl group-hover:border-white/30 transition-all duration-500 bg-gray-900"
             >
-              {buttonText}
-            </motion.button>
+              {/* Banner 背景图片 - 建议尺寸 1600x200 */}
+              <img 
+                src="/assets/register_banner.png" 
+                alt="Register for MSC 2026"
+                className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500"
+                onError={(e) => { e.target.src = 'https://placehold.co/1600x200/0a0a0a/ffffff?text=ENTER+THE+STAGE+MSC+2026'; }} 
+              />
+
+              {/* 动态扫光层 */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
+              
+              {/* 覆盖文字 (如图片已带字可删除此 div) */}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-transparent transition-colors duration-500">
+                <span className="text-white text-sm md:text-2xl font-black italic tracking-[0.4em] uppercase drop-shadow-lg select-none">
+                  Enter the Stage.
+                </span>
+              </div>
+            </motion.div>
           </Link>
 
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.5, duration: 1 }}
-            className="mt-6 text-gray-400 text-[10px] md:text-sm tracking-[0.3em] uppercase opacity-80"
+            className="mt-8 text-gray-400 text-[10px] md:text-sm tracking-[0.3em] uppercase opacity-80"
           >
             Rhythm Game Tournament in Sihong
           </motion.p>
