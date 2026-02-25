@@ -352,7 +352,7 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* 按钮控制区 */}
+{/* 按钮控制区 */}
           <div className="pb-2 md:pb-4 w-full md:w-auto flex flex-wrap justify-center gap-3 z-20">
             {isOwnProfile ? (
               !isEditing ? (
@@ -393,7 +393,7 @@ const Profile = () => {
                 </div>
               )
             ) : (
-// 🔥 全新注入：动态好友状态按钮系统 🔥
+              // 🔥 全新注入：动态好友状态按钮系统 🔥
               (() => {
                 const currentUserId = currentUser?.id || currentUser?._id;
                 
@@ -423,15 +423,17 @@ const Profile = () => {
 
                 // 状态 C：陌生人 -> 蓝色 加为好友 按钮
                 return (
-              <button 
-                  onClick={handleAddFriend}
-                  className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white rounded-full font-bold shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center"
-              >
-                  <FaUserPlus /> 加为好友
-              </button>
+                  <button 
+                    onClick={handleAddFriend}
+                    className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white rounded-full font-bold shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center"
+                  >
+                    <FaUserPlus /> 加为好友
+                  </button>
+                );
+              })()
             )}
           </div>
-        </div>
+
 
         {/* 水鱼数据同步模块 (仅本人可见) */}
         {isOwnProfile && (
