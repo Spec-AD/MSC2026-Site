@@ -147,24 +147,8 @@ const Home = () => {
 
               {/* 动态扫光层 */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
-              
-              {/* 覆盖文字 (如图片已带字可删除此 div) */}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-transparent transition-colors duration-500">
-                <span className="text-white text-sm md:text-2xl font-black italic tracking-[0.4em] uppercase drop-shadow-lg select-none">
-                  Enter the Stage.
-                </span>
-              </div>
             </motion.div>
           </Link>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.5, duration: 1 }}
-            className="mt-8 text-gray-400 text-[10px] md:text-sm tracking-[0.3em] uppercase opacity-80"
-          >
-            Rhythm Game Tournament in Sihong
-          </motion.p>
 
           <motion.div
             initial={{ opacity: 0 }}
