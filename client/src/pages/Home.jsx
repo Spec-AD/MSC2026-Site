@@ -47,7 +47,7 @@ const Home = () => {
       {/* ==================================================== */}
       {/* 全新注入：主页右上角专属标志与按钮群 */}
       {/* ==================================================== */}
-      <div className="fixed top-6 right-6 md:right-8 z-[100] flex flex-col md:flex-row items-end md:items-center gap-3 md:gap-6 pointer-events-auto">
+      <div className="absolute top-6 right-6 md:right-8 z-[100] flex flex-col md:flex-row items-end md:items-center gap-3 md:gap-6 pointer-events-auto">
         
         {/* 品牌标识 */}
         <div className="text-right flex flex-col items-end cursor-default select-none">

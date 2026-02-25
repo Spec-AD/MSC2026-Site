@@ -239,7 +239,9 @@ const Feedback = () => {
             <div className="text-center py-20 text-gray-600 font-mono text-sm uppercase tracking-widest">No feedbacks found.</div>
           ) : (
             feedbacks.map((fb, index) => {
-              const isAuthor = user && fb.author && fb.author._id === user.id;
+              // 兼容刚登录(id)和刷新页面(_id)两种状态
+	      const currentUserId = user ? (user.id || user._id) : null; 
+              const isAuthor = user && fb.author && fb.author._id === currentUserId;
               const isADM = user && user.role === 'ADM';
 
               return (
