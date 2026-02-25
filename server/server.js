@@ -543,10 +543,14 @@ app.post('/api/announcements', authMiddleware, async (req, res) => {
   }
 });
 
-// === ADM 全量曲库同步 ===
+// === ADM 全量曲库同步 (权限校验修复版) ===
 app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
   try {
-    if (req.user.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
+    // 🔥 修复点：不能直接查 req.user.role（Token里没有），必须去数据库查出你的真身！
+    const adminUser = await User.findById(req.user.id || req.user._id);
+    if (!adminUser || adminUser.role !== 'ADM') {
+      return res.status(403).json({ msg: '权限不足：服务器未能识别您的 ADM 身份' });
+    }
 
     const response = await axios.get('https://www.diving-fish.com/api/maimaidxprober/music_data');
     const songs = response.data;
@@ -566,7 +570,7 @@ app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
             ds: song.ds,
             level: song.level,
             basic_info: song.basic_info,
-            charts: song.charts // 🔥 物量数据现在会 100% 写入数据库
+            charts: song.charts // 🔥 确保物量数据 100% 写入数据库
           }
         },
         upsert: true
