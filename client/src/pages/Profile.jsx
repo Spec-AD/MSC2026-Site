@@ -53,6 +53,12 @@ const Profile = () => {
     try {
       setLoading(true);
       setError('');
+
+// 🔥 1. 在请求末尾加上时间戳 ?t=...，强制打穿浏览器和 Zeabur 的所有缓存！
+      const res = await axios.get(`/api/users/${targetUsername}?t=${Date.now()}`);
+      
+      // 🔥 2. 把后端真实传过来的数据打印到控制台，不给它任何伪装的机会
+      console.log("👀 从后端收到的完整档案数据:", res.data);
       const res = await axios.get(`/api/users/${targetUsername}`);
       setProfile(res.data);
       setProberId(res.data.proberUsername || ''); // 初始化水鱼账号
