@@ -149,22 +149,22 @@ const Feedback = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-black text-white pt-24 pb-20 px-4 md:px-8 font-sans relative">
+    <div className="w-full min-h-screen text-white pt-24 pb-20 px-4 md:px-8 font-sans relative overflow-x-hidden bg-gradient-to-b from-transparent to-black/80">
       <div className="absolute inset-0 bg-[url('/assets/grid.svg')] opacity-10 pointer-events-none"></div>
 
       <div className="max-w-4xl mx-auto relative z-10">
         
         {/* Header */}
         <div className="mb-12 border-b border-white/10 pb-6">
-          <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter drop-shadow-lg text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500">
-            FEEDBACK HALL.
+          <h1 className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-lg text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500">
+            FEEDBACK 反馈
           </h1>
           <p className="text-gray-400 text-xs md:text-sm mt-3 tracking-widest uppercase font-mono">
             Help us shape the future of purebeat.top
           </p>
         </div>
 
-        {/* 提交反馈表单 (需登录) */}
+        {/* 提交反馈表单 */}
         {user ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-16 bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-2xl p-6 shadow-2xl">
             <h2 className="text-sm font-bold text-gray-300 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -180,15 +180,15 @@ const Feedback = () => {
                   onChange={(e) => setFormData({...formData, type: e.target.value})}
                   className="bg-black/60 border border-gray-700 text-sm font-bold text-gray-200 rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors w-full md:w-1/4 uppercase tracking-wider"
                 >
-                  <option value="FEATURE">💡 Feature (建议)</option>
-                  <option value="PROBLEM">⚠️ Problem (非代码问题)</option>
-                  <option value="BUG">🐛 Bug (代码报错)</option>
+                  <option value="FEATURE">Feature (建议)</option>
+                  <option value="PROBLEM">Problem (非代码问题)</option>
+                  <option value="BUG">Bug (代码报错)</option>
                 </select>
 
                 {/* 标题 */}
                 <input 
                   type="text" 
-                  placeholder="标题 (一句话概括)..." 
+                  placeholder="标题" 
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
                   className="bg-black/60 border border-gray-700 text-white text-sm rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors flex-1 placeholder:text-gray-600"
