@@ -588,6 +588,55 @@ app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
 });
 
 // ==========================================
+// 好友系统 API (Friend System)
+// ==========================================
+
+// 1. 发送好友请求
+app.post('/api/users/:username/friend-request', authMiddleware, async (req, res) => {
+  try {
+    const sender = await User.findById(req.user.id);
+    const receiver = await User.findOne({ username: req.params.username });
+
+    if (!receiver) return res.status(404).json({ message: '目标用户不存在' });
+    if (sender._id.toString() === receiver._id.toString()) return res.status(400).json({ message: '不能添加自己为好友' });
+
+    // 赞助分级栏位计算法则
+    const getFriendLimit = (tier) => {
+      if (tier === 2) return 5000;
+      if (tier === 1) return 300;
+      return 50; // 默认普通用户
+    };
+
+    const senderLimit = getFriendLimit(sender.sponsorTier || 0);
+    const receiverLimit = getFriendLimit(receiver.sponsorTier || 0);
+
+    // 容量上限拦截
+    if (sender.friends.length >= senderLimit) {
+      return res.status(400).json({ message: `你的好友数量已达上限 (${senderLimit})，请升级赞助档位或清理好友` });
+    }
+    if (receiver.friends.length >= receiverLimit) {
+      return res.status(400).json({ message: '对方的好友栏位已满，无法接收新请求' });
+    }
+
+    // 重复性拦截
+    if (receiver.friends.includes(sender._id)) {
+      return res.status(400).json({ message: '你们已经是好友了' });
+    }
+    if (receiver.friendRequests.includes(sender._id)) {
+      return res.status(400).json({ message: '你已经发送过请求，请耐心等待对方同意' });
+    }
+
+    // 将发送者的 ID 推入接收者的“待处理请求列表”
+    receiver.friendRequests.push(sender._id);
+    await receiver.save();
+
+    res.json({ message: '好友申请已发送！' });
+  } catch (err) {
+    res.status(500).json({ message: '请求发送失败，请稍后重试' });
+  }
+});
+
+// ==========================================
 // 反馈大厅 API (Feedback System)
 // ==========================================
 
