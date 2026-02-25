@@ -3,7 +3,7 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { FaEnvelopeOpenText, FaUserPlus, FaShieldAlt, FaServer, FaCheck, FaTimes, FaSpinner } from 'react-icons/fa';
+import { FaEnvelopeOpenText, FaUserPlus, FaShieldAlt, FaServer, FaCheck, FaTimes, FaSpinner, FaArrowLeft } from 'react-icons/fa';
 import FallingIcons from '../components/FallingIcons';
 
 const Inbox = () => {
@@ -11,7 +11,10 @@ const Inbox = () => {
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] = useState(null); // 防止连点
+  const [processingId, setProcessingId] = useState(null);
+  
+  // 新增：当前选中的邮件 ID
+  const [selectedMsgId, setSelectedMsgId] = useState(null);
 
   useEffect(() => {
     if (!user) {
@@ -29,6 +32,11 @@ const Inbox = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(res.data);
+      
+      // 如果有数据且没有选中的邮件，默认选中第一条 (仅在电脑端体验更好，可根据需要调整)
+      if (res.data.length > 0 && window.innerWidth >= 768) {
+        setSelectedMsgId(res.data[0]._id);
+      }
     } catch (err) {
       console.error('拉取信件失败', err);
     } finally {
@@ -36,7 +44,6 @@ const Inbox = () => {
     }
   };
 
-  // 标记普通信件为已读
   const handleMarkAsRead = async (id) => {
     try {
       setProcessingId(id);
@@ -44,7 +51,6 @@ const Inbox = () => {
       await axios.patch(`/api/messages/${id}/read`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      // 本地更新状态，让红点消失
       setMessages(messages.map(msg => msg._id === id ? { ...msg, isRead: true } : msg));
     } catch (err) {
       alert('操作失败');
@@ -53,7 +59,6 @@ const Inbox = () => {
     }
   };
 
-  // 处理好友请求 (同意或拒绝)
   const handleFriendAction = async (action, senderId, messageId) => {
     try {
       setProcessingId(messageId);
@@ -65,7 +70,8 @@ const Inbox = () => {
       });
       
       alert(res.data.message);
-      fetchMessages(); // 重新拉取列表更新状态
+      fetchMessages(); 
+      setSelectedMsgId(null); // 处理完后清空右侧视图
     } catch (err) {
       alert(err.response?.data?.message || '操作失败');
     } finally {
@@ -73,7 +79,6 @@ const Inbox = () => {
     }
   };
 
-  // 根据邮件类型渲染不同的图标和颜色
   const getTypeConfig = (type) => {
     switch (type) {
       case 'FRIEND_REQUEST':
@@ -86,127 +91,163 @@ const Inbox = () => {
     }
   };
 
+  // 获取当前选中的完整邮件对象
+  const selectedMsg = messages.find(m => m._id === selectedMsgId);
+
   return (
-    <div className="w-full min-h-screen text-white pt-24 pb-20 px-4 md:px-8 font-sans relative overflow-x-hidden bg-gradient-to-b from-transparent to-black/80">
+    <div className="w-full min-h-screen text-white pt-24 pb-8 px-4 md:px-8 font-sans relative overflow-hidden bg-gradient-to-b from-transparent to-black/80 flex flex-col">
       <FallingIcons />
 
-      <div className="max-w-3xl mx-auto relative z-10">
+      <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col relative z-10 h-full">
         
         {/* Header */}
-        <div className="mb-12 border-b border-white/10 pb-6">
-          <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter drop-shadow-lg text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500 flex items-center gap-4">
+        <div className="mb-6 border-b border-white/10 pb-4 shrink-0">
+          <h1 className="text-3xl md:text-4xl font-black italic tracking-tighter drop-shadow-lg text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500 flex items-center gap-4">
             <FaEnvelopeOpenText className="text-gray-300" /> INBOX.
           </h1>
-          <p className="text-gray-400 text-xs md:text-sm mt-3 tracking-widest uppercase font-mono">
-            Your personal messages and notifications
-          </p>
         </div>
 
-        {/* 邮件列表 */}
-        <div className="space-y-4">
-          {loading ? (
-            <div className="text-center py-20"><FaSpinner className="animate-spin text-3xl text-gray-600 mx-auto" /></div>
-          ) : messages.length === 0 ? (
-            <div className="text-center py-20 text-gray-600 font-mono text-sm uppercase tracking-widest bg-black/40 border border-gray-800 rounded-2xl backdrop-blur-md">
-              Inbox is empty.
+        {/* 核心双栏容器 */}
+        <div className="flex-1 flex flex-col md:flex-row gap-4 h-[calc(100vh-200px)] min-h-[500px]">
+          
+          {/* ================= 左侧：邮件列表 ================= */}
+          <div className={`w-full md:w-1/3 h-full bg-black/40 backdrop-blur-xl border border-gray-800 rounded-2xl overflow-hidden flex flex-col transition-all duration-300 ${selectedMsgId ? 'hidden md:flex' : 'flex'}`}>
+            <div className="p-4 border-b border-gray-800 bg-black/50 text-xs font-bold text-gray-400 uppercase tracking-widest flex justify-between items-center shrink-0">
+              <span>Message List</span>
+              <span>{messages.filter(m => !m.isRead).length} Unread</span>
             </div>
-          ) : (
-            messages.map((msg, index) => {
-              const config = getTypeConfig(msg.type);
-              const isUnread = !msg.isRead;
 
-              return (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  transition={{ delay: index * 0.05 }}
-                  key={msg._id} 
-                  className={`relative bg-black/50 backdrop-blur-md border rounded-xl p-5 md:p-6 transition-all ${
-                    isUnread ? 'border-gray-500 shadow-[0_0_15px_rgba(255,255,255,0.05)]' : 'border-gray-800 opacity-70 grayscale-[30%]'
-                  }`}
-                >
-                  {/* 未读红点标志 */}
-                  {isUnread && (
-                    <div className="absolute top-6 right-6 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>
-                  )}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              {loading ? (
+                <div className="flex justify-center items-center h-full"><FaSpinner className="animate-spin text-2xl text-gray-600" /></div>
+              ) : messages.length === 0 ? (
+                <div className="text-center p-8 text-gray-600 font-mono text-sm uppercase tracking-widest">Inbox is empty.</div>
+              ) : (
+                messages.map((msg) => {
+                  const isSelected = selectedMsgId === msg._id;
+                  const isUnread = !msg.isRead;
+                  const config = getTypeConfig(msg.type);
 
-                  {/* 发件人与类型信息 */}
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-black border border-gray-700 text-lg ${config.color}`}>
-                      {msg.sender?.avatarUrl ? (
-                        <img src={msg.sender.avatarUrl} alt="avatar" className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        config.icon
-                      )}
+                  return (
+                    <div 
+                      key={msg._id}
+                      onClick={() => setSelectedMsgId(msg._id)}
+                      className={`p-4 border-b border-gray-800/50 cursor-pointer transition-all ${isSelected ? 'bg-gray-800/80 border-l-4 border-l-blue-500' : 'hover:bg-gray-900/60 border-l-4 border-l-transparent'}`}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-black border border-gray-700 text-[10px] ${config.color}`}>
+                            {msg.sender?.avatarUrl ? <img src={msg.sender.avatarUrl} alt="avatar" className="w-full h-full rounded-full object-cover" /> : config.icon}
+                          </div>
+                          <span className="font-bold text-sm text-gray-200 truncate">{msg.sender?.username || 'SYSTEM'}</span>
+                        </div>
+                        <div className="flex flex-col items-end shrink-0 ml-2">
+                          {isUnread && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)] mb-1"></div>}
+                          <span className="text-[9px] text-gray-500 font-mono">{new Date(msg.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className={`text-sm truncate w-full ${isUnread ? 'text-white font-bold' : 'text-gray-400'}`}>
+                        {msg.title}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* ================= 右侧：邮件正文 ================= */}
+          <div className={`w-full md:w-2/3 h-full bg-black/40 backdrop-blur-xl border border-gray-800 rounded-2xl overflow-hidden flex flex-col transition-all duration-300 ${!selectedMsgId ? 'hidden md:flex' : 'flex'}`}>
+            
+            {!selectedMsg ? (
+              // 未选中任何邮件时的占位图
+              <div className="flex-1 flex flex-col items-center justify-center text-gray-600">
+                <FaEnvelopeOpenText className="text-6xl mb-4 opacity-20" />
+                <p className="font-mono text-sm tracking-widest uppercase">Select a message to read</p>
+              </div>
+            ) : (
+              // 选中邮件后的详情视图
+              <div className="flex-1 flex flex-col h-full">
+                
+                {/* 详情头部 */}
+                <div className="p-6 border-b border-gray-800 shrink-0 bg-gradient-to-b from-gray-900/50 to-transparent">
+                  {/* 手机端返回按钮 */}
+                  <button 
+                    onClick={() => setSelectedMsgId(null)}
+                    className="md:hidden flex items-center gap-2 text-gray-400 hover:text-white mb-4 text-xs font-bold uppercase tracking-widest transition-colors"
+                  >
+                    <FaArrowLeft /> Back to List
+                  </button>
+
+                  <h2 className="text-2xl font-bold text-white mb-4">{selectedMsg.title}</h2>
+                  
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-black border border-gray-700 text-xl overflow-hidden">
+                      {selectedMsg.sender?.avatarUrl ? <img src={selectedMsg.sender.avatarUrl} alt="avatar" className="w-full h-full object-cover" /> : getTypeConfig(selectedMsg.type).icon}
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                        {msg.sender?.username || 'SYSTEM'}
-                        <span className={`text-[9px] px-1.5 py-0.5 border rounded uppercase tracking-widest font-bold ${
-                          msg.type === 'ADM_DIRECT' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 
-                          msg.type === 'FRIEND_REQUEST' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 
-                          'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                        }`}>
-                          {config.label}
+                      <div className="font-bold text-gray-200 flex items-center gap-2">
+                        {selectedMsg.sender?.username || 'SYSTEM'}
+                        <span className="text-[9px] px-1.5 py-0.5 border border-gray-600 rounded uppercase tracking-widest text-gray-400 bg-gray-800/50">
+                          {getTypeConfig(selectedMsg.type).label}
                         </span>
                       </div>
-                      <div className="text-[10px] text-gray-500 font-mono tracking-wider mt-0.5">
-                        {new Date(msg.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      <div className="text-xs text-gray-500 font-mono mt-1">
+                        {new Date(selectedMsg.createdAt).toLocaleString('zh-CN', { hour12: false })}
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* 邮件正文 */}
-                  <div className="ml-0 md:ml-13 mb-4">
-                    <h3 className={`text-base font-bold mb-1 ${isUnread ? 'text-white' : 'text-gray-300'}`}>
-                      {msg.title}
-                    </h3>
-                    <p className="text-sm text-gray-400 leading-relaxed whitespace-pre-wrap">
-                      {msg.content}
-                    </p>
-                  </div>
+                {/* 详情正文 (可滚动) */}
+                <div className="p-6 flex-1 overflow-y-auto custom-scrollbar text-sm md:text-base text-gray-300 leading-relaxed whitespace-pre-wrap">
+                  {selectedMsg.content}
+                </div>
 
-                  {/* 操作按钮区 */}
-                  <div className="ml-0 md:ml-13 flex flex-wrap items-center gap-3">
-                    
-                    {/* 好友请求专属按钮 (仅未读时显示) */}
-                    {msg.type === 'FRIEND_REQUEST' && isUnread && msg.actionData?.senderId && (
-                      <>
-                        <button 
-                          onClick={() => handleFriendAction('ACCEPT', msg.actionData.senderId, msg._id)}
-                          disabled={processingId === msg._id}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest rounded transition-colors disabled:opacity-50"
-                        >
-                          <FaCheck /> Accept
-                        </button>
-                        <button 
-                          onClick={() => handleFriendAction('REJECT', msg.actionData.senderId, msg._id)}
-                          disabled={processingId === msg._id}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-[10px] md:text-xs font-bold uppercase tracking-widest rounded transition-colors disabled:opacity-50 border border-gray-700"
-                        >
-                          <FaTimes /> Reject
-                        </button>
-                      </>
-                    )}
-
-                    {/* 普通邮件标为已读按钮 (仅未读时显示) */}
-                    {msg.type !== 'FRIEND_REQUEST' && isUnread && (
-                      <button 
-                        onClick={() => handleMarkAsRead(msg._id)}
-                        disabled={processingId === msg._id}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-white text-black hover:bg-gray-200 text-[10px] md:text-xs font-bold uppercase tracking-widest rounded transition-colors disabled:opacity-50"
-                      >
-                        Mark as Read
-                      </button>
-                    )}
-                  </div>
+                {/* 详情底部操作区 */}
+                <div className="p-6 border-t border-gray-800 shrink-0 bg-black/50 flex flex-wrap gap-3 items-center">
                   
-                </motion.div>
-              );
-            })
-          )}
-        </div>
+                  {selectedMsg.type === 'FRIEND_REQUEST' && !selectedMsg.isRead && selectedMsg.actionData?.senderId && (
+                    <>
+                      <button 
+                        onClick={() => handleFriendAction('ACCEPT', selectedMsg.actionData.senderId, selectedMsg._id)}
+                        disabled={processingId === selectedMsg._id}
+                        className="flex items-center gap-1.5 px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold uppercase tracking-widest rounded transition-colors disabled:opacity-50"
+                      >
+                        <FaCheck /> Accept Request
+                      </button>
+                      <button 
+                        onClick={() => handleFriendAction('REJECT', selectedMsg.actionData.senderId, selectedMsg._id)}
+                        disabled={processingId === selectedMsg._id}
+                        className="flex items-center gap-1.5 px-6 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-xs font-bold uppercase tracking-widest rounded transition-colors disabled:opacity-50"
+                      >
+                        <FaTimes /> Reject
+                      </button>
+                    </>
+                  )}
 
+                  {selectedMsg.type !== 'FRIEND_REQUEST' && !selectedMsg.isRead && (
+                    <button 
+                      onClick={() => handleMarkAsRead(selectedMsg._id)}
+                      disabled={processingId === selectedMsg._id}
+                      className="flex items-center gap-1.5 px-6 py-2.5 bg-white text-black hover:bg-gray-200 text-xs font-bold uppercase tracking-widest rounded transition-colors disabled:opacity-50"
+                    >
+                      Mark as Read
+                    </button>
+                  )}
+                  
+                  {selectedMsg.isRead && (
+                    <span className="text-xs font-mono text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
+                      <FaCheck className="text-green-500/50" /> Message Read
+                    </span>
+                  )}
+                </div>
+
+              </div>
+            )}
+          </div>
+          
+        </div>
       </div>
     </div>
   );
