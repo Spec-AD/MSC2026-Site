@@ -59,6 +59,7 @@ const Admin = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      const token = localStorage.getItem('token');
       await axios.post('/api/announcements', formData);
       alert('发布成功！全站已同步。');
       setFormData({ title: '', type: 'NEWS', content: '' }); // 清空表单
