@@ -19,8 +19,7 @@ const Profile = () => {
   // --- 编辑与同步状态 ---
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [proberId, setProberId] = useState('');
-  const [importToken, setImportToken] = useState(''); // 新增：Import-Token 状态
+  const [importToken, setImportToken] = useState(''); // 仅保留 Import-Token 状态
   const [isSyncingMaimai, setIsSyncingMaimai] = useState(false);
   
   // 保存文本和本地预览的 Base64 URL
@@ -59,7 +58,6 @@ const Profile = () => {
       const res = await axios.get(`/api/users/${targetUsername}?t=${Date.now()}`);
       
       setProfile(res.data);
-      setProberId(res.data.proberUsername || ''); 
       setImportToken(res.data.importToken || ''); // 初始化 Token
       
       // 初始化编辑框的数据
@@ -75,12 +73,8 @@ const Profile = () => {
     }
   };
 
-  // --- 处理水鱼 B50 数据同步 (使用 Import-Token) ---
+  // --- 处理水鱼 B50 数据同步 (纯 Import-Token 版本) ---
   const handleSyncMaimai = async () => {
-    if (!proberId.trim()) {
-      alert('请输入有效的水鱼查分器用户名或 QQ！');
-      return;
-    }
     if (!importToken.trim()) {
       alert('请提供有效的 Import-Token！（前往水鱼查分器获取）');
       return;
@@ -88,16 +82,15 @@ const Profile = () => {
     
     setIsSyncingMaimai(true);
     try {
-      // 将 proberUsername 和 importToken 一起发给后端
+      // 仅发送 importToken
       const res = await axios.post('/api/users/sync-maimai', { 
-        proberUsername: proberId, 
         importToken: importToken 
       });
       alert('✅ 数据同步成功！您的当前 Rating 为: ' + res.data.rating);
       // 刷新页面以拉取最新成绩数据
       window.location.reload();
     } catch (err) {
-      alert('❌ ' + (err.response?.data?.msg || '同步失败，请检查账号和 Token 是否正确'));
+      alert('❌ ' + (err.response?.data?.msg || '同步失败，请检查 Token 是否正确'));
     } finally {
       setIsSyncingMaimai(false);
     }
@@ -438,7 +431,7 @@ const Profile = () => {
                 Data Synchronization
               </label>
               <div className="text-gray-400 text-xs leading-relaxed">
-                绑定查分器账号并提供 Import-Token，生成专属舞萌 DX 战力面板与 B50 成绩单。<br/>
+                绑定 Import-Token，生成专属舞萌 DX 战力面板与 B50 成绩单。<br/>
                 <a 
                   href="https://www.diving-fish.com/maimaidx/prober/" 
                   target="_blank" 
@@ -452,23 +445,16 @@ const Profile = () => {
             
             <div className="flex flex-col md:flex-row w-full gap-3">
               <input 
-                type="text" 
-                value={proberId}
-                onChange={(e) => setProberId(e.target.value)}
-                placeholder="水鱼用户名或 QQ"
-                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
-              />
-              <input 
                 type="password" 
                 value={importToken}
                 onChange={(e) => setImportToken(e.target.value)}
-                placeholder="在此粘贴您的 Import-Token"
-                className="flex-[2] bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors font-mono"
+                placeholder="在此粘贴您的超长 Import-Token"
+                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors font-mono"
               />
               <button 
                 onClick={handleSyncMaimai}
                 disabled={isSyncingMaimai}
-                className="bg-gray-800 hover:bg-gray-700 text-purple-400 border border-gray-700 hover:border-purple-500 px-8 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap shadow-lg flex items-center justify-center gap-2"
+                className="bg-gray-800 hover:bg-gray-700 text-purple-400 border border-gray-700 hover:border-purple-500 px-8 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap shadow-lg flex items-center justify-center gap-2 shrink-0"
               >
                 {isSyncingMaimai ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
                 {isSyncingMaimai ? 'SYNCING...' : 'SYNC'}
