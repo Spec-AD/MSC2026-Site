@@ -125,6 +125,24 @@ const Profile = () => {
     reader.readAsDataURL(file);
   };
 
+// --- 发送好友请求 ---
+  const handleAddFriend = async () => {
+    if (!currentUser) {
+      alert('请先登录才能添加好友！');
+      navigate('/login');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`/api/users/${profile.username}/friend-request`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert(res.data.message);
+    } catch (err) {
+      alert(err.response?.data?.message || '发送请求失败');
+    }
+  };
+
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append('image', file);
@@ -364,8 +382,11 @@ const Profile = () => {
                 </div>
               )
             ) : (
-              <button className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white rounded-full font-bold shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center">
-                <FaUserPlus /> 加为好友
+              <button 
+                  onClick={handleAddFriend}
+                  className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white rounded-full font-bold shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center"
+              >
+                  <FaUserPlus /> 加为好友
               </button>
             )}
           </div>
