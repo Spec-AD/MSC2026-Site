@@ -986,7 +986,7 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
       songMap.set(String(song.id), song);
     });
 
-    // 3. 极速内存计算 (0.01秒完成 1500首歌的 PF 计算)
+// 3. 极速内存计算 (0.01秒完成 1500首歌的 PF 计算)
     const processedScores = allRecords.map(rec => {
       const song = songMap.get(String(rec.song_id));
       let pf = 0, dxRatio = 0, constant = rec.ds || 0;
@@ -1009,9 +1009,16 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
       
       return {
         userId: req.user.id,
+        // 🔥 修复点 1：补齐数据库必填的 nickname (使用水鱼返回的昵称)
+        nickname: data.nickname || 'MaimaiPlayer', 
+        // 🔥 修复点 2：补齐数据库必填的 imageUrl (直接拼接水鱼的官方封面)
+        imageUrl: `https://www.diving-fish.com/covers/${rec.song_id}.png`, 
+        // 🔥 修复点 3：补齐数据库必填的 achievementRate 
+        achievementRate: rec.achievements || 0, 
+
         songId: rec.song_id, 
         songName: song ? song.title : rec.title,
-        achievement: rec.achievements || 0,
+        achievement: rec.achievements || 0, 
         dxScore: rec.dxScore || 0,
         rating: rec.ra || 0, 
         level: rec.level_index || 0, 
