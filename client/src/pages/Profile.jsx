@@ -631,8 +631,62 @@ const Profile = () => {
           </div>
 
           {/* 成绩卡片矩阵 */}
+          {/* 成绩卡片矩阵 */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-            {mockB50.map((record, index) => {
+            
+            {(!profile.topScores || profile.topScores.length === 0) ? (
+              <div className="col-span-full py-20 text-center text-gray-500 font-mono tracking-widest border border-white/5 rounded-2xl bg-black/20">
+                AWAITING SYNCHRONIZATION...
+              </div>
+            ) : (
+              profile.topScores.map((record, index) => {
+                const colorClasses = getDifficultyColor(record.level);
+
+                return (
+                  <motion.div 
+                    key={record._id || index}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ delay: index * 0.05 }}
+                    whileHover={{ y: -5, scale: 1.02 }}
+                    className={`relative aspect-[4/3] rounded-2xl overflow-hidden border-2 bg-gray-900 group cursor-default transition-all duration-300 ${colorClasses}`}
+                  >
+                    {/* 真实背景封面图 */}
+                    <img 
+                      src={`https://www.diving-fish.com/covers/${record.songId}.png`} 
+                      alt={record.songName}
+                      className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
+                      onError={(e) => { e.target.src = '/assets/bg.png'; }}
+                    />
+                    
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
+
+                    {/* 顶部序号标签 */}
+                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm border border-white/20 px-2 py-0.5 rounded text-[10px] font-black italic text-white z-10">
+                      #{index + 1}
+                    </div>
+
+                    {/* 底部数据区 */}
+                    <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
+                      <div className="text-xs md:text-sm font-bold text-white truncate drop-shadow-md mb-1">
+                        {record.songName}
+                      </div>
+                      
+                      <div className="flex items-end justify-between">
+                        <div className="text-lg md:text-xl font-black italic tracking-tighter text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                          {record.achievement ? record.achievement.toFixed(4) : '0.0000'}<span className="text-[10px] text-gray-300 ml-0.5">%</span>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-md border border-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-white flex items-center gap-1 shadow-lg">
+                          <span className="text-[8px] opacity-70">➔</span> {record.rating || 0}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })
+            )}
+          </div>
               // 获取当前难度的颜色边框
               const colorClasses = getDifficultyColor(record.level);
 
