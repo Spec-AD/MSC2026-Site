@@ -695,6 +695,76 @@ app.post('/api/users/friend-request/reject', authMiddleware, async (req, res) =>
 });
 
 // ==========================================
+// 收件箱与邮件系统 API (Inbox System)
+// ==========================================
+
+// 1. 获取当前登录用户的收件箱列表
+app.get('/api/messages', authMiddleware, async (req, res) => {
+  try {
+    const messages = await Message.find({ receiver: req.user.id })
+      .populate('sender', 'username avatarUrl')
+      .sort({ createdAt: -1 }); // 最新收到的在最前面
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ message: '获取收件箱失败' });
+  }
+});
+
+// 2. 获取未读消息数量 (供主页右上角小红点使用)
+app.get('/api/messages/unread-count', authMiddleware, async (req, res) => {
+  try {
+    const count = await Message.countDocuments({ receiver: req.user.id, isRead: false });
+    res.json({ count });
+  } catch (err) {
+    res.status(500).json({ message: '获取未读数失败' });
+  }
+});
+
+// 3. 标记信件为已读
+app.patch('/api/messages/:id/read', authMiddleware, async (req, res) => {
+  try {
+    const message = await Message.findById(req.params.id);
+    if (!message || message.receiver.toString() !== req.user.id) {
+      return res.status(403).json({ message: '无权操作' });
+    }
+    message.isRead = true;
+    await message.save();
+    res.json(message);
+  } catch (err) {
+    res.status(500).json({ message: '操作失败' });
+  }
+});
+
+// 4. [ADM 专属] 按 UID 向指定玩家发送系统邮件
+app.post('/api/admin/send-message', authMiddleware, async (req, res) => {
+  try {
+    const admin = await User.findById(req.user.id);
+    if (admin.role !== 'ADM') return res.status(403).json({ message: '权限不足' });
+
+    const { targetUid, title, content } = req.body;
+    if (!targetUid || !title || !content) return res.status(400).json({ message: '请填写完整信息' });
+
+    // 通过 UID 查找接收人
+    const targetUser = await User.findOne({ uid: targetUid });
+    if (!targetUser) return res.status(404).json({ message: '未找到该 UID 对应的玩家' });
+
+    // 生成并保存系统邮件
+    const newMessage = new Message({
+      receiver: targetUser._id,
+      sender: admin._id,
+      type: 'ADM_DIRECT',
+      title,
+      content
+    });
+
+    await newMessage.save();
+    res.json({ message: `成功向 ${targetUser.username} (UID:${targetUid}) 发送了邮件！` });
+  } catch (err) {
+    res.status(500).json({ message: '邮件发送失败' });
+  }
+});
+
+// ==========================================
 // 反馈大厅 API (Feedback System)
 // ==========================================
 
