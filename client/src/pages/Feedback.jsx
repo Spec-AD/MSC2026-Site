@@ -183,7 +183,7 @@ const Feedback = () => {
         <div className="mb-12 border-b border-white/10 pb-6 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
             <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter drop-shadow-lg text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500">
-              FEEDBACK HALL.
+              FEEDBACK 反馈
             </h1>
             <p className="text-gray-400 text-xs md:text-sm mt-3 tracking-widest uppercase font-mono">
               Help us shape the future of purebeat.top
@@ -225,13 +225,13 @@ const Feedback = () => {
                   onChange={(e) => setFormData({...formData, type: e.target.value})}
                   className="bg-black/60 border border-gray-700 text-sm font-bold text-gray-200 rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors w-full md:w-1/4 uppercase tracking-wider"
                 >
-                  <option value="FEATURE">💡 Feature (建议)</option>
-                  <option value="PROBLEM">⚠️ Problem (非代码问题)</option>
-                  <option value="BUG">🐛 Bug (代码报错)</option>
+                  <option value="FEATURE">Feature (建议)</option>
+                  <option value="PROBLEM">Problem (非代码问题)</option>
+                  <option value="BUG">Bug (代码报错)</option>
                 </select>
                 <input 
                   type="text" 
-                  placeholder="标题 (一句话概括)..." 
+                  placeholder="标题" 
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
                   className="bg-black/60 border border-gray-700 text-white text-sm rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors flex-1 placeholder:text-gray-600"
@@ -429,5 +429,6 @@ const Feedback = () => {
     </div>
   );
 };
+
 
 export default Feedback;
