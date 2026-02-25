@@ -950,34 +950,32 @@ app.post('/api/feedback/:id/reply', authMiddleware, async (req, res) => {
   }
 });
 
-// === 玩家成绩同步 API (Import-Token 终极防弹版) ===
+// === 玩家成绩同步 API (Import-Token 性能炸裂版) ===
 app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
   try {
     const { importToken } = req.body;
     
     if (!importToken) return res.status(400).json({ msg: '请提供有效的 Import-Token' });
 
-    // 🔥 防护盾 1：伪装成真实浏览器，绕过 Cloudflare 的反爬虫拦截！
+    // 1. 伪装浏览器，向水鱼发起合法请求
     const response = await axios.get('https://www.diving-fish.com/api/maimaidxprober/player/records', {
       headers: { 
         'Import-Token': importToken.trim(),
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json'
       },
-      timeout: 15000 // 增加超时时间
+      timeout: 15000 
     });
 
     const data = response.data;
 
-    // 严谨校验格式
+    // 2. 严谨的数据校验
     if (typeof data === 'string' && data.includes('<html')) {
-      return res.status(403).json({ msg: '请求被水鱼防火墙(WAF)拦截，请检查服务器网络或稍后再试。' });
+      return res.status(403).json({ msg: '请求被水鱼防火墙拦截，请稍后再试。' });
     }
-
     if (!data || !data.records || !Array.isArray(data.records)) {
-      return res.status(400).json({ msg: `水鱼返回了意外的数据: ${JSON.stringify(data).substring(0, 50)}...` });
+      return res.status(400).json({ msg: '水鱼返回了无法解析的成绩格式。' });
     }
-
     if (data.records.length === 0) {
       return res.status(400).json({ msg: '在您的水鱼账号中未找到打歌记录！' });
     }
@@ -985,9 +983,17 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
     const playerRating = data.rating || 0; 
     const allRecords = data.records;
 
-    // 处理成绩并计算 PF
-    const processedScores = await Promise.all(allRecords.map(async rec => {
-      const song = await Song.findOne({ id: String(rec.song_id) });
+    // 🔥 性能核武器：只查 1 次数据库！把全量曲库拉到内存中构建字典 (Map)
+    const allSongsArray = await Song.find({});
+    const songMap = new Map();
+    allSongsArray.forEach(song => {
+      songMap.set(String(song.id), song);
+    });
+
+    // 3. 极速处理成绩 (将原本需要十几秒的数据库 I/O 压缩到几毫秒的内存计算)
+    const processedScores = allRecords.map(rec => {
+      // 直接从内存字典中获取对应的歌曲信息，时间复杂度 O(1)
+      const song = songMap.get(String(rec.song_id));
       let pf = 0, dxRatio = 0, constant = rec.ds || 0;
       
       if (song && song.charts && song.charts[rec.level_index]) {
@@ -996,15 +1002,12 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
         const maxDxScore = totalNotes * 3;
         
         constant = rec.ds || song.ds[rec.level_index];
-        
-        // 🔥 防护盾 2：严格防范除以 0 导致的 NaN 数据库崩溃！
         dxRatio = maxDxScore > 0 ? (rec.dxScore / maxDxScore) : 0;
         if (maxDxScore > 0) {
            pf = calculatePF(constant, rec.achievements, rec.dxScore, maxDxScore);
         }
       }
       
-      // 最终清洗，确保没有任何 NaN 或者 undefined 混入数据库
       return {
         userId: req.user.id,
         songId: rec.song_id, 
@@ -1018,41 +1021,34 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
         dxRatio: isNaN(dxRatio) || !isFinite(dxRatio) ? 0 : dxRatio,  
         constant: isNaN(constant) || !isFinite(constant) ? 0 : constant
       };
-    }));
+    });
 
-    // 全量覆盖写入数据库
+    // 4. 全量覆盖写入数据库 (MongoDB 的 insertMany 极其适合批量插入)
     await Score.deleteMany({ userId: req.user.id });
     await Score.insertMany(processedScores);
 
-    // 结算 PF50
+    // 5. 结算 PF50
     const topRecordsByPf = [...processedScores].sort((a, b) => b.pf - a.pf).slice(0, 50);
     const totalPf = topRecordsByPf.reduce((sum, score) => sum + score.pf, 0);
     
-    // 更新用户面板
+    // 6. 更新用户面板数据
     await User.findByIdAndUpdate(req.user.id, { 
       importToken: importToken.trim(),
       totalPf: Number(totalPf.toFixed(2)),
       rating: playerRating 
     });
 
-    res.json({ msg: '数据同步成功！', rating: playerRating, totalPf: Number(totalPf.toFixed(2)) });
+    res.json({ msg: `成功同步 ${processedScores.length} 首成绩！`, rating: playerRating, totalPf: Number(totalPf.toFixed(2)) });
   } catch (err) {
     console.error('[水鱼同步致命报错]', err);
-    
-    // 🔥 防护盾 3：极其精确的错误定位器！把报错扒得底裤都不剩传给前端
     let exactErrorMsg = '未知服务器错误';
     if (err.response) {
-      // 水鱼返回了明确的错误状态码
-      const dfMsg = err.response.data?.message || err.response.data?.msg || err.response.statusText;
-      exactErrorMsg = `水鱼服务器拒绝访问 (HTTP ${err.response.status}): ${dfMsg}`;
+      exactErrorMsg = `水鱼服务器拒绝访问 (HTTP ${err.response.status}): ${err.response.data?.message || err.response.statusText}`;
     } else if (err.request) {
-      // 请求发出了但没响应 (超时或网络阻断)
       exactErrorMsg = '无法连接到水鱼服务器，请求超时或被阻断。';
     } else {
-      // 我们自己 Node.js 代码执行层面的报错 (比如某行代码写错了)
-      exactErrorMsg = `内部代码异常: ${err.message}`;
+      exactErrorMsg = `内部异常: ${err.message}`;
     }
-    
     res.status(500).json({ msg: exactErrorMsg });
   }
 });
