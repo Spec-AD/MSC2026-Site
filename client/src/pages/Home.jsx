@@ -5,13 +5,15 @@ import { useAuth } from '../context/AuthContext';
 import bbcode from 'bbcode-to-react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { FaEnvelope } from 'react-icons/fa'; // 引入信封图标
 
 const Home = () => {
   const { user } = useAuth();
-  const navigate = useNavigate(); // 引入路由跳转钩子
-  const [announcements, setAnnouncements] = useState([]); // 存放真实公告数据
+  const navigate = useNavigate();
+  const [announcements, setAnnouncements] = useState([]); 
+  const [unreadCount, setUnreadCount] = useState(0); // 新增：未读消息数状态
 
-  // 页面加载时拉取数据
+  // 页面加载时拉取公告数据
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
@@ -23,6 +25,21 @@ const Home = () => {
     };
     fetchAnnouncements();
   }, []);
+
+  // 新增：如果用户已登录，拉取未读消息数（小红点）
+  useEffect(() => {
+    if (user) {
+      const fetchUnread = async () => {
+        try {
+          const res = await axios.get('/api/messages/unread-count', {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+          setUnreadCount(res.data.count);
+        } catch (err) {}
+      };
+      fetchUnread();
+    }
+  }, [user]);
 
   let buttonText = "立即报名 MSC 2026";
   let buttonLink = "/register";
@@ -41,11 +58,11 @@ const Home = () => {
   }
 
   return (
-    // 外层容器：支持滚动，隐藏横向溢出，带有从上到下的半透明遮罩防止下方文字看不清
+    // 外层容器：支持滚动，隐藏横向溢出
     <div className="w-full min-h-screen text-white flex flex-col items-center overflow-x-hidden relative bg-gradient-to-b from-transparent to-black/80">
       
       {/* ==================================================== */}
-      {/* 全新注入：主页右上角专属标志与按钮群 */}
+      {/* 主页右上角专属标志与按钮群 */}
       {/* ==================================================== */}
       <div className="absolute top-6 right-6 md:right-8 z-[100] flex flex-col md:flex-row items-end md:items-center gap-3 md:gap-6 pointer-events-auto">
         
@@ -59,21 +76,43 @@ const Home = () => {
           </span>
         </div>
 
-        {/* 极简风操作按钮 */}
+        {/* 极简风操作按钮群 */}
         <div className="flex items-center gap-3">
+          
+          {/* 1. 信封 (收件箱) - 仅登录可见 */}
+          {user && (
+            <button 
+              onClick={() => navigate('/inbox')}
+              className="relative text-gray-300 hover:text-white bg-black/40 p-2 md:p-2.5 rounded-full transition-all backdrop-blur-md border border-gray-600 hover:border-gray-400 flex items-center justify-center"
+              title="收件箱"
+            >
+              <FaEnvelope className="text-sm md:text-base" />
+              
+              {/* 小红点逻辑 */}
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-black animate-pulse">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* 2. 反馈按钮 */}
           <button 
             onClick={() => navigate('/feedback')}
             className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-white border border-gray-600 hover:border-gray-400 bg-black/40 px-4 py-2 rounded-full transition-all backdrop-blur-md"
           >
             Feedback
           </button>
-	  <a 
-  	      href="https://afdian.com/a/purebeat" 
-  	      target="_blank" 
-  	      rel="noopener noreferrer"
-  	      className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-yellow-400 hover:text-yellow-300 border border-yellow-500/50 hover:border-yellow-400 bg-yellow-500/10 px-4 py-2 rounded-full transition-all backdrop-blur-md shadow-[0_0_10px_rgba(234,179,8,0.2)] flex items-center"
+
+          {/* 3. 捐赠按钮 */}
+          <a 
+            href="https://afdian.com/a/purebeat" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-yellow-400 hover:text-yellow-300 border border-yellow-500/50 hover:border-yellow-400 bg-yellow-500/10 px-4 py-2 rounded-full transition-all backdrop-blur-md shadow-[0_0_10px_rgba(234,179,8,0.2)] flex items-center"
           >
-              Donate
+            Donate
           </a>
         </div>
       </div>
@@ -83,13 +122,10 @@ const Home = () => {
       {/* ==================================================== */}
       <div className="relative w-full h-full min-h-screen flex flex-col items-center justify-center overflow-hidden px-6">
         
-        {/* 背景层 */}
         <FallingIcons />
 
-        {/* 内容层 */}
         <div className="z-10 flex flex-col items-center text-center">
           
-          {/* LOGO 动画 */}
           <motion.div
             initial={{ scale: 0.8, opacity: 0, y: 30 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -105,10 +141,8 @@ const Home = () => {
             <div className="absolute inset-0 bg-white/10 blur-[40px] md:blur-[50px] rounded-full opacity-0 group-hover:opacity-30 transition-opacity duration-1000"></div>
           </motion.div>
 
-          {/* 间距 */}
           <div className="h-10 md:h-16"></div>
 
-          {/* 动态按钮 */}
           <Link to={buttonLink} className="w-full flex justify-center">
             <motion.button
               initial={{ opacity: 0 }}
@@ -122,7 +156,6 @@ const Home = () => {
             </motion.button>
           </Link>
 
-          {/* 装饰性文字 */}
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -132,7 +165,6 @@ const Home = () => {
             Rhythm Game Tournament in Sihong
           </motion.p>
 
-          {/* 🔥 引导滚动的提示符 */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -147,11 +179,10 @@ const Home = () => {
       </div>
 
       {/* ==================================================== */}
-      {/* 🔥 2. 史诗级公告区域 (Latest Directives) 🔥 */}
+      {/* 2. 史诗级公告区域 (Latest Directives) */}
       {/* ==================================================== */}
       <div className="w-full max-w-6xl mx-auto px-4 md:px-8 py-24 z-10 relative">
         
-        {/* 大气感标题 */}
         <motion.div 
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -166,11 +197,9 @@ const Home = () => {
           </div>
         </motion.div>
 
-        {/* 公告流 */}
         <div className="space-y-16 md:space-y-24">
           {announcements.length > 0 ? (
             announcements.map((announcement, index) => {
-              // 🔥 动态计算时间，格式化为 "02.24" 和 "2026"
               const d = new Date(announcement.createdAt);
               const dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
               const yearStr = d.getFullYear().toString();
@@ -184,7 +213,6 @@ const Home = () => {
                   transition={{ duration: 0.6, delay: index * 0.1 }}
                   className="flex flex-col md:flex-row gap-6 md:gap-12 relative group"
                 >
-                  {/* 左侧：巨大的日期排版 */}
                   <div className="md:w-1/4 flex-shrink-0 flex md:flex-col items-baseline md:items-start gap-3 md:gap-0 border-b border-white/10 md:border-none pb-4 md:pb-0">
                     <div className="text-5xl md:text-7xl font-black italic tracking-tighter text-gray-300 group-hover:text-white transition-colors duration-500">
                       {dateStr}
@@ -197,7 +225,6 @@ const Home = () => {
                     </div>
                   </div>
 
-                  {/* 右侧：玻璃卡片内容 */}
                   <div className="md:w-3/4">
                     <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl group-hover:bg-white/[0.03] transition-colors duration-500">
                       <h3 className="text-2xl md:text-4xl font-bold mb-6 md:mb-8 text-white tracking-tight">
@@ -212,7 +239,6 @@ const Home = () => {
               );
             })
           ) : (
-            // 如果还没发公告，显示酷炫的等待画面
             <div className="text-center py-20 text-gray-500 border border-white/5 rounded-3xl bg-black/20 backdrop-blur-md">
                <span className="font-mono tracking-widest">AWAITING DIRECTIVES...</span>
             </div>
@@ -220,8 +246,6 @@ const Home = () => {
         </div>
         
       </div>
-      {/* ==================================================== */}
-
     </div>
   );
 };
