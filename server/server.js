@@ -950,52 +950,46 @@ app.post('/api/feedback/:id/reply', authMiddleware, async (req, res) => {
   }
 });
 
-// === 玩家成绩同步 API (Import-Token 官方纯净版) ===
+// === 玩家成绩同步 API (Import-Token 官方终极规范版) ===
 app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
   try {
     const { importToken } = req.body;
     
     if (!importToken) return res.status(400).json({ msg: '请提供有效的 Import-Token' });
 
-    // 1. 获取用户全量成绩 (Import-Token 专属 GET 端点)
+    // 1. 【核心修复】严格遵守文档，使用 GET 端点！
     const response = await axios.get('https://www.diving-fish.com/api/maimaidxprober/player/records', {
-      headers: { 'Import-Token': importToken }
+      headers: { 'Import-Token': importToken.trim() } // 放入请求头
     });
 
     const data = response.data;
 
-    // 2. 兼容水鱼的返回格式 (Import-Token 端点返回的是纯数组)
-    let allRecords = [];
-    if (Array.isArray(data)) {
-      allRecords = data; // ✅ 成功接管纯数组数据！
-    } else if (data && (data.records || data.records_new)) {
-      allRecords = [...(data.records || []), ...(data.records_new || [])];
-    } else {
-      return res.status(400).json({ msg: '水鱼验证成功，但返回的数据格式无法解析。' });
+    // 2. 严格按文档结构校验：只要有 records 数组就是成功
+    if (!data || !data.records || !Array.isArray(data.records)) {
+      return res.status(400).json({ msg: '验证成功，但未能解析成绩结构，请稍后再试。' });
     }
 
-    if (allRecords.length === 0) {
-      return res.status(400).json({ msg: '在您的水鱼账号中未找到任何打歌记录！请确保已上传成绩。' });
+    if (data.records.length === 0) {
+      return res.status(400).json({ msg: '在您的水鱼账号中未找到打歌记录！' });
     }
 
-    // 3. 处理成绩并匹配本地曲库 (判断新旧版本)
+    // 🔥 官方直接发来了精确的 Rating，太香了，直接接管大佬的 16537！
+    const playerRating = data.rating || 0; 
+    const allRecords = data.records;
+
+    // 3. 处理成绩，去本地曲库查 notes 计算我们自己的 PF 战力
     const processedScores = await Promise.all(allRecords.map(async rec => {
       const song = await Song.findOne({ id: String(rec.song_id) });
       let pf = 0, dxRatio = 0, constant = rec.ds || 0;
-      let isNew = false;
       
-      if (song) {
-        // 🔥 借助我们在 ADM 中控台同步的曲库，精准判断这首歌是否为新版本
-        isNew = song.basic_info?.is_new || false; 
+      if (song && song.charts && song.charts[rec.level_index]) {
+        const chartInfo = song.charts[rec.level_index];
+        const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
+        const maxDxScore = totalNotes * 3;
         
-        if (song.charts && song.charts[rec.level_index]) {
-          const chartInfo = song.charts[rec.level_index];
-          const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
-          const maxDxScore = totalNotes * 3;
-          constant = rec.ds || song.ds[rec.level_index];
-          dxRatio = maxDxScore > 0 ? (rec.dxScore / maxDxScore) : 0;
-          pf = calculatePF(constant, rec.achievements, rec.dxScore, maxDxScore);
-        }
+        constant = rec.ds || song.ds[rec.level_index];
+        dxRatio = maxDxScore > 0 ? (rec.dxScore / maxDxScore) : 0;
+        pf = calculatePF(constant, rec.achievements, rec.dxScore, maxDxScore);
       }
       
       return {
@@ -1004,43 +998,36 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
         songName: song ? song.title : rec.title,
         achievement: rec.achievements,
         dxScore: rec.dxScore,
-        rating: rec.ra || 0, // 提取水鱼算好的单曲 Rating
+        rating: rec.ra || 0, 
         level: rec.level_index, 
         finishTime: new Date(),
         pf: pf,            
         dxRatio: dxRatio,  
-        constant: constant,
-        isNew: isNew // 临时分组标识
+        constant: constant
       };
     }));
 
-    // 4. 精确计算 Maimai DX 的真实 Rating (旧曲 Top 35 + 新曲 Top 15)
-    const oldTop35 = processedScores.filter(r => !r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 35);
-    const newTop15 = processedScores.filter(r => r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 15);
-    const playerRating = [...oldTop35, ...newTop15].reduce((sum, rec) => sum + rec.rating, 0);
-
-    // 5. 剔除 isNew 临时字段，全量写入数据库
-    const finalScoresToSave = processedScores.map(({ isNew, ...rest }) => rest);
-    
+    // 4. 全量覆盖写入数据库
     await Score.deleteMany({ userId: req.user.id });
-    await Score.insertMany(finalScoresToSave);
+    await Score.insertMany(processedScores);
 
-    // 6. 计算全站独家 PF 战力 (Top 50 PF)
-    const topRecordsByPf = [...finalScoresToSave].sort((a, b) => b.pf - a.pf).slice(0, 50);
+    // 5. 结算我们网站专属的 PF50 战力
+    const topRecordsByPf = [...processedScores].sort((a, b) => b.pf - a.pf).slice(0, 50);
     const totalPf = topRecordsByPf.reduce((sum, score) => sum + score.pf, 0);
     
-    // 7. 更新用户面板数据
+    // 6. 更新用户面板数据
     await User.findByIdAndUpdate(req.user.id, { 
-      importToken: importToken,
+      importToken: importToken.trim(),
       totalPf: Number(totalPf.toFixed(2)),
-      rating: playerRating // 写入精准算出的 16537 战力！
+      rating: playerRating // 写入真实 Rating
     });
 
     res.json({ msg: '数据同步成功！', rating: playerRating, totalPf: Number(totalPf.toFixed(2)) });
   } catch (err) {
     console.error('[水鱼同步报错]', err.response?.data || err.message);
+    // 精准捕获水鱼 400 报错（如 "导入token有误"）
     const dfError = err.response?.data?.message || err.response?.data?.msg; 
-    res.status(err.response?.status || 500).json({ msg: dfError ? `水鱼服务器拒绝: ${dfError}` : '同步失败，请检查您的 Import-Token 是否准确无误' });
+    res.status(err.response?.status || 500).json({ msg: dfError ? `水鱼服务器拒绝: ${dfError}` : '同步失败，网络异常或 Token 错误' });
   }
 });
 
