@@ -59,7 +59,6 @@ const Profile = () => {
       
       // 🔥 2. 把后端真实传过来的数据打印到控制台，不给它任何伪装的机会
       console.log("👀 从后端收到的完整档案数据:", res.data);
-      const res = await axios.get(`/api/users/${targetUsername}`);
       setProfile(res.data);
       setProberId(res.data.proberUsername || ''); // 初始化水鱼账号
       // 初始化编辑框的数据
