@@ -47,7 +47,6 @@ const jwt = require('jsonwebtoken');
 // --- 刚才创建的模型文件 ---
 const User = require('./models/User');
 const Score = require('./models/Score');
-
 const app = express();
 
 // --- 中间件配置 ---
@@ -637,7 +636,7 @@ app.post('/api/users/:username/friend-request', authMiddleware, async (req, res)
       sender: sender._id,
       type: 'FRIEND_REQUEST',
       title: '📬 新的好友申请',
-      content: `玩家 [${sender.username}] 觉得你的实力很强，希望添加你为好友！`,
+      content: `玩家 [${sender.username}] 希望添加你为好友！`,
       actionData: { senderId: sender._id } // 绑定发送者的 ID，供前端展示“同意/拒绝”按钮使用
     });
     await friendRequestMsg.save();
@@ -646,6 +645,52 @@ app.post('/api/users/:username/friend-request', authMiddleware, async (req, res)
   } catch (err) {
     console.error('发送请求失败:', err);
     res.status(500).json({ message: '请求发送失败，请稍后重试' });
+  }
+});
+
+// 2. 同意好友申请
+app.post('/api/users/friend-request/accept', authMiddleware, async (req, res) => {
+  try {
+    const { senderId, messageId } = req.body;
+    const receiver = await User.findById(req.user.id);
+    const sender = await User.findById(senderId);
+
+    if (!sender) return res.status(404).json({ message: '发送者不存在' });
+
+    // 从接收者的“待处理列表”中移除
+    receiver.friendRequests = receiver.friendRequests.filter(id => id.toString() !== senderId);
+
+    // 互相添加好友 (自动去重)
+    if (!receiver.friends.includes(senderId)) receiver.friends.push(senderId);
+    if (!sender.friends.includes(receiver._id)) sender.friends.push(receiver._id);
+
+    await receiver.save();
+    await sender.save();
+
+    // 自动将这封请求信件标记为已读
+    if (messageId) await Message.findByIdAndUpdate(messageId, { isRead: true });
+
+    res.json({ message: '已成功添加为好友！' });
+  } catch (err) {
+    res.status(500).json({ message: '操作失败' });
+  }
+});
+
+// 3. 拒绝好友申请
+app.post('/api/users/friend-request/reject', authMiddleware, async (req, res) => {
+  try {
+    const { senderId, messageId } = req.body;
+    const receiver = await User.findById(req.user.id);
+
+    // 从待处理列表中移除即可
+    receiver.friendRequests = receiver.friendRequests.filter(id => id.toString() !== senderId);
+    await receiver.save();
+
+    if (messageId) await Message.findByIdAndUpdate(messageId, { isRead: true });
+
+    res.json({ message: '已拒绝该申请' });
+  } catch (err) {
+    res.status(500).json({ message: '操作失败' });
   }
 });
 
