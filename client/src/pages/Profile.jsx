@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from 'axios';
-import { FaCamera, FaUserPlus, FaUserEdit, FaTrophy, FaUsers, FaSpinner, FaSave, FaTimes, FaSyncAlt } from 'react-icons/fa';
+import { FaCamera, FaUserPlus, FaUserEdit, FaTrophy, FaUsers, FaSpinner, FaSave, FaTimes, FaSyncAlt, FaClock, FaHeart } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import bbcode from 'bbcode-to-react';
 
@@ -143,6 +143,12 @@ const Profile = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       alert(res.data.message);
+// 🔥 核心注入：乐观更新 UI，瞬间触发“等待验证”状态
+      const currentUserId = currentUser.id || currentUser._id;
+      setProfile(prev => ({
+        ...prev,
+        friendRequests: [...(prev.friendRequests || []), currentUserId]
+      }));
     } catch (err) {
       alert(err.response?.data?.message || '发送请求失败');
     }
@@ -387,6 +393,36 @@ const Profile = () => {
                 </div>
               )
             ) : (
+// 🔥 全新注入：动态好友状态按钮系统 🔥
+              (() => {
+                const currentUserId = currentUser?.id || currentUser?._id;
+                
+                // 1. 判断是否已经是好友 (对方的 friends 数组里有我)
+                const isFriend = currentUserId && profile.friends?.some(f => (f._id || f).toString() === currentUserId.toString());
+                
+                // 2. 判断是否已发送过申请 (对方的 friendRequests 数组里有我)
+                const isPending = currentUserId && profile.friendRequests?.some(reqId => reqId.toString() === currentUserId.toString());
+
+                // 状态 A：已经是好友 -> 粉色 Friends 按钮
+                if (isFriend) {
+                  return (
+                    <button disabled className="px-6 py-3 bg-pink-500 text-white rounded-full font-bold shadow-[0_0_15px_rgba(236,72,153,0.4)] flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center opacity-90 cursor-default">
+                      <FaHeart /> Friends
+                    </button>
+                  );
+                }
+
+                // 状态 B：等待对方通过 -> 灰色 等待验证 按钮
+                if (isPending) {
+                  return (
+                    <button disabled className="px-6 py-3 bg-gray-600/80 text-gray-300 border border-gray-500/50 rounded-full font-bold flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center cursor-not-allowed transition-all">
+                      <FaClock /> 等待验证
+                    </button>
+                  );
+                }
+
+                // 状态 C：陌生人 -> 蓝色 加为好友 按钮
+                return (
               <button 
                   onClick={handleAddFriend}
                   className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white rounded-full font-bold shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center"
