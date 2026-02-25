@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Admin from './pages/Admin';
+import Inbox from './pages/Inbox';
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -32,6 +33,7 @@ function App() {
           <Route path="/profile/:username" element={<Profile />} />
           <Route path="/admin" element={<Admin />} />
 	  <Route path="/feedback" element={<Feedback />} />
+          <Route path="/inbox" element={<Inbox />} />
           
           {/* 🔥 新增：曲目图鉴页路由 */}
           <Route path="songs" element={<Songs />} />
