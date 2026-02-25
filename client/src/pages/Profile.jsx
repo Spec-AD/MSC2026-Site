@@ -528,38 +528,34 @@ const Profile = () => {
                 </div>
               ) : (
                 // 改为单列/双列的长条形卡片网格，以容纳 UID 和 PF 分
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-3">
                   {profile.friends.map(friend => (
                     <div 
                       key={friend._id} 
                       onClick={() => navigate(`/profile/${friend.username}`)}
-                      className="flex items-center gap-3 bg-white/5 border border-white/10 p-3 rounded-2xl hover:bg-white/10 hover:border-blue-400/50 transition-all cursor-pointer group"
+                      className="flex items-center gap-4 bg-white/5 border border-white/10 p-3 md:p-4 rounded-2xl hover:bg-white/10 hover:border-blue-400/50 transition-all cursor-pointer group"
                     >
                       {/* 头像 */}
                       <img 
                         src={friend.avatarUrl || '/assets/logos.png'} 
                         alt="avatar"
-                        className="w-10 h-10 md:w-12 md:h-12 rounded-xl border border-transparent group-hover:border-blue-400 transition-all object-cover bg-gray-800 shrink-0"
+                        className="w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 border-transparent group-hover:border-blue-400 transition-all object-cover bg-gray-800 shrink-0"
                       />
                       
                       {/* 名字与 UID */}
                       <div className="flex-1 overflow-hidden flex flex-col justify-center">
-                        <span className="text-sm font-bold text-gray-300 group-hover:text-white truncate w-full transition-colors">
+                        <span className="text-base md:text-lg font-bold text-gray-300 group-hover:text-white truncate w-full transition-colors">
                           {friend.username}
                         </span>
-                        <span className="text-[10px] text-gray-500 font-mono tracking-widest mt-0.5">
+                        <span className="text-xs text-gray-500 font-mono tracking-widest mt-0.5">
                           UID: <span className="text-gray-400">{friend.uid || '未绑定'}</span>
                         </span>
                       </div>
 
                       {/* PF 分数展示 (右对齐) */}
-                      <div className="text-right shrink-0 pr-1">
-                        <div className="text-[8px] font-bold text-blue-400/70 uppercase tracking-widest mb-0.5">
-                          PF SCORE
-                        </div>
-                        {/* 这里的 friend.b50 如果你的数据库叫别的名字(如 rating/pfScore)，请自行更改 */}
-                        <div className="text-sm md:text-base font-black text-white italic drop-shadow-md">
-                          {friend.b50 || friend.pfScore || friend.rating || '0'}
+                      <div className="text-right shrink-0 pr-2 md:pr-4">
+                        <div className="text-xl md:text-2xl font-black text-white drop-shadow-md font-mono tracking-tighter">
+                          {friend.b50 || friend.totalPf || friend.rating || '0'}
                         </div>
                       </div>
                     </div>
