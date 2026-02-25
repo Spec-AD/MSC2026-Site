@@ -67,9 +67,14 @@ const Home = () => {
           >
             Feedback
           </button>
-          <button className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-yellow-400 hover:text-yellow-300 border border-yellow-500/50 hover:border-yellow-400 bg-yellow-500/10 px-4 py-2 rounded-full transition-all backdrop-blur-md shadow-[0_0_10px_rgba(234,179,8,0.2)]">
-            Donate
-          </button>
+	  <a 
+  	      href="https://afdian.com/a/purebeat" 
+  	      target="_blank" 
+  	      rel="noopener noreferrer"
+  	      className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-yellow-400 hover:text-yellow-300 border border-yellow-500/50 hover:border-yellow-400 bg-yellow-500/10 px-4 py-2 rounded-full transition-all backdrop-blur-md shadow-[0_0_10px_rgba(234,179,8,0.2)] flex items-center"
+          >
+              Donate
+          </a>
         </div>
       </div>
 
