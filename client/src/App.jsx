@@ -11,6 +11,7 @@ import Qualifiers from './pages/Qualifiers';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
 import Songs from './pages/Songs'; // 🔥 新增：引入曲目图鉴页面
+import Feedback from './pages/Feedback';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/:username" element={<Profile />} />
           <Route path="/admin" element={<Admin />} />
+	  <Route path="/feedback" element={<Feedback />} />
           
           {/* 🔥 新增：曲目图鉴页路由 */}
           <Route path="songs" element={<Songs />} />
