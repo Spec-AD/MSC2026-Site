@@ -20,6 +20,7 @@ const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [proberId, setProberId] = useState('');
+  const [importToken, setImportToken] = useState(''); // 新增：Import-Token 状态
   const [isSyncingMaimai, setIsSyncingMaimai] = useState(false);
   
   // 保存文本和本地预览的 Base64 URL
@@ -54,13 +55,13 @@ const Profile = () => {
       setLoading(true);
       setError('');
 
-// 🔥 1. 在请求末尾加上时间戳 ?t=...，强制打穿浏览器和 Zeabur 的所有缓存！
+      // 加上时间戳 ?t=...，强制打穿缓存
       const res = await axios.get(`/api/users/${targetUsername}?t=${Date.now()}`);
       
-      // 🔥 2. 把后端真实传过来的数据打印到控制台，不给它任何伪装的机会
-      console.log("👀 从后端收到的完整档案数据:", res.data);
       setProfile(res.data);
-      setProberId(res.data.proberUsername || ''); // 初始化水鱼账号
+      setProberId(res.data.proberUsername || ''); 
+      setImportToken(res.data.importToken || ''); // 初始化 Token
+      
       // 初始化编辑框的数据
       setEditData({
         bio: res.data.bio || '',
@@ -74,20 +75,29 @@ const Profile = () => {
     }
   };
 
-  // --- 处理水鱼 B50 数据同步 ---
+  // --- 处理水鱼 B50 数据同步 (使用 Import-Token) ---
   const handleSyncMaimai = async () => {
     if (!proberId.trim()) {
       alert('请输入有效的水鱼查分器用户名或 QQ！');
       return;
     }
+    if (!importToken.trim()) {
+      alert('请提供有效的 Import-Token！（前往水鱼查分器获取）');
+      return;
+    }
+    
     setIsSyncingMaimai(true);
     try {
-      const res = await axios.post('/api/users/sync-maimai', { proberUsername: proberId });
+      // 将 proberUsername 和 importToken 一起发给后端
+      const res = await axios.post('/api/users/sync-maimai', { 
+        proberUsername: proberId, 
+        importToken: importToken 
+      });
       alert('✅ 数据同步成功！您的当前 Rating 为: ' + res.data.rating);
       // 刷新页面以拉取最新成绩数据
       window.location.reload();
     } catch (err) {
-      alert('❌ ' + (err.response?.data?.msg || '同步失败，请检查账号并确保水鱼已开启允许第三方查询'));
+      alert('❌ ' + (err.response?.data?.msg || '同步失败，请检查账号和 Token 是否正确'));
     } finally {
       setIsSyncingMaimai(false);
     }
@@ -130,7 +140,7 @@ const Profile = () => {
     reader.readAsDataURL(file);
   };
 
-// --- 发送好友请求 ---
+  // --- 发送好友请求 ---
   const handleAddFriend = async () => {
     if (!currentUser) {
       alert('请先登录才能添加好友！');
@@ -143,7 +153,8 @@ const Profile = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       alert(res.data.message);
-// 🔥 核心注入：乐观更新 UI，瞬间触发“等待验证”状态
+      
+      // 乐观更新 UI，瞬间触发“等待验证”状态
       const currentUserId = currentUser.id || currentUser._id;
       setProfile(prev => ({
         ...prev,
@@ -248,17 +259,6 @@ const Profile = () => {
     return colors[levelIndex] || 'border-gray-500 text-gray-400';
   };
 
-  // --- 📊 模拟的 B50 数据 ---
-  const mockB50 = [
-    { songId: '11253', title: 'Pandora Paradoxxx', level: 4, achievement: 100.4500, rating: 334, type: 'DX' },
-    { songId: '11200', title: 'QZKago Requiem', level: 3, achievement: 100.8200, rating: 326, type: 'SD' },
-    { songId: '11172', title: 'Grievous Lady', level: 3, achievement: 100.6000, rating: 322, type: 'DX' },
-    { songId: '11000', title: 'Glorious Crown', level: 4, achievement: 99.8500, rating: 310, type: 'SD' },
-    { songId: '834', title: 'Oshama Scramble!', level: 4, achievement: 100.9500, rating: 308, type: 'DX' },
-    { songId: '731', title: 'Garakuta Doll Play', level: 3, achievement: 100.5000, rating: 305, type: 'SD' },
-    { songId: '11270', title: 'Lia=Fail', level: 2, achievement: 100.9999, rating: 280, type: 'DX' },
-  ];
-
   return (
     <div className="w-full min-h-screen pb-24 overflow-x-hidden text-white relative">
       
@@ -325,7 +325,7 @@ const Profile = () => {
               )}
             </div>
             
-            {/* 🔥 核心注入：硬核左上对齐数据看板 🔥 */}
+            {/* 核心数据看板 */}
             <div className="flex flex-wrap items-end justify-center md:justify-start gap-6 md:gap-10 mt-4 mb-2">
                 {/* UID */}
                 <div className="flex flex-col items-start">
@@ -352,7 +352,7 @@ const Profile = () => {
             </div>
           </div>
 
-{/* 按钮控制区 */}
+          {/* 按钮控制区 */}
           <div className="pb-2 md:pb-4 w-full md:w-auto flex flex-wrap justify-center gap-3 z-20">
             {isOwnProfile ? (
               !isEditing ? (
@@ -364,7 +364,6 @@ const Profile = () => {
                     <FaUserEdit /> 编辑资料
                   </button>
 
-                  {/* ADM 中控台暗门入口 */}
                   {currentUser && currentUser.role === 'ADM' && (
                     <button 
                       onClick={() => navigate('/admin')}
@@ -393,17 +392,12 @@ const Profile = () => {
                 </div>
               )
             ) : (
-              // 🔥 全新注入：动态好友状态按钮系统 🔥
+              // 动态好友状态按钮系统
               (() => {
                 const currentUserId = currentUser?.id || currentUser?._id;
-                
-                // 1. 判断是否已经是好友 (对方的 friends 数组里有我)
                 const isFriend = currentUserId && profile.friends?.some(f => (f._id || f).toString() === currentUserId.toString());
-                
-                // 2. 判断是否已发送过申请 (对方的 friendRequests 数组里有我)
                 const isPending = currentUserId && profile.friendRequests?.some(reqId => reqId.toString() === currentUserId.toString());
 
-                // 状态 A：已经是好友 -> 粉色 Friends 按钮
                 if (isFriend) {
                   return (
                     <button disabled className="px-6 py-3 bg-pink-500 text-white rounded-full font-bold shadow-[0_0_15px_rgba(236,72,153,0.4)] flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center opacity-90 cursor-default">
@@ -412,7 +406,6 @@ const Profile = () => {
                   );
                 }
 
-                // 状态 B：等待对方通过 -> 灰色 等待验证 按钮
                 if (isPending) {
                   return (
                     <button disabled className="px-6 py-3 bg-gray-600/80 text-gray-300 border border-gray-500/50 rounded-full font-bold flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center cursor-not-allowed transition-all">
@@ -421,7 +414,6 @@ const Profile = () => {
                   );
                 }
 
-                // 状态 C：陌生人 -> 蓝色 加为好友 按钮
                 return (
                   <button 
                     onClick={handleAddFriend}
@@ -435,33 +427,48 @@ const Profile = () => {
           </div>
         </div>
 
-
-        {/* 水鱼数据同步模块 (仅本人可见) */}
+        {/* --- 水鱼数据同步模块 (仅本人可见) --- */}
         {isOwnProfile && (
           <motion.div 
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            className="mt-8 p-5 bg-blue-500/10 border border-blue-500/20 rounded-2xl w-full backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4 z-20"
+            className="mt-8 p-5 md:p-6 bg-blue-500/10 border border-blue-500/20 rounded-2xl w-full backdrop-blur-md flex flex-col gap-4 z-20"
           >
             <div className="text-center md:text-left">
               <label className="text-sm font-bold text-blue-400 uppercase tracking-widest block mb-1">
                 Data Synchronization
               </label>
-              <div className="text-gray-400 text-xs">绑定查分器账号，生成专属舞萌 DX 战力面板与 B50 成绩单。</div>
+              <div className="text-gray-400 text-xs leading-relaxed">
+                绑定查分器账号并提供 Import-Token，生成专属舞萌 DX 战力面板与 B50 成绩单。<br/>
+                <a 
+                  href="https://www.diving-fish.com/maimaidx/prober/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-400 underline hover:text-blue-300 mt-1 inline-block"
+                >
+                  不知道怎么获取？点击前往水鱼查分器主页生成 Import-Token
+                </a>
+              </div>
             </div>
             
-            <div className="flex w-full md:w-auto gap-2">
+            <div className="flex flex-col md:flex-row w-full gap-3">
               <input 
                 type="text" 
                 value={proberId}
                 onChange={(e) => setProberId(e.target.value)}
-                placeholder="输入水鱼用户名或 QQ"
-                className="flex-1 md:w-64 bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none transition-colors"
+                placeholder="水鱼用户名或 QQ"
+                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
               />
-              {/* 🔥 注入文案修改：稳重的 SYNC 🔥 */}
+              <input 
+                type="password" 
+                value={importToken}
+                onChange={(e) => setImportToken(e.target.value)}
+                placeholder="在此粘贴您的 Import-Token"
+                className="flex-[2] bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors font-mono"
+              />
               <button 
                 onClick={handleSyncMaimai}
                 disabled={isSyncingMaimai}
-                className="bg-gray-800 hover:bg-gray-700 text-purple-400 border border-gray-700 hover:border-purple-500 px-6 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap shadow-lg flex items-center justify-center gap-2"
+                className="bg-gray-800 hover:bg-gray-700 text-purple-400 border border-gray-700 hover:border-purple-500 px-8 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap shadow-lg flex items-center justify-center gap-2"
               >
                 {isSyncingMaimai ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
                 {isSyncingMaimai ? 'SYNCING...' : 'SYNC'}
@@ -474,7 +481,6 @@ const Profile = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mt-8 md:mt-12">
           
           <div className="md:col-span-2 space-y-6 md:space-y-8">
-            
             {/* A: 个人介绍 */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -542,13 +548,11 @@ const Profile = () => {
           </div>
 
           <div className="space-y-6 md:space-y-8">
-            
             {/* C: 好友列表 */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl"
             >
-              {/* 保留你原本漂亮的头部设计 */}
               <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-2">
                 <div className="flex items-center gap-2">
                   <FaUsers className="text-blue-400" />
@@ -559,13 +563,11 @@ const Profile = () => {
                 </span>
               </div>
               
-              {/* 列表内容区域 */}
               {!profile.friends || profile.friends.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-xs font-mono tracking-widest">
                   还是个独行侠...
                 </div>
               ) : (
-                // 改为单列/双列的长条形卡片网格，以容纳 UID 和 PF 分
                 <div className="flex flex-col gap-3">
                   {profile.friends.map(friend => (
                     <div 
@@ -573,14 +575,11 @@ const Profile = () => {
                       onClick={() => navigate(`/profile/${friend.username}`)}
                       className="flex items-center gap-4 bg-white/5 border border-white/10 p-3 md:p-4 rounded-2xl hover:bg-white/10 hover:border-blue-400/50 transition-all cursor-pointer group"
                     >
-                      {/* 头像 */}
                       <img 
                         src={friend.avatarUrl || '/assets/logos.png'} 
                         alt="avatar"
                         className="w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 border-transparent group-hover:border-blue-400 transition-all object-cover bg-gray-800 shrink-0"
                       />
-                      
-                      {/* 名字与 UID */}
                       <div className="flex-1 overflow-hidden flex flex-col justify-center">
                         <span className="text-base md:text-lg font-bold text-gray-300 group-hover:text-white truncate w-full transition-colors">
                           {friend.username}
@@ -589,11 +588,9 @@ const Profile = () => {
                           UID: <span className="text-gray-400">{friend.uid || '未绑定'}</span>
                         </span>
                       </div>
-
-                      {/* PF 分数展示 (右对齐) */}
                       <div className="text-right shrink-0 pr-2 md:pr-4">
                         <div className="text-xl md:text-2xl font-black text-white drop-shadow-md font-mono tracking-tighter">
-                          {friend.b50 || friend.totalPf || friend.rating || '0'}
+                          {friend.totalPf || friend.b50 || friend.rating || '0'}
                         </div>
                       </div>
                     </div>
@@ -601,12 +598,11 @@ const Profile = () => {
                 </div>
               )}
             </motion.div>
-            
           </div>
         </div>
 
         {/* ========================================================= */}
-        {/* 4. 史诗级 B50 成绩面板 (Best 50 Records) */}
+        {/* 4. 史诗级 B50 成绩面板 (Best 50 Records - 按 Rating 排序) */}
         {/* ========================================================= */}
         <div className="mt-16 md:mt-24 z-20 relative">
           
@@ -625,13 +621,12 @@ const Profile = () => {
             <div className="mt-4 md:mt-0 flex items-center gap-4 bg-black/40 backdrop-blur-md border border-white/10 px-6 py-3 rounded-2xl">
               <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">DX Rating</span>
               <span className="text-3xl font-black italic text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
-                {profile.rating || 15000} {/* 暂时写死一个大佬分数过过瘾 */}
+                {profile.rating || 0}
               </span>
             </div>
           </div>
 
-          {/* 成绩卡片矩阵 */}
-          {/* 成绩卡片矩阵 */}
+          {/* 真实成绩卡片矩阵 */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
             
             {(!profile.topScores || profile.topScores.length === 0) ? (
@@ -687,60 +682,10 @@ const Profile = () => {
               })
             )}
           </div>
-              // 获取当前难度的颜色边框
-              const colorClasses = getDifficultyColor(record.level);
-
-              return (
-                <motion.div 
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-50px" }}
-                  transition={{ delay: index * 0.05 }}
-                  whileHover={{ y: -5, scale: 1.02 }}
-                  className={`relative aspect-[4/3] rounded-2xl overflow-hidden border-2 bg-gray-900 group cursor-default transition-all duration-300 ${colorClasses}`}
-                >
-                  {/* 背景封面图 (直连水鱼图库) */}
-                  <img 
-                    src={`https://www.diving-fish.com/covers/${record.songId}.png`} 
-                    alt={record.title}
-                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
-                    onError={(e) => { e.target.src = '/assets/bg.png'; }} // 防裂图机制
-                  />
-                  
-                  {/* 底部渐变遮罩 (确保文字清晰) */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
-
-                  {/* 顶部标签 */}
-                  <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm border border-white/20 px-2 py-0.5 rounded text-[10px] font-black italic text-white z-10">
-                    {record.type}
-                  </div>
-
-                  {/* 底部数据区 */}
-                  <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
-                    {/* 曲名 (单行防溢出) */}
-                    <div className="text-xs md:text-sm font-bold text-white truncate drop-shadow-md mb-1">
-                      {record.title}
-                    </div>
-                    
-                    {/* 成绩与单曲 Rating */}
-                    <div className="flex items-end justify-between">
-                      <div className="text-lg md:text-xl font-black italic tracking-tighter text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                        {record.achievement.toFixed(4)}<span className="text-[10px] text-gray-300 ml-0.5">%</span>
-                      </div>
-                      <div className="bg-white/10 backdrop-blur-md border border-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-white flex items-center gap-1 shadow-lg">
-                        <span className="text-[8px] opacity-70">➔</span> {record.rating}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
         </div>
 
         {/* ========================================================= */}
-        {/* 🔥 5. 极简 PF Top 50 列表 (全新注入) 🔥 */}
+        {/* 🔥 5. 极简 PF Top 50 列表 (按 PF 排序) 🔥 */}
         {/* ========================================================= */}
         {profile.topPfScores && profile.topPfScores.length > 0 && (
           <div className="mt-16 md:mt-24 z-20 relative border-t border-white/10 pt-12">
@@ -751,7 +696,8 @@ const Profile = () => {
             <div className="flex flex-col border-t border-gray-800/50">
               {profile.topPfScores.map((score, index) => {
                 const diffColors = ['text-green-400', 'text-yellow-400', 'text-red-400', 'text-purple-400', 'text-pink-300'];
-                const diffColor = diffColors[score.difficulty] || 'text-gray-400';
+                // 因为 score.difficulty 存储的是 0~4 的等级索引，所以可以直接作为数组下标获取颜色
+                const diffColor = diffColors[score.difficulty] || diffColors[score.level] || 'text-gray-400';
 
                 return (
                   <div key={score._id || index} className="flex justify-between items-center py-2.5 border-b border-gray-800/50 hover:bg-white/5 transition-colors group px-2">
