@@ -543,50 +543,41 @@ app.post('/api/announcements', authMiddleware, async (req, res) => {
   }
 });
 
-// === ADM 专属：从水鱼同步全量曲库 ===
+// === ADM 全量曲库同步 ===
 app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
   try {
-    // 1. 权限校验
-    const user = await User.findById(req.user.id);
-    if (!user || user.role !== 'ADM') {
-      return res.status(403).json({ msg: '权限不足：仅限 ADM 执行高危操作' });
-    }
+    if (req.user.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
 
-    console.log('[Sync] 正在从水鱼服务器拉取全量曲库...');
-    
-    // 2. 发起拉取请求
     const response = await axios.get('https://www.diving-fish.com/api/maimaidxprober/music_data');
-    const songsData = response.data; // 这是一个包含上千首歌的巨型数组
+    const songs = response.data;
 
-    console.log(`[Sync] 成功拉取到 ${songsData.length} 首曲目，开始写入数据库...`);
+    // 清除错误的旧索引
+    await Song.collection.dropIndexes().catch(() => {});
 
-    // 3. 批量写入/更新数据库 (使用 BulkWrite 提升性能)
-    // 核心逻辑：如果库里没这首歌就插入，如果有就更新（Upsert），防止产生重复数据
-    const bulkOps = songsData.map(song => ({
+    // 直接用绝对唯一的 id 覆盖写入
+    const bulkOps = songs.map(song => ({
       updateOne: {
-        filter: { id: song.id },
+        filter: { id: String(song.id) }, 
         update: {
           $set: {
+            id: String(song.id),
             title: song.title,
             type: song.type,
             ds: song.ds,
             level: song.level,
             basic_info: song.basic_info,
-            lastUpdated: new Date()
+            charts: song.charts // 🔥 物量数据现在会 100% 写入数据库
           }
         },
-        upsert: true // 找不到就新建
+        upsert: true
       }
     }));
 
     await Song.bulkWrite(bulkOps);
-
-    console.log('[Sync] 曲库同步/更新完成！');
-    res.json({ msg: `曲库同步成功！共收录 ${songsData.length} 首曲目数据。` });
-
+    res.json({ msg: `✅ 成功同步 ${songs.length} 首乐曲，物量数据已全量保存！` });
   } catch (err) {
-    console.error('[Sync Error]', err.message);
-    res.status(500).json({ msg: '曲库同步失败，请检查服务器网络或水鱼接口状态' });
+    console.error('[曲库同步报错]', err);
+    res.status(500).json({ msg: '曲库同步失败，请检查网络或后端日志' });
   }
 });
 
@@ -979,28 +970,34 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
     const playerRating = data.rating || 0; 
     const allRecords = data.records;
 
-    // 🔥 性能核武器：使用 .lean() 且只选取需要的字段，将 8秒 的耗时压缩到 0.2秒！
+// 🔥 仅凭全局唯一的 ID 构建字典
     const allSongsArray = await Song.find({}, 'id title ds charts basic_info').lean();
     const songMap = new Map();
     allSongsArray.forEach(song => {
-      songMap.set(String(song.id), song);
+      songMap.set(String(song.id), song); 
     });
 
-// 3. 极速内存计算 (0.01秒完成 1500首歌的 PF 计算)
+    // 3. 极速内存计算
     const processedScores = allRecords.map(rec => {
+      // 🔥 直接用成绩单的 song_id 去字典里拿歌
       const song = songMap.get(String(rec.song_id));
       let pf = 0, dxRatio = 0, constant = rec.ds || 0;
       let isNew = false;
       
       if (song) {
         isNew = song.basic_info?.is_new || false; 
+        
+        // 如果数据库里成功存入了物量 (charts)
         if (song.charts && song.charts[rec.level_index]) {
           const chartInfo = song.charts[rec.level_index];
+          // 计算满分 DX
           const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
           const maxDxScore = totalNotes * 3;
           
           constant = rec.ds || song.ds[rec.level_index];
           dxRatio = maxDxScore > 0 ? (rec.dxScore / maxDxScore) : 0;
+          
+          // 引擎启动，算出真实的 PF 分！
           if (maxDxScore > 0) {
              pf = calculatePF(constant, rec.achievements, rec.dxScore, maxDxScore);
           }
@@ -1009,13 +1006,9 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
       
       return {
         userId: req.user.id,
-        // 🔥 修复点 1：补齐数据库必填的 nickname (使用水鱼返回的昵称)
         nickname: data.nickname || 'MaimaiPlayer', 
-        // 🔥 修复点 2：补齐数据库必填的 imageUrl (直接拼接水鱼的官方封面)
-        imageUrl: `https://www.diving-fish.com/covers/${String(rec.song_id).padStart(5, '0')}.png`,
-        // 🔥 修复点 3：补齐数据库必填的 achievementRate 
+        imageUrl: `https://www.diving-fish.com/covers/${String(rec.song_id).padStart(5, '0')}.png`, 
         achievementRate: rec.achievements || 0, 
-
         songId: rec.song_id, 
         songName: song ? song.title : rec.title,
         achievement: rec.achievements || 0, 
@@ -1029,6 +1022,7 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
         isNew: isNew
       };
     });
+
 
     // 4. 重算真实水鱼 Rating (旧曲35 + 新曲15)
     const oldTop35 = processedScores.filter(r => !r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 35);
