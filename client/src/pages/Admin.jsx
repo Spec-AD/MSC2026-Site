@@ -18,6 +18,31 @@ const Admin = () => {
   const [broadcastData, setBroadcastData] = useState({ title: '', content: '' });
   const [isBroadcasting, setIsBroadcasting] = useState(false);
 
+// 🌟 新增：定向发送邮件状态
+  const [directMessageData, setDirectMessageData] = useState({ targetUid: '', title: '', content: '' });
+  const [isSendingDirect, setIsSendingDirect] = useState(false);
+
+  // 🌟 新增：处理定向发信
+  const handleSendDirect = async () => {
+    if (!directMessageData.targetUid || !directMessageData.title || !directMessageData.content) {
+      alert('请填写完整信息！');
+      return;
+    }
+    setIsSendingDirect(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post('/api/admin/send-message', directMessageData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert('✅ ' + res.data.message);
+      setDirectMessageData({ targetUid: '', title: '', content: '' }); // 发送成功后清空
+    } catch (err) {
+      alert('❌ ' + (err.response?.data?.message || '发送失败'));
+    } finally {
+      setIsSendingDirect(false);
+    }
+  };
+
   // 🛡️ 前端拦截：如果没登录或者不是 ADM，直接劝退
   if (!user || user.role !== 'ADM') {
     return (
@@ -190,6 +215,65 @@ const Admin = () => {
         </div>
       </div>
 
+{/* ========================================================= */}
+      {/* 模块 4：定向系统邮件 (绿色精准投递) */}
+      {/* ========================================================= */}
+      <div className="bg-black/40 backdrop-blur-xl border border-green-500/30 rounded-3xl p-8 shadow-[0_0_50px_rgba(34,197,94,0.1)] mb-12">
+        <h2 className="text-3xl font-black italic tracking-tight text-green-500 mb-6 border-b border-green-500/20 pb-4">
+          DIRECT MESSAGE / 定向系统邮件
+        </h2>
+        
+        <div className="flex flex-col md:flex-row gap-6 mb-6 text-gray-400 text-sm">
+          <p>
+            <span className="font-bold text-white">» 精准触达单一玩家</span><br />
+            输入目标玩家的 <strong className="text-green-400 mx-1">UID</strong>，即可向其个人收件箱发送专属邮件。常用于违规警告、特殊奖励发放或申诉回复。
+          </p>
+        </div>
+
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row gap-6">
+            <div className="md:w-1/3 space-y-2">
+              <label className="text-sm font-bold text-gray-400 tracking-widest uppercase">目标玩家 UID</label>
+              <input 
+                type="number" 
+                value={directMessageData.targetUid} 
+                onChange={(e) => setDirectMessageData({...directMessageData, targetUid: e.target.value})}
+                className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-green-500 outline-none transition-colors"
+                placeholder="例如：10001"
+              />
+            </div>
+            <div className="flex-1 space-y-2">
+              <label className="text-sm font-bold text-gray-400 tracking-widest uppercase">邮件标题</label>
+              <input 
+                type="text" 
+                value={directMessageData.title} 
+                onChange={(e) => setDirectMessageData({...directMessageData, title: e.target.value})}
+                className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-green-500 outline-none transition-colors"
+                placeholder="例如：关于您近期违规行为的警告"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-gray-400 tracking-widest uppercase">邮件正文</label>
+            <textarea 
+              rows="4"
+              value={directMessageData.content} 
+              onChange={(e) => setDirectMessageData({...directMessageData, content: e.target.value})}
+              className="w-full bg-black/50 border border-white/20 rounded-xl p-4 text-white focus:border-green-500 outline-none transition-colors resize-y"
+              placeholder="请输入邮件的详细内容..."
+            />
+          </div>
+
+          <button 
+            onClick={handleSendDirect}
+            disabled={isSendingDirect}
+            className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-black tracking-[0.2em] rounded-xl transition-all shadow-lg shadow-green-500/30 disabled:opacity-50"
+          >
+            {isSendingDirect ? '正在投递...' : 'SEND DIRECT MESSAGE / 发送定向邮件'}
+          </button>
+        </div>
+      </div>
       {/* ========================================================= */}
       {/* 模块 2：高危操作 - 数据同步 (蓝色科技感) */}
       {/* ========================================================= */}
