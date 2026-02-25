@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import FallingIcons from '../components/FallingIcons'; 
 import { useAuth } from '../context/AuthContext'; 
 import bbcode from 'bbcode-to-react';
@@ -8,6 +8,7 @@ import axios from 'axios';
 
 const Home = () => {
   const { user } = useAuth();
+  const navigate = useNavigate(); // 引入路由跳转钩子
   const [announcements, setAnnouncements] = useState([]); // 存放真实公告数据
 
   // 页面加载时拉取数据
@@ -43,6 +44,35 @@ const Home = () => {
     // 外层容器：支持滚动，隐藏横向溢出，带有从上到下的半透明遮罩防止下方文字看不清
     <div className="w-full min-h-screen text-white flex flex-col items-center overflow-x-hidden relative bg-gradient-to-b from-transparent to-black/80">
       
+      {/* ==================================================== */}
+      {/* 全新注入：主页右上角专属标志与按钮群 */}
+      {/* ==================================================== */}
+      <div className="fixed top-6 right-6 md:right-8 z-[100] flex flex-col md:flex-row items-end md:items-center gap-3 md:gap-6 pointer-events-auto">
+        
+        {/* 品牌标识 */}
+        <div className="text-right flex flex-col items-end cursor-default select-none">
+          <span className="text-xl md:text-2xl font-black italic tracking-widest text-white drop-shadow-md leading-none">
+            purebeat.top
+          </span>
+          <span className="text-[10px] font-mono text-purple-400 font-bold tracking-widest mt-1 uppercase">
+            Version 1.1.2
+          </span>
+        </div>
+
+        {/* 极简风操作按钮 */}
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => navigate('/feedback')}
+            className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-white border border-gray-600 hover:border-gray-400 bg-black/40 px-4 py-2 rounded-full transition-all backdrop-blur-md"
+          >
+            Feedback
+          </button>
+          <button className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-yellow-400 hover:text-yellow-300 border border-yellow-500/50 hover:border-yellow-400 bg-yellow-500/10 px-4 py-2 rounded-full transition-all backdrop-blur-md shadow-[0_0_10px_rgba(234,179,8,0.2)]">
+            Donate
+          </button>
+        </div>
+      </div>
+
       {/* ==================================================== */}
       {/* 1. 英雄区域 (Hero Section) */}
       {/* ==================================================== */}
