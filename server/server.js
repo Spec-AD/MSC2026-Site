@@ -766,6 +766,37 @@ app.post('/api/admin/send-message', authMiddleware, async (req, res) => {
   }
 });
 
+// [ADM 专属] 全局广播邮件：向全站所有注册玩家发送
+app.post('/api/admin/broadcast-message', authMiddleware, async (req, res) => {
+  try {
+    const admin = await User.findById(req.user.id);
+    if (!admin || admin.role !== 'ADM') return res.status(403).json({ message: '权限不足' });
+
+    const { title, content } = req.body;
+    if (!title || !content) return res.status(400).json({ message: '标题和内容不能为空' });
+
+    // 1. 获取所有玩家的 ID
+    const allUsers = await User.find({}, '_id');
+    
+    // 2. 构造邮件数组
+    const messages = allUsers.map(u => ({
+      receiver: u._id,
+      sender: admin._id,
+      type: 'SYSTEM', // 全局邮件统一标记为系统类型
+      title: `📢 ${title}`,
+      content: content
+    }));
+
+    // 3. 使用 insertMany 高效批量插入数据库
+    await Message.insertMany(messages);
+
+    res.json({ message: `广播成功！已向 ${allUsers.length} 位玩家投递邮件。` });
+  } catch (err) {
+    console.error('广播失败:', err);
+    res.status(500).json({ message: '服务器内部错误，广播失败' });
+  }
+});
+
 // ==========================================
 // 反馈大厅 API (Feedback System)
 // ==========================================
