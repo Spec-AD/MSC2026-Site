@@ -149,17 +149,6 @@ const Home = () => {
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
             </motion.div>
           </Link>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 2.5, duration: 1 }}
-            className="absolute bottom-8 md:bottom-12 flex flex-col items-center text-gray-500/50 animate-bounce pointer-events-none"
-          >
-            <span className="text-[10px] tracking-widest uppercase mb-2">Scroll to Discover</span>
-            <span>↓</span>
-          </motion.div>
-
         </div>
       </div>
 
