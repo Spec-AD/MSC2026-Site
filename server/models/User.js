@@ -7,7 +7,7 @@ const UserSchema = new mongoose.Schema({
     proberUsername: { type: String, default: '' },
     sponsorTier: { type: Number, default: 0 }, // 0: 普通用户, 1: 赞助一档, 2: 赞助二档
     friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // 已添加的好友
-    friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }] // 收到的好友请求
+    friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // 收到的好友请求
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
     divingFishUsername: { 
