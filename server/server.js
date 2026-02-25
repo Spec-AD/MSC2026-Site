@@ -462,7 +462,7 @@ app.get('/api/users/:username', async (req, res) => {
             pfRank: pfRank,               // [新增] 返回 PF 排名
             topPfScores: topPfScores,     // [新增] 返回 PF 排行榜
             friendsCount: user.friends ? user.friends.length : 0,
-            friends: [] // 暂时留空
+            friends: user.friends
         });
 
     } catch (err) {
