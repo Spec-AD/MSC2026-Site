@@ -650,7 +650,7 @@ const Profile = () => {
                   >
                     {/* 真实背景封面图 */}
                     <img 
-                      src={`https://www.diving-fish.com/covers/${record.songId}.png`} 
+                      src={`https://www.diving-fish.com/covers/${String(record.songId).padStart(5, '0')}.png`} 
                       alt={record.songName}
                       className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
                       onError={(e) => { e.target.src = '/assets/bg.png'; }}
