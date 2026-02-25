@@ -1012,7 +1012,7 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
         // 🔥 修复点 1：补齐数据库必填的 nickname (使用水鱼返回的昵称)
         nickname: data.nickname || 'MaimaiPlayer', 
         // 🔥 修复点 2：补齐数据库必填的 imageUrl (直接拼接水鱼的官方封面)
-        imageUrl: `https://www.diving-fish.com/covers/${rec.song_id}.png`, 
+        imageUrl: `https://www.diving-fish.com/covers/${String(rec.song_id).padStart(5, '0')}.png`,
         // 🔥 修复点 3：补齐数据库必填的 achievementRate 
         achievementRate: rec.achievements || 0, 
 

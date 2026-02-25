@@ -23,6 +23,8 @@ const SongSchema = new mongoose.Schema({
   
   // 记录同步时间
   lastUpdated: { type: Date, default: Date.now }
-});
+
+// 🔥 最核心的修改：加上 { strict: false }，允许数据库接收我们没在上面显式写出来的 charts (音符物量) 数据
+}, { strict: false }); 
 
 module.exports = mongoose.model('Song', SongSchema);
