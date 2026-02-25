@@ -442,15 +442,16 @@ app.get('/api/users/:username', async (req, res) => {
             pfRank = await User.countDocuments({ totalPf: { $gt: user.totalPf } }) + 1;
         }
 
+// 🔥 机制 A：查该用户的 B50 成绩 (按 Rating 降序，供卡片区使用)
+        const topScores = await Score.find({ userId: user._id })
+            .sort({ rating: -1, achievement: -1 })
+            .limit(50);
+
         // [新增] 查该用户的 PF 历史最佳成绩 (Top 50)
         const topPfScores = await Score.find({ userId: user._id })
             .sort({ pf: -1 })
             .limit(50);
 
-        // B. 查该用户的达成率最佳成绩 (Top 5，保留你原有的功能)
-        const topScores = await Score.find({ userId: user._id })
-            .sort({ achievement: -1 }) // 按达成率降序
-            .limit(5);
 
         // C. 查好友 (暂时只返回空数组或简单的计数，后续完善)
         // const friends = await User.find({ '_id': { $in: user.friends } }).select('username avatarUrl');
@@ -460,7 +461,7 @@ app.get('/api/users/:username', async (req, res) => {
             ...user.toObject(),
             topScores: topScores || [], 
             pfRank: pfRank,               // [新增] 返回 PF 排名
-            topPfScores: topPfScores,     // [新增] 返回 PF 排行榜
+            topPfScores: topPfScores || [],     // [新增] 返回 PF 排行榜
             friendsCount: user.friends ? user.friends.length : 0,
             friends: user.friends
         });
@@ -949,36 +950,34 @@ app.post('/api/feedback/:id/reply', authMiddleware, async (req, res) => {
   }
 });
 
-// === 玩家成绩同步 API (带Developer Token的强力版本) ===
+// === 玩家成绩同步 API (使用 Import-Token) ===
 app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
   try {
-    const { proberUsername } = req.body;
+    const { proberUsername, importToken } = req.body;
+    
     if (!proberUsername) return res.status(400).json({ msg: '请输入水鱼查分器账号或QQ号' });
+    if (!importToken) return res.status(400).json({ msg: '请提供有效的 Import-Token' });
 
-    // 🔥 1. 智能识别：全是数字就当作 QQ 号，否则是用户名
     const isQQ = /^\d+$/.test(proberUsername);
     const payload = isQQ ? { qq: proberUsername } : { username: proberUsername };
 
-    // 🔥 2. 将你刚才在水鱼官网申请到的 Developer Token 填入这里 (保留双引号)
-    const DEVELOPER_TOKEN = "u1XGtb7pVZ8AaDyKLM3IjT4CEnHrckvf";
-
-    // 3. 向水鱼发送带 Token 的请求
     const response = await axios.post('https://www.diving-fish.com/api/maimaidxprober/query/player', payload, {
-      headers: {
-        'Developer-Token': DEVELOPER_TOKEN // 核心通行证！
-      }
+      headers: { 'Import-Token': importToken }
     });
 
     const data = response.data;
     if (!data.records) return res.status(404).json({ msg: '水鱼返回成功，但未找到成绩数据' });
 
-    // 更新用户绑定的账号
-    await User.findByIdAndUpdate(req.user.id, { proberUsername, divingFishUsername: proberUsername });
+    await User.findByIdAndUpdate(req.user.id, { 
+      proberUsername, 
+      divingFishUsername: proberUsername,
+      importToken 
+    });
 
     const allRecords = [...(data.records || []), ...(data.records_new || [])];
 
-    // [新增] 遍历全体成绩并计算 PF 
-    const recordsWithPf = await Promise.all(allRecords.map(async rec => {
+    // 🔥 1. 遍历计算所有成绩的 PF，准备全量写入数据库
+    const processedScores = await Promise.all(allRecords.map(async rec => {
       const song = await Song.findOne({ id: String(rec.song_id) });
       let pf = 0, dxRatio = 0, constant = rec.ds || 0;
       
@@ -990,54 +989,36 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
         dxRatio = maxDxScore > 0 ? (rec.dxScore / maxDxScore) : 0;
         pf = calculatePF(constant, rec.achievements, rec.dxScore, maxDxScore);
       }
-      return { ...rec, pf, dxRatio, constant, songName: song ? song.title : rec.title };
+      return {
+        userId: req.user.id,
+        songId: rec.song_id, 
+        songName: song ? song.title : rec.title,
+        achievement: rec.achievements,
+        dxScore: rec.dxScore,
+        rating: rec.ra, // 存储水鱼算好的单曲 Rating
+        level: rec.level_index, 
+        finishTime: new Date(),
+        pf: pf,            
+        dxRatio: dxRatio,  
+        constant: constant 
+      };
     }));
 
-    // 提取 B50 数据 (按你的原逻辑)
-    const topRecordsByRa = recordsWithPf.sort((a, b) => b.ra - a.ra).slice(0, 50);
-
-    // [新增] 提取 Top 50 PF
-    const topRecordsByPf = [...recordsWithPf].sort((a, b) => b.pf - a.pf).slice(0, 50);
-
-    // [新增] 合并 RA50 和 PF50，去重后写入数据库，保证两种榜单数据都在
-    const mergedRecordsMap = new Map();
-    [...topRecordsByRa, ...topRecordsByPf].forEach(rec => {
-        mergedRecordsMap.set(`${rec.song_id}_${rec.level_index}`, rec);
-    });
-    const finalRecordsToSave = Array.from(mergedRecordsMap.values());
-
-    // 先清空旧数据
+    // 🔥 2. 清空旧数据后，全量写入新数据 (不删减、不合并，保留完整打歌历史)
     await Score.deleteMany({ userId: req.user.id });
+    await Score.insertMany(processedScores);
 
-    // 批量写入新数据
-    const scoreOps = finalRecordsToSave.map(rec => ({
-      userId: req.user.id,
-      songId: rec.song_id, 
-      songName: rec.songName, // 保存名字供前端展示
-      achievement: rec.achievements,
-      dxScore: rec.dxScore,
-      rating: rec.ra,
-      level: rec.level_index, 
-      finishTime: new Date(),
-      // [新增] PF 相关字段
-      pf: rec.pf,            
-      dxRatio: rec.dxRatio,  
-      constant: rec.constant 
-    }));
-
-    await Score.insertMany(scoreOps);
-
-    // [新增] 结算全站 Total PF
+    // 🔥 3. 单独结算全站 Total PF (仅取 PF 最高的 50 首累加)
+    const topRecordsByPf = [...processedScores].sort((a, b) => b.pf - a.pf).slice(0, 50);
     const totalPf = topRecordsByPf.reduce((sum, score) => sum + score.pf, 0);
+    
     await User.findByIdAndUpdate(req.user.id, { totalPf: Number(totalPf.toFixed(2)) });
 
     res.json({ msg: '数据同步成功！', rating: data.rating, totalPf: Number(totalPf.toFixed(2)) });
   } catch (err) {
     console.error('[水鱼同步报错]', err.response?.data || err.message);
-    
-    // 🔥 精准捕获水鱼抛出的原本中文报错信息 (水鱼返回字段是 message)
     const dfError = err.response?.data?.message; 
-    res.status(500).json({ msg: dfError ? `水鱼服务器拒绝: ${dfError}` : '同步失败，请检查网络或账号' });
+    res.status(500).json({ msg: dfError ? `水鱼服务器拒绝: ${dfError}` : '同步失败，请检查网络、账号或 Token 是否正确' });
   }
 });
 
