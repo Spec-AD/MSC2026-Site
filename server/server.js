@@ -431,6 +431,7 @@ app.get('/api/users/:username', async (req, res) => {
         // 使用 .select('-password') 排除密码等敏感信息
         const user = await User.findOne({ username: req.params.username })
             .select('-password -contactValue -contactType'); 
+	    .populate('friends', 'username uid avatarUrl totalPf rating');
         
         if (!user) return res.status(404).json({ msg: '用户不存在' });
 
