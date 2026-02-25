@@ -950,33 +950,36 @@ app.post('/api/feedback/:id/reply', authMiddleware, async (req, res) => {
   }
 });
 
-// === 玩家成绩同步 API (Import-Token 专属通道) ===
+// === 玩家成绩同步 API (Import-Token 官方标准版) ===
 app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
   try {
     const { proberUsername, importToken } = req.body;
     
+    // 🔥 1. 用户名和 Token 缺一不可
+    if (!proberUsername) return res.status(400).json({ msg: '请输入水鱼查分器用户名或QQ号' });
     if (!importToken) return res.status(400).json({ msg: '请提供有效的 Import-Token' });
 
-    // 🔥 核心修复 1：改用水鱼官方指定的 Import-Token 查询端点 (GET 请求)
-    const response = await axios.get('https://www.diving-fish.com/api/maimaidxprober/player/records', {
+    // 🔥 2. 构建原本的 Payload (依旧发给原来的旧端点)
+    const isQQ = /^\d+$/.test(proberUsername);
+    const payload = isQQ ? { qq: proberUsername, b50: true } : { username: proberUsername, b50: true };
+
+    // 🔥 3. 核心修复：端点依然是 POST /query/player，但 Header 换成 Import-Token 修饰！
+    const response = await axios.post('https://www.diving-fish.com/api/maimaidxprober/query/player', payload, {
       headers: { 'Import-Token': importToken }
     });
 
     const data = response.data;
-
-    // 如果数据结构不对，直接抛出异常
     if (!data || (!data.records && !data.records_new)) {
-      return res.status(400).json({ msg: '水鱼验证成功，但未能提取到成绩列表，请确认水鱼中已有成绩' });
+      return res.status(404).json({ msg: '验证成功，但未能提取到成绩列表，请确认水鱼中已有成绩' });
     }
 
-    // 🔥 核心修复 2：自己精确计算 Maimai DX 的真实 Rating (旧曲 Top 35 的 ra 总和 + 新曲 Top 15 的 ra 总和)
+    // --- 下面是雷打不动的数据处理和 PF 计算逻辑 ---
+    // 精确计算 Maimai DX 的真实 Rating (旧曲 Top 35 + 新曲 Top 15)
     const oldTop35 = (data.records || []).sort((a, b) => b.ra - a.ra).slice(0, 35);
     const newTop15 = (data.records_new || []).sort((a, b) => b.ra - a.ra).slice(0, 15);
     const playerRating = [...oldTop35, ...newTop15].reduce((sum, rec) => sum + rec.ra, 0);
 
-    // 将新老数据合并，准备计算 PF 并存入数据库
     const allRecords = [...(data.records || []), ...(data.records_new || [])];
-
     const processedScores = await Promise.all(allRecords.map(async rec => {
       const song = await Song.findOne({ id: String(rec.song_id) });
       let pf = 0, dxRatio = 0, constant = rec.ds || 0;
@@ -995,7 +998,7 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
         songName: song ? song.title : rec.title,
         achievement: rec.achievements,
         dxScore: rec.dxScore,
-        rating: rec.ra, // 这首单曲的 Rating (ra)
+        rating: rec.ra, 
         level: rec.level_index, 
         finishTime: new Date(),
         pf: pf,            
@@ -1004,28 +1007,26 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
       };
     }));
 
-    // 先清空旧数据，再全量写入新数据 (保证数据最纯净)
     await Score.deleteMany({ userId: req.user.id });
     await Score.insertMany(processedScores);
 
-    // 计算全站的 PF 总分 (取 PF 最高的 50 首累加)
     const topRecordsByPf = [...processedScores].sort((a, b) => b.pf - a.pf).slice(0, 50);
     const totalPf = topRecordsByPf.reduce((sum, score) => sum + score.pf, 0);
     
     // 更新用户的统计信息
     await User.findByIdAndUpdate(req.user.id, { 
-      proberUsername: proberUsername || '', 
-      divingFishUsername: proberUsername || '',
+      proberUsername: proberUsername, 
+      divingFishUsername: proberUsername,
       importToken: importToken,
       totalPf: Number(totalPf.toFixed(2)),
-      rating: playerRating // 存入我们算出来的真实水鱼 Rating
+      rating: playerRating || data.rating
     });
 
-    res.json({ msg: '数据同步成功！', rating: playerRating, totalPf: Number(totalPf.toFixed(2)) });
+    res.json({ msg: '数据同步成功！', rating: playerRating || data.rating, totalPf: Number(totalPf.toFixed(2)) });
   } catch (err) {
     console.error('[水鱼同步报错]', err.response?.data || err.message);
-    const dfError = err.response?.data?.message; 
-    res.status(500).json({ msg: dfError ? `水鱼服务器拒绝: ${dfError}` : '同步失败，请检查 Import-Token 是否正确' });
+    const dfError = err.response?.data?.message || err.response?.data?.msg; 
+    res.status(err.response?.status || 500).json({ msg: dfError ? `水鱼服务器拒绝: ${dfError}` : '同步失败，请检查账号和 Import-Token 是否正确' });
   }
 });
 
