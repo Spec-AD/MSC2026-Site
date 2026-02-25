@@ -504,28 +504,58 @@ const Profile = () => {
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl"
             >
+              {/* 保留你原本漂亮的头部设计 */}
               <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-2">
                 <div className="flex items-center gap-2">
                   <FaUsers className="text-blue-400" />
                   <h3 className="text-gray-400 text-xs uppercase tracking-[0.2em] font-bold">Friends</h3>
                 </div>
                 <span className="text-xs bg-white/10 px-2 py-1 rounded-full text-gray-300">
-                  {profile.friendsCount || 0}
+                  {profile.friends?.length || profile.friendsCount || 0}
                 </span>
               </div>
               
-              {profile.friendsCount === 0 ? (
-                <div className="text-center py-4 text-gray-500 text-xs">
+              {/* 列表内容区域 */}
+              {!profile.friends || profile.friends.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 text-xs font-mono tracking-widest">
                   还是个独行侠...
                 </div>
               ) : (
-                <div className="grid grid-cols-4 md:grid-cols-3 gap-4">
-                  {profile.friends?.map(friend => (
-                    <div key={friend._id} className="flex flex-col items-center gap-2 group cursor-pointer">
-                      <img src={friend.avatarUrl} className="w-12 h-12 md:w-16 md:h-16 rounded-xl border-2 border-transparent group-hover:border-blue-400 transition-all object-cover bg-gray-800"/>
-                      <span className="text-[10px] text-gray-400 group-hover:text-white truncate w-full text-center">
-                        {friend.username}
-                      </span>
+                // 改为单列/双列的长条形卡片网格，以容纳 UID 和 PF 分
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {profile.friends.map(friend => (
+                    <div 
+                      key={friend._id} 
+                      onClick={() => navigate(`/profile/${friend.username}`)}
+                      className="flex items-center gap-3 bg-white/5 border border-white/10 p-3 rounded-2xl hover:bg-white/10 hover:border-blue-400/50 transition-all cursor-pointer group"
+                    >
+                      {/* 头像 */}
+                      <img 
+                        src={friend.avatarUrl || '/assets/logos.png'} 
+                        alt="avatar"
+                        className="w-10 h-10 md:w-12 md:h-12 rounded-xl border border-transparent group-hover:border-blue-400 transition-all object-cover bg-gray-800 shrink-0"
+                      />
+                      
+                      {/* 名字与 UID */}
+                      <div className="flex-1 overflow-hidden flex flex-col justify-center">
+                        <span className="text-sm font-bold text-gray-300 group-hover:text-white truncate w-full transition-colors">
+                          {friend.username}
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-mono tracking-widest mt-0.5">
+                          UID: <span className="text-gray-400">{friend.uid || '未绑定'}</span>
+                        </span>
+                      </div>
+
+                      {/* PF 分数展示 (右对齐) */}
+                      <div className="text-right shrink-0 pr-1">
+                        <div className="text-[8px] font-bold text-blue-400/70 uppercase tracking-widest mb-0.5">
+                          PF SCORE
+                        </div>
+                        {/* 这里的 friend.b50 如果你的数据库叫别的名字(如 rating/pfScore)，请自行更改 */}
+                        <div className="text-sm md:text-base font-black text-white italic drop-shadow-md">
+                          {friend.b50 || friend.pfScore || friend.rating || '0'}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
