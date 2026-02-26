@@ -58,10 +58,10 @@ const WikiIndex = () => {
         <div>
           <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 drop-shadow-lg flex items-center gap-4">
             <FaBook className="text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.5)]" />
-            PUREBEAT WIKI.
+            WIKI.
           </h1>
           <p className="text-gray-400 font-mono text-sm tracking-[0.2em] uppercase mt-4">
-            The Ultimate Knowledge Base & Documentation
+            Know what you want to know
           </p>
         </div>
         
@@ -141,5 +141,6 @@ const WikiIndex = () => {
     </div>
   );
 };
+
 
 export default WikiIndex;
