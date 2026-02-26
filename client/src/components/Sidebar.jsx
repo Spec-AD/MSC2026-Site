@@ -24,8 +24,6 @@ const Sidebar = () => {
   // 🔥 修改：在导航数组中加入曲目图鉴
   const navItems = [
     { path: '/', icon: <FaHome />, label: '主页' },
-    { path: '/intro', icon: <FaInfoCircle />, label: '介绍' },
-    { path: '/rules', icon: <FaScroll />, label: '须知' },
     { path: '/tournaments', icon: <FaTrophy />, label: '赛事' },
     { path: '/songs', icon: <FaCompactDisc />, label: '曲目' }, // <- 新增这行
   ];
