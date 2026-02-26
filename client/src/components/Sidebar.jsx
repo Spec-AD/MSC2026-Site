@@ -27,7 +27,7 @@ const Sidebar = () => {
     { path: '/register', icon: <FaPenNib />, label: '报名' },
     { path: '/intro', icon: <FaInfoCircle />, label: '介绍' },
     { path: '/rules', icon: <FaScroll />, label: '须知' },
-    { path: '/qualifiers', icon: <FaTrophy />, label: '预选' },
+    { path: '/tournaments', icon: <FaTrophy />, label: '赛事' },
     { path: '/songs', icon: <FaCompactDisc />, label: '曲目' }, // <- 新增这行
   ];
 
