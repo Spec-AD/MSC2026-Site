@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Admin from './pages/Admin';
 import Inbox from './pages/Inbox';
+import Leaderboard from './pages/Leaderboard';
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -42,6 +43,7 @@ function App() {
 	  <Route path="/tournament-info" element={<TournamentInfo />} />
 	  <Route path="/wiki" element={<WikiIndex />} />
           <Route path="/wiki/:slug" element={<WikiArticle />} />
+	  <Route path="/leaderboard" element={<Leaderboard />} />
           
           {/* 🔥 新增：曲目图鉴页路由 */}
           <Route path="songs" element={<Songs />} />
