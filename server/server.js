@@ -1325,6 +1325,21 @@ app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// 5. [ADM 专属] 获取所有待审核的 Wiki 文章列表
+app.get('/api/admin/wiki/pending', authMiddleware, async (req, res) => {
+  try {
+    if (!['ADM', 'TO'].includes(req.user.role)) return res.status(403).json({ msg: '权限不足' });
+    
+    const pendingPages = await WikiPage.find({ status: 'PENDING' })
+      .populate('author', 'username')
+      .sort({ createdAt: -1 }); // 最新提交的排在前面
+      
+    res.json(pendingPages);
+  } catch (err) {
+    res.status(500).json({ msg: '获取待审核列表失败' });
+  }
+});
+
 // --- 启动服务器 ---
 // [注意！] 为了保证所有的路由都能被 Express 正确拦截并生效，app.listen 必须写在文件的最后面！
 const PORT = process.env.PORT || 5000;
