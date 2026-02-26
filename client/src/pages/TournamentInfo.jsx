@@ -154,7 +154,7 @@ const TournamentInfo = () => {
                   <motion.div 
                     className="flex gap-4 md:gap-8 px-4" 
                     animate={{ x: ["0%", "-50%"] }} 
-                    transition={{ repeat: Infinity, ease: "linear", duration: 25 }}
+                    transition={{ repeat: Infinity, ease: "linear", duration: 10 }}
                     style={{ width: "fit-content" }}
                   >
                     {[...lastYearImages, ...lastYearImages].map((src, index) => (
@@ -170,5 +170,6 @@ const TournamentInfo = () => {
     </div>
   );
 };
+
 
 export default TournamentInfo;
