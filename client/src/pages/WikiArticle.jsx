@@ -122,7 +122,7 @@ const WikiArticle = () => {
 
           {/* 正文渲染区 */}
           <div className="bbcode-content text-base md:text-lg leading-loose text-gray-200 break-words whitespace-pre-wrap">
-            {bbcode.toReact(page.content)}
+            {renderSafeBBCode(page.content)}
           </div>
         </motion.div>
 
