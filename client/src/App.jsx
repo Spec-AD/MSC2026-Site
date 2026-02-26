@@ -15,6 +15,8 @@ import Songs from './pages/Songs'; // 🔥 新增：引入曲目图鉴页面
 import Feedback from './pages/Feedback';
 import Tournaments from './pages/Tournaments';
 import TournamentInfo from './pages/TournamentInfo';
+import WikiIndex from './pages/WikiIndex';
+import WikiArticle from './pages/WikiArticle';
 
 function App() {
   return (
@@ -38,6 +40,8 @@ function App() {
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/tournaments" element={<Tournaments />} />
 	  <Route path="/tournament-info" element={<TournamentInfo />} />
+	  <Route path="/wiki" element={<WikiIndex />} />
+          <Route path="/wiki/:slug" element={<WikiArticle />} />
           
           {/* 🔥 新增：曲目图鉴页路由 */}
           <Route path="songs" element={<Songs />} />
