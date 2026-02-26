@@ -41,10 +41,10 @@ const TournamentInfo = () => {
         <img 
           src={bgUrl} 
           alt="Background" 
-          className="w-full h-full object-cover opacity-30 blur-[2px] transition-all duration-1000" 
+          className="w-full h-full object-cover opacity-10 blur-[2px] transition-all duration-1000" 
         />
         {/* 渐变遮罩：确保内容文字在任何背景下都清晰 */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/1 via-black/10 to-black pointer-events-none" />
       </div>
 
       {/* 底部巨大图标装饰 */}
@@ -173,4 +173,5 @@ const TournamentInfo = () => {
 
 
 export default TournamentInfo;
+
 
