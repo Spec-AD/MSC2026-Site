@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from 'axios';
@@ -17,10 +17,13 @@ const Profile = () => {
   const [error, setError] = useState('');
   const [proberId, setProberId] = useState('');
   
+  // 🔥 高级筛选 B50 状态
+  const [b50Filter, setB50Filter] = useState('DEFAULT');
+  
   // --- 编辑与同步状态 ---
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [importToken, setImportToken] = useState(''); // 仅保留 Import-Token 状态
+  const [importToken, setImportToken] = useState(''); 
   const [isSyncingMaimai, setIsSyncingMaimai] = useState(false);
   
   // 保存文本和本地预览的 Base64 URL
@@ -30,17 +33,15 @@ const Profile = () => {
   const [newAvatarFile, setNewAvatarFile] = useState(null);
   const [newBannerFile, setNewBannerFile] = useState(null);
 
-  // 文件选择器引用
   const avatarInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
-  // --- 🔥 身份判定 ---
+  // --- 身份判定 ---
   const targetUsername = routeUsername || currentUser?.username;
   const isOwnProfile = profile && currentUser && (
     profile.username.toLowerCase() === currentUser.username.toLowerCase()
   );
 
-  // 初始化拉取数据
   useEffect(() => {
     fetchProfile();
   }, [targetUsername, currentUser]);
@@ -54,14 +55,12 @@ const Profile = () => {
     try {
       setLoading(true);
       setError('');
-
-      // 加上时间戳 ?t=...，强制打穿缓存
       const res = await axios.get(`/api/users/${targetUsername}?t=${Date.now()}`);
       
       setProfile(res.data);
-      setImportToken(res.data.importToken || ''); // 初始化 Token
+      setProberId(res.data.proberUsername || ''); 
+      setImportToken(res.data.importToken || '');
       
-      // 初始化编辑框的数据
       setEditData({
         bio: res.data.bio || '',
         avatarUrl: res.data.avatarUrl || '/assets/logos.png',
@@ -74,21 +73,12 @@ const Profile = () => {
     }
   };
 
-// --- 处理水鱼 B50 数据同步 (需 Import-Token 和 Username) ---
   const handleSyncMaimai = async () => {
-    // 强制验证两个输入框
-    if (!proberId.trim()) {
-      alert('请输入有效的水鱼查分器用户名或 QQ！');
-      return;
-    }
-    if (!importToken.trim()) {
-      alert('请提供有效的 Import-Token！（前往水鱼查分器获取）');
-      return;
-    }
+    if (!proberId.trim()) { alert('请输入有效的水鱼查分器用户名或 QQ！'); return; }
+    if (!importToken.trim()) { alert('请提供有效的 Import-Token！'); return; }
     
     setIsSyncingMaimai(true);
     try {
-      // 同时把查分器账号和 Token 传给后端
       const res = await axios.post('/api/users/sync-maimai', { 
         proberUsername: proberId,
         importToken: importToken 
@@ -102,12 +92,10 @@ const Profile = () => {
     }
   };
 
-  // --- 处理文件选择与预览 ---
   const handleFileChange = (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // 体积限制 (3MB)
     const MAX_SIZE = 3 * 1024 * 1024; 
     if (file.size > MAX_SIZE) {
       alert(`上传失败：图片体积太大啦！当前文件 ${(file.size / 1024 / 1024).toFixed(2)}MB，不能超过 3MB。`);
@@ -115,7 +103,6 @@ const Profile = () => {
       return;
     }
 
-    // 格式校验
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     if (!validTypes.includes(file.type)) {
       alert('仅支持 jpg, jpeg, png, gif 格式的图片');
@@ -123,11 +110,8 @@ const Profile = () => {
       return;
     }
 
-    if (type === 'avatar') {
-      setNewAvatarFile(file);
-    } else {
-      setNewBannerFile(file);
-    }
+    if (type === 'avatar') setNewAvatarFile(file);
+    else setNewBannerFile(file);
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -139,7 +123,6 @@ const Profile = () => {
     reader.readAsDataURL(file);
   };
 
-  // --- 发送好友请求 ---
   const handleAddFriend = async () => {
     if (!currentUser) {
       alert('请先登录才能添加好友！');
@@ -153,7 +136,6 @@ const Profile = () => {
       });
       alert(res.data.message);
       
-      // 乐观更新 UI，瞬间触发“等待验证”状态
       const currentUserId = currentUser.id || currentUser._id;
       setProfile(prev => ({
         ...prev,
@@ -202,7 +184,7 @@ const Profile = () => {
       alert('资料更新成功！');
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.msg || '保存失败，请检查网络或图片尺寸是否过大');
+      alert(err.response?.data?.msg || '保存失败，请检查网络或图片尺寸');
     } finally {
       setIsSaving(false);
     }
@@ -218,6 +200,79 @@ const Profile = () => {
     setNewBannerFile(null);
     setIsEditing(false);
   };
+
+  // ==========================================
+  // 🔥 超级引擎：动态 B50 计算核心
+  // ==========================================
+  const displayScores = useMemo(() => {
+    if (!profile) return [];
+    
+    // 取全量成绩进行筛选，如果没有全量则用 topScores 兜底
+    const sourceScores = profile.allScores || profile.topScores || [];
+    
+    switch (b50Filter) {
+      case 'DEFAULT':
+        return profile.topScores || [];
+      case 'AP50':
+        return sourceScores.filter(s => ['ap', 'app'].includes(s.fcStatus)).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'FC50':
+        return sourceScores.filter(s => ['fc', 'fcp', 'ap', 'app'].includes(s.fcStatus)).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'I50':
+        // I50：基于当前的默认 B50 进行虚拟补全
+        return (profile.topScores || []).map(score => {
+          let newAch = score.achievement;
+          let newFc = score.fcStatus || '';
+          
+          if (newAch < 100.0) {
+            newAch = 100.0;
+          } else if (newAch >= 100.0 && newAch < 100.5) {
+            newAch = 100.5;
+            newFc = 'fcp'; // 强制升为 FC+
+          } else if (newAch >= 100.5) {
+            newAch = 101.0;
+            newFc = 'app'; // 强制升为 AP+
+          }
+          
+          // DX分占比提升5%，最高100%
+          let newDxRatio = Math.min(1.0, (score.dxRatio || 0) + 0.05);
+
+          // 重新计算 Maimai DX 理论 Rating
+          let factor = 0;
+          if (newAch >= 100.5) factor = 22.4;
+          else if (newAch >= 100.0) factor = 21.6;
+          else if (newAch >= 99.5) factor = 21.1;
+          else if (newAch >= 99.0) factor = 20.8;
+          else if (newAch >= 98.0) factor = 20.3;
+          else if (newAch >= 97.0) factor = 20.0;
+          else if (newAch >= 94.0) factor = 16.8;
+          else if (newAch >= 90.0) factor = 15.2;
+          else if (newAch >= 80.0) factor = 13.6;
+
+          const newRating = Math.floor(score.constant * (Math.min(newAch, 100.5) / 100) * factor);
+
+          return { ...score, achievement: newAch, dxRatio: newDxRatio, rating: newRating, fcStatus: newFc, isIdeal: true };
+        }).sort((a, b) => b.rating - a.rating).slice(0, 50);
+
+      case 'STAR_1': return sourceScores.filter(s => s.dxRatio >= 0.85).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'STAR_2': return sourceScores.filter(s => s.dxRatio >= 0.90).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'STAR_3': return sourceScores.filter(s => s.dxRatio >= 0.93).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'STAR_4': return sourceScores.filter(s => s.dxRatio >= 0.95).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'STAR_5': return sourceScores.filter(s => s.dxRatio >= 0.97).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'STAR_5_5': return sourceScores.filter(s => s.dxRatio >= 0.98).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'STAR_6': return sourceScores.filter(s => s.dxRatio >= 0.99).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'RED': return sourceScores.filter(s => s.level === 2).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'PURPLE': return sourceScores.filter(s => s.level === 3).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      case 'WHITE': return sourceScores.filter(s => s.level === 4).sort((a,b) => b.rating - a.rating).slice(0, 50);
+      
+      default: return profile.topScores || [];
+    }
+  }, [profile, b50Filter]);
+
+  // 计算筛选后总 Rating 
+  const displayRating = useMemo(() => {
+    if (b50Filter === 'DEFAULT') return profile?.rating || 0;
+    return displayScores.reduce((sum, s) => sum + (s.rating || 0), 0);
+  }, [displayScores, b50Filter, profile]);
 
   if (loading) return (
     <div className="w-full min-h-screen flex items-center justify-center text-white pb-20">
@@ -243,17 +298,16 @@ const Profile = () => {
     DS:  { color: 'text-green-500', badgeUrl: '/assets/badges/ds.png', label: 'Daily Supervisioner' },
     user:{ color: 'text-white', badgeUrl: null, label: 'Player' } 
   };
-  
   const userRole = profile.role ? (ROLE_CONFIG[profile.role] || ROLE_CONFIG.user) : ROLE_CONFIG.user;
 
   // --- 🎨 舞萌 DX 难度颜色映射 ---
   const getDifficultyColor = (levelIndex) => {
     const colors = [
-      'border-green-400 shadow-[0_0_10px_rgba(74,222,128,0.3)] text-green-400',   // 0: Basic (绿)
-      'border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.3)] text-yellow-400', // 1: Advanced (黄)
-      'border-red-400 shadow-[0_0_10px_rgba(248,113,113,0.3)] text-red-400',      // 2: Expert (红)
-      'border-purple-400 shadow-[0_0_10px_rgba(192,132,252,0.3)] text-purple-400',// 3: Master (紫)
-      'border-purple-200 shadow-[0_0_10px_rgba(233,213,255,0.5)] text-purple-200' // 4: Re:Master (白)
+      'border-green-400 shadow-[0_0_10px_rgba(74,222,128,0.3)] text-green-400',   // 0: Basic
+      'border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.3)] text-yellow-400', // 1: Advanced
+      'border-red-400 shadow-[0_0_10px_rgba(248,113,113,0.3)] text-red-400',      // 2: Expert
+      'border-purple-400 shadow-[0_0_10px_rgba(192,132,252,0.3)] text-purple-400',// 3: Master
+      'border-purple-200 shadow-[0_0_10px_rgba(233,213,255,0.5)] text-purple-200' // 4: Re:Master
     ];
     return colors[levelIndex] || 'border-gray-500 text-gray-400';
   };
@@ -287,7 +341,6 @@ const Profile = () => {
       <div className="max-w-6xl mx-auto px-4 md:px-8 -mt-16 md:-mt-24 relative z-20">
         <div className="flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-8 text-center md:text-left">
           
-          {/* 头像 */}
           <div className="relative group flex-shrink-0 z-30">
             <div className="w-28 h-28 md:w-44 md:h-44 rounded-2xl md:rounded-3xl overflow-hidden border-4 border-black bg-gray-900 shadow-2xl relative">
               <img 
@@ -295,7 +348,6 @@ const Profile = () => {
                 alt="Avatar" 
                 className="w-full h-full object-cover" 
               />
-              
               {isOwnProfile && isEditing && (
                 <div 
                   onClick={(e) => { e.stopPropagation(); avatarInputRef.current.click(); }}
@@ -308,7 +360,6 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* 身份文字与核心数据看板 */}
           <div className="flex-1 pb-2 md:pb-4 z-20 w-full">
             <div className="flex items-end gap-3 md:gap-4 flex-wrap justify-center md:justify-start">
               <h1 className={`text-4xl md:text-6xl font-black italic tracking-tighter drop-shadow-2xl transition-colors ${userRole.color}`}>
@@ -324,21 +375,17 @@ const Profile = () => {
               )}
             </div>
             
-            {/* 核心数据看板 */}
             <div className="flex flex-wrap items-end justify-center md:justify-start gap-6 md:gap-10 mt-4 mb-2">
-                {/* UID */}
                 <div className="flex flex-col items-start">
                     <span className="text-[10px] text-gray-400 font-bold tracking-widest leading-none mb-1 uppercase">UID</span>
                     <span className="text-xl md:text-2xl font-mono text-gray-200 font-semibold leading-none">{profile.uid || '未分配'}</span>
                 </div>
-                {/* PF 分 */}
                 <div className="flex flex-col items-start">
                     <span className="text-[10px] text-gray-400 font-bold tracking-widest leading-none mb-1 uppercase">Performance</span>
                     <span className="text-xl md:text-2xl font-mono text-purple-400 font-bold leading-none">
                         {profile.totalPf ? profile.totalPf.toFixed(2) : '0.00'}
                     </span>
                 </div>
-                {/* Rank 排名 */}
                 <div className="flex flex-col items-start">
                     <span className="text-[10px] text-gray-400 font-bold tracking-widest leading-none mb-1 uppercase">Rank</span>
                     <span className="text-xl md:text-2xl font-mono text-blue-400 font-bold leading-none">
@@ -351,7 +398,6 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* 按钮控制区 */}
           <div className="pb-2 md:pb-4 w-full md:w-auto flex flex-wrap justify-center gap-3 z-20">
             {isOwnProfile ? (
               !isEditing ? (
@@ -391,7 +437,6 @@ const Profile = () => {
                 </div>
               )
             ) : (
-              // 动态好友状态按钮系统
               (() => {
                 const currentUserId = currentUser?.id || currentUser?._id;
                 const isFriend = currentUserId && profile.friends?.some(f => (f._id || f).toString() === currentUserId.toString());
@@ -426,7 +471,7 @@ const Profile = () => {
           </div>
         </div>
 
-{/* --- 水鱼数据同步模块 (仅本人可见) --- */}
+        {/* 水鱼数据同步模块 (仅本人可见) */}
         {isOwnProfile && (
           <motion.div 
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -444,13 +489,12 @@ const Profile = () => {
                   rel="noopener noreferrer"
                   className="text-blue-400 underline hover:text-blue-300 mt-1 inline-block"
                 >
-                  不知道怎么获取？点击前往水鱼查分器主页 > 编辑个人资料 > 成绩导入Token（复制即可）
+                  不知道怎么获取？点击前往水鱼查分器主页 {'>'} 编辑个人资料 {'>'} 成绩导入Token（复制即可）
                 </a>
               </div>
             </div>
             
             <div className="flex flex-col md:flex-row w-full gap-3">
-              {/* 输入框 1：水鱼账号 */}
               <input 
                 type="text" 
                 value={proberId}
@@ -458,7 +502,6 @@ const Profile = () => {
                 placeholder="水鱼用户名或QQ"
                 className="w-full md:w-48 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
               />
-              {/* 输入框 2：超长 Token */}
               <input 
                 type="password" 
                 value={importToken}
@@ -482,7 +525,6 @@ const Profile = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mt-8 md:mt-12">
           
           <div className="md:col-span-2 space-y-6 md:space-y-8">
-            {/* A: 个人介绍 */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-xl"
@@ -490,13 +532,12 @@ const Profile = () => {
               <h3 className="text-gray-400 text-xs md:text-sm uppercase tracking-[0.2em] mb-4 md:mb-6 border-b border-white/10 pb-2 font-bold">
                 About Me
               </h3>
-              
               {isEditing ? (
                 <div className="relative">
                   <textarea 
                     value={editData.bio}
                     onChange={(e) => setEditData({...editData, bio: e.target.value})}
-                    placeholder="在这里介绍一下你自己，支持 BBCode 语法，例如 [b]加粗[/b] 或 [color=red]红字[/color]"
+                    placeholder="在这里介绍一下你自己，支持 BBCode 语法"
                     className="w-full h-48 bg-black/50 border border-white/20 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition-colors font-mono text-sm resize-none whitespace-pre-wrap"
                   />
                   <div className="absolute right-4 bottom-4 text-xs text-gray-500 font-mono pointer-events-none">BBCode Supported</div>
@@ -508,7 +549,6 @@ const Profile = () => {
               )}
             </motion.div>
 
-            {/* B: 荣誉陈列架 */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-xl"
@@ -549,7 +589,6 @@ const Profile = () => {
           </div>
 
           <div className="space-y-6 md:space-y-8">
-            {/* C: 好友列表 */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
               className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl"
@@ -591,7 +630,7 @@ const Profile = () => {
                       </div>
                       <div className="text-right shrink-0 pr-2 md:pr-4">
                         <div className="text-xl md:text-2xl font-black text-white drop-shadow-md font-mono tracking-tighter">
-                          {friend.totalPf || friend.b50 || friend.rating || '0'}
+                          {friend.totalPf || friend.rating || '0'}
                         </div>
                       </div>
                     </div>
@@ -603,52 +642,70 @@ const Profile = () => {
         </div>
 
         {/* ========================================================= */}
-        {/* 4. 史诗级 B50 成绩面板 (Best 50 Records - 按 Rating 排序) */}
+        {/* 4. 史诗级 B50 成绩面板 (Best 50 Records) */}
         {/* ========================================================= */}
         <div className="mt-16 md:mt-24 z-20 relative">
-          
-          {/* 大气感标题头 */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 border-b border-white/10 pb-4">
-            <div>
-              <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 drop-shadow-lg">
-                BEST 50.
-              </h2>
-              <div className="text-gray-400 font-mono text-sm tracking-[0.3em] uppercase mt-2">
-                Diving Fish / Maimai DX Records
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 border-b border-white/10 pb-4 gap-4">
+            
+            <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+              <div>
+                <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 drop-shadow-lg">
+                  BEST 50.
+                </h2>
+                <div className="text-gray-400 font-mono text-sm tracking-[0.3em] uppercase mt-2">
+                  Diving Fish / Maimai DX Records
+                </div>
               </div>
+              
+              <select
+                value={b50Filter}
+                onChange={(e) => setB50Filter(e.target.value)}
+                className="bg-black/80 backdrop-blur-md border border-purple-500/50 text-purple-300 rounded-xl px-4 py-2 outline-none font-bold text-sm uppercase tracking-widest cursor-pointer hover:bg-purple-900/30 transition-colors shadow-[0_0_15px_rgba(168,85,247,0.2)] mt-2 md:mt-0"
+              >
+                 <option value="DEFAULT">默认 B50 (Default)</option>
+                 <option value="AP50">AP 50 (All Perfect)</option>
+                 <option value="FC50">FC 50 (Full Combo)</option>
+                 <option value="I50">理想 B50 (Ideal-50)</option>
+                 <option value="STAR_1">1星 B50 (DX≥85%)</option>
+                 <option value="STAR_2">2星 B50 (DX≥90%)</option>
+                 <option value="STAR_3">3星 B50 (DX≥93%)</option>
+                 <option value="STAR_4">4星 B50 (DX≥95%)</option>
+                 <option value="STAR_5">5星 B50 (DX≥97%)</option>
+                 <option value="STAR_5_5">5.5星 B50 (DX≥98%)</option>
+                 <option value="STAR_6">6星 B50 (DX≥99%)</option>
+                 <option value="RED">红谱 B50 (EXPERT)</option>
+                 <option value="PURPLE">紫谱 B50 (MASTER)</option>
+                 <option value="WHITE">白谱 B50 (Re:MASTER)</option>
+              </select>
             </div>
             
-            {/* 战力总评 */}
             <div className="mt-4 md:mt-0 flex items-center gap-4 bg-black/40 backdrop-blur-md border border-white/10 px-6 py-3 rounded-2xl">
-              <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">DX Rating</span>
-              <span className="text-3xl font-black italic text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
-                {profile.rating || 0}
+              <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">
+                {b50Filter === 'DEFAULT' ? 'DX Rating' : 'Filtered Rating'}
+              </span>
+              <span className="text-3xl font-black italic text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)] transition-all">
+                {displayRating}
               </span>
             </div>
           </div>
 
-          {/* 真实成绩卡片矩阵 */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-            
-            {(!profile.topScores || profile.topScores.length === 0) ? (
+            {displayScores.length === 0 ? (
               <div className="col-span-full py-20 text-center text-gray-500 font-mono tracking-widest border border-white/5 rounded-2xl bg-black/20">
-                AWAITING SYNCHRONIZATION...
+                NO RECORDS FOUND UNDER THIS FILTER
               </div>
             ) : (
-              profile.topScores.map((record, index) => {
+              displayScores.map((record, index) => {
                 const colorClasses = getDifficultyColor(record.level);
 
                 return (
                   <motion.div 
-                    key={record._id || index}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-50px" }}
-                    transition={{ delay: index * 0.05 }}
-                    whileHover={{ y: -5, scale: 1.02 }}
+                    key={`${b50Filter}-${index}`}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.02 }}
                     className={`relative aspect-[4/3] rounded-2xl overflow-hidden border-2 bg-gray-900 group cursor-default transition-all duration-300 ${colorClasses}`}
                   >
-                    {/* 真实背景封面图 */}
                     <img 
                       src={`https://www.diving-fish.com/covers/${String(record.songId).padStart(5, '0')}.png`} 
                       alt={record.songName}
@@ -658,17 +715,29 @@ const Profile = () => {
                     
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
 
-                    {/* 顶部序号标签 */}
+                    {/* FC/AP 状态徽章 */}
+                    {record.fcStatus && ['fc', 'fcp', 'ap', 'app'].includes(record.fcStatus) && (
+                      <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-black italic text-white shadow-lg z-10 
+                        ${record.fcStatus.includes('ap') ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' : 'bg-gradient-to-r from-pink-400 to-pink-600'}`}>
+                        {record.fcStatus.toUpperCase()}
+                      </div>
+                    )}
+
+                    {/* I50 虚拟增幅标志 */}
+                    {record.isIdeal && (
+                      <div className="absolute top-2 left-10 bg-cyan-500/80 backdrop-blur-sm border border-cyan-300 px-1.5 py-0.5 rounded text-[9px] font-black italic text-white z-10 shadow-[0_0_10px_rgba(6,182,212,0.8)]">
+                        BOOSTED
+                      </div>
+                    )}
+
                     <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm border border-white/20 px-2 py-0.5 rounded text-[10px] font-black italic text-white z-10">
                       #{index + 1}
                     </div>
 
-                    {/* 底部数据区 */}
                     <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
                       <div className="text-xs md:text-sm font-bold text-white truncate drop-shadow-md mb-1">
                         {record.songName}
                       </div>
-                      
                       <div className="flex items-end justify-between">
                         <div className="text-lg md:text-xl font-black italic tracking-tighter text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                           {record.achievement ? record.achievement.toFixed(4) : '0.0000'}<span className="text-[10px] text-gray-300 ml-0.5">%</span>
@@ -686,7 +755,7 @@ const Profile = () => {
         </div>
 
         {/* ========================================================= */}
-        {/* 🔥 5. 极简 PF Top 50 列表 (按 PF 排序) 🔥 */}
+        {/* 🔥 5. 极简 PF Top 50 列表 🔥 */}
         {/* ========================================================= */}
         {profile.topPfScores && profile.topPfScores.length > 0 && (
           <div className="mt-16 md:mt-24 z-20 relative border-t border-white/10 pt-12">
@@ -697,7 +766,6 @@ const Profile = () => {
             <div className="flex flex-col border-t border-gray-800/50">
               {profile.topPfScores.map((score, index) => {
                 const diffColors = ['text-green-400', 'text-yellow-400', 'text-red-400', 'text-purple-400', 'text-pink-300'];
-                // 因为 score.difficulty 存储的是 0~4 的等级索引，所以可以直接作为数组下标获取颜色
                 const diffColor = diffColors[score.difficulty] || diffColors[score.level] || 'text-gray-400';
 
                 return (
