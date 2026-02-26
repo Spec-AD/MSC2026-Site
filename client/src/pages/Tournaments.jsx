@@ -9,11 +9,11 @@ const Tournaments = () => {
   const tournamentList = [
     {
       id: 'msc-2026',
-      title: 'MSC 2026 预选赛',
-      subtitle: 'Maimai DX Standard Championship',
+      title: 'MSC 2026',
+      subtitle: '第二届MSC官方赛事',
       status: 'ONGOING', // 状态：ONGOING (进行中), UPCOMING (未开始), ENDED (已结束)
-      date: '2026.03.01 - 2026.03.15',
-      participants: '全球海选', 
+      date: '2026.04.30 - 2026.07.13',
+      participants: '报名参加', 
       coverUrl: '/assets/bg.png', // 建议后期替换成你们 MSC 2026 的专属炫酷海报
       themeColor: 'from-orange-500 to-yellow-500',
       badgeColor: 'bg-green-500/20 text-green-400 border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.3)]',
@@ -21,12 +21,12 @@ const Tournaments = () => {
     },
     // 下面是一个“敬请期待”的占位卡片，让大厅看起来更丰满
     {
-      id: 'summer-cup',
-      title: 'Purebeat Summer Cup',
-      subtitle: '夏日双排 2v2 娱乐赛',
+      id: 'bg1',
+      title: '敬请期待....',
+      subtitle: '-',
       status: 'UPCOMING',
-      date: 'COMING SOON IN AUG 2026',
-      participants: '组队报名',
+      date: '-',
+      participants: '-',
       coverUrl: '/assets/bg.png', 
       themeColor: 'from-blue-500 to-cyan-500',
       badgeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.3)]',
