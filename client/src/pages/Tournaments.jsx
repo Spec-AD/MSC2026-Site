@@ -199,20 +199,32 @@ const Tournaments = () => {
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-4xl bg-gray-900 border border-orange-500/30 rounded-3xl shadow-[0_0_50px_rgba(249,115,22,0.2)] overflow-hidden relative flex flex-col max-h-[90vh]"
             >
-              {/* Modal 头部 */}
-              <div className="bg-black/60 p-6 md:p-8 border-b border-orange-500/20 relative flex items-center justify-between shrink-0">
+{/* Modal 头部 */}
+              <div className="bg-black/60 p-6 md:p-8 border-b border-orange-500/20 relative flex flex-col md:flex-row md:items-center justify-between shrink-0 gap-4">
                 <div>
                   <h2 className="text-3xl md:text-4xl font-black italic tracking-tighter text-orange-500 drop-shadow-md">
                     TOURNAMENT STAGES
                   </h2>
                   <p className="text-gray-400 font-mono text-sm tracking-widest mt-1">MSC 2026 赛事规程与通道</p>
                 </div>
-                <button 
-                  onClick={() => setSelectedTournament(null)}
-                  className="w-10 h-10 bg-white/10 hover:bg-red-500 text-white rounded-full flex items-center justify-center transition-colors"
-                >
-                  <FaTimes />
-                </button>
+                
+                {/* 🔥 新增：右侧操作区 (了解赛事 + 关闭按钮) */}
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => navigate('/tournament-info')}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-orange-500/20 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/50 rounded-full transition-all text-xs font-bold tracking-widest uppercase shadow-[0_0_10px_rgba(249,115,22,0.2)]"
+                  >
+                    <FaInfoCircle className="text-lg" />
+                    了解赛事详情
+                  </button>
+
+                  <button 
+                    onClick={() => setSelectedTournament(null)}
+                    className="w-10 h-10 bg-white/10 hover:bg-red-500 text-white rounded-full flex items-center justify-center transition-colors"
+                  >
+                    <FaTimes />
+                  </button>
+                </div>
               </div>
 
               {/* Modal 阶段列表主体 */}
