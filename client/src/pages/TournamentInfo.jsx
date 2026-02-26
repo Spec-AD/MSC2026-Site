@@ -16,6 +16,18 @@ const TournamentInfo = () => {
   const navigate = useNavigate();
   // 控制当前显示的 Tab: 'overview' | 'rules' | 'memories'
   const [activeTab, setActiveTab] = useState('overview');
+  // 🔥 新增：背景图片状态管理
+  const [bgUrl, setBgUrl] = useState('/assets/tournament.png');
+
+  // 🔥 新增：检测图片是否存在
+  useEffect(() => {
+    const img = new Image();
+    img.src = '/assets/tournament.png';
+    img.onerror = () => {
+      // 如果 tournament.png 加载失败，则回退到站内默认背景
+      setBgUrl('/assets/bg.png');
+    };
+  }, []);
 
   const tabVariants = {
     hidden: { opacity: 0, y: 20 },
