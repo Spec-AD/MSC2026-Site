@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   FaHome, FaPenNib, FaInfoCircle, FaScroll, 
   FaTrophy, FaUserCircle, FaSearch, FaSpinner, FaTimes, 
-  FaCompactDisc // 🔥 新增：引入光盘图标作为曲目图鉴的 icon
+  FaCompactDisc, FaBook // 🔥 新增：引入光盘图标作为曲目图鉴的 icon
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -25,7 +25,8 @@ const Sidebar = () => {
   const navItems = [
     { path: '/', icon: <FaHome />, label: '主页' },
     { path: '/tournaments', icon: <FaTrophy />, label: '赛事' },
-    { path: '/songs', icon: <FaCompactDisc />, label: '曲目' }, 
+    { path: '/songs', icon: <FaCompactDisc />, label: '曲目' },
+    { path: '/wiki', icon: <FaBook />, label: '维基' },
   ];
 
   // --- 搜索核心机制：防抖与请求 ---
