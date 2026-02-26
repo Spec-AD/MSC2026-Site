@@ -217,7 +217,7 @@ const WikiIndex = () => {
               </h2>
               <p className="text-xs text-gray-400 mb-6 font-mono leading-relaxed">
                 感谢你为社区贡献力量！提交的词条将进入审核队列。<br/>
-                如果输入的 URL 标识 (Slug) 与现有词条重复，将视为对该词条的**更新修改申请**。
+                如果输入的 URL 标识 (Slug) 与现有词条重复，将视为对该词条的更新修改申请。
               </p>
 
               <form onSubmit={handleWikiSubmit} className="space-y-5">
@@ -278,5 +278,6 @@ const WikiIndex = () => {
     </div>
   );
 };
+
 
 export default WikiIndex;
