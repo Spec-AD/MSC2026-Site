@@ -1328,7 +1328,6 @@ app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
       });
       await newPage.save();
       return res.json({ msg: isAdmin ? '发布成功！' : '提交成功，请等待审核。' });
-    }
   } catch (err) {
     res.status(500).json({ msg: '提交文章失败' });
   }
