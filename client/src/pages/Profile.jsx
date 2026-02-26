@@ -396,6 +396,52 @@ const Profile = () => {
                    <span className="bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-1 rounded text-[10px] uppercase tracking-wider ml-auto md:ml-0 mb-1">参赛选手</span>
                 )}
             </div>
+            
+            {/* 🔥 新增：登塔等级与经验条 (The Tower Level) 🔥 */}
+            <div className="w-full mt-6 bg-black/40 border border-white/10 rounded-2xl p-4 relative overflow-hidden group max-w-lg mx-auto md:mx-0 shadow-lg">
+              {/* 动态流光背景 */}
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
+              
+              <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3 shrink-0">
+                  {/* 等级徽章 */}
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center font-black italic text-xl shadow-[0_0_15px_rgba(34,211,238,0.5)] border border-white/20">
+                    {profile.level || 1}
+                  </div>
+                  <div className="flex flex-col text-left">
+                    <span className="text-[10px] font-bold tracking-widest text-cyan-400 uppercase leading-none mb-1">
+                      The Tower Lv.
+                    </span>
+                    <span className="text-xs font-mono text-gray-400 leading-none">
+                      Total XP: {profile.xp || 0}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 进度条区 */}
+                <div className="flex-1 w-full flex flex-col gap-1.5 justify-center">
+                  <div className="flex justify-between text-[10px] font-mono font-bold text-gray-400 px-1">
+                    <span>NEXT: Lv.{ (profile.level || 1) + 1 }</span>
+                    <span className="text-cyan-300 drop-shadow-md">
+                      { (profile.xp || 0) % 100 } / 100 <span className="text-[8px] opacity-70">({ (profile.xp || 0) % 100 }%)</span>
+                    </span>
+                  </div>
+                  {/* 进度条轨道 */}
+                  <div className="h-2.5 w-full bg-gray-900 rounded-full overflow-hidden border border-white/5 shadow-inner">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(profile.xp || 0) % 100}%` }}
+                      transition={{ duration: 1.5, ease: "easeOut", type: "spring" }}
+                      className="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-blue-500 shadow-[0_0_10px_rgba(34,211,238,0.8)] relative"
+                    >
+                      {/* 进度条高光动画 */}
+                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/30 to-transparent"></div>
+                    </motion.div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
           </div>
 
           <div className="pb-2 md:pb-4 w-full md:w-auto flex flex-wrap justify-center gap-3 z-20">

@@ -5,13 +5,16 @@ import { useAuth } from '../context/AuthContext';
 import bbcode from 'bbcode-to-react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaEnvelope } from 'react-icons/fa'; // 引入信封图标
+import { FaEnvelope, FaCalendarCheck, FaSpinner } from 'react-icons/fa'; // 🔥 引入了日历和加载图标
 
 const Home = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [announcements, setAnnouncements] = useState([]); 
   const [unreadCount, setUnreadCount] = useState(0); // 未读消息数状态
+  
+  // 🔥 新增：签到状态
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
 
   // 页面加载时拉取公告数据
   useEffect(() => {
@@ -41,6 +44,22 @@ const Home = () => {
     }
   }, [user]);
 
+  // 🔥 新增：签到处理函数
+  const handleCheckIn = async () => {
+    setIsCheckingIn(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post('/api/users/check-in', {}, { headers: { Authorization: `Bearer ${token}` }});
+      alert(`✅ ${res.data.msg}\n当前等级: Lv.${res.data.level} | 当前经验: ${res.data.xp}`);
+      // 签到成功后刷新页面以更新最新数据
+      window.location.reload(); 
+    } catch (err) {
+      alert('❌ ' + (err.response?.data?.msg || '签到失败'));
+    } finally {
+      setIsCheckingIn(false);
+    }
+  };
+
   return (
     // 外层容器：支持滚动，隐藏横向溢出
     <div className="w-full min-h-screen text-white flex flex-col items-center overflow-x-hidden relative bg-gradient-to-b from-transparent to-black/80">
@@ -56,12 +75,12 @@ const Home = () => {
             purebeat.top
           </span>
           <span className="text-[10px] font-mono text-purple-400 font-bold tracking-widest mt-1 uppercase">
-            Version 1.1.2
+            Version 1.1.3
           </span>
         </div>
 
         {/* 极简风操作按钮群 */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
           
           {/* 1. 信封 (收件箱) - 仅登录可见 */}
           {user && (
@@ -81,20 +100,33 @@ const Home = () => {
             </button>
           )}
 
-          {/* 2. 反馈按钮 */}
+          {/* 🔥 2. 新增：每日签到按钮 (仅登录可见) */}
+          {user && (
+            <button 
+              onClick={handleCheckIn}
+              disabled={isCheckingIn}
+              className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 hover:from-cyan-500 hover:to-blue-500 text-cyan-400 hover:text-white border border-cyan-500/30 hover:border-transparent rounded-full font-bold text-[10px] md:text-xs tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(34,211,238,0.1)] hover:shadow-[0_0_20px_rgba(34,211,238,0.4)] disabled:opacity-50 backdrop-blur-md"
+              title="每日签到 (获得经验)"
+            >
+              {isCheckingIn ? <FaSpinner className="animate-spin text-sm md:text-base" /> : <FaCalendarCheck className="text-sm md:text-base" />}
+              <span className="hidden md:inline">Check-In</span>
+            </button>
+          )}
+
+          {/* 3. 反馈按钮 */}
           <button 
             onClick={() => navigate('/feedback')}
-            className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-white border border-gray-600 hover:border-gray-400 bg-black/40 px-4 py-2 rounded-full transition-all backdrop-blur-md"
+            className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-white border border-gray-600 hover:border-gray-400 bg-black/40 px-3 md:px-4 py-2 rounded-full transition-all backdrop-blur-md"
           >
             Feedback
           </button>
 
-          {/* 3. 捐赠按钮 */}
+          {/* 4. 捐赠按钮 */}
           <a 
             href="https://afdian.com/a/purebeat" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-yellow-400 hover:text-yellow-300 border border-yellow-500/50 hover:border-yellow-400 bg-yellow-500/10 px-4 py-2 rounded-full transition-all backdrop-blur-md shadow-[0_0_10px_rgba(234,179,8,0.2)] flex items-center"
+            className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-yellow-400 hover:text-yellow-300 border border-yellow-500/50 hover:border-yellow-400 bg-yellow-500/10 px-3 md:px-4 py-2 rounded-full transition-all backdrop-blur-md shadow-[0_0_10px_rgba(234,179,8,0.2)] flex items-center"
           >
             Donate
           </a>
