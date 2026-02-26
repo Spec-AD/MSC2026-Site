@@ -1381,6 +1381,24 @@ app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// ==========================================
+// 🏆 [全局战力排行榜 API]
+// ==========================================
+app.get('/api/leaderboard/pf', async (req, res) => {
+  try {
+    // 核心排序逻辑：totalPf 降序 (-1)；若同分，按注册时间 createdAt 升序 (1)
+    const users = await User.find()
+      .sort({ totalPf: -1, createdAt: 1 })
+      .select('username uid avatarUrl totalPf rating role isRegistered') // 坚决不能下发密码等敏感信息
+      .limit(100); // 为了性能，暂取前 100 名，后续可做成分页
+
+    res.json(users);
+  } catch (err) {
+    console.error('获取排行榜失败:', err);
+    res.status(500).json({ msg: '获取排行榜失败' });
+  }
+});
+
 // --- 启动服务器 ---
 // [注意！] 为了保证所有的路由都能被 Express 正确拦截并生效，app.listen 必须写在文件的最后面！
 const PORT = process.env.PORT || 5000;
