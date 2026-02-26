@@ -18,9 +18,6 @@ const wikiPageSchema = new mongoose.Schema({
     ref: 'WikiCategory', 
     required: true 
   }, // 关联到动态类别库
-    enum: ['SYSTEM', 'GUIDE', 'TOURNAMENT', 'COMMUNITY', 'ARCHIVE'], // 预设几个大类
-    default: 'COMMUNITY'
-  },
   content: { 
     type: String, 
     required: true 
