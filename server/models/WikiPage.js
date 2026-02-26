@@ -14,8 +14,10 @@ const wikiPageSchema = new mongoose.Schema({
     trim: true
   }, // 文章的唯一 URL 标识，例如 "ppf-algorithm"
   category: { 
-    type: String, 
-    required: true,
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'WikiCategory', 
+    required: true 
+  }, // 关联到动态类别库
     enum: ['SYSTEM', 'GUIDE', 'TOURNAMENT', 'COMMUNITY', 'ARCHIVE'], // 预设几个大类
     default: 'COMMUNITY'
   },
