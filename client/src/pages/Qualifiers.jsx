@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { FaClock, FaTrophy, FaMedal } from 'react-icons/fa';
+import { FaClock, FaTrophy, FaMedal, FaArrowLeft } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
 
 // --- 自定义 Hook：监听窗口大小以适配 3D 位移 ---
 const useWindowSize = () => {
@@ -107,6 +108,7 @@ const Qualifiers = () => {
   const [timeLeft, setTimeLeft] = useState('-- 天 -- 小时 -- 分 -- 秒');
   const [leaderboard, setLeaderboard] = useState([]);
   const { width } = useWindowSize();
+  const navigate = useNavigate();
   const isMobile = width < 768;
   
   // 比赛时间设置
@@ -116,7 +118,8 @@ const Qualifiers = () => {
   useEffect(() => {
     const initData = async () => {
       try {
-        const scoreRes = await axios.get('/api/leaderboard');
+        // 🔥 核心升级 1：请求专属的赛事总分接口
+        const scoreRes = await axios.get('/api/leaderboard/qualifiers');
         setLeaderboard(scoreRes.data);
 
         const timeRes = await axios.get('/api/time');
@@ -154,27 +157,35 @@ const Qualifiers = () => {
     setTimeLeft(`${d}天 ${h}时 ${m}分 ${s}秒`);
   };
 
-  // 🔥 核心修复 C：前端排序逻辑
-  // 1. 优先比 Achievement (降序)
-  // 2. 其次比 DX Score (降序)
+  // 🔥 核心升级 2：前端防呆排序，按照 totalAchievement 和 totalDxScore 排序
   const sortedLeaderboard = [...leaderboard].sort((a, b) => {
-    const achA = Number(a.achievement);
-    const achB = Number(b.achievement);
+    const achA = Number(a.totalAchievement || 0);
+    const achB = Number(b.totalAchievement || 0);
     
-    // 如果差值大于 0.0001，则认为不相等，按达成率排
-    if (Math.abs(achB - achA) != 0) {
+    // 如果差值不为 0，则按达成率排
+    if (Math.abs(achB - achA) !== 0) {
       return achB - achA;
     }
     
     // 否则按 DX 分数排
-    return (b.dxScore || 0) - (a.dxScore || 0);
+    return (b.totalDxScore || 0) - (a.totalDxScore || 0);
   });
 
   return (
-    <div className="w-full min-h-screen flex flex-col items-center pt-6 md:pt-10 pb-24 overflow-x-hidden">
+    <div className="w-full min-h-screen flex flex-col items-center pt-6 md:pt-10 pb-24 overflow-x-hidden relative">
       
+      {/* 返回大厅按钮 */}
+      <div className="w-full max-w-7xl px-4 md:px-8 flex justify-start mb-4 z-30 relative top-14 md:top-0">
+        <button 
+          onClick={() => navigate('/tournaments')}
+          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors font-bold tracking-widest text-xs md:text-sm uppercase bg-black/40 px-4 py-2 rounded-full border border-white/10"
+        >
+          <FaArrowLeft /> BACK TO TOURNAMENTS
+        </button>
+      </div>
+
       {/* 1. 倒计时抬头 */}
-      <motion.div className="text-center mb-6 md:mb-12 z-20 px-4">
+      <motion.div className="text-center mb-6 md:mb-12 z-20 px-4 mt-16 md:mt-0">
         <h2 className="text-xs md:text-xl text-blue-300 tracking-[0.3em] md:tracking-[0.5em] mb-2 uppercase">Qualifiers Stage</h2>
         <div className="text-2xl md:text-6xl font-mono font-bold text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
           {timeLeft}
@@ -192,22 +203,23 @@ const Qualifiers = () => {
       <div className="w-full max-w-4xl px-2 md:px-4 z-10">
         <div className="flex items-center gap-2 mb-4 border-b border-white/20 pb-2 pl-2">
           <FaTrophy className="text-yellow-400 text-lg md:text-2xl" />
-          <h3 className="text-base md:text-2xl font-light tracking-widest text-white">实时排名 (Live Ranking)</h3>
+          <h3 className="text-base md:text-2xl font-light tracking-widest text-white">预选赛总分排行榜 (Total Score)</h3>
         </div>
 
         <div className="flex flex-col gap-2">
           
-          {/* 🔥 核心修复 D：表头自适应 (显示 DX Score) */}
+          {/* 表头 */}
           <div className="grid grid-cols-12 text-gray-500 text-[10px] md:text-sm px-2 md:px-4 pb-1 uppercase tracking-wider">
             <div className="col-span-2 md:col-span-1">Rank</div>
             <div className="col-span-4 md:col-span-5">Player</div>
-            <div className="col-span-3 md:col-span-3 text-right">Achiev.</div>
-            {/* 手机端不再 hidden，而是跟 Achiev 一样宽 */}
-            <div className="col-span-3 md:col-span-3 text-right">DX Score</div>
+            <div className="col-span-3 md:col-span-3 text-right">Total Achiev.</div>
+            <div className="col-span-3 md:col-span-3 text-right">Total DX</div>
           </div>
 
           {sortedLeaderboard.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 bg-white/5 rounded text-xs">暂无数据 / 虚位以待</div>
+            <div className="text-center py-12 text-gray-500 bg-white/5 border border-white/10 rounded-xl text-xs font-mono tracking-widest uppercase shadow-lg">
+              Awaiting Contenders... <br/><span className="text-[10px] opacity-60">暂无成绩录入</span>
+            </div>
           ) : (
             sortedLeaderboard.map((score, index) => (
               <motion.div
@@ -215,28 +227,32 @@ const Qualifiers = () => {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className={`grid grid-cols-12 items-center px-2 md:px-4 py-2 md:py-4 rounded bg-white/5 border border-white/5 ${
-                  index === 0 ? 'bg-yellow-500/10 border-yellow-500/30' : ''
+                onClick={() => navigate(`/profile/${score.username}`)}
+                className={`grid grid-cols-12 items-center px-2 md:px-4 py-3 md:py-4 rounded-xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors ${
+                  index === 0 ? 'bg-gradient-to-r from-yellow-500/20 to-transparent border-l-4 border-l-yellow-400' : ''
                 }`}
               >
                 {/* 排名 */}
                 <div className="col-span-2 md:col-span-1 font-mono font-bold text-sm md:text-xl">
-                  {index < 3 ? <FaMedal className={index === 0 ? 'text-yellow-400' : index === 1 ? 'text-gray-300' : 'text-orange-400'} /> : `#${index + 1}`}
+                  {index < 3 ? <FaMedal className={index === 0 ? 'text-yellow-400 drop-shadow-md scale-125' : index === 1 ? 'text-gray-300 drop-shadow-md scale-110' : 'text-orange-400 drop-shadow-md scale-110'} /> : `#${index + 1}`}
                 </div>
                 
-                {/* 玩家名 (截断) */}
-                <div className="col-span-4 md:col-span-5 font-bold text-xs md:text-lg text-white truncate pr-1">
-                  {score.nickname}
+                {/* 玩家名及进度 */}
+                <div className="col-span-4 md:col-span-5 flex flex-col pr-1 truncate">
+                  <span className="font-bold text-xs md:text-lg text-white truncate">{score.username}</span>
+                  <span className="text-[8px] md:text-[10px] font-mono text-gray-400 uppercase tracking-widest mt-0.5">
+                    Progress: <span className={score.playCount === 3 ? "text-green-400" : "text-yellow-500"}>{score.playCount || 0}/3</span>
+                  </span>
                 </div>
                 
-                {/* 达成率 (强制4位小数 + 小字号) */}
-                <div className="col-span-3 md:col-span-3 text-right font-mono text-[10px] md:text-xl text-green-400 leading-tight">
-                  {Number(score.achievement).toFixed(4)}%
+                {/* 总达成率 */}
+                <div className="col-span-3 md:col-span-3 text-right font-mono text-[11px] md:text-xl text-yellow-400 font-bold leading-tight">
+                  {Number(score.totalAchievement || 0).toFixed(4)}%
                 </div>
                 
-                {/* DX 分数 (显示 + 小字号) */}
-                <div className="col-span-3 md:col-span-3 text-right font-mono text-[10px] md:text-lg text-gray-400 leading-tight">
-                  {score.dxScore}
+                {/* 总 DX 分数 */}
+                <div className="col-span-3 md:col-span-3 text-right font-mono text-[11px] md:text-lg text-white font-bold leading-tight">
+                  {score.totalDxScore || 0}
                 </div>
               </motion.div>
             ))
