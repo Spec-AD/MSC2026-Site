@@ -1,28 +1,68 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-// 🔥 引入所有的 Fa 图标，以便后端动态下发的 icon 字符串能够生效
 import * as FaIcons from 'react-icons/fa'; 
+import { useAuth } from '../context/AuthContext'; // 🔥 引入权限上下文，判断是否登录
 
 const WikiIndex = () => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // 获取当前登录玩家
   const [articles, setArticles] = useState([]);
+  const [categories, setCategories] = useState([]); // 🔥 存储分类列表供提交表单使用
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // --- 玩家提交表单状态 ---
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [wikiFormData, setWikiFormData] = useState({ title: '', slug: '', categoryId: '', content: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   useEffect(() => {
-    fetchWikiList();
+    fetchWikiData();
   }, []);
 
-  const fetchWikiList = async () => {
+  const fetchWikiData = async () => {
     try {
-      const res = await axios.get('/api/wiki/list');
-      setArticles(res.data);
+      // 同时拉取文章列表和分类列表
+      const [listRes, catRes] = await Promise.all([
+        axios.get('/api/wiki/list'),
+        axios.get('/api/wiki/categories')
+      ]);
+      setArticles(listRes.data);
+      setCategories(catRes.data);
+      if (catRes.data.length > 0) {
+        setWikiFormData(prev => ({ ...prev, categoryId: catRes.data[0]._id }));
+      }
     } catch (err) {
-      console.error('获取维基列表失败', err);
+      console.error('获取维基数据失败', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // --- 处理玩家提交词条 ---
+  const handleWikiSubmit = async (e) => {
+    e.preventDefault();
+    if (!user) {
+      alert('请先登录后再参与维基共建！');
+      return navigate('/login');
+    }
+    if (!wikiFormData.categoryId) return alert('请选择一个分类！');
+
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post('/api/wiki/submit', wikiFormData, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      alert('✅ ' + res.data.msg); // 会提示“提交成功，请等待审核”
+      setShowSubmitModal(false);
+      setWikiFormData({ title: '', slug: '', categoryId: categories[0]?._id || '', content: '' });
+    } catch (err) {
+      alert('❌ ' + (err.response?.data?.msg || '提交失败，Slug 可能已被占用'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -33,27 +73,19 @@ const WikiIndex = () => {
     );
   }, [articles, searchQuery]);
 
-  // 🔥 v2 核心引擎：动态分类聚合
+  // 动态分类聚合
   const groupedArticles = useMemo(() => {
     const groups = {};
     filteredArticles.forEach(article => {
-      // 如果由于历史数据原因没有分类，给个兜底
       const cat = article.category || { _id: 'unassigned', name: '未分类 (Uncategorized)', color: 'text-gray-500', icon: 'FaFolder' };
-      
-      if (!groups[cat._id]) {
-        groups[cat._id] = {
-          info: cat,
-          items: []
-        };
-      }
+      if (!groups[cat._id]) groups[cat._id] = { info: cat, items: [] };
       groups[cat._id].items.push(article);
     });
-    // 将对象转为数组，方便 map 渲染
     return Object.values(groups);
   }, [filteredArticles]);
 
   return (
-    <div className="w-full min-h-screen pb-24 text-white px-4 md:px-8 max-w-7xl mx-auto pt-24">
+    <div className="w-full min-h-screen pb-24 text-white px-4 md:px-8 max-w-7xl mx-auto pt-24 relative">
       
       {/* --- 头部 Hero 区 --- */}
       <div className="mb-12 border-b border-white/10 pb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -67,16 +99,26 @@ const WikiIndex = () => {
           </p>
         </div>
         
-        {/* 搜索框 */}
-        <div className="relative w-full md:w-72">
-          <FaIcons.FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input 
-            type="text" 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜索词条..."
-            className="w-full bg-black/50 border border-white/20 rounded-full pl-12 pr-4 py-3 text-sm focus:border-cyan-500 outline-none transition-colors font-mono"
-          />
+        <div className="flex flex-col md:flex-row items-end md:items-center gap-4">
+          {/* 🔥 新增：参与共建按钮 */}
+          <button 
+            onClick={() => setShowSubmitModal(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-cyan-500/20 hover:bg-cyan-500 text-cyan-400 hover:text-white border border-cyan-500/50 rounded-full transition-all text-sm font-bold tracking-widest uppercase shadow-[0_0_15px_rgba(34,211,238,0.2)]"
+          >
+            <FaIcons.FaPenNib /> 参与共建
+          </button>
+
+          {/* 搜索框 */}
+          <div className="relative w-full md:w-64">
+            <FaIcons.FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input 
+              type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索词条..."
+              className="w-full bg-black/50 border border-white/20 rounded-full pl-12 pr-4 py-3 text-sm focus:border-cyan-500 outline-none transition-colors font-mono"
+            />
+          </div>
         </div>
       </div>
 
@@ -86,9 +128,7 @@ const WikiIndex = () => {
         <div className="space-y-12">
           {groupedArticles.map((group) => {
             const config = group.info;
-            // 动态匹配图标，找不到就用默认的文件夹图标
             const Icon = FaIcons[config.icon] || FaIcons.FaFolder;
-            // 动态颜色
             const colorClass = config.color || 'text-cyan-400';
 
             return (
@@ -146,6 +186,95 @@ const WikiIndex = () => {
           )}
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* 🔥 玩家共建弹窗 (Submit Modal) */}
+      {/* ========================================================= */}
+      <AnimatePresence>
+        {showSubmitModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            {/* 模糊背景 */}
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowSubmitModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            
+            {/* 弹窗面板 */}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-gray-900 border border-cyan-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(34,211,238,0.1)] overflow-y-auto max-h-[90vh]"
+            >
+              <button 
+                onClick={() => setShowSubmitModal(false)}
+                className="absolute top-6 right-6 text-gray-400 hover:text-white transition-colors text-xl"
+              >
+                <FaIcons.FaTimes />
+              </button>
+
+              <h2 className="text-2xl font-black italic tracking-tight text-cyan-400 mb-2 flex items-center gap-3">
+                <FaIcons.FaPenNib /> WIKI CONTRIBUTION
+              </h2>
+              <p className="text-xs text-gray-400 mb-6 font-mono leading-relaxed">
+                感谢你为社区贡献力量！提交的词条将进入审核队列。<br/>
+                如果输入的 URL 标识 (Slug) 与现有词条重复，将视为对该词条的**更新修改申请**。
+              </p>
+
+              <form onSubmit={handleWikiSubmit} className="space-y-5">
+                <div>
+                  <label className="text-xs font-bold text-gray-400 tracking-widest uppercase mb-1 block">词条标题</label>
+                  <input 
+                    type="text" required value={wikiFormData.title} onChange={(e) => setWikiFormData({...wikiFormData, title: e.target.value})}
+                    className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors"
+                    placeholder="如: PPF 战力算法解析"
+                  />
+                </div>
+                
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <label className="text-xs font-bold text-gray-400 tracking-widest uppercase mb-1 block">URL 标识 (Slug)</label>
+                    <input 
+                      type="text" required value={wikiFormData.slug} onChange={(e) => setWikiFormData({...wikiFormData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')})}
+                      className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors font-mono text-sm"
+                      placeholder="纯英文/数字/中划线, 如: ppf-algo"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs font-bold text-gray-400 tracking-widest uppercase mb-1 block">所属分类</label>
+                    <select 
+                      required value={wikiFormData.categoryId} onChange={(e) => setWikiFormData({...wikiFormData, categoryId: e.target.value})}
+                      className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors font-bold text-sm"
+                    >
+                      {categories.map(cat => (
+                        <option key={cat._id} value={cat._id}>
+                           {cat.parentId ? '　├─ ' : ''}{cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-400 tracking-widest uppercase mb-1 block">正文内容</label>
+                  <textarea 
+                    required rows="8" value={wikiFormData.content} onChange={(e) => setWikiFormData({...wikiFormData, content: e.target.value})}
+                    className="w-full bg-black/50 border border-white/20 rounded-xl p-4 text-white focus:border-cyan-500 outline-none transition-colors font-mono text-sm resize-y"
+                    placeholder="在这里编写词条内容..."
+                  />
+                </div>
+
+                <button 
+                  type="submit" disabled={isSubmitting}
+                  className="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-black tracking-widest rounded-xl transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50"
+                >
+                  {isSubmitting ? <FaIcons.FaSpinner className="animate-spin mx-auto" /> : 'SUBMIT FOR REVIEW / 提交审核'}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };
