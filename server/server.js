@@ -7,6 +7,7 @@ const Song = require('./models/Song');
 const { calculatePF } = require('./utils/pfCalculator');
 const Feedback = require('./models/Feedback');
 const Message = require('./models/Message');
+const QualifierScore = require('./models/QualifierScore');
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -456,16 +457,17 @@ app.get('/api/users/:username', async (req, res) => {
         // C. 查好友 (暂时只返回空数组或简单的计数，后续完善)
         // const friends = await User.find({ '_id': { $in: user.friends } }).select('username avatarUrl');
 
-        // D. 组装数据返回
+            const qualifierScores = await QualifierScore.find({ userId: user._id }).sort({ entryTime: -1 });
+
         res.json({
             ...user.toObject(),
-            topScores: topScores || [], 
-            pfRank: pfRank,               // [新增] 返回 PF 排名
-            topPfScores: topPfScores || [],     // [新增] 返回 PF 排行榜
+            topScores: topScores || [],       
+            pfRank: pfRank,               
+            topPfScores: topPfScores || [],  
+            qualifierScores: qualifierScores || [], // 🔥 把预选赛成绩塞给前端
             friendsCount: user.friends ? user.friends.length : 0,
-            friends: user.friends
+            friends: user.friends 
         });
-
     } catch (err) {
         console.error(err);
         res.status(500).json({ msg: '服务器错误' });
@@ -584,6 +586,7 @@ app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
     res.status(500).json({ msg: '曲库同步失败，请检查网络或后端日志' });
   }
 });
+
 
 // ==========================================
 // 好友系统 API (Friend System)
@@ -790,6 +793,151 @@ app.post('/api/admin/broadcast-message', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('广播失败:', err);
     res.status(500).json({ message: '服务器内部错误，广播失败' });
+  }
+});
+
+// === [ADM/TO 专属] 录入/更新预选赛单曲成绩与智能通知 ===
+app.post('/api/admin/qualifier-score', authMiddleware, async (req, res) => {
+  try {
+    // 1. 校验裁判身份
+    const adminUser = await User.findById(req.user.id || req.user._id);
+    if (!adminUser || !['ADM', 'TO'].includes(adminUser.role)) {
+      return res.status(403).json({ msg: '权限不足：仅考官或管理员可录入成绩' });
+    }
+
+    const { targetUid, songName, level, achievement, dxScore } = req.body;
+    
+    if (!targetUid || !songName || !achievement) {
+      return res.status(400).json({ msg: '请填写完整的比赛记录信息' });
+    }
+
+    // 2. 找到参赛选手
+    const targetUser = await User.findOne({ uid: targetUid });
+    if (!targetUser) return res.status(404).json({ msg: '未找到该 UID 的选手' });
+
+    // 难度映射表，用于邮件显示
+    const levelMap = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'Re:MASTER'];
+    const levelStr = levelMap[Number(level)] || 'UNKNOWN';
+
+    // 3. 核心逻辑：检查是否是“刷榜更新”
+    const existingScore = await QualifierScore.findOne({ 
+      userId: targetUser._id, 
+      songName: songName // 同一首歌视为同一条比赛记录
+    });
+
+    const Message = require('./models/Message'); // 引入站内信模型
+
+    if (existingScore) {
+      // ---> 场景 A：玩家刷榜更新成绩 <---
+      existingScore.level = Number(level);
+      existingScore.achievement = Number(achievement);
+      existingScore.dxScore = Number(dxScore || 0);
+      existingScore.entryBy = adminUser.username;
+      existingScore.entryTime = Date.now();
+      await existingScore.save();
+
+      // 发送【更新】邮件
+      await Message.create({
+        receiver: targetUser._id,
+        sender: adminUser._id,
+        type: 'SYSTEM',
+        title: '🔄 您的预选赛成绩已更新',
+        content: `你好！你（选手：${targetUser.username}）的预选赛成绩：\n[${songName}] [${levelStr}] [${Number(achievement).toFixed(4)}%] [${dxScore || 0}]\n已成功更新，详情查看该赛事的预选赛成绩列表。\n如果有疑问，请向该赛事主办方及时反馈。`
+      });
+
+      return res.json({ msg: `成绩更新成功！已向选手 ${targetUser.username} 发送更新邮件。` });
+
+    } else {
+      // ---> 场景 B：录入全新的歌曲成绩 <---
+      const newQScore = new QualifierScore({
+        userId: targetUser._id,
+        songName,
+        level: Number(level),
+        achievement: Number(achievement),
+        dxScore: Number(dxScore || 0),
+        entryBy: adminUser.username
+      });
+      await newQScore.save();
+
+      // 统计该选手目前录入了几首歌
+      const scoreCount = await QualifierScore.countDocuments({ userId: targetUser._id });
+
+      // 当且仅当录满 3 首歌时，发送【汇总】邮件
+      if (scoreCount === 3) {
+        const allScores = await QualifierScore.find({ userId: targetUser._id }).sort({ entryTime: 1 });
+        
+        let scoresText = '';
+        allScores.forEach(score => {
+          const sLevelStr = levelMap[score.level] || 'UNKNOWN';
+          scoresText += `[${score.songName}] [${sLevelStr}] [${score.achievement.toFixed(4)}%] [${score.dxScore || 0}]\n`;
+        });
+
+        await Message.create({
+          receiver: targetUser._id,
+          sender: adminUser._id,
+          type: 'SYSTEM',
+          title: '🎉 您的预选赛成绩已全部录入！',
+          content: `你好！你（选手：${targetUser.username}）的预选赛成绩：\n${scoresText}已成功录入，详情查看该赛事的预选赛成绩列表。\n如果有疑问，请向赛事主办方及时反馈。`
+        });
+
+        return res.json({ msg: `第 3 首歌录入成功！已向选手 ${targetUser.username} 发送成绩汇总邮件。` });
+      }
+
+      return res.json({ msg: `录入成功！该选手目前已录入 ${scoreCount}/3 首曲目。` });
+    }
+
+  } catch (err) {
+    console.error('[录入赛事成绩报错]', err);
+    res.status(500).json({ msg: '服务器错误，录入失败' });
+  }
+});
+
+// === [公共接口] 获取预选赛全局总分排行榜 ===
+app.get('/api/leaderboard/qualifiers', async (req, res) => {
+  try {
+    const leaderboard = await QualifierScore.aggregate([
+      {
+        // 1. 按选手分组，计算他们录入的曲目总达成率和总DX分
+        $group: {
+          _id: '$userId',
+          totalAchievement: { $sum: '$achievement' },
+          totalDxScore: { $sum: '$dxScore' },
+          playCount: { $sum: 1 } // 统计已经录入了几首歌
+        }
+      },
+      {
+        // 2. 连表查询，获取选手的名字、头像、UID
+        $lookup: {
+          from: 'users', // 注意 MongoDB 中集合名是小写复数
+          localField: '_id',
+          foreignField: '_id',
+          as: 'userInfo'
+        }
+      },
+      { $unwind: '$userInfo' }, 
+      {
+        // 3. 整理发给前端的数据格式
+        $project: {
+          _id: 0,
+          userId: '$_id',
+          username: '$userInfo.username',
+          avatarUrl: '$userInfo.avatarUrl',
+          uid: '$userInfo.uid',
+          totalAchievement: 1,
+          totalDxScore: 1,
+          playCount: 1
+        }
+      },
+      {
+        // 4. 终极排名：总达成率降序，同分看总 DX 降序
+        $sort: { totalAchievement: -1, totalDxScore: -1 }
+      }
+    ]);
+
+    res.json(leaderboard);
+  } catch (err) {
+    console.error('[预选赛榜单报错]', err);
+    res.status(500).json({ msg: '获取排行榜失败' });
   }
 });
 
