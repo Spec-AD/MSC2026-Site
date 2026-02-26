@@ -9,6 +9,7 @@ const Feedback = require('./models/Feedback');
 const Message = require('./models/Message');
 const QualifierScore = require('./models/QualifierScore');
 const WikiPage = require('./models/WikiPage');
+const WikiCategory = require('./models/WikiCategory'); 
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -1221,80 +1222,111 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
 // 📚 [WIKI 维基系统接口]
 // ==========================================
 
-// 1. [公共] 获取所有已通过审核的 Wiki 分类及文章列表 (供维基大厅展示)
+// 1. [公共] 获取全部分类（返回扁平列表，前端会自己组装成树）
+app.get('/api/wiki/categories', async (req, res) => {
+  try {
+    const categories = await WikiCategory.find().sort({ createdAt: 1 });
+    res.json(categories);
+  } catch (err) {
+    res.status(500).json({ msg: '获取维基分类失败' });
+  }
+});
+
+// 2. [ADM专属] 创建新类别 (支持多级)
+app.post('/api/admin/wiki/category', authMiddleware, async (req, res) => {
+  try {
+    if (!['ADM', 'TO'].includes(req.user.role)) return res.status(403).json({ msg: '权限不足' });
+
+    const { name, slug, description, parentId, icon, color } = req.body;
+    if (!name || !slug) return res.status(400).json({ msg: '类别名称和 Slug 不能为空' });
+
+    const formattedSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const existing = await WikiCategory.findOne({ slug: formattedSlug });
+    if (existing) return res.status(400).json({ msg: '该类别 Slug 已存在' });
+
+    const newCategory = new WikiCategory({
+      name,
+      slug: formattedSlug,
+      description,
+      parentId: parentId || null, // null 即为顶级分类
+      icon: icon || 'FaFolder',
+      color: color || 'text-cyan-400'
+    });
+
+    await newCategory.save();
+    res.json({ msg: '新类别创建成功！', category: newCategory });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: '创建类别失败' });
+  }
+});
+
+// 3. [公共] 获取所有已通过审核的文章 (连表查询 Category)
 app.get('/api/wiki/list', async (req, res) => {
   try {
-    // 只查询状态为 APPROVED 的文章
     const pages = await WikiPage.find({ status: 'APPROVED' })
       .select('title slug category views updatedAt')
-      .sort({ category: 1, views: -1 }); // 按分类排序，同分类按浏览量降序
+      .populate('category', 'name slug parentId color icon') // 🔥 把类别详情也带给前端
+      .sort({ views: -1 });
     res.json(pages);
   } catch (err) {
     res.status(500).json({ msg: '获取维基列表失败' });
   }
 });
 
-// 2. [公共] 根据 Slug 读取单篇文章详细内容 (每次读取浏览量 +1)
+// 4. [公共] 获取文章详情
 app.get('/api/wiki/page/:slug', async (req, res) => {
   try {
     const page = await WikiPage.findOneAndUpdate(
       { slug: req.params.slug, status: 'APPROVED' },
-      { $inc: { views: 1 } }, // 浏览量自动 +1
+      { $inc: { views: 1 } },
       { new: true }
     )
+    .populate('category', 'name slug parentId') // 🔥 带上类别
     .populate('author', 'username avatarUrl role')
     .populate('lastEditedBy', 'username avatarUrl role');
 
-    if (!page) return res.status(404).json({ msg: '该词条不存在或尚未通过审核' });
+    if (!page) return res.status(404).json({ msg: '词条不存在或未过审' });
     res.json(page);
   } catch (err) {
     res.status(500).json({ msg: '获取维基文章失败' });
   }
 });
 
-// 3. [玩家专属] 提交/编辑 Wiki 文章 (进入审核池)
+// 5. [玩家专属] 提交文章
 app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
   try {
-    const { slug, title, category, content } = req.body;
-    if (!slug || !title || !content) return res.status(400).json({ msg: '标题、路径和内容不能为空' });
+    const { slug, title, categoryId, content } = req.body; // 注意：前端传的应该是 categoryId
+    if (!slug || !title || !categoryId || !content) return res.status(400).json({ msg: '请填写完整信息，包括分类' });
 
-    // 格式化 slug (只允许英文、数字、中划线)
     const formattedSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-
-    // 检查是否已存在同名 Slug 的文章
     let page = await WikiPage.findOne({ slug: formattedSlug });
-
-    // 权限判断逻辑
     const isAdmin = ['ADM', 'TO'].includes(req.user.role);
-    const newStatus = isAdmin ? 'APPROVED' : 'PENDING'; // 管理员直接过审，玩家进审核池
+    const newStatus = isAdmin ? 'APPROVED' : 'PENDING';
 
     if (page) {
-      // ---> 更新现有文章 <---
       page.title = title;
-      page.category = category || page.category;
+      page.category = categoryId;
       page.content = content;
       page.lastEditedBy = req.user.id;
-      page.status = newStatus; // 玩家编辑后重新进入待审核状态
-      page.rejectReason = '';
+      page.status = newStatus;
       await page.save();
-      return res.json({ msg: isAdmin ? '文章更新并发布成功！' : '文章已提交更新，请等待管理员审核。', slug: page.slug });
+      return res.json({ msg: isAdmin ? '更新成功！' : '更新已提交审核。' });
     } else {
-      // ---> 创建新文章 <---
       const newPage = new WikiPage({
         title,
         slug: formattedSlug,
-        category: category || 'COMMUNITY',
+        category: categoryId,
         content,
         author: req.user.id,
         lastEditedBy: req.user.id,
         status: newStatus
       });
       await newPage.save();
-      return res.json({ msg: isAdmin ? '新文章创建并发布成功！' : '新文章已提交，请等待管理员审核。', slug: newPage.slug });
+      return res.json({ msg: isAdmin ? '发布成功！' : '提交成功，请等待审核。' });
     }
   } catch (err) {
-    console.error('[Wiki Submit Error]', err);
-    res.status(500).json({ msg: '提交文章失败，Slug 可能已被占用' });
+    res.status(500).json({ msg: '提交文章失败' });
   }
 });
 
@@ -1325,14 +1357,15 @@ app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// 5. [ADM 专属] 获取所有待审核的 Wiki 文章列表
+// 6. [ADM 专属] 获取待审核列表
 app.get('/api/admin/wiki/pending', authMiddleware, async (req, res) => {
   try {
     if (!['ADM', 'TO'].includes(req.user.role)) return res.status(403).json({ msg: '权限不足' });
     
     const pendingPages = await WikiPage.find({ status: 'PENDING' })
+      .populate('category', 'name') // 带上类别名字
       .populate('author', 'username')
-      .sort({ createdAt: -1 }); // 最新提交的排在前面
+      .sort({ createdAt: -1 });
       
     res.json(pendingPages);
   } catch (err) {
