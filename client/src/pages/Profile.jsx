@@ -339,7 +339,7 @@ const Profile = () => {
 
       {/* --- 2. 用户身份信息区 --- */}
       <div className="max-w-6xl mx-auto px-4 md:px-8 -mt-16 md:-mt-24 relative z-20">
-        {/* 这个 flex 容器限制了头像、名字和操作按钮。将进度条移出此容器，即可防止上顶效应 */}
+        {/* 这个 flex 容器限制了头像、名字和操作按钮 */}
         <div className="flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-8 text-center md:text-left">
           
           <div className="relative group flex-shrink-0 z-30">
@@ -472,8 +472,8 @@ const Profile = () => {
           </div>
         </div> {/* <--- 核心布局修复：在这里闭合 flex 容器 ---> */}
 
-        {/* 🔥 极简登塔经验条 (移出 flex 容器，防止排版被顶高) 🔥 */}
-        <div className="w-full mt-6 bg-black/40 border border-white/10 rounded-2xl p-3 relative overflow-hidden group shadow-lg z-20 md:max-w-3xl md:ml-[192px]">
+        {/* 🔥 极简登塔经验条 (与水鱼同步卡片等宽) 🔥 */}
+        <div className="w-full mt-8 bg-black/40 border border-white/10 rounded-2xl p-4 md:p-5 relative overflow-hidden group shadow-lg z-20">
           {/* 动态流光背景 */}
           <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
           
