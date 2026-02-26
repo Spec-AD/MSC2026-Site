@@ -1232,10 +1232,9 @@ app.get('/api/wiki/categories', async (req, res) => {
   }
 });
 
-// 2. [ADM专属] 创建新类别 (🔥 修复权限判断)
+// 2. [ADM专属] 创建新类别
 app.post('/api/admin/wiki/category', authMiddleware, async (req, res) => {
   try {
-    // 💡 修复：去数据库查出该用户的真实 role
     const currentUser = await User.findById(req.user.id || req.user._id);
     if (!currentUser || !['ADM', 'TO'].includes(currentUser.role)) {
       return res.status(403).json({ msg: '权限不足' });
@@ -1252,7 +1251,7 @@ app.post('/api/admin/wiki/category', authMiddleware, async (req, res) => {
       name,
       slug: formattedSlug,
       description,
-      parentId: parentId || null, // null 即为顶级分类
+      parentId: parentId || null, 
       icon: icon || 'FaFolder',
       color: color || 'text-cyan-400'
     });
@@ -1270,7 +1269,7 @@ app.get('/api/wiki/list', async (req, res) => {
   try {
     const pages = await WikiPage.find({ status: 'APPROVED' })
       .select('title slug category views updatedAt')
-      .populate('category', 'name slug parentId color icon') // 🔥 把类别详情也带给前端
+      .populate('category', 'name slug parentId color icon') 
       .sort({ views: -1 });
     res.json(pages);
   } catch (err) {
@@ -1286,7 +1285,7 @@ app.get('/api/wiki/page/:slug', async (req, res) => {
       { $inc: { views: 1 } },
       { new: true }
     )
-    .populate('category', 'name slug parentId') // 🔥 带上类别
+    .populate('category', 'name slug parentId') 
     .populate('author', 'username avatarUrl role')
     .populate('lastEditedBy', 'username avatarUrl role');
 
@@ -1297,43 +1296,7 @@ app.get('/api/wiki/page/:slug', async (req, res) => {
   }
 });
 
-// 5. [玩家专属] 提交文章
-app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
-  try {
-    const { slug, title, categoryId, content } = req.body; // 注意：前端传的应该是 categoryId
-    if (!slug || !title || !categoryId || !content) return res.status(400).json({ msg: '请填写完整信息，包括分类' });
-
-    const formattedSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    let page = await WikiPage.findOne({ slug: formattedSlug });
-    const isAdmin = ['ADM', 'TO'].includes(req.user.role);
-    const newStatus = isAdmin ? 'APPROVED' : 'PENDING';
-
-    if (page) {
-      page.title = title;
-      page.category = categoryId;
-      page.content = content;
-      page.lastEditedBy = req.user.id;
-      page.status = newStatus;
-      await page.save();
-      return res.json({ msg: isAdmin ? '更新成功！' : '更新已提交审核。' });
-    } else {
-      const newPage = new WikiPage({
-        title,
-        slug: formattedSlug,
-        category: categoryId,
-        content,
-        author: req.user.id,
-        lastEditedBy: req.user.id,
-        status: newStatus
-      });
-      await newPage.save();
-      return res.json({ msg: isAdmin ? '发布成功！' : '提交成功，请等待审核。' });
-  } catch (err) {
-    res.status(500).json({ msg: '提交文章失败' });
-  }
-});
-
-// 5. [玩家专属] 提交文章 (🔥 修复 ADM 提交免审逻辑)
+// 5. [玩家专属] 提交文章 (修复 ADM 提交免审逻辑)
 app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
   try {
     const { slug, title, categoryId, content } = req.body; 
@@ -1342,7 +1305,6 @@ app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
     const formattedSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     let page = await WikiPage.findOne({ slug: formattedSlug });
     
-    // 💡 修复：去数据库查出该用户的真实 role 判断是否免审
     const currentUser = await User.findById(req.user.id || req.user._id);
     const isAdmin = currentUser && ['ADM', 'TO'].includes(currentUser.role);
     const newStatus = isAdmin ? 'APPROVED' : 'PENDING';
@@ -1373,18 +1335,9 @@ app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
   }
 });
 
-    // 💡 可选高级功能：可以引入站内信模型 (Message)，在审核通过/拒绝时给作者发邮件通知
-    
-    res.json({ msg: `文章已被标记为 ${page.status}` });
-  } catch (err) {
-    res.status(500).json({ msg: '审核操作失败' });
-  }
-});
-
-// 6. [ADM 专属] 获取待审核列表 (🔥 修复权限判断)
+// 6. [ADM 专属] 获取待审核列表
 app.get('/api/admin/wiki/pending', authMiddleware, async (req, res) => {
   try {
-    // 💡 修复：查库确认权限
     const currentUser = await User.findById(req.user.id || req.user._id);
     if (!currentUser || !['ADM', 'TO'].includes(currentUser.role)) {
       return res.status(403).json({ msg: '权限不足' });
@@ -1398,6 +1351,33 @@ app.get('/api/admin/wiki/pending', authMiddleware, async (req, res) => {
     res.json(pendingPages);
   } catch (err) {
     res.status(500).json({ msg: '获取待审核列表失败' });
+  }
+});
+
+// 7. [ADM 专属] 审核操作
+app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user.id || req.user._id);
+    if (!currentUser || !['ADM', 'TO'].includes(currentUser.role)) {
+      return res.status(403).json({ msg: '权限不足' });
+    }
+
+    const { action, rejectReason } = req.body;
+    const page = await WikiPage.findById(req.params.id);
+    if (!page) return res.status(404).json({ msg: '文章不存在' });
+
+    if (action === 'APPROVE') {
+      page.status = 'APPROVED';
+      page.rejectReason = '';
+    } else if (action === 'REJECT') {
+      page.status = 'REJECTED';
+      page.rejectReason = rejectReason || '内容不符合社区规范';
+    }
+
+    await page.save();
+    res.json({ msg: `文章已被标记为 ${page.status}` });
+  } catch (err) {
+    res.status(500).json({ msg: '审核操作失败' });
   }
 });
 
