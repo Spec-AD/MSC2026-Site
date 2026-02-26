@@ -6,13 +6,12 @@ import { FaArrowLeft, FaEye, FaClock, FaUserEdit, FaSpinner, FaTag } from 'react
 import bbcode from 'bbcode-to-react';
 
 // ==========================================
-// 🔥 注册自定义 BBCode 标签 (用于显示纯文本代码)
+// 🔥 注册自定义 BBCode 标签 (用于显示纯文本代码教学)
 // ==========================================
 
 // 1. 行内代码标签 [code]...[/code]
 class InlineCodeTag extends bbcode.Tag {
   toReact() {
-    // getContent(true) 代表强制获取内部的原始文本，不进行 BBCode 解析
     return (
       <code className="bg-white/10 text-cyan-300 px-1.5 py-0.5 rounded font-mono text-[0.9em] mx-1 border border-white/5 shadow-inner">
         {this.getContent(true)}
@@ -37,6 +36,7 @@ bbcode.registerTag('code', InlineCodeTag);
 bbcode.registerTag('block', BlockCodeTag);
 
 // ==========================================
+
 const WikiArticle = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -95,7 +95,8 @@ const WikiArticle = () => {
             </h1>
             <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-gray-400">
               <span className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded border border-white/10">
-                <FaTag className="text-cyan-500" /> {page.category}
+                {/* 🔥 这里修复了致命崩溃：安全地获取对象的 name 属性 */}
+                <FaTag className="text-cyan-500" /> {page.category?.name || '未分类'}
               </span>
               <span className="flex items-center gap-1.5">
                 <FaClock /> {new Date(page.updatedAt).toLocaleString()}
@@ -112,7 +113,7 @@ const WikiArticle = () => {
           </div>
         </motion.div>
 
-        {/* --- 右侧：侧边元数据栏 (PC端悬浮，移动端在底部) --- */}
+        {/* --- 右侧：侧边元数据栏 --- */}
         <motion.div 
           initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
           className="w-full lg:w-80 shrink-0 space-y-6 lg:sticky lg:top-24"
@@ -132,7 +133,7 @@ const WikiArticle = () => {
                 </div>
               </div>
 
-              {page.lastEditedBy && page.lastEditedBy._id !== page.author._id && (
+              {page.lastEditedBy && page.lastEditedBy._id !== page.author?._id && (
                 <div className="flex items-center gap-3 border-t border-white/5 pt-4">
                   <img src={page.lastEditedBy.avatarUrl || '/assets/logos.png'} alt="editor" className="w-8 h-8 rounded-lg object-cover border border-white/20 opacity-80" />
                   <div className="flex flex-col">
@@ -144,7 +145,6 @@ const WikiArticle = () => {
             </div>
           </div>
 
-          {/* 目录占位 (未来如果要写提取标题生成TOC的逻辑，可以放这里) */}
           <div className="bg-white/5 border border-white/10 rounded-3xl p-6 hidden lg:block">
             <h3 className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-4">
               Article Info
