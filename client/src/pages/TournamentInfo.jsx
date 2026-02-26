@@ -44,7 +44,7 @@ const TournamentInfo = () => {
           className="w-full h-full object-cover opacity-30 blur-[2px] transition-all duration-1000" 
         />
         {/* 渐变遮罩：确保内容文字在任何背景下都清晰 */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/80 to-black pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black pointer-events-none" />
       </div>
 
       {/* 底部巨大图标装饰 */}
@@ -154,7 +154,7 @@ const TournamentInfo = () => {
                   <motion.div 
                     className="flex gap-4 md:gap-8 px-4" 
                     animate={{ x: ["0%", "-50%"] }} 
-                    transition={{ repeat: Infinity, ease: "linear", duration: 10 }}
+                    transition={{ repeat: Infinity, ease: "linear", duration: 5 }}
                     style={{ width: "fit-content" }}
                   >
                     {[...lastYearImages, ...lastYearImages].map((src, index) => (
@@ -173,3 +173,4 @@ const TournamentInfo = () => {
 
 
 export default TournamentInfo;
+
