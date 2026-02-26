@@ -920,7 +920,7 @@ app.get('/api/leaderboard/qualifiers', async (req, res) => {
         $project: {
           _id: 0,
           userId: '$_id',
-          username: { $ifNull: ['$userInfo.tournamentNickname', '$userInfo.username'] },
+          username: { $ifNull: ['$userInfo.nickname', '$userInfo.username'] },
           avatarUrl: '$userInfo.avatarUrl',
           uid: '$userInfo.uid',
           totalAchievement: 1,
