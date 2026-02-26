@@ -26,7 +26,6 @@ const Sidebar = () => {
     { path: '/', icon: <FaHome />, label: '主页' },
     { path: '/tournaments', icon: <FaTrophy />, label: '赛事' },
     { path: '/songs', icon: <FaCompactDisc />, label: '曲目' }, 
-    { path: '/wiki', icon: <FaBook />, label: '维基' }, 
   ];
 
   // --- 搜索核心机制：防抖与请求 ---
