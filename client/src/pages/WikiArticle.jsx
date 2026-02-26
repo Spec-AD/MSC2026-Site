@@ -5,6 +5,38 @@ import axios from 'axios';
 import { FaArrowLeft, FaEye, FaClock, FaUserEdit, FaSpinner, FaTag } from 'react-icons/fa';
 import bbcode from 'bbcode-to-react';
 
+// ==========================================
+// 🔥 注册自定义 BBCode 标签 (用于显示纯文本代码)
+// ==========================================
+
+// 1. 行内代码标签 [code]...[/code]
+class InlineCodeTag extends bbcode.Tag {
+  toReact() {
+    // getContent(true) 代表强制获取内部的原始文本，不进行 BBCode 解析
+    return (
+      <code className="bg-white/10 text-cyan-300 px-1.5 py-0.5 rounded font-mono text-[0.9em] mx-1 border border-white/5 shadow-inner">
+        {this.getContent(true)}
+      </code>
+    );
+  }
+}
+
+// 2. 多行代码块标签 [block]...[/block]
+class BlockCodeTag extends bbcode.Tag {
+  toReact() {
+    return (
+      <pre className="bg-black/60 border border-cyan-500/20 text-cyan-300 p-4 rounded-xl font-mono text-sm overflow-x-auto my-4 shadow-[0_0_15px_rgba(34,211,238,0.05)]">
+        {this.getContent(true)}
+      </pre>
+    );
+  }
+}
+
+// 3. 将标签注入系统
+bbcode.registerTag('code', InlineCodeTag);
+bbcode.registerTag('block', BlockCodeTag);
+
+// ==========================================
 const WikiArticle = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
