@@ -442,6 +442,7 @@ app.get('/api/users/:username', async (req, res) => {
         if (user.totalPf && user.totalPf > 0) {
             pfRank = await User.countDocuments({ totalPf: { $gt: user.totalPf } }) + 1;
         }
+	const allScores = await Score.find({ userId: user._id }).lean();
 
 // 🔥 机制 A：查该用户的 B50 成绩 (按 Rating 降序，供卡片区使用)
         const topScores = await Score.find({ userId: user._id })
@@ -461,6 +462,7 @@ app.get('/api/users/:username', async (req, res) => {
 
         res.json({
             ...user.toObject(),
+	    allScores: allScores || [],
             topScores: topScores || [],       
             pfRank: pfRank,               
             topPfScores: topPfScores || [],  
@@ -1164,6 +1166,7 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
         songId: rec.song_id, 
         songName: song ? song.title : rec.title,
         achievement: rec.achievements || 0, 
+	fcStatus: rec.fc || '',
         dxScore: rec.dxScore || 0,
         rating: rec.ra || 0, 
         level: rec.level_index || 0, 
