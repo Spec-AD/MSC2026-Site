@@ -6,15 +6,17 @@ import { FaArrowLeft, FaEye, FaClock, FaUserEdit, FaSpinner, FaTag } from 'react
 import bbcode from 'bbcode-to-react';
 
 // ==========================================
-// 🔥 注册自定义 BBCode 标签 (用于显示纯文本代码教学)
+// 🔥 注册自定义 BBCode 标签 (已修复属性被吞的 BUG)
 // ==========================================
 
 // 1. 行内代码标签 [code]...[/code]
 class InlineCodeTag extends bbcode.Tag {
   toReact() {
+    // 将解析后的魔法占位符还原回真实的中括号
+    const text = (this.getContent(true) || '').replace(/__L__/g, '[').replace(/__R__/g, ']');
     return (
       <code className="bg-white/10 text-cyan-300 px-1.5 py-0.5 rounded font-mono text-[0.9em] mx-1 border border-white/5 shadow-inner">
-        {this.getContent(true)}
+        {text}
       </code>
     );
   }
@@ -23,9 +25,11 @@ class InlineCodeTag extends bbcode.Tag {
 // 2. 多行代码块标签 [block]...[/block]
 class BlockCodeTag extends bbcode.Tag {
   toReact() {
+    // 将解析后的魔法占位符还原回真实的中括号
+    const text = (this.getContent(true) || '').replace(/__L__/g, '[').replace(/__R__/g, ']');
     return (
       <pre className="bg-black/60 border border-cyan-500/20 text-cyan-300 p-4 rounded-xl font-mono text-sm overflow-x-auto my-4 shadow-[0_0_15px_rgba(34,211,238,0.05)]">
-        {this.getContent(true)}
+        {text}
       </pre>
     );
   }
@@ -35,8 +39,17 @@ class BlockCodeTag extends bbcode.Tag {
 bbcode.registerTag('code', InlineCodeTag);
 bbcode.registerTag('block', BlockCodeTag);
 
+// 💡 4. 核心引擎：防吞属性预处理器
+const renderSafeBBCode = (content) => {
+  if (!content) return null;
+  // 正则拦截：在进入解析器前，把 [code] 和 [block] 内部的 [ ] 替换成不会被解析的 __L__ 和 __R__
+  const safeContent = content.replace(/\[(code|block)\]([\s\S]*?)\[\/\1\]/gi, (match, tag, inner) => {
+    const escapedInner = inner.replace(/\[/g, '__L__').replace(/\]/g, '__R__');
+    return `[${tag}]${escapedInner}[/${tag}]`;
+  });
+  return bbcode.toReact(safeContent);
+};
 // ==========================================
-
 const WikiArticle = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
