@@ -69,6 +69,24 @@ mongoose.connect(process.env.MONGO_URI)
 // 辅助工具与中间件
 // ==========================================
 
+// ==========================================
+// 辅助工具与中间件
+// ==========================================
+// (在 authMiddleware 下方添加这个函数)
+
+const addXp = async (userId, amount) => {
+  try {
+    const user = await User.findById(userId);
+    if (!user) return;
+    user.xp = (user.xp || 0) + amount;
+    // 核心算法：1级开始，每 300 经验升 1 级，无穷无尽！
+    user.level = Math.floor(user.xp / 300) + 1;
+    await user.save();
+  } catch (err) {
+    console.error('加经验失败:', err);
+  }
+};
+
 // JWT 验证中间件 (保护需要登录的路由)
 const authMiddleware = (req, res, next) => {
     // 从请求头获取 Token (格式: Bearer <token>)
@@ -181,6 +199,13 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
         const user = await User.findById(req.user.id).select('-password') // 不返回密码
 	.populate('friends', 'username uid avatarUrl totalPf rating');
         if (!user) return res.status(404).json({ msg: '用户未找到' });
+	const today = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
+        if (user.lastLoginDate !== today) {
+          user.lastLoginDate = today;
+          user.xp = (user.xp || 0) + 10;
+          user.level = Math.floor(user.xp / 100) + 1;
+          await user.save();
+        }
         res.json(user);
     } catch (err) {
         res.status(500).json({ msg: '服务器错误' });
@@ -308,6 +333,7 @@ app.post('/api/match/register', authMiddleware, async (req, res) => {
             },
             { new: true }
         );
+	await addXp(req.user.id, 200); // 赛事报名奖励
 
         res.json({ success: true, user: updatedUser });
     } catch (err) {
@@ -1039,6 +1065,7 @@ app.patch('/api/feedback/:id/status', authMiddleware, async (req, res) => {
       if (user.role !== 'ADM') return res.status(403).json({ message: '仅管理员可标记为已解决' });
       feedback.status = 'SOLVED';
       feedback.statusUpdatedAt = Date.now();
+      await addXp(feedback.author, 100);
     } 
     else if (action === 'REAPPEAL') {
       if (feedback.author.toString() !== req.user.id) return res.status(403).json({ message: '仅发起者可要求重申' });
@@ -1369,6 +1396,7 @@ app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
     if (action === 'APPROVE') {
       page.status = 'APPROVED';
       page.rejectReason = '';
+      await addXp(page.author, 50);
     } else if (action === 'REJECT') {
       page.status = 'REJECTED';
       page.rejectReason = rejectReason || '内容不符合社区规范';
@@ -1396,6 +1424,27 @@ app.get('/api/leaderboard/pf', async (req, res) => {
   } catch (err) {
     console.error('获取排行榜失败:', err);
     res.status(500).json({ msg: '获取排行榜失败' });
+  }
+});
+
+// [新增] 每日签到接口 (+20 XP)
+app.post('/api/users/check-in', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const today = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }); // 获取东八区今天的日期字符串
+    
+    if (user.lastCheckInDate === today) {
+      return res.status(400).json({ msg: '今天已经签到过啦，明天再来吧！' });
+    }
+    
+    user.lastCheckInDate = today;
+    user.xp = (user.xp || 0) + 20;
+    user.level = Math.floor(user.xp / 100) + 1;
+    await user.save();
+    
+    res.json({ msg: '签到成功！经验值 +20', xp: user.xp, level: user.level });
+  } catch (err) {
+    res.status(500).json({ msg: '签到失败' });
   }
 });
 

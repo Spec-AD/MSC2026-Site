@@ -10,6 +10,10 @@ const UserSchema = new mongoose.Schema({
     friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], 
     importToken: { type: String, default: '' },
     rating: { type: Number, default: 0 },
+    xp: { type: Number, default: 0 },         // 总经验值
+    level: { type: Number, default: 1 },      // 当前等级 (登塔层数)
+    lastLoginDate: { type: String, default: '' },   // 上次每日登录加经验的日期
+    lastCheckInDate: { type: String, default: '' }, // 上次主动点击签到的日期
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
     divingFishUsername: { 
