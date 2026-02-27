@@ -24,6 +24,7 @@ const UserSchema = new mongoose.Schema({
     osuPp: { type: Number, default: 0 },         
     osuGlobalRank: { type: Number, default: 0 }, 
     osuCountryRank: { type: Number, default: 0 },
+    osuMode: { type: String, default: 'osu' },
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
     isB50Visible: { type: Boolean, default: false },
