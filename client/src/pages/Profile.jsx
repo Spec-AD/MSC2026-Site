@@ -690,7 +690,7 @@ const Profile = () => {
                         </span>
                       </div>
                       <div className="text-right shrink-0 pr-2 md:pr-4">
-                        <div className={`text-xl md:text-2xl font-black drop-shadow-md font-mono tracking-tighter ${textClipFix} ${friend.totalPf ? getPfColor(friend.totalPf) : (friend.isB50Visible !== false ? getRatingColor(friend.rating) : 'text-gray-500')}`}>
+                        <div className={`text-xl md:text-2xl font-black drop-shadow-md font-mono tracking-tighter ${textClipFix} ${friend.totalPf ? getPfColor(friend.totalPf) : (friend.isB50Visible === true ? getRatingColor(friend.rating) : 'text-gray-500')}`}>
                           {friend.totalPf ? friend.totalPf.toFixed(2) : (friend.isB50Visible !== false ? (friend.rating || '0') : '-')}
                         </div>
                       </div>
