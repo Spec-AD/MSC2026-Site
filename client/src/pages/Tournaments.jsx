@@ -6,6 +6,7 @@ import {
   FaTrophy, FaCalendarAlt, FaUsers, FaArrowRight, FaStar, 
   FaTimes, FaLock, FaCheckCircle, FaPenNib, FaMusic, FaSitemap, FaInfoCircle, FaMedal
 } from 'react-icons/fa';
+import { useToast } from '../context/ToastContext';
 
 const Tournaments = () => {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ const Tournaments = () => {
   
   // 当前时间，用于判断阶段是否开放
   const [now, setNow] = useState(Date.now());
+  const { addToast } = useToast();
 
   useEffect(() => {
     // 每秒更新一次当前时间，确保状态实时切换

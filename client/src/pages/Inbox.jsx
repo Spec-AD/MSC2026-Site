@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { FaEnvelopeOpenText, FaUserPlus, FaShieldAlt, FaServer, FaCheck, FaTimes, FaSpinner, FaArrowLeft } from 'react-icons/fa';
 import FallingIcons from '../components/FallingIcons';
+import { useToast } from '../context/ToastContext';
 
 const Inbox = () => {
   const { user } = useAuth();
@@ -12,6 +13,7 @@ const Inbox = () => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
+  const { addToast } = useToast();
   
   // 新增：当前选中的邮件 ID
   const [selectedMsgId, setSelectedMsgId] = useState(null);

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import axios from 'axios';
 import { FaArrowLeft, FaEye, FaClock, FaUserEdit, FaSpinner, FaTag } from 'react-icons/fa';
 import bbcode from 'bbcode-to-react';
+import { useToast } from '../context/ToastContext';
 
 // ==========================================
 // 🔥 注册自定义 BBCode 标签 (已修复属性被吞的 BUG)
@@ -56,6 +57,7 @@ const WikiArticle = () => {
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { addToast } = useToast();
 
   useEffect(() => {
     const fetchPage = async () => {

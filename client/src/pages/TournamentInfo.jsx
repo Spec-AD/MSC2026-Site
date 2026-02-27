@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { FaUserShield, FaBan, FaArrowLeft, FaInfoCircle, FaBook, FaImages, FaExclamationTriangle } from 'react-icons/fa';
+import { useToast } from '../context/ToastContext';
 
 // 图片数组 (回顾相册)
 const lastYearImages = [
@@ -18,6 +19,7 @@ const TournamentInfo = () => {
   
   // 🔥 背景图逻辑：默认加载 tournament.png，失败则回退到 bg.png
   const [bgUrl, setBgUrl] = useState('/assets/tournament.png');
+  const { addToast } = useToast();
 
   useEffect(() => {
     const img = new Image();

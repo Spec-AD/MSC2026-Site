@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import * as FaIcons from 'react-icons/fa'; 
 import { useAuth } from '../context/AuthContext'; // 🔥 引入权限上下文，判断是否登录
+import { useToast } from '../context/ToastContext';
 
 const WikiIndex = () => {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ const WikiIndex = () => {
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [wikiFormData, setWikiFormData] = useState({ title: '', slug: '', categoryId: '', content: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { addToast } = useToast();
 
   useEffect(() => {
     fetchWikiData();

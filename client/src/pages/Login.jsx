@@ -3,11 +3,13 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true); 
   const [formData, setFormData] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
+  const { addToast } = useToast();
   
   const { login, registerAction } = useAuth();
   const navigate = useNavigate();

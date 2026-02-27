@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { FaCrown, FaMedal, FaSpinner, FaFireAlt, FaLevelUpAlt, FaBook, FaBug, FaCalendarCheck } from 'react-icons/fa';
+import { useToast } from '../context/ToastContext';
 
 const Leaderboard = () => {
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('pf'); // 当前激活的榜单
   const navigate = useNavigate();
+  const { addToast } = useToast();
 
   // 榜单配置字典
   const TABS = [

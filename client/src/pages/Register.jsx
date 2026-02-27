@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { FaCheckCircle, FaExclamationCircle, FaChevronDown } from 'react-icons/fa';
+import { useToast } from '../context/ToastContext';
 
 const Register = () => {
   const { user, login } = useAuth(); 
   const navigate = useNavigate();
+  const { addToast } = useToast();
   
   const [formData, setFormData] = useState({
     nickname: '',

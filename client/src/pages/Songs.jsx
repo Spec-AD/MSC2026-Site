@@ -3,6 +3,7 @@ import { Virtuoso } from 'react-virtuoso';
 import axios from 'axios';
 import { FaSpinner, FaSearch } from 'react-icons/fa';
 import SongDrawer from '../components/SongDrawer';
+import { useToast } from '../context/ToastContext';
 
 export default function Songs() {
   const [songs, setSongs] = useState([]);
