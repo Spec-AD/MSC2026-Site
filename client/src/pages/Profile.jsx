@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from 'axios';
-import { FaCamera, FaUserPlus, FaUserEdit, FaTrophy, FaUsers, FaSpinner, FaSave, FaTimes, FaSyncAlt, FaClock, FaHeart, FaLock, FaUnlock } from 'react-icons/fa';
+import { FaCamera, FaUserPlus, FaUserEdit, FaTrophy, FaUsers, FaSpinner, FaSave, FaTimes, FaSyncAlt, FaClock, FaHeart, FaLock, FaUnlock, FaGamepad } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import bbcode from 'bbcode-to-react';
 import { useToast } from '../context/ToastContext';
@@ -18,6 +18,8 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [proberId, setProberId] = useState('');
+  const [activeGame, setActiveGame] = useState('maimai'); // 'maimai' | 'osu'
+  const [isSyncingOsu, setIsSyncingOsu] = useState(false);
   
   // 🔥 高级筛选 B50 状态
   const [b50Filter, setB50Filter] = useState('DEFAULT');
@@ -77,7 +79,7 @@ const Profile = () => {
 
   const handleSyncMaimai = async () => {
     if (!proberId.trim()) { addToast('请输入有效的水鱼查分器用户名或 QQ！', 'error'); return; }
-   if (!importToken.trim()) { addToast('请提供有效的 Import-Token！', 'error'); return; }
+    if (!importToken.trim()) { addToast('请提供有效的 Import-Token！', 'error'); return; }
     
     setIsSyncingMaimai(true);
     try {
@@ -91,6 +93,21 @@ const Profile = () => {
       addToast(err.response?.data?.msg || '同步失败，请检查账号和 Token 是否匹配', 'error');
     } finally {
       setIsSyncingMaimai(false);
+    }
+  };
+
+  // 🔥 OSU 数据同步
+  const handleSyncOsu = async () => {
+    setIsSyncingOsu(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post('/api/users/sync-osu', {}, { headers: { Authorization: `Bearer ${token}` }});
+      addToast(res.data.msg, 'success');
+      setTimeout(() => window.location.reload(), 1500); // 刷新以渲染新成绩
+    } catch (err) {
+      addToast(err.response?.data?.msg || '同步失败，请稍后重试', 'error');
+    } finally {
+      setIsSyncingOsu(false);
     }
   };
 
@@ -127,7 +144,7 @@ const Profile = () => {
 
   const handleAddFriend = async () => {
     if (!currentUser) {
-      addToast('请先登录才能添加好友！', 'info'); // 蓝色的引导性提示
+      addToast('请先登录才能添加好友！', 'info'); 
       navigate('/login');
       return;
     }
@@ -136,7 +153,7 @@ const Profile = () => {
       const res = await axios.post(`/api/users/${profile.username}/friend-request`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      addToast(res.data.message, 'success'); // 绿色的成功提示
+      addToast(res.data.message, 'success'); 
       
       const currentUserId = currentUser.id || currentUser._id;
       setProfile(prev => ({
@@ -144,7 +161,7 @@ const Profile = () => {
         friendRequests: [...(prev.friendRequests || []), currentUserId]
       }));
     } catch (err) {
-      addToast(err.response?.data?.message || '发送请求失败', 'error'); // 红色的失败提示
+      addToast(err.response?.data?.message || '发送请求失败', 'error'); 
     }
   };
 
@@ -157,7 +174,6 @@ const Profile = () => {
     return res.data.url; 
   };
 
-  // 🔥 修复致命 BUG：保存后强制重新拉取 Populate 数据
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
@@ -171,10 +187,9 @@ const Profile = () => {
         bio: editData.bio,
         avatarUrl: finalAvatarUrl,
         bannerUrl: finalBannerUrl,
-        isB50Visible: editData.isB50Visible // 提交隐私修改
+        isB50Visible: editData.isB50Visible 
       });
       
-      // 💡 不要直接用后端的残缺 res.data 覆盖 profile，而是重新执行全量查询
       await fetchProfile();
       
       setNewAvatarFile(null);
@@ -203,7 +218,7 @@ const Profile = () => {
   };
 
   // ==========================================
-  // 🔥 超级引擎：动态 B50 计算核心
+  // 🔥 超级引擎：动态 B50 计算核心 (Maimai)
   // ==========================================
   const displayScores = useMemo(() => {
     if (!profile) return [];
@@ -296,6 +311,17 @@ const Profile = () => {
     if (r >= 13000) return 'text-purple-400'; 
     if (r >= 10000) return 'text-blue-400'; 
     return 'text-[#cd7f32]'; 
+  };
+
+  // osu! 评级专属颜色映射
+  const getOsuGradeColor = (grade) => {
+    const g = grade.toUpperCase();
+    if (['XH', 'SH'].includes(g)) return 'text-gray-300 drop-shadow-[0_0_8px_rgba(209,213,219,0.8)]'; // 银 SS/S
+    if (['X', 'S'].includes(g)) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]'; // 金 SS/S
+    if (g === 'A') return 'text-green-400';
+    if (g === 'B') return 'text-blue-400';
+    if (g === 'C') return 'text-purple-400';
+    return 'text-gray-400';
   };
 
   const getPfColor = (pf) => {
@@ -513,94 +539,7 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* 水鱼数据同步模块 (仅本人可见) */}
-        {isOwnProfile && (
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            className="mt-8 p-5 md:p-6 bg-blue-500/10 border border-blue-500/20 rounded-2xl w-full backdrop-blur-md flex flex-col gap-4 z-20"
-          >
-            <div className="text-center md:text-left">
-              <label className="text-sm font-bold text-blue-400 uppercase tracking-widest block mb-1">
-                Data Synchronization
-              </label>
-              <div className="text-gray-400 text-xs leading-relaxed">
-                绑定查分器账号并提供 Import-Token即可获取您的B50<br/>
-                <a href="https://www.diving-fish.com/maimaidx/prober/" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300 mt-1 inline-block">
-                  不知道怎么获取？点击前往水鱼查分器主页 {'>'} 编辑个人资料 {'>'} 成绩导入Token（复制即可）
-                </a>
-              </div>
-            </div>
-            
-            <div className="flex flex-col md:flex-row w-full gap-3">
-              <input 
-                type="text" 
-                value={proberId}
-                onChange={(e) => setProberId(e.target.value)}
-                placeholder="水鱼用户名或QQ"
-                className="w-full md:w-48 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors"
-              />
-              <input 
-                type="password" 
-                value={importToken}
-                onChange={(e) => setImportToken(e.target.value)}
-                placeholder="在此粘贴您的超长 Import-Token"
-                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none transition-colors font-mono"
-              />
-              <button 
-                onClick={handleSyncMaimai}
-                disabled={isSyncingMaimai}
-                className="bg-gray-800 hover:bg-gray-700 text-purple-400 border border-gray-700 hover:border-purple-500 px-8 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap shadow-lg flex items-center justify-center gap-2 shrink-0"
-              >
-                {isSyncingMaimai ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
-                {isSyncingMaimai ? 'SYNCING...' : 'SYNC'}
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {isOwnProfile && (
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            className="mt-6 p-5 md:p-6 bg-pink-500/10 border border-pink-500/20 rounded-2xl w-full backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4 z-20"
-  >
-            <div className="text-center md:text-left flex-1">
-              <label className="text-sm font-bold text-pink-400 uppercase tracking-widest block mb-1">
-                osu! Link
-              </label>
-              <div className="text-gray-400 text-xs leading-relaxed">
-                {profile.osuId 
-                  ? `已绑定 osu! 账号: ${profile.osuUsername} (ID: ${profile.osuId})`
-                  : '授权绑定你的 osu! 官方账号，解锁更多成就与专属组件！(首次绑定 +50 XP)'
-                }
-              </div>
-            </div>
-
-            {profile.osuId ? (
-              <img 
-                src={profile.osuAvatarUrl} 
-                alt="osu avatar" 
-                className="w-12 h-12 rounded-xl border border-pink-500/50 shadow-[0_0_10px_rgba(236,72,153,0.3)]"
-              />
-            ) : (
-              <button 
-                // 🔥 核心：点击按钮直接跳转到 osu! 官网的授权页
-                onClick={() => {
-                  // 注意：这里的 client_id 必须换成你刚才申请到的纯数字 Client ID！！
-                  // redirect_uri 必须和你刚在官网填写的完全一致！
-                  const clientId = "49210"; 
-                  const redirectUri = encodeURIComponent("https://www.purebeat.top/osu-callback");
-                  window.location.href = `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify`;
-        }}
-                className="bg-pink-600 hover:bg-pink-500 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-[0_0_15px_rgba(236,72,153,0.4)] flex items-center gap-2 shrink-0"
-              >
-                绑定 osu! 账号
-              </button>
-            )}
-          </motion.div>
-        )}
-
-
-        {/* --- 3. 详细内容网格区 --- */}
+        {/* --- 3. 全局通用信息网格区 (About Me / Honors / Friends) --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mt-8 md:mt-12">
           
           <div className="md:col-span-2 space-y-6 md:space-y-8">
@@ -624,13 +563,13 @@ const Profile = () => {
                     <div className="absolute right-4 bottom-4 text-xs text-gray-500 font-mono pointer-events-none">BBCode Supported</div>
                   </div>
 
-                  {/* 🔥 转移到这里的隐私开关面板 🔥 */}
+                  {/* 隐私开关面板 */}
                   <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-blue-400 tracking-widest uppercase flex items-center gap-2">
                         {editData.isB50Visible ? <FaUnlock className="text-xs" /> : <FaLock className="text-xs" />} 隐私设置 / Privacy
                       </span>
-                      <span className="text-xs text-gray-400 mt-1 hidden sm:inline">公开展示我的 DX Rating 和 Best 50 成绩单给访客</span>
+                      <span className="text-xs text-gray-400 mt-1 hidden sm:inline">公开展示我的 Maimai Rating 和 B50 成绩单给访客</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0">
                       <input 
@@ -713,7 +652,6 @@ const Profile = () => {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {/* 🔥 好友列表应用颜色引擎与隐私保护 */}
                   {profile.friends.map(friend => (
                     <div 
                       key={friend._id} 
@@ -747,170 +685,383 @@ const Profile = () => {
         </div>
 
         {/* ========================================================= */}
-        {/* 4. 史诗级 B50 成绩面板 (带隐私拦截锁) */}
+        {/* 🎮 游戏生态 Tab 切换器 (Game Ecosystem Tabs) */}
         {/* ========================================================= */}
-        {(isOwnProfile || profile.isB50Visible) ? (
-          <div className="mt-16 md:mt-24 z-20 relative">
-            <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 border-b border-white/10 pb-4 gap-4">
-              
-              <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
-                <div>
-                  <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 drop-shadow-lg">
-                    BEST 50.
-                  </h2>
-                  <div className="text-gray-400 font-mono text-sm tracking-[0.3em] uppercase mt-2">
-                    Diving Fish / Maimai DX Records
+        <div className="mt-16 flex items-center gap-6 border-b border-white/10 pb-2 overflow-x-auto hide-scrollbar z-20 relative">
+          <button 
+            onClick={() => setActiveGame('maimai')}
+            className={`text-lg md:text-2xl font-black italic tracking-widest px-4 py-2 transition-all whitespace-nowrap ${activeGame === 'maimai' ? 'text-cyan-400 border-b-4 border-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]' : 'text-gray-600 hover:text-gray-400'}`}
+          >
+            MAIMAI DX
+          </button>
+          <button 
+            onClick={() => setActiveGame('osu')}
+            className={`text-lg md:text-2xl font-black italic tracking-widest px-4 py-2 transition-all whitespace-nowrap ${activeGame === 'osu' ? 'text-pink-400 border-b-4 border-pink-400 drop-shadow-[0_0_10px_rgba(236,72,153,0.5)]' : 'text-gray-600 hover:text-gray-400'}`}
+          >
+            OSU! V2
+          </button>
+        </div>
+
+        {/* ========================================================= */}
+        {/* 💠 MAIMAI DX 生态系统区 */}
+        {/* ========================================================= */}
+        {activeGame === 'maimai' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col">
+            
+            {/* 水鱼数据同步模块 (仅本人可见) */}
+            {isOwnProfile && (
+              <div className="mt-8 p-5 md:p-6 bg-cyan-900/10 border border-cyan-500/20 rounded-2xl w-full backdrop-blur-md flex flex-col gap-4 z-20">
+                <div className="text-center md:text-left">
+                  <label className="text-sm font-bold text-cyan-400 uppercase tracking-widest block mb-1">
+                    Maimai DX Data Synchronization
+                  </label>
+                  <div className="text-gray-400 text-xs leading-relaxed">
+                    绑定查分器账号并提供 Import-Token即可获取您的B50<br/>
+                    <a href="https://www.diving-fish.com/maimaidx/prober/" target="_blank" rel="noopener noreferrer" className="text-cyan-400 underline hover:text-cyan-300 mt-1 inline-block">
+                      不知道怎么获取？点击前往水鱼查分器主页 {'>'} 编辑个人资料 {'>'} 成绩导入Token（复制即可）
+                    </a>
                   </div>
                 </div>
                 
-                <select
-                  value={b50Filter}
-                  onChange={(e) => setB50Filter(e.target.value)}
-                  className="bg-black/80 backdrop-blur-md border border-purple-500/50 text-purple-300 rounded-xl px-4 py-2 outline-none font-bold text-sm uppercase tracking-widest cursor-pointer hover:bg-purple-900/30 transition-colors shadow-[0_0_15px_rgba(168,85,247,0.2)] mt-2 md:mt-0"
-                >
-                   <option value="DEFAULT">默认 B50 (Default)</option>
-                   <option value="AP50">AP 50 (All Perfect)</option>
-                   <option value="FC50">FC 50 (Full Combo)</option>
-                   <option value="I50">理想 B50 (Ideal-50)</option>
-                   <option value="STAR_1">1星 B50 (DX≥85%)</option>
-                   <option value="STAR_2">2星 B50 (DX≥90%)</option>
-                   <option value="STAR_3">3星 B50 (DX≥93%)</option>
-                   <option value="STAR_4">4星 B50 (DX≥95%)</option>
-                   <option value="STAR_5">5星 B50 (DX≥97%)</option>
-                   <option value="STAR_5_5">5.5星 B50 (DX≥98%)</option>
-                   <option value="STAR_6">6星 B50 (DX≥99%)</option>
-                   <option value="RED">红谱 B50 (EXPERT)</option>
-                   <option value="PURPLE">紫谱 B50 (MASTER)</option>
-                   <option value="WHITE">白谱 B50 (Re:MASTER)</option>
-                </select>
-              </div>
-              
-              <div className="mt-4 md:mt-0 flex items-center gap-4 bg-black/40 backdrop-blur-md border border-white/10 px-6 py-3 rounded-2xl">
-                <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">
-                  {b50Filter === 'DEFAULT' ? 'DX Rating' : 'Filtered Rating'}
-                </span>
-                <span className={`text-3xl font-black italic transition-all ${textClipFix} ${getRatingColor(displayRating)}`}>
-                  {displayRating}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-              {displayScores.length === 0 ? (
-                <div className="col-span-full py-20 text-center text-gray-500 font-mono tracking-widest border border-white/5 rounded-2xl bg-black/20">
-                  NO RECORDS FOUND UNDER THIS FILTER
+                <div className="flex flex-col md:flex-row w-full gap-3">
+                  <input 
+                    type="text" 
+                    value={proberId}
+                    onChange={(e) => setProberId(e.target.value)}
+                    placeholder="水鱼用户名或QQ"
+                    className="w-full md:w-48 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-cyan-500 outline-none transition-colors"
+                  />
+                  <input 
+                    type="password" 
+                    value={importToken}
+                    onChange={(e) => setImportToken(e.target.value)}
+                    placeholder="在此粘贴您的超长 Import-Token"
+                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-cyan-500 outline-none transition-colors font-mono"
+                  />
+                  <button 
+                    onClick={handleSyncMaimai}
+                    disabled={isSyncingMaimai}
+                    className="bg-gray-800 hover:bg-gray-700 text-cyan-400 border border-gray-700 hover:border-cyan-500 px-8 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap shadow-lg flex items-center justify-center gap-2 shrink-0"
+                  >
+                    {isSyncingMaimai ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
+                    {isSyncingMaimai ? 'SYNCING...' : 'SYNC'}
+                  </button>
                 </div>
-              ) : (
-                displayScores.map((record, index) => {
-                  const colorClasses = getDifficultyColor(record.level);
+              </div>
+            )}
 
-                  return (
-                    <motion.div 
-                      key={`${b50Filter}-${index}`}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.02 }}
-                      className={`relative aspect-[4/3] rounded-2xl overflow-hidden border-2 bg-gray-900 group cursor-default transition-all duration-300 ${colorClasses}`}
+            {/* B50 成绩面板 (带隐私拦截锁) */}
+            {(isOwnProfile || profile.isB50Visible) ? (
+              <div className="mt-12 z-20 relative">
+                <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 border-b border-white/10 pb-4 gap-4">
+                  <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+                    <div>
+                      <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 drop-shadow-lg">
+                        BEST 50.
+                      </h2>
+                      <div className="text-gray-400 font-mono text-sm tracking-[0.3em] uppercase mt-2">
+                        Diving Fish / Maimai DX Records
+                      </div>
+                    </div>
+                    
+                    <select
+                      value={b50Filter}
+                      onChange={(e) => setB50Filter(e.target.value)}
+                      className="bg-black/80 backdrop-blur-md border border-cyan-500/50 text-cyan-300 rounded-xl px-4 py-2 outline-none font-bold text-sm uppercase tracking-widest cursor-pointer hover:bg-cyan-900/30 transition-colors shadow-[0_0_15px_rgba(34,211,238,0.2)] mt-2 md:mt-0"
                     >
-                      <img 
-                        src={`https://www.diving-fish.com/covers/${String(record.songId).padStart(5, '0')}.png`} 
-                        alt={record.songName}
-                        className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
-                        onError={(e) => { e.target.src = '/assets/bg.png'; }}
-                      />
-                      
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
+                       <option value="DEFAULT">默认 B50 (Default)</option>
+                       <option value="AP50">AP 50 (All Perfect)</option>
+                       <option value="FC50">FC 50 (Full Combo)</option>
+                       <option value="I50">理想 B50 (Ideal-50)</option>
+                       <option value="STAR_1">1星 B50 (DX≥85%)</option>
+                       <option value="STAR_2">2星 B50 (DX≥90%)</option>
+                       <option value="STAR_3">3星 B50 (DX≥93%)</option>
+                       <option value="STAR_4">4星 B50 (DX≥95%)</option>
+                       <option value="STAR_5">5星 B50 (DX≥97%)</option>
+                       <option value="STAR_5_5">5.5星 B50 (DX≥98%)</option>
+                       <option value="STAR_6">6星 B50 (DX≥99%)</option>
+                       <option value="RED">红谱 B50 (EXPERT)</option>
+                       <option value="PURPLE">紫谱 B50 (MASTER)</option>
+                       <option value="WHITE">白谱 B50 (Re:MASTER)</option>
+                    </select>
+                  </div>
+                  
+                  <div className="mt-4 md:mt-0 flex items-center gap-4 bg-black/40 backdrop-blur-md border border-white/10 px-6 py-3 rounded-2xl">
+                    <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">
+                      {b50Filter === 'DEFAULT' ? 'DX Rating' : 'Filtered Rating'}
+                    </span>
+                    <span className={`text-3xl font-black italic transition-all ${textClipFix} ${getRatingColor(displayRating)}`}>
+                      {displayRating}
+                    </span>
+                  </div>
+                </div>
 
-                      {record.fcStatus && ['fc', 'fcp', 'ap', 'app'].includes(record.fcStatus) && (
-                        <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-black italic text-white shadow-lg z-10 
-                          ${record.fcStatus.includes('ap') ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' : 'bg-gradient-to-r from-pink-400 to-pink-600'}`}>
-                          {record.fcStatus.toUpperCase()}
-                        </div>
-                      )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                  {displayScores.length === 0 ? (
+                    <div className="col-span-full py-20 text-center text-gray-500 font-mono tracking-widest border border-white/5 rounded-2xl bg-black/20">
+                      NO RECORDS FOUND UNDER THIS FILTER
+                    </div>
+                  ) : (
+                    displayScores.map((record, index) => {
+                      const colorClasses = getDifficultyColor(record.level);
 
-                      {record.isIdeal && (
-                        <div className="absolute top-2 left-10 bg-cyan-500/80 backdrop-blur-sm border border-cyan-300 px-1.5 py-0.5 rounded text-[9px] font-black italic text-white z-10 shadow-[0_0_10px_rgba(6,182,212,0.8)]">
-                          BOOSTED
-                        </div>
-                      )}
+                      return (
+                        <motion.div 
+                          key={`${b50Filter}-${index}`}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: index * 0.02 }}
+                          className={`relative aspect-[4/3] rounded-2xl overflow-hidden border-2 bg-gray-900 group cursor-default transition-all duration-300 ${colorClasses}`}
+                        >
+                          <img 
+                            src={`https://www.diving-fish.com/covers/${String(record.songId).padStart(5, '0')}.png`} 
+                            alt={record.songName}
+                            className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
+                            onError={(e) => { e.target.src = '/assets/bg.png'; }}
+                          />
+                          
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
 
-                      <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm border border-white/20 px-2 py-0.5 rounded text-[10px] font-black italic text-white z-10">
-                        #{index + 1}
-                      </div>
+                          {record.fcStatus && ['fc', 'fcp', 'ap', 'app'].includes(record.fcStatus) && (
+                            <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-black italic text-white shadow-lg z-10 
+                              ${record.fcStatus.includes('ap') ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' : 'bg-gradient-to-r from-pink-400 to-pink-600'}`}>
+                              {record.fcStatus.toUpperCase()}
+                            </div>
+                          )}
 
-                      <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
-                        <div className="text-xs md:text-sm font-bold text-white truncate drop-shadow-md mb-1">
-                          {record.songName}
-                        </div>
-                        <div className="flex items-end justify-between">
-                          <div className="text-lg md:text-xl font-black italic tracking-tighter text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                            {record.achievement ? record.achievement.toFixed(4) : '0.0000'}<span className="text-[10px] text-gray-300 ml-0.5">%</span>
+                          {record.isIdeal && (
+                            <div className="absolute top-2 left-10 bg-cyan-500/80 backdrop-blur-sm border border-cyan-300 px-1.5 py-0.5 rounded text-[9px] font-black italic text-white z-10 shadow-[0_0_10px_rgba(6,182,212,0.8)]">
+                              BOOSTED
+                            </div>
+                          )}
+
+                          <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm border border-white/20 px-2 py-0.5 rounded text-[10px] font-black italic text-white z-10">
+                            #{index + 1}
                           </div>
-                          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-white flex items-center gap-1 shadow-lg">
-                            <span className="text-[8px] opacity-70">➔</span> {record.rating || 0}
+
+                          <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
+                            <div className="text-xs md:text-sm font-bold text-white truncate drop-shadow-md mb-1">
+                              {record.songName}
+                            </div>
+                            <div className="flex items-end justify-between">
+                              <div className="text-lg md:text-xl font-black italic tracking-tighter text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                                {record.achievement ? record.achievement.toFixed(4) : '0.0000'}<span className="text-[10px] text-gray-300 ml-0.5">%</span>
+                              </div>
+                              <div className="bg-white/10 backdrop-blur-md border border-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-white flex items-center gap-1 shadow-lg">
+                                <span className="text-[8px] opacity-70">➔</span> {record.rating || 0}
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-12 z-20 relative border border-white/5 bg-black/40 backdrop-blur-md rounded-3xl p-16 md:p-24 flex flex-col items-center justify-center text-center shadow-xl">
+                <FaLock className="text-6xl text-gray-700 mb-6 drop-shadow-md" />
+                <h2 className="text-2xl md:text-3xl font-black italic tracking-widest text-gray-400 mb-2">B50 数据已隐藏</h2>
+                <p className="text-gray-500 font-mono text-sm tracking-widest">该玩家未开放访客查看权限 / ACCESS DENIED</p>
+              </div>
+            )}
+
+            {/* PF Top 50 列表 */}
+            {profile.topPfScores && profile.topPfScores.length > 0 && (
+              <div className="mt-16 md:mt-24 z-20 relative border-t border-white/10 pt-12">
+                <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter text-gray-300 drop-shadow-lg mb-6 flex items-center gap-3">
+                  <FaTrophy className="text-cyan-400" />
+                  PERFORMANCE TOP 50.
+                </h2>
+                <div className="flex flex-col border-t border-gray-800/50">
+                  {profile.topPfScores.map((score, index) => {
+                    const diffColors = ['text-green-400', 'text-yellow-400', 'text-red-400', 'text-purple-400', 'text-pink-300'];
+                    const diffColor = diffColors[score.difficulty] || diffColors[score.level] || 'text-gray-400';
+
+                    return (
+                      <div key={score._id || index} className="flex justify-between items-center py-2.5 border-b border-gray-800/50 hover:bg-white/5 transition-colors group px-2">
+                        <div className="flex items-center gap-4 truncate">
+                          <div className="text-gray-600 font-mono text-sm w-6 text-right shrink-0">
+                            {index + 1}
+                          </div>
+                          <div className="flex flex-col truncate">
+                            <span className="text-gray-200 font-semibold text-sm truncate group-hover:text-cyan-300 transition-colors">
+                              {score.songName || 'Unknown'}
+                            </span>
+                            <div className="flex items-center gap-2 mt-0.5 text-[11px]">
+                              <span className={`font-black ${diffColor}`}>Lv.{score.level}</span>
+                              <span className="text-gray-600">|</span>
+                              <span className="text-gray-500 font-mono">{score.constant?.toFixed(1)}</span>
+                              <span className="text-gray-600 hidden md:inline">|</span>
+                              <span className="text-gray-500 font-mono hidden md:inline">{score.achievement?.toFixed(4)}%</span>
+                            </div>
                           </div>
                         </div>
+
+                        <div className="flex items-baseline gap-1.5 shrink-0 ml-4">
+                          <span className={`text-base font-mono font-bold ${textClipFix} ${getPfColor(score.pf)}`}>
+                            {score.pf ? score.pf.toFixed(2) : '0.00'}
+                          </span>
+                          <span className="text-[10px] text-gray-600 font-bold uppercase">PF</span>
+                        </div>
                       </div>
-                    </motion.div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        ) : (
-          /* 🔥 当访客被限制时的锁定界面 */
-          <div className="mt-16 md:mt-24 z-20 relative border border-white/5 bg-black/40 backdrop-blur-md rounded-3xl p-16 md:p-24 flex flex-col items-center justify-center text-center shadow-xl">
-            <FaLock className="text-6xl text-gray-700 mb-6 drop-shadow-md" />
-            <h2 className="text-2xl md:text-3xl font-black italic tracking-widest text-gray-400 mb-2">B50 数据已隐藏</h2>
-            <p className="text-gray-500 font-mono text-sm tracking-widest">该玩家未开放访客查看权限 / ACCESS DENIED</p>
-          </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+          </motion.div>
         )}
 
         {/* ========================================================= */}
-        {/* 🔥 5. 极简 PF Top 50 列表 🔥 */}
+        {/* 🌸 OSU! 生态系统区 */}
         {/* ========================================================= */}
-        {profile.topPfScores && profile.topPfScores.length > 0 && (
-          <div className="mt-16 md:mt-24 z-20 relative border-t border-white/10 pt-12">
-            <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter text-gray-300 drop-shadow-lg mb-6 flex items-center gap-3">
-              <FaTrophy className="text-purple-400" />
-              PERFORMANCE TOP 50.
-            </h2>
-            <div className="flex flex-col border-t border-gray-800/50">
-              {profile.topPfScores.map((score, index) => {
-                const diffColors = ['text-green-400', 'text-yellow-400', 'text-red-400', 'text-purple-400', 'text-pink-300'];
-                const diffColor = diffColors[score.difficulty] || diffColors[score.level] || 'text-gray-400';
-
-                return (
-                  <div key={score._id || index} className="flex justify-between items-center py-2.5 border-b border-gray-800/50 hover:bg-white/5 transition-colors group px-2">
-                    <div className="flex items-center gap-4 truncate">
-                      <div className="text-gray-600 font-mono text-sm w-6 text-right shrink-0">
-                        {index + 1}
+        {activeGame === 'osu' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col mt-8">
+            
+            {/* osu! 玩家名片与绑定控制台 */}
+            <div className="bg-pink-900/10 border border-pink-500/20 rounded-3xl p-6 md:p-8 backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden z-20 shadow-xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-pink-500/5 to-transparent pointer-events-none"></div>
+              
+              <div className="flex items-center gap-4 md:gap-6 z-10 w-full md:w-auto">
+                {profile.osuId ? (
+                  <img 
+                    src={profile.osuAvatarUrl || '/assets/logos.png'} 
+                    className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.4)] object-cover bg-gray-900 shrink-0" 
+                    alt="osu avatar" 
+                  />
+                ) : (
+                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-dashed border-pink-500/50 flex items-center justify-center bg-pink-900/20 shrink-0">
+                    <FaGamepad className="text-3xl text-pink-500/50" />
+                  </div>
+                )}
+                
+                <div className="flex flex-col">
+                  {profile.osuId ? (
+                    <>
+                      <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-white drop-shadow-md">
+                        {profile.osuUsername}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-2 font-mono text-sm font-bold text-pink-300">
+                        <span className="bg-black/50 px-2 py-0.5 rounded border border-pink-500/30">{Math.round(profile.osuPp || 0)} pp</span>
+                        <span className="text-gray-500 hidden md:inline">|</span>
+                        <span className="text-gray-300 flex items-center gap-1">🌍 <span className="text-white">#{profile.osuGlobalRank || '-'}</span></span>
+                        <span className="text-gray-500 hidden md:inline">|</span>
+                        <span className="text-gray-300 flex items-center gap-1">🏳️ <span className="text-white">#{profile.osuCountryRank || '-'}</span></span>
                       </div>
-                      <div className="flex flex-col truncate">
-                        <span className="text-gray-200 font-semibold text-sm truncate group-hover:text-purple-300 transition-colors">
-                          {score.songName || 'Unknown'}
-                        </span>
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px]">
-                          <span className={`font-black ${diffColor}`}>Lv.{score.level}</span>
-                          <span className="text-gray-600">|</span>
-                          <span className="text-gray-500 font-mono">{score.constant?.toFixed(1)}</span>
-                          <span className="text-gray-600 hidden md:inline">|</span>
-                          <span className="text-gray-500 font-mono hidden md:inline">{score.achievement?.toFixed(4)}%</span>
-                        </div>
-                      </div>
-                    </div>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="text-xl md:text-2xl font-black italic tracking-widest text-gray-400">OSU! DISCONNECTED</h3>
+                      <p className="text-xs text-gray-500 mt-1">该玩家尚未绑定 osu! 官方账号</p>
+                    </>
+                  )}
+                </div>
+              </div>
 
-                    <div className="flex items-baseline gap-1.5 shrink-0 ml-4">
-                      <span className={`text-base font-mono font-bold ${textClipFix} ${getPfColor(score.pf)}`}>
-                        {score.pf ? score.pf.toFixed(2) : '0.00'}
-                      </span>
-                      <span className="text-[10px] text-gray-600 font-bold uppercase">PF</span>
+              {/* 同步按钮与绑定入口 */}
+              <div className="flex flex-col gap-2 w-full md:w-auto shrink-0 z-10">
+                {!profile.osuId ? (
+                  isOwnProfile && (
+                    <button onClick={() => {
+                      const clientId = "49210"; 
+                      const redirectUri = encodeURIComponent("https://www.purebeat.top/osu-callback");
+                      window.location.href = `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=public+identify`;
+                    }} className="bg-pink-600 hover:bg-pink-500 text-white px-8 py-3.5 rounded-xl font-bold tracking-widest uppercase transition-all shadow-[0_0_20px_rgba(236,72,153,0.4)] flex items-center justify-center gap-2">
+                      <FaLock className="text-sm" /> 前往授权绑定
+                    </button>
+                  )
+                ) : (
+                  isOwnProfile && (
+                    <button 
+                      onClick={handleSyncOsu}
+                      disabled={isSyncingOsu}
+                      className="bg-gray-900 border border-pink-500/50 hover:bg-pink-600/20 text-pink-400 px-6 py-3 rounded-xl font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg"
+                    >
+                      {isSyncingOsu ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
+                      {isSyncingOsu ? 'SYNCING...' : '同步最新数据'}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* BP100 展示区 */}
+            {profile.osuId && (
+              <div className="mt-12 z-20 relative">
+                <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 border-b border-white/10 pb-4 gap-4">
+                  <div>
+                    <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-red-500 drop-shadow-lg">
+                      BEST PERFORMANCE.
+                    </h2>
+                    <div className="text-gray-400 font-mono text-sm tracking-[0.3em] uppercase mt-2">
+                      Osu! Standard Top 100 Plays
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {(!profile.osuScores || profile.osuScores.length === 0) ? (
+                    <div className="col-span-full py-20 text-center text-pink-500/50 font-mono tracking-widest border border-pink-500/10 rounded-2xl bg-pink-900/10">
+                      NO RECORDS FOUND (CLICK SYNC TO FETCH)
+                    </div>
+                  ) : (
+                    profile.osuScores.map((score, index) => (
+                      <motion.div 
+                        initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.01 }}
+                        key={score._id || index} 
+                        className="flex items-center bg-gray-900/40 backdrop-blur-sm border border-white/5 rounded-xl overflow-hidden hover:border-pink-500/50 transition-all group shadow-md hover:shadow-[0_0_15px_rgba(236,72,153,0.2)]"
+                      >
+                        {/* 排名序号 */}
+                        <div className="w-12 text-center font-mono font-black text-gray-500 italic group-hover:text-pink-400 transition-colors">
+                          #{index + 1}
+                        </div>
+                        
+                        {/* 曲绘 */}
+                        <div className="relative w-16 h-16 md:w-20 md:h-20 shrink-0">
+                          <img src={score.coverUrl || '/assets/bg.png'} className="w-full h-full object-cover" alt="cover" />
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-all"></div>
+                        </div>
+                        
+                        {/* 详细信息 */}
+                        <div className="flex-1 p-3 overflow-hidden flex flex-col justify-center">
+                          <div className="text-sm md:text-base font-bold text-white truncate group-hover:text-pink-300 transition-colors drop-shadow-md">
+                            {score.title}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-yellow-500 font-bold truncate max-w-[150px] md:max-w-[200px]">
+                              [{score.version}]
+                            </span>
+                            {score.mods && score.mods.length > 0 && (
+                              <span className="text-[10px] font-mono font-black text-red-400 bg-red-500/10 px-1 rounded border border-red-500/20">
+                                +{score.mods.join('')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 mt-1.5">
+                            <span className="text-xs md:text-sm font-black italic text-pink-400 tracking-tighter">
+                              {Math.round(score.pp)} PP
+                            </span>
+                            <span className="text-[10px] md:text-xs font-mono font-bold text-gray-400">
+                              {score.accuracy.toFixed(2)}%
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* 评级 */}
+                        <div className="w-16 md:w-20 flex justify-center shrink-0 pr-2">
+                          <span className={`text-2xl md:text-3xl font-black italic tracking-tighter ${getOsuGradeColor(score.grade)}`}>
+                            {score.grade}
+                          </span>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </motion.div>
         )}
 
       </div>
