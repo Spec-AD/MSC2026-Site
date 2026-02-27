@@ -18,6 +18,9 @@ const UserSchema = new mongoose.Schema({
     wikiApprovedCount: { type: Number, default: 0 },     // 维基审核通过数
     feedbackApprovedCount: { type: Number, default: 0 }, // 反馈采纳数
     lastWikiReadDate: { type: String, default: '' }, // 记录每日阅读维基的日期
+    osuId: { type: Number, default: null },           // osu! 官方的用户 ID
+    osuUsername: { type: String, default: '' },       // osu! 玩家名
+    osuAvatarUrl: { type: String, default: '' },      // osu! 头像链接
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
     isB50Visible: { type: Boolean, default: false },

@@ -26,7 +26,8 @@ const wikiPageSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
     required: true 
-  }, // 词条创建者
+  }, 
+  isPendingUpdate: { type: Boolean, default: false }, 
   lastEditedBy: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User' 

@@ -1509,6 +1509,61 @@ app.post('/api/users/check-in', authMiddleware, async (req, res) => {
   }
 });
 
+// ==========================================
+// 🔴 [v1.2.0] osu! API 授权绑定系统
+// ==========================================
+app.post('/api/osu/bind', authMiddleware, async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ msg: '未提供授权码(Code)' });
+
+    // 1. 拿着前端传来的 code，去向 osu! 服务器换取 Access Token
+    const tokenResponse = await axios.post('https://osu.ppy.sh/oauth/token', {
+      client_id: process.env.OSU_CLIENT_ID,
+      client_secret: process.env.OSU_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: process.env.OSU_CALLBACK_URL
+    });
+
+    const accessToken = tokenResponse.data.access_token;
+
+    // 2. 拿着 Access Token，去获取该玩家的 osu! 个人信息
+    const userResponse = await axios.get('https://osu.ppy.sh/api/v2/me/osu', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json'
+      }
+    });
+
+    const osuUser = userResponse.data;
+
+    // 3. 将 osu! 数据绑定到当前登录的 Purebeat 用户身上
+    // 同时可以给绑定 osu! 账号的玩家发放 50 经验值奖励！
+    const user = await User.findById(req.user.id || req.user._id);
+    user.osuId = osuUser.id;
+    user.osuUsername = osuUser.username;
+    user.osuAvatarUrl = osuUser.avatar_url;
+    user.xp = (user.xp || 0) + 50;
+    user.level = Math.floor(user.xp / 300) + 1;
+
+    await user.save();
+
+    res.json({ 
+      msg: `成功绑定 osu! 账号：${osuUser.username}！经验值 +50`,
+      osuUser: {
+        id: osuUser.id,
+        username: osuUser.username,
+        avatar: osuUser.avatar_url
+      }
+    });
+
+  } catch (err) {
+    console.error('osu! 绑定报错:', err.response?.data || err.message);
+    res.status(500).json({ msg: '绑定失败，授权码可能已过期，请重试' });
+  }
+});
+
 // --- 启动服务器 ---
 // [注意！] 为了保证所有的路由都能被 Express 正确拦截并生效，app.listen 必须写在文件的最后面！
 const PORT = process.env.PORT || 5000;
