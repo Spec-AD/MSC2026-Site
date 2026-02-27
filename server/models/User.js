@@ -14,6 +14,9 @@ const UserSchema = new mongoose.Schema({
     level: { type: Number, default: 1 },      // 当前等级 (登塔层数)
     lastLoginDate: { type: String, default: '' },   // 上次每日登录加经验的日期
     lastCheckInDate: { type: String, default: '' }, // 上次主动点击签到的日期
+    checkInCount: { type: Number, default: 0 },          // 累计签到天数
+    wikiApprovedCount: { type: Number, default: 0 },     // 维基审核通过数
+    feedbackApprovedCount: { type: Number, default: 0 }, // 反馈采纳数
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
     isB50Visible: { type: Boolean, default: false },

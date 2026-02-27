@@ -1067,6 +1067,7 @@ app.patch('/api/feedback/:id/status', authMiddleware, async (req, res) => {
       feedback.status = 'SOLVED';
       feedback.statusUpdatedAt = Date.now();
       await addXp(feedback.author, 100);
+      await User.findByIdAndUpdate(feedback.author, { $inc: { feedbackApprovedCount: 1 } });
     } 
     else if (action === 'REAPPEAL') {
       if (feedback.author.toString() !== req.user.id) return res.status(403).json({ message: '仅发起者可要求重申' });
@@ -1398,6 +1399,7 @@ app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
       page.status = 'APPROVED';
       page.rejectReason = '';
       await addXp(page.author, 50);
+      await User.findByIdAndUpdate(page.author, { $inc: { wikiApprovedCount: 1 } });
     } else if (action === 'REJECT') {
       page.status = 'REJECTED';
       page.rejectReason = rejectReason || '内容不符合社区规范';
@@ -1411,15 +1413,27 @@ app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
 });
 
 // ==========================================
-// 🏆 [全局战力排行榜 API]
+// 🏆 [全局多榜单 排行榜 API]
 // ==========================================
-app.get('/api/leaderboard/pf', async (req, res) => {
+app.get('/api/leaderboard/:type', async (req, res) => {
   try {
-    // 核心排序逻辑：totalPf 降序 (-1)；若同分，按注册时间 createdAt 升序 (1)
+    const type = req.params.type;
+    let sortQuery = {};
+
+    // 动态决定排序字段 (降序 -1，同分按注册时间 1 垫底)
+    switch(type) {
+      case 'level': sortQuery = { xp: -1, createdAt: 1 }; break;
+      case 'wiki': sortQuery = { wikiApprovedCount: -1, createdAt: 1 }; break;
+      case 'feedback': sortQuery = { feedbackApprovedCount: -1, createdAt: 1 }; break;
+      case 'checkin': sortQuery = { checkInCount: -1, createdAt: 1 }; break;
+      case 'pf':
+      default: sortQuery = { totalPf: -1, createdAt: 1 }; break;
+    }
+
     const users = await User.find()
-      .sort({ totalPf: -1, createdAt: 1 })
-      .select('username uid avatarUrl totalPf rating role isRegistered isB50Visible') // 坚决不能下发密码等敏感信息
-      .limit(100); // 为了性能，暂取前 100 名，后续可做成分页
+      .sort(sortQuery)
+      .select('username uid avatarUrl totalPf rating role isRegistered isB50Visible xp level wikiApprovedCount feedbackApprovedCount checkInCount')
+      .limit(100);
 
     res.json(users);
   } catch (err) {
@@ -1440,6 +1454,7 @@ app.post('/api/users/check-in', authMiddleware, async (req, res) => {
     
     user.lastCheckInDate = today;
     user.xp = (user.xp || 0) + 20;
+    user.checkInCount = (user.checkInCount || 0) + 1;
     user.level = Math.floor(user.xp / 100) + 1;
     await user.save();
     
