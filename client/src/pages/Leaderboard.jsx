@@ -126,10 +126,10 @@ const Leaderboard = () => {
       <div className="mb-8 text-center md:text-left">
         <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 drop-shadow-lg flex items-center justify-center md:justify-start gap-4">
           <FaCrown className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
-          HALL OF FAME.
+          LEADERBOARD.
         </h1>
         <p className="text-gray-400 font-mono text-sm tracking-[0.2em] uppercase mt-4">
-          Purebeat Global Rankings & Achievements
+          See where you located
         </p>
       </div>
 
@@ -271,5 +271,6 @@ const Leaderboard = () => {
     </div>
   );
 };
+
 
 export default Leaderboard;
