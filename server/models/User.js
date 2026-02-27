@@ -21,6 +21,9 @@ const UserSchema = new mongoose.Schema({
     osuId: { type: Number, default: null },           // osu! 官方的用户 ID
     osuUsername: { type: String, default: '' },       // osu! 玩家名
     osuAvatarUrl: { type: String, default: '' },      // osu! 头像链接
+    osuPp: { type: Number, default: 0 },         
+    osuGlobalRank: { type: Number, default: 0 }, 
+    osuCountryRank: { type: Number, default: 0 },
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
     isB50Visible: { type: Boolean, default: false },
