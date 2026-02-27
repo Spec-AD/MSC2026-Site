@@ -20,6 +20,7 @@ const Profile = () => {
   const [proberId, setProberId] = useState('');
   const [activeGame, setActiveGame] = useState('maimai'); // 'maimai' | 'osu'
   const [isSyncingOsu, setIsSyncingOsu] = useState(false);
+  const [osuSyncMode, setOsuSyncMode] = useState('osu'); // 🔥 新增：用于控制下拉菜单当前选中的模式
   
   // 🔥 高级筛选 B50 状态
   const [b50Filter, setB50Filter] = useState('DEFAULT');
@@ -96,12 +97,12 @@ const Profile = () => {
     }
   };
 
-  // 🔥 OSU 数据同步
+  // 🔥 OSU 数据同步 (支持模式选择)
   const handleSyncOsu = async () => {
     setIsSyncingOsu(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('/api/users/sync-osu', {}, { headers: { Authorization: `Bearer ${token}` }});
+      const res = await axios.post('/api/users/sync-osu', { mode: osuSyncMode }, { headers: { Authorization: `Bearer ${token}` }});
       addToast(res.data.msg, 'success');
       setTimeout(() => window.location.reload(), 1500); // 刷新以渲染新成绩
     } catch (err) {
@@ -944,7 +945,10 @@ const Profile = () => {
                         {profile.osuUsername}
                       </h3>
                       <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-2 font-mono text-sm font-bold text-pink-300">
-                        <span className="bg-black/50 px-2 py-0.5 rounded border border-pink-500/30">{Math.round(profile.osuPp || 0)} pp</span>
+                        {/* 动态显示玩家当前同步的是什么模式 */}
+                        <span className="bg-black/50 px-2 py-0.5 rounded border border-pink-500/30">
+                          {profile.osuMode ? profile.osuMode.toUpperCase() : 'OSU'} | {Math.round(profile.osuPp || 0)} pp
+                        </span>
                         <span className="text-gray-500 hidden md:inline">|</span>
                         <span className="text-gray-300 flex items-center gap-1">🌍 <span className="text-white">#{profile.osuGlobalRank || '-'}</span></span>
                         <span className="text-gray-500 hidden md:inline">|</span>
@@ -960,7 +964,7 @@ const Profile = () => {
                 </div>
               </div>
 
-              {/* 同步按钮与绑定入口 */}
+              {/* 同步按钮与模式切换入口 */}
               <div className="flex flex-col gap-2 w-full md:w-auto shrink-0 z-10">
                 {!profile.osuId ? (
                   isOwnProfile && (
@@ -974,14 +978,28 @@ const Profile = () => {
                   )
                 ) : (
                   isOwnProfile && (
-                    <button 
-                      onClick={handleSyncOsu}
-                      disabled={isSyncingOsu}
-                      className="bg-gray-900 border border-pink-500/50 hover:bg-pink-600/20 text-pink-400 px-6 py-3 rounded-xl font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg"
-                    >
-                      {isSyncingOsu ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
-                      {isSyncingOsu ? 'SYNCING...' : '同步最新数据'}
-                    </button>
+                    <div className="flex flex-col md:flex-row gap-2">
+                      {/* 🌟 核心：游戏模式下拉框 */}
+                      <select
+                        value={osuSyncMode}
+                        onChange={(e) => setOsuSyncMode(e.target.value)}
+                        className="bg-gray-900 border border-pink-500/50 text-pink-300 px-4 py-3 rounded-xl font-bold uppercase outline-none shadow-lg appearance-none cursor-pointer text-center md:text-left transition-colors hover:bg-pink-900/30"
+                      >
+                        <option value="osu">osu! (STD)</option>
+                        <option value="mania">osu!mania</option>
+                        <option value="taiko">osu!taiko</option>
+                        <option value="fruits">osu!catch</option>
+                      </select>
+                      
+                      <button 
+                        onClick={handleSyncOsu}
+                        disabled={isSyncingOsu}
+                        className="flex-1 bg-gray-900 border border-pink-500/50 hover:bg-pink-600/20 text-pink-400 px-6 py-3 rounded-xl font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg"
+                      >
+                        {isSyncingOsu ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
+                        {isSyncingOsu ? 'SYNCING...' : 'SYNC DATA'}
+                      </button>
+                    </div>
                   )
                 )}
               </div>
@@ -996,7 +1014,7 @@ const Profile = () => {
                       BEST PERFORMANCE.
                     </h2>
                     <div className="text-gray-400 font-mono text-sm tracking-[0.3em] uppercase mt-2">
-                      Osu! Standard Top 100 Plays
+                      Osu! {profile.osuMode || 'Standard'} Top 100 Plays
                     </div>
                   </div>
                 </div>
