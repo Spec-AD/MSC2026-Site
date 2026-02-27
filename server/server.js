@@ -1510,56 +1510,61 @@ app.post('/api/users/check-in', authMiddleware, async (req, res) => {
 });
 
 // ==========================================
-// 🔴 [v1.2.0] osu! API 授权绑定系统
+// 🔴 [v1.2.0] osu! API 授权绑定系统 (终极调试版)
 // ==========================================
 app.post('/api/osu/bind', authMiddleware, async (req, res) => {
   try {
-    // ================== 🔥 替换这一段 ==================
     const { code } = req.body;
     if (!code) return res.status(400).json({ msg: '未提供授权码(Code)' });
 
-    // 🕵️ 打印日志，帮你揪出到底哪个变量没读到！
-    console.log("👉 [调试] 准备向 osu! 发送的凭证:", {
-      client_id: process.env.OSU_CLIENT_ID,
-      secret_exists: !!process.env.OSU_CLIENT_SECRET,
-      secret_length: process.env.OSU_CLIENT_SECRET ? process.env.OSU_CLIENT_SECRET.length : 0,
-      redirect_uri: process.env.OSU_CALLBACK_URL
-    });
+    // 1. 绝对严格的环境变量清洗
+    // 将 ID 强制转化为纯数字，将 Secret 强制转为字符串并剔除所有前后空格和隐藏换行符
+    const clientId = Number(process.env.OSU_CLIENT_ID); 
+    const clientSecret = process.env.OSU_CLIENT_SECRET ? String(process.env.OSU_CLIENT_SECRET).trim() : '';
+    const redirectUri = process.env.OSU_CALLBACK_URL ? String(process.env.OSU_CALLBACK_URL).trim() : '';
 
-    if (!process.env.OSU_CLIENT_ID || !process.env.OSU_CLIENT_SECRET) {
-      return res.status(500).json({ msg: '后端环境变量未配置，请检查 .env 并重启服务器' });
+    // 2. 🚨 终极调试日志：去 Zeabur 的日志控制台看这段输出！
+    console.log("================ OSU OAUTH DEBUG ================");
+    console.log("1. Client ID:", clientId, "| Is NaN?", isNaN(clientId));
+    console.log("2. Client Secret Length:", clientSecret.length);
+    console.log("3. Client Secret Preview:", clientSecret.substring(0, 4) + '***' + clientSecret.slice(-4));
+    console.log("4. Redirect URI:", redirectUri);
+    console.log("=================================================");
+
+    if (!clientId || isNaN(clientId) || !clientSecret) {
+      return res.status(500).json({ msg: '服务器凭证读取失败，请检查 Zeabur 变量' });
     }
 
-// 💡 终极修复：使用标准 OAuth 表单格式 (x-www-form-urlencoded) 发送数据，而不是 JSON！
-    const params = new URLSearchParams();
-    params.append('client_id', process.env.OSU_CLIENT_ID.trim());
-    params.append('client_secret', process.env.OSU_CLIENT_SECRET.trim());
-    params.append('code', code);
-    params.append('grant_type', 'authorization_code');
-    params.append('redirect_uri', process.env.OSU_CALLBACK_URL.trim());
+    // 3. 采用最严格的 application/json 格式发送
+    const payload = {
+      client_id: clientId,         // 必须是纯数字！
+      client_secret: clientSecret, // 必须是字符串！
+      code: code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri
+    };
 
-    // 1. 拿着前端传来的 code 和表单数据，去向 osu! 服务器换取 Access Token
-    const tokenResponse = await axios.post('https://osu.ppy.sh/oauth/token', params, {
+    const tokenResponse = await axios.post('https://osu.ppy.sh/oauth/token', payload, {
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Content-Type': 'application/json' // 🔥 强制声明这是 JSON
       }
     });
 
     const accessToken = tokenResponse.data.access_token;
+    console.log("✅ 成功拿到 Access Token!");
 
-    // 2. 拿着 Access Token，去获取该玩家的 osu! 个人信息
+    // 4. 获取玩家公开数据
     const userResponse = await axios.get('https://osu.ppy.sh/api/v2/me/osu', {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json'
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
       }
     });
 
     const osuUser = userResponse.data;
 
-    // 3. 将 osu! 数据绑定到当前登录的 Purebeat 用户身上
-    // 同时可以给绑定 osu! 账号的玩家发放 50 经验值奖励！
+    // 5. 绑定到数据库
     const user = await User.findById(req.user.id || req.user._id);
     user.osuId = osuUser.id;
     user.osuUsername = osuUser.username;
@@ -1579,8 +1584,10 @@ app.post('/api/osu/bind', authMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('osu! 绑定报错:', err.response?.data || err.message);
-    res.status(500).json({ msg: '绑定失败，授权码可能已过期，请重试' });
+    console.error('❌ osu! 绑定报错:', err.response?.data || err.message);
+    res.status(500).json({ 
+      msg: '绑定失败：' + (err.response?.data?.error_description || '与 osu! 通信异常')
+    });
   }
 });
 
