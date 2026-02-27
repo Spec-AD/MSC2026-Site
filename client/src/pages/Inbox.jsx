@@ -53,7 +53,7 @@ const Inbox = () => {
       });
       setMessages(messages.map(msg => msg._id === id ? { ...msg, isRead: true } : msg));
     } catch (err) {
-      alert('操作失败');
+      addToast('操作失败', 'error');
     } finally {
       setProcessingId(null);
     }
@@ -69,11 +69,11 @@ const Inbox = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      alert(res.data.message);
+      addToast(res.data.message, 'success');
       fetchMessages(); 
       setSelectedMsgId(null); // 处理完后清空右侧视图
     } catch (err) {
-      alert(err.response?.data?.message || '操作失败');
+      addToast(err.response?.data?.message || '操作失败', 'error');
     } finally {
       setProcessingId(null);
     }

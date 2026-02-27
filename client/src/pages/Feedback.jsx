@@ -4,11 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { FaBug, FaLightbulb, FaExclamationTriangle, FaCheckCircle, FaClock, FaTimesCircle, FaEdit, FaTrash, FaRedoAlt, FaSpinner, FaThumbtack, FaReply, FaFilter } from 'react-icons/fa';
 import FallingIcons from '../components/FallingIcons';
+import { useToast } from '../context/ToastContext';
 
 const Feedback = () => {
   const { user } = useAuth();
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
   
   // 表单与状态
   const [formData, setFormData] = useState({ title: '', content: '', type: 'FEATURE' });
@@ -40,7 +42,7 @@ const Feedback = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.title.trim() || !formData.content.trim()) return alert('标题和正文不能为空');
+    if (!formData.title.trim() || !formData.content.trim()) return addToast('标题和正文不能为空', 'error');
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('token');
@@ -54,7 +56,7 @@ const Feedback = () => {
       setEditingId(null);
       fetchFeedbacks();
     } catch (err) {
-      alert(err.response?.data?.message || '操作失败');
+      addToast(err.response?.data?.message || '操作失败', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -78,7 +80,7 @@ const Feedback = () => {
       await axios.delete(`/api/feedback/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       fetchFeedbacks();
     } catch (err) {
-      alert('删除失败');
+      addToast('删除失败', 'error');
     }
   };
 
@@ -88,7 +90,7 @@ const Feedback = () => {
       await axios.patch(`/api/feedback/${id}/status`, { action }, { headers: { Authorization: `Bearer ${token}` } });
       fetchFeedbacks();
     } catch (err) {
-      alert(err.response?.data?.message || '状态更新失败');
+      addToast(err.response?.data?.message || '状态更新失败', 'error');
     }
   };
 
@@ -98,7 +100,7 @@ const Feedback = () => {
       await axios.patch(`/api/feedback/${id}/pin`, {}, { headers: { Authorization: `Bearer ${token}` } });
       fetchFeedbacks();
     } catch (err) {
-      alert('置顶操作失败');
+      addToast('置顶操作失败', 'error');
     }
   };
 
@@ -112,7 +114,7 @@ const Feedback = () => {
       setReplyInputs({ ...replyInputs, [feedbackId]: '' }); // 清空该帖子的输入框
       fetchFeedbacks();
     } catch (err) {
-      alert('回复失败');
+      addToast('回复失败', 'error');
     } finally {
       setIsReplying(false);
     }

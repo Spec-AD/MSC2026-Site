@@ -5,13 +5,15 @@ import { useAuth } from '../context/AuthContext';
 import bbcode from 'bbcode-to-react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaEnvelope, FaCalendarCheck, FaSpinner } from 'react-icons/fa'; // 🔥 引入了日历和加载图标
+import { FaEnvelope, FaCalendarCheck, FaSpinner } from 'react-icons/fa'; 
+import { useToast } from '../context/ToastContext';
 
 const Home = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [announcements, setAnnouncements] = useState([]); 
-  const [unreadCount, setUnreadCount] = useState(0); // 未读消息数状态
+  const [unreadCount, setUnreadCount] = useState(0);
+  const { addToast } = useToast(); 
   
   // 🔥 新增：签到状态
   const [isCheckingIn, setIsCheckingIn] = useState(false);
@@ -50,11 +52,11 @@ const Home = () => {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post('/api/users/check-in', {}, { headers: { Authorization: `Bearer ${token}` }});
-      alert(`✅ ${res.data.msg}\n当前等级: Lv.${res.data.level} | 当前经验: ${res.data.xp}`);
+      addToast(`${res.data.msg}\n当前等级: Lv.${res.data.level} | 经验: ${res.data.xp}`, 'success');
       // 签到成功后刷新页面以更新最新数据
       window.location.reload(); 
     } catch (err) {
-      alert('❌ ' + (err.response?.data?.msg || '签到失败'));
+      addToast(err.response?.data?.msg || '签到失败', 'error');
     } finally {
       setIsCheckingIn(false);
     }

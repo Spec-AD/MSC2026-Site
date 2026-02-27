@@ -62,6 +62,19 @@ const WikiArticle = () => {
       try {
         const res = await axios.get(`/api/wiki/page/${slug}`);
         setPage(res.data);
+
+        // 🔥 新增：触发每日阅读奖励机制 (静默请求)
+        const token = localStorage.getItem('token');
+        if (token) {
+          axios.post('/api/wiki/read-reward', {}, { headers: { Authorization: `Bearer ${token}` } })
+            .then(rewardRes => {
+              // 如果今天第一次阅读，弹出奖励提示
+              if (rewardRes.data.awarded) {
+                addToast(rewardRes.data.msg, 'success'); 
+              }
+            }).catch(() => { /* 忽略静默请求的错误 */ });
+        }
+
       } catch (err) {
         setError(err.response?.data?.msg || '词条读取失败');
       } finally {

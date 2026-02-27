@@ -45,10 +45,10 @@ const WikiIndex = () => {
   const handleWikiSubmit = async (e) => {
     e.preventDefault();
     if (!user) {
-      alert('请先登录后再参与维基共建！');
+      addToast('请先登录后再参与维基共建！', 'info');
       return navigate('/login');
     }
-    if (!wikiFormData.categoryId) return alert('请选择一个分类！');
+    if (!wikiFormData.categoryId) return addToast('请选择一个分类！', 'info');
 
     setIsSubmitting(true);
     try {
@@ -56,11 +56,11 @@ const WikiIndex = () => {
       const res = await axios.post('/api/wiki/submit', wikiFormData, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
-      alert('✅ ' + res.data.msg); // 会提示“提交成功，请等待审核”
+      addToast(res.data.msg, 'success'); // 会提示“提交成功，请等待审核”
       setShowSubmitModal(false);
       setWikiFormData({ title: '', slug: '', categoryId: categories[0]?._id || '', content: '' });
     } catch (err) {
-      alert('❌ ' + (err.response?.data?.msg || '提交失败，Slug 可能已被占用'));
+      addToast((err.response?.data?.msg || '提交失败，Slug 可能已被占用', 'error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -217,7 +217,7 @@ const WikiIndex = () => {
               </h2>
               <p className="text-xs text-gray-400 mb-6 font-mono leading-relaxed">
                 感谢你为社区贡献力量！提交的词条将进入审核队列。<br/>
-                如果输入的 URL 标识 (Slug) 与现有词条重复，将视为对该词条的更新修改申请。
+                如果输入的 URL 标识 (Slug) 与现有词条重复，将视为对该词条的**更新修改申请**。
               </p>
 
               <form onSubmit={handleWikiSubmit} className="space-y-5">
@@ -278,6 +278,5 @@ const WikiIndex = () => {
     </div>
   );
 };
-
 
 export default WikiIndex;

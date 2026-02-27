@@ -5,11 +5,13 @@ import axios from 'axios';
 import { FaCamera, FaUserPlus, FaUserEdit, FaTrophy, FaUsers, FaSpinner, FaSave, FaTimes, FaSyncAlt, FaClock, FaHeart, FaLock, FaUnlock } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import bbcode from 'bbcode-to-react';
+import { useToast } from '../context/ToastContext';
 
 const Profile = () => {
   const { username: routeUsername } = useParams();
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   
   // --- 核心状态 ---
   const [profile, setProfile] = useState(null);
@@ -74,8 +76,8 @@ const Profile = () => {
   };
 
   const handleSyncMaimai = async () => {
-    if (!proberId.trim()) { alert('请输入有效的水鱼查分器用户名或 QQ！'); return; }
-    if (!importToken.trim()) { alert('请提供有效的 Import-Token！'); return; }
+    if (!proberId.trim()) { addToast('请输入有效的水鱼查分器用户名或 QQ！', 'error'); return; }
+   if (!importToken.trim()) { addToast('请提供有效的 Import-Token！', 'error'); return; }
     
     setIsSyncingMaimai(true);
     try {
@@ -83,10 +85,10 @@ const Profile = () => {
         proberUsername: proberId,
         importToken: importToken 
       });
-      alert('✅ 数据同步成功！您的当前 Rating 为: ' + res.data.rating);
+      addToast(`数据同步成功！\n您的当前 Rating 为: ${res.data.rating}`, 'success');
       window.location.reload();
     } catch (err) {
-      alert('❌ ' + (err.response?.data?.msg || '同步失败，请检查账号和 Token 是否匹配'));
+      addToast(err.response?.data?.msg || '同步失败，请检查账号和 Token 是否匹配', 'error');
     } finally {
       setIsSyncingMaimai(false);
     }
@@ -98,14 +100,14 @@ const Profile = () => {
 
     const MAX_SIZE = 3 * 1024 * 1024; 
     if (file.size > MAX_SIZE) {
-      alert(`上传失败：图片体积太大啦！当前文件 ${(file.size / 1024 / 1024).toFixed(2)}MB，不能超过 3MB。`);
+      addToast(`上传失败：图片体积太大！当前文件 ${(file.size / 1024 / 1024).toFixed(2)}MB，不能超过 3MB。`, 'error');
       e.target.value = ''; 
       return;
     }
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      alert('仅支持 jpg, jpeg, png, gif 格式的图片');
+      addToast('仅支持 jpg, jpeg, png, gif 格式的图片', 'error');
       e.target.value = '';
       return;
     }
@@ -125,7 +127,7 @@ const Profile = () => {
 
   const handleAddFriend = async () => {
     if (!currentUser) {
-      alert('请先登录才能添加好友！');
+      addToast('请先登录才能添加好友！', 'info'); // 蓝色的引导性提示
       navigate('/login');
       return;
     }
@@ -134,7 +136,7 @@ const Profile = () => {
       const res = await axios.post(`/api/users/${profile.username}/friend-request`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      alert(res.data.message);
+      addToast(res.data.message, 'success'); // 绿色的成功提示
       
       const currentUserId = currentUser.id || currentUser._id;
       setProfile(prev => ({
@@ -142,7 +144,7 @@ const Profile = () => {
         friendRequests: [...(prev.friendRequests || []), currentUserId]
       }));
     } catch (err) {
-      alert(err.response?.data?.message || '发送请求失败');
+      addToast(err.response?.data?.message || '发送请求失败', 'error'); // 红色的失败提示
     }
   };
 
@@ -179,10 +181,10 @@ const Profile = () => {
       setNewBannerFile(null);
       setIsEditing(false);
       
-      alert('资料更新成功！');
+      addToast('资料更新成功！', 'success');
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.msg || '保存失败，请检查网络或图片尺寸');
+      addToast(err.response?.data?.msg || '保存失败，请检查网络或图片尺寸', 'error');
     } finally {
       setIsSaving(false);
     }
