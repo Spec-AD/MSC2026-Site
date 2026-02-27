@@ -1312,7 +1312,7 @@ app.get('/api/wiki/page/:slug', async (req, res) => {
     const page = await WikiPage.findOneAndUpdate(
       { slug: req.params.slug, status: 'APPROVED' },
       { $inc: { views: 1 } },
-      { new: true }
+      { new: true, timestamps: false }
     )
     .populate('category', 'name slug parentId') 
     .populate('author', 'username avatarUrl role')
