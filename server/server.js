@@ -203,7 +203,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
         if (user.lastLoginDate !== today) {
           user.lastLoginDate = today;
           user.xp = (user.xp || 0) + 10;
-          user.level = Math.floor(user.xp / 100) + 1;
+          user.level = Math.floor(user.xp / 300) + 1;
           await user.save();
         }
         res.json(user);
@@ -1325,7 +1325,7 @@ app.get('/api/wiki/page/:slug', async (req, res) => {
   }
 });
 
-// 5. [玩家专属] 提交文章 (修复 ADM 提交免审逻辑)
+// 5. [玩家/管理共享] 提交文章 (🔥 修复 ADM 免审奖励 & 区分创建/更新)
 app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
   try {
     const { slug, title, categoryId, content } = req.body; 
@@ -1339,14 +1339,24 @@ app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
     const newStatus = isAdmin ? 'APPROVED' : 'PENDING';
 
     if (page) {
+      // --- 场景 A：更新现有词条 ---
       page.title = title;
       page.category = categoryId;
       page.content = content;
       page.lastEditedBy = currentUser._id;
       page.status = newStatus;
+      page.isPendingUpdate = !isAdmin; // 如果不是管理员，标记为“待审核的更新”
       await page.save();
-      return res.json({ msg: isAdmin ? '更新成功！' : '更新已提交审核。' });
+
+      if (isAdmin) {
+        // ADM 免审更新：+30 XP，+1 贡献数
+        await addXp(currentUser._id, 30);
+        await User.findByIdAndUpdate(currentUser._id, { $inc: { wikiApprovedCount: 1 } });
+      }
+      return res.json({ msg: isAdmin ? '✅ 更新成功！经验+30，贡献+1' : '更新已提交审核。' });
+      
     } else {
+      // --- 场景 B：创建新词条 ---
       const newPage = new WikiPage({
         title,
         slug: formattedSlug,
@@ -1354,10 +1364,17 @@ app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
         content,
         author: currentUser._id,
         lastEditedBy: currentUser._id,
-        status: newStatus
+        status: newStatus,
+        isPendingUpdate: false
       });
       await newPage.save();
-      return res.json({ msg: isAdmin ? '发布成功！' : '提交成功，请等待审核。' });
+
+      if (isAdmin) {
+        // ADM 免审创建：+50 XP，+1 贡献数
+        await addXp(currentUser._id, 50);
+        await User.findByIdAndUpdate(currentUser._id, { $inc: { wikiApprovedCount: 1 } });
+      }
+      return res.json({ msg: isAdmin ? '✅ 发布成功！经验+50，贡献+1' : '提交成功，请等待审核。' });
     }
   } catch (err) {
     res.status(500).json({ msg: '提交文章失败' });
@@ -1383,7 +1400,7 @@ app.get('/api/admin/wiki/pending', authMiddleware, async (req, res) => {
   }
 });
 
-// 7. [ADM 专属] 审核操作
+// 7. [ADM 专属] 审核操作 (🔥 智能识别新建与更新奖励)
 app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
   try {
     const currentUser = await User.findById(req.user.id || req.user._id);
@@ -1398,8 +1415,16 @@ app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
     if (action === 'APPROVE') {
       page.status = 'APPROVED';
       page.rejectReason = '';
-      await addXp(page.author, 50);
-      await User.findByIdAndUpdate(page.author, { $inc: { wikiApprovedCount: 1 } });
+      
+      // 💡 核心逻辑：区分是“新建过审”还是“更新过审”
+      const xpReward = page.isPendingUpdate ? 30 : 50;
+      const targetUserId = page.isPendingUpdate ? page.lastEditedBy : page.author;
+      
+      await addXp(targetUserId, xpReward);
+      await User.findByIdAndUpdate(targetUserId, { $inc: { wikiApprovedCount: 1 } });
+      
+      // 审核完毕，重置标记
+      page.isPendingUpdate = false;
     } else if (action === 'REJECT') {
       page.status = 'REJECTED';
       page.rejectReason = rejectReason || '内容不符合社区规范';
@@ -1409,6 +1434,26 @@ app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
     res.json({ msg: `文章已被标记为 ${page.status}` });
   } catch (err) {
     res.status(500).json({ msg: '审核操作失败' });
+  }
+});
+
+// 🏆 [新增] 每日首次阅读维基奖励 (+5 XP)
+app.post('/api/wiki/read-reward', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id || req.user._id);
+    if (!user) return res.status(404).json({ msg: '用户不存在' });
+
+    const today = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    if (user.lastWikiReadDate !== today) {
+      user.lastWikiReadDate = today;
+      user.xp = (user.xp || 0) + 5;
+      user.level = Math.floor(user.xp / 300) + 1; // 💡 严格遵守 300 经验/级
+      await user.save();
+      return res.json({ awarded: true, msg: '📚 每日首次阅读维基，经验值 +5！' });
+    }
+    res.json({ awarded: false });
+  } catch (err) {
+    res.status(500).json({ msg: '奖励发放失败' });
   }
 });
 
@@ -1455,7 +1500,7 @@ app.post('/api/users/check-in', authMiddleware, async (req, res) => {
     user.lastCheckInDate = today;
     user.xp = (user.xp || 0) + 20;
     user.checkInCount = (user.checkInCount || 0) + 1;
-    user.level = Math.floor(user.xp / 100) + 1;
+    user.level = Math.floor(user.xp / 300) + 1;
     await user.save();
     
     res.json({ msg: '签到成功！经验值 +20', xp: user.xp, level: user.level });
