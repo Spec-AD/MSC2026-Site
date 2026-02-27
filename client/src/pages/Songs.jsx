@@ -215,7 +215,7 @@ export default function Songs() {
 
             {/* 1. 仅看新曲 */}
             <label className="flex items-center justify-between cursor-pointer group">
-              <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">🆕 仅看新曲 (New Only)</span>
+              <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">🆕 仅看新曲 </span>
               <div className="relative">
                 <input type="checkbox" className="sr-only" checked={isNewOnly} onChange={(e) => setIsNewOnly(e.target.checked)} />
                 <div className={`block w-10 h-6 rounded-full transition-colors ${isNewOnly ? 'bg-purple-500' : 'bg-gray-700'}`}></div>
@@ -225,7 +225,7 @@ export default function Songs() {
 
             {/* 2. 难度分离 */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Difficulty (难度限制)</label>
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Difficulty</label>
               <div className="flex flex-wrap gap-2">
                 {DIFF_CONFIG.map((diff, index) => {
                   const isActive = selectedDiffs.includes(index);
@@ -245,7 +245,7 @@ export default function Songs() {
             {/* 3. 定数范围 */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex justify-between">
-                <span>DS Range (定数)</span>
+                <span>定数</span>
                 <span className="text-purple-400 font-mono">{dsMin.toFixed(1)} - {dsMax.toFixed(1)}</span>
               </label>
               <div className="flex items-center gap-2">
@@ -258,7 +258,7 @@ export default function Songs() {
             {/* 4. BPM 范围 */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex justify-between">
-                <span>BPM Range</span>
+                <span>BPM</span>
                 <span className="text-purple-400 font-mono">{bpmMin} - {bpmMax}</span>
               </label>
               <div className="flex items-center gap-2">
@@ -386,4 +386,5 @@ export default function Songs() {
       />
     </div>
   );
+
 }
