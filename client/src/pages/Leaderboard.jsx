@@ -23,24 +23,26 @@ const Leaderboard = () => {
     fetchLeaderboard();
   }, []);
 
-  // ==========================================
-  // 🔥 新增：段位颜色引擎 (Rating & PF)
+// ==========================================
+  // 🔥 更新后的段位颜色引擎 (Rating & PF)
   // ==========================================
   const getRatingColor = (rating) => {
     const r = Number(rating) || 0;
-    if (r >= 16000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]';
-    if (r >= 15000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]';
-    if (r >= 13000) return 'text-purple-400';
-    if (r >= 10001) return 'text-blue-400';
-    return 'text-[#cd7f32]'; // 铜色/棕色
+    if (r >= 16500) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]'; // 发光彩色
+    if (r >= 16000) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-cyan-400 to-blue-400 drop-shadow-[0_0_10px_rgba(103,232,249,0.6)]'; // 钻石色 (有渐变)
+    if (r >= 15000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]'; // 金色
+    if (r >= 13000) return 'text-purple-400'; // 紫色
+    if (r >= 10000) return 'text-blue-400'; // 蓝色 (10000整被纳入蓝色)
+    return 'text-[#cd7f32]'; // 铜色/棕色 (0 - 9999)
   };
 
   const getPfColor = (pf) => {
     const p = Number(pf) || 0;
-    if (p >= 35000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]';
-    if (p >= 30000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]';
-    if (p >= 20000) return 'text-purple-400';
-    if (p >= 15000) return 'text-blue-400';
+    if (p >= 42000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]'; // 发光彩色
+    if (p >= 35000) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-cyan-400 to-blue-400 drop-shadow-[0_0_10px_rgba(103,232,249,0.6)]'; // 钻石色 (有渐变)
+    if (p >= 30000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]'; // 金色
+    if (p >= 20000) return 'text-purple-400'; // 紫色
+    if (p >= 15000) return 'text-blue-400'; // 蓝色
     return 'text-[#cd7f32]'; // 铜色/棕色
   };
 
