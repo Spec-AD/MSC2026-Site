@@ -1514,17 +1514,31 @@ app.post('/api/users/check-in', authMiddleware, async (req, res) => {
 // ==========================================
 app.post('/api/osu/bind', authMiddleware, async (req, res) => {
   try {
+    // ================== 🔥 替换这一段 ==================
     const { code } = req.body;
     if (!code) return res.status(400).json({ msg: '未提供授权码(Code)' });
 
-    // 1. 拿着前端传来的 code，去向 osu! 服务器换取 Access Token
-    const tokenResponse = await axios.post('https://osu.ppy.sh/oauth/token', {
+    // 🕵️ 打印日志，帮你揪出到底哪个变量没读到！
+    console.log("👉 [调试] 准备向 osu! 发送的凭证:", {
       client_id: process.env.OSU_CLIENT_ID,
-      client_secret: process.env.OSU_CLIENT_SECRET,
-      code,
-      grant_type: 'authorization_code',
+      secret_exists: !!process.env.OSU_CLIENT_SECRET,
+      secret_length: process.env.OSU_CLIENT_SECRET ? process.env.OSU_CLIENT_SECRET.length : 0,
       redirect_uri: process.env.OSU_CALLBACK_URL
     });
+
+    if (!process.env.OSU_CLIENT_ID || !process.env.OSU_CLIENT_SECRET) {
+      return res.status(500).json({ msg: '后端环境变量未配置，请检查 .env 并重启服务器' });
+    }
+
+    // 1. 拿着前端传来的 code，去向 osu! 服务器换取 Access Token
+    const tokenResponse = await axios.post('https://osu.ppy.sh/oauth/token', {
+      client_id: Number(process.env.OSU_CLIENT_ID), // 🔥 核心修复：强制转换为数字
+      client_secret: process.env.OSU_CLIENT_SECRET.trim(), // 🔥 防御性去除可能首尾带上的空格
+      code: code,
+      grant_type: 'authorization_code',
+      redirect_uri: process.env.OSU_CALLBACK_URL.trim()
+    });
+    // ====================================================
 
     const accessToken = tokenResponse.data.access_token;
 
