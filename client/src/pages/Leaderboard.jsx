@@ -171,7 +171,7 @@ const Leaderboard = () => {
             <div className="hidden md:flex items-center px-6 py-3 text-xs font-bold tracking-widest text-gray-500 uppercase border-b border-white/5">
               <div className="w-20 text-center">Rank</div>
               <div className="flex-1">Player</div>
-	      {activeTab === 'pf' && <div className="w-32 text-center">DX Rating</div>}
+              {activeTab === 'pf' && <div className="w-32 text-center">DX Rating</div>}
               <div className="w-40 text-right pr-4">Data / Score</div>
             </div>
 
@@ -256,7 +256,9 @@ const Leaderboard = () => {
                   </div>
                 </div>
               );
-            })}
+              });
+            })()} 
+            {/* ⬆️ 致命错误修复点：将 }) 补全为 })()}，让这个匿名函数真正执行并返回结果数组 */}
 
             {players.length === 0 && (
               <div className="text-center py-20 text-gray-500 font-mono tracking-widest border border-white/5 bg-black/20 rounded-2xl">
