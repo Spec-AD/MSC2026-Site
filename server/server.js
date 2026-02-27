@@ -10,6 +10,7 @@ const Message = require('./models/Message');
 const QualifierScore = require('./models/QualifierScore');
 const WikiPage = require('./models/WikiPage');
 const WikiCategory = require('./models/WikiCategory'); 
+const OsuScore = require('./models/OsuScore');
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -472,7 +473,7 @@ app.get('/api/users/:username', async (req, res) => {
         }
 	const allScores = await Score.find({ userId: user._id }).lean();
 
-// 🔥 机制 A：查该用户的 B50 成绩 (按 Rating 降序，供卡片区使用)
+        // 🔥 机制 A：查该用户的 B50 成绩 (按 Rating 降序，供卡片区使用)
         const topScores = await Score.find({ userId: user._id })
             .sort({ rating: -1, achievement: -1 })
             .limit(50);
@@ -482,19 +483,19 @@ app.get('/api/users/:username', async (req, res) => {
             .sort({ pf: -1 })
             .limit(50);
 
+        const qualifierScores = await QualifierScore.find({ userId: user._id }).sort({ entryTime: -1 });
 
-        // C. 查好友 (暂时只返回空数组或简单的计数，后续完善)
-        // const friends = await User.find({ '_id': { $in: user.friends } }).select('username avatarUrl');
-
-            const qualifierScores = await QualifierScore.find({ userId: user._id }).sort({ entryTime: -1 });
+        // 🔥 新增：查询该用户的 osu! 成绩 (BP100)
+        const osuScores = await OsuScore.find({ userId: user._id }).sort({ pp: -1 }).lean();
 
         res.json({
             ...user.toObject(),
-	    allScores: allScores || [],
+	          allScores: allScores || [],
             topScores: topScores || [],       
             pfRank: pfRank,               
             topPfScores: topPfScores || [],  
             qualifierScores: qualifierScores || [], // 🔥 把预选赛成绩塞给前端
+            osuScores: osuScores || [],             // 🔥 把 osu! 的 BP100 塞给前端
             friendsCount: user.friends ? user.friends.length : 0,
             friends: user.friends 
         });
@@ -1590,6 +1591,67 @@ app.post('/api/osu/bind', authMiddleware, async (req, res) => {
     });
   }
 });
+
+// ==========================================
+// 🔴 [v1.2.0] osu! 数据同步 (获取 PP 与 BP100)
+// ==========================================
+app.post('/api/users/sync-osu', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id || req.user._id);
+    if (!user.osuId) return res.status(400).json({ msg: '请先绑定 osu! 账号' });
+
+    // 1. 获取后端机器通信的 Access Token (这不需要用户参与)
+    const tokenRes = await axios.post('https://osu.ppy.sh/oauth/token', {
+      client_id: Number(process.env.OSU_CLIENT_ID),
+      client_secret: process.env.OSU_CLIENT_SECRET.trim(),
+      grant_type: 'client_credentials',
+      scope: 'public'
+    });
+    const token = tokenRes.data.access_token;
+
+    // 2. 获取玩家最新主页数据 (包含 PP 和 排名)
+    // 默认获取 osu 标准模式，后续也可以通过前端传参获取 taiko, catch, mania
+    const osuUserRes = await axios.get(`https://osu.ppy.sh/api/v2/users/${user.osuId}/osu`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const osuStats = osuUserRes.data.statistics;
+
+    // 更新到数据库
+    user.osuPp = osuStats.pp;
+    user.osuGlobalRank = osuStats.global_rank || 0;
+    user.osuCountryRank = osuStats.country_rank || 0;
+    await user.save();
+
+    // 3. 获取 BP100 (Best Performance)
+    const bpRes = await axios.get(`https://osu.ppy.sh/api/v2/users/${user.osuId}/scores/best?mode=osu&limit=100`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    // 4. 清理旧 BP，存入新 BP
+    await OsuScore.deleteMany({ userId: user._id });
+    
+    const bpDocs = bpRes.data.map(s => ({
+      userId: user._id,
+      beatmapId: s.beatmap.id,
+      title: s.beatmapset.title,
+      version: s.beatmap.version,
+      accuracy: s.accuracy * 100, // osu API 返回的是 0.995 这种格式
+      mods: s.mods.map(m => m.acronym || m), // 兼容不同版本的 mods 格式
+      pp: s.pp,
+      grade: s.rank,
+      coverUrl: s.beatmapset.covers.list,
+      playedAt: s.created_at
+    }));
+
+    await OsuScore.insertMany(bpDocs);
+
+    res.json({ msg: `osu! 数据同步成功！当前 PP: ${Math.round(osuStats.pp)}` });
+  } catch (err) {
+    console.error('osu! 同步报错:', err.response?.data || err.message);
+    res.status(500).json({ msg: 'osu! 数据拉取失败，请稍后重试' });
+  }
+});
+
 
 // --- 启动服务器 ---
 // [注意！] 为了保证所有的路由都能被 Express 正确拦截并生效，app.listen 必须写在文件的最后面！
