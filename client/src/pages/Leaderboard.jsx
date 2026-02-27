@@ -76,7 +76,7 @@ const Leaderboard = () => {
             <div className={`text-xl md:text-3xl font-black italic tracking-tighter font-mono ${textClipFix} ${getPfColor(player.totalPf)}`}>
               {player.totalPf ? player.totalPf.toFixed(2) : '0.00'}
             </div>
-            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">Total PF</span>
+            <span className="text-[10px] text-white font-bold uppercase tracking-widest mt-[-2px]">Total PF</span>
           </>
         );
       case 'level':
@@ -85,7 +85,7 @@ const Leaderboard = () => {
             <div className="text-xl md:text-3xl font-black italic tracking-tighter font-mono text-cyan-400 pb-1 leading-tight">
               Lv.{player.level || 1}
             </div>
-            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">{player.xp || 0} XP</span>
+            <span className="text-[10px] text-white font-bold uppercase tracking-widest mt-[-2px]">{player.xp || 0} XP</span>
           </>
         );
       case 'wiki':
@@ -94,7 +94,7 @@ const Leaderboard = () => {
             <div className="text-xl md:text-3xl font-black italic tracking-tighter font-mono text-purple-400 pb-1 leading-tight">
               {player.wikiApprovedCount || 0}
             </div>
-            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">已过审词条</span>
+            <span className="text-[10px] text-white font-bold uppercase tracking-widest mt-[-2px]">已过审词条</span>
           </>
         );
       case 'feedback':
@@ -103,7 +103,7 @@ const Leaderboard = () => {
             <div className="text-xl md:text-3xl font-black italic tracking-tighter font-mono text-green-400 pb-1 leading-tight">
               {player.feedbackApprovedCount || 0}
             </div>
-            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">采纳建议数</span>
+            <span className="text-[10px] text-white font-bold uppercase tracking-widest mt-[-2px]">采纳建议数</span>
           </>
         );
       case 'checkin':
@@ -112,7 +112,7 @@ const Leaderboard = () => {
             <div className="text-xl md:text-3xl font-black italic tracking-tighter font-mono text-yellow-400 pb-1 leading-tight">
               {player.checkInCount || 0}
             </div>
-            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">累计签到(天)</span>
+            <span className="text-[10px] text-white font-bold uppercase tracking-widest mt-[-2px]">累计签到(天)</span>
           </>
         );
       default: return null;
@@ -126,10 +126,10 @@ const Leaderboard = () => {
       <div className="mb-8 text-center md:text-left">
         <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 drop-shadow-lg flex items-center justify-center md:justify-start gap-4">
           <FaCrown className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
-          LEADERBOARD.
+          HALL OF FAME.
         </h1>
         <p className="text-gray-400 font-mono text-sm tracking-[0.2em] uppercase mt-4">
-          See where you located
+          Purebeat Global Rankings & Achievements
         </p>
       </div>
 
@@ -175,13 +175,36 @@ const Leaderboard = () => {
               <div className="w-40 text-right pr-4">Data / Score</div>
             </div>
 
-            {/* 玩家列表 */}
-            {players.map((player, index) => {
-              const isTop3 = index < 3;
-              // 💡 必须严格等于 true 才显示，undefined 和 false 都会被隐藏
-              const isRatingVisible = player.isB50Visible === true; 
-              
-              return (
+            {/* 玩家列表 (🔥 动态计算并列排名) */}
+            {(() => {
+              let currentRank = 1;
+              return players.map((player, index) => {
+                // 1. 核心并列判断逻辑
+                if (index > 0) {
+                  const prevPlayer = players[index - 1];
+                  let currentVal, prevVal;
+                  switch (activeTab) {
+                    case 'pf': currentVal = player.totalPf; prevVal = prevPlayer.totalPf; break;
+                    case 'level': currentVal = player.xp; prevVal = prevPlayer.xp; break;
+                    case 'wiki': currentVal = player.wikiApprovedCount; prevVal = prevPlayer.wikiApprovedCount; break;
+                    case 'feedback': currentVal = player.feedbackApprovedCount; prevVal = prevPlayer.feedbackApprovedCount; break;
+                    case 'checkin': currentVal = player.checkInCount; prevVal = prevPlayer.checkInCount; break;
+                    default: currentVal = player.totalPf; prevVal = prevPlayer.totalPf; break;
+                  }
+                  // 如果分数不一样，名次才会往后推；如果一样，沿用上一个 currentRank
+                  if (currentVal !== prevVal) {
+                    currentRank = index + 1;
+                  }
+                }
+                
+                // 此时 rankIndex 即为并列排名对应的索引 (0=第一名, 1=第二名...)
+                const rankIndex = currentRank - 1; 
+                
+                // 2. 将之前用到 index 的地方全部替换为 rankIndex
+                const isTop3 = rankIndex < 3;
+                const isRatingVisible = player.isB50Visible === true; 
+                
+                return (
                 <div 
                   key={`${activeTab}-${player._id}`}
                   onClick={() => navigate(`/profile/${player.username}`)}
@@ -191,7 +214,7 @@ const Leaderboard = () => {
                 >
                   {/* 排名列 */}
                   <div className="w-12 md:w-20 flex justify-center shrink-0">
-                    {renderRankBadge(index)}
+                    {renderRankBadge(rankIndex)}
                   </div>
 
                   {/* 玩家信息列 */}
@@ -246,6 +269,5 @@ const Leaderboard = () => {
     </div>
   );
 };
-
 
 export default Leaderboard;
