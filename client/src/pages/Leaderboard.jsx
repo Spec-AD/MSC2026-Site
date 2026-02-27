@@ -13,7 +13,7 @@ const Leaderboard = () => {
   // 榜单配置字典
   const TABS = [
     { id: 'pf', label: 'PERFORMANCE', icon: <FaFireAlt />, color: 'text-orange-500', bgHover: 'hover:bg-orange-500/20', border: 'border-orange-500' },
-    { id: 'level', label: 'THE TOWER', icon: <FaLevelUpAlt />, color: 'text-cyan-400', bgHover: 'hover:bg-cyan-500/20', border: 'border-cyan-400' },
+    { id: 'level', label: 'LEVELS', icon: <FaLevelUpAlt />, color: 'text-cyan-400', bgHover: 'hover:bg-cyan-500/20', border: 'border-cyan-400' },
     { id: 'wiki', label: 'WIKI CONTRIB', icon: <FaBook />, color: 'text-purple-400', bgHover: 'hover:bg-purple-500/20', border: 'border-purple-400' },
     { id: 'feedback', label: 'BUG HUNTER', icon: <FaBug />, color: 'text-green-400', bgHover: 'hover:bg-green-500/20', border: 'border-green-400' },
     { id: 'checkin', label: 'CHECK-IN', icon: <FaCalendarCheck />, color: 'text-yellow-400', bgHover: 'hover:bg-yellow-500/20', border: 'border-yellow-400' },
@@ -171,7 +171,7 @@ const Leaderboard = () => {
             <div className="hidden md:flex items-center px-6 py-3 text-xs font-bold tracking-widest text-gray-500 uppercase border-b border-white/5">
               <div className="w-20 text-center">Rank</div>
               <div className="flex-1">Player</div>
-              <div className="w-32 text-center">DX Rating</div>
+	      {activeTab === 'pf' && <div className="w-32 text-center">DX Rating</div>}
               <div className="w-40 text-right pr-4">Data / Score</div>
             </div>
 
@@ -218,12 +218,14 @@ const Leaderboard = () => {
                     </div>
                   </div>
 
-                  {/* Rating 列 (保护隐私) */}
-                  <div className="hidden md:flex w-32 justify-center shrink-0">
-                    <span className={`bg-white/5 px-3 py-1 rounded-full text-xs font-mono font-bold border border-white/10 ${textClipFix} ${isRatingVisible ? getRatingColor(player.rating) : 'text-gray-500'}`}>
-                      {isRatingVisible ? (player.rating || 0) : '-'}
-                    </span>
-                  </div>
+                  {/* Rating 列 (保护隐私) - 🔥 仅在 PF 榜单显示 */}
+                  {activeTab === 'pf' && (
+                    <div className="hidden md:flex w-32 justify-center shrink-0">
+                      <span className={`bg-white/5 px-3 py-1 rounded-full text-xs font-mono font-bold border border-white/10 ${textClipFix} ${isRatingVisible ? getRatingColor(player.rating) : 'text-gray-500'}`}>
+                        {isRatingVisible ? (player.rating || 0) : '-'}
+                      </span>
+                    </div>
+                  )}
 
                   {/* 🔥 动态渲染右侧数值列 */}
                   <div className="w-24 md:w-40 flex flex-col items-end shrink-0 pr-2 md:pr-4">
