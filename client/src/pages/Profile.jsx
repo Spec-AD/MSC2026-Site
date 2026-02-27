@@ -588,7 +588,7 @@ const Profile = () => {
                   // 注意：这里的 client_id 必须换成你刚才申请到的纯数字 Client ID！！
                   // redirect_uri 必须和你刚在官网填写的完全一致！
                   const clientId = "49210"; 
-                  const redirectUri = encodeURIComponent("http://www.purebeat.top/osu-callback");
+                  const redirectUri = encodeURIComponent("https://www.purebeat.top/osu-callback");
                   window.location.href = `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify`;
         }}
                 className="bg-pink-600 hover:bg-pink-500 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-[0_0_15px_rgba(236,72,153,0.4)] flex items-center gap-2 shrink-0"
