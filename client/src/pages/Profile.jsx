@@ -312,6 +312,48 @@ const Profile = () => {
     return colors[levelIndex] || 'border-gray-500 text-gray-400';
   };
 
+  // ==========================================
+  // 🔥 新增：段位颜色引擎 (Rating, PF, Rank)
+  // ==========================================
+  const getRatingColor = (rating) => {
+    const r = Number(rating) || 0;
+    if (r >= 16000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]';
+    if (r >= 15000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]';
+    if (r >= 13000) return 'text-purple-400';
+    if (r >= 10001) return 'text-blue-400';
+    return 'text-[#cd7f32]'; // 铜色/棕色
+  };
+
+  const getPfColor = (pf) => {
+    const p = Number(pf) || 0;
+    if (p >= 35000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]';
+    if (p >= 30000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]';
+    if (p >= 20000) return 'text-purple-400';
+    if (p >= 15000) return 'text-blue-400';
+    return 'text-[#cd7f32]'; // 铜色/棕色
+  };
+
+  const getRankColor = (rank) => {
+    if (rank === '-' || !rank) return 'text-gray-500';
+    const r = Number(rank);
+    if (r >= 1 && r <= 10) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]';
+    if (r >= 11 && r <= 100) return 'text-cyan-300 drop-shadow-[0_0_10px_rgba(103,232,249,0.8)]'; // 钻石色
+    return 'text-blue-400';
+  };
+
+  // 🔥 针对需要 bg-clip-text 的元素，防止文字底部被裁切，引入统一的 padding 补正
+  const textClipFix = "pb-1 leading-tight";
+
+  // 💡 安全解析 BBCode
+  const renderSafeBBCode = (content) => {
+    if (!content) return null;
+    const safeContent = content.replace(/\[(code|block)\]([\s\S]*?)\[\/\1\]/gi, (match, tag, inner) => {
+      const escapedInner = inner.replace(/\[/g, '__L__').replace(/\]/g, '__R__');
+      return `[${tag}]${escapedInner}[/${tag}]`;
+    });
+    return bbcode.toReact(safeContent);
+  };
+
   return (
     <div className="w-full min-h-screen pb-24 overflow-x-hidden text-white relative">
       
@@ -339,7 +381,6 @@ const Profile = () => {
 
       {/* --- 2. 用户身份信息区 --- */}
       <div className="max-w-6xl mx-auto px-4 md:px-8 -mt-16 md:-mt-24 relative z-20">
-        {/* 这个 flex 容器限制了头像、名字和操作按钮 */}
         <div className="flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-8 text-center md:text-left">
           
           <div className="relative group flex-shrink-0 z-30">
@@ -381,15 +422,17 @@ const Profile = () => {
                     <span className="text-[10px] text-gray-400 font-bold tracking-widest leading-none mb-1 uppercase">UID</span>
                     <span className="text-xl md:text-2xl font-mono text-gray-200 font-semibold leading-none">{profile.uid || '未分配'}</span>
                 </div>
+                {/* 🔥 应用 PF 颜色引擎 */}
                 <div className="flex flex-col items-start">
                     <span className="text-[10px] text-gray-400 font-bold tracking-widest leading-none mb-1 uppercase">Performance</span>
-                    <span className="text-xl md:text-2xl font-mono text-purple-400 font-bold leading-none">
+                    <span className={`text-xl md:text-2xl font-mono font-bold ${textClipFix} ${getPfColor(profile.totalPf)}`}>
                         {profile.totalPf ? profile.totalPf.toFixed(2) : '0.00'}
                     </span>
                 </div>
+                {/* 🔥 应用排名颜色引擎 */}
                 <div className="flex flex-col items-start">
                     <span className="text-[10px] text-gray-400 font-bold tracking-widest leading-none mb-1 uppercase">Rank</span>
-                    <span className="text-xl md:text-2xl font-mono text-blue-400 font-bold leading-none">
+                    <span className={`text-xl md:text-2xl font-mono font-bold ${textClipFix} ${getRankColor(profile.pfRank)}`}>
                         {profile.pfRank !== '-' && profile.pfRank ? `#${profile.pfRank}` : '-'}
                     </span>
                 </div>
@@ -470,25 +513,21 @@ const Profile = () => {
               })()
             )}
           </div>
-        </div> {/* <--- 核心布局修复：在这里闭合 flex 容器 ---> */}
+        </div>
 
-        {/* 🔥 极简登塔经验条 (与水鱼同步卡片等宽) 🔥 */}
+        {/* 极简登塔经验条 */}
         <div className="w-full mt-8 bg-black/40 border border-white/10 rounded-2xl p-4 md:p-5 relative overflow-hidden group shadow-lg z-20">
-          {/* 动态流光背景 */}
           <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
           
           <div className="relative z-10 flex items-center gap-4 px-2 md:px-4">
-            {/* 等级徽章 (极简) */}
             <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center font-black italic text-lg md:text-xl shadow-[0_0_15px_rgba(34,211,238,0.5)] border border-white/20">
               {profile.level || 1}
             </div>
 
-            {/* 进度条区 (300 经验/级) */}
             <div className="flex-1 w-full flex flex-col gap-1.5 justify-center">
               <div className="flex justify-end text-[10px] md:text-xs font-mono font-bold text-cyan-300 drop-shadow-md px-1 leading-none">
                 { (profile.xp || 0) % 300 } / 300 <span className="opacity-70 ml-1.5">({ (((profile.xp || 0) % 300) / 300 * 100).toFixed(1) }%)</span>
               </div>
-              {/* 进度条轨道 */}
               <div className="h-2.5 w-full bg-gray-900 rounded-full overflow-hidden border border-white/5 shadow-inner">
                 <motion.div 
                   initial={{ width: 0 }}
@@ -496,7 +535,6 @@ const Profile = () => {
                   transition={{ duration: 1.5, ease: "easeOut", type: "spring" }}
                   className="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-blue-500 shadow-[0_0_10px_rgba(34,211,238,0.8)] relative"
                 >
-                  {/* 进度条高光动画 */}
                   <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/30 to-transparent"></div>
                 </motion.div>
               </div>
@@ -577,7 +615,7 @@ const Profile = () => {
                 </div>
               ) : (
                 <div className="text-sm md:text-base leading-relaxed text-gray-200 bbcode-content break-words whitespace-pre-wrap">
-                  {profile.bio ? bbcode.toReact(profile.bio) : <span className="text-gray-500 italic">这个人很懒，什么都没写...</span>}
+                  {renderSafeBBCode(profile.bio) || <span className="text-gray-500 italic">这个人很懒，什么都没写...</span>}
                 </div>
               )}
             </motion.div>
@@ -642,6 +680,7 @@ const Profile = () => {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
+                  {/* 🔥 好友列表应用颜色引擎 */}
                   {profile.friends.map(friend => (
                     <div 
                       key={friend._id} 
@@ -662,7 +701,7 @@ const Profile = () => {
                         </span>
                       </div>
                       <div className="text-right shrink-0 pr-2 md:pr-4">
-                        <div className="text-xl md:text-2xl font-black text-white drop-shadow-md font-mono tracking-tighter">
+                        <div className={`text-xl md:text-2xl font-black drop-shadow-md font-mono tracking-tighter ${textClipFix} ${friend.totalPf ? getPfColor(friend.totalPf) : getRatingColor(friend.rating)}`}>
                           {friend.totalPf || friend.rating || '0'}
                         </div>
                       </div>
@@ -712,11 +751,12 @@ const Profile = () => {
               </select>
             </div>
             
+            {/* 🔥 B50 总分应用颜色引擎 */}
             <div className="mt-4 md:mt-0 flex items-center gap-4 bg-black/40 backdrop-blur-md border border-white/10 px-6 py-3 rounded-2xl">
               <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">
                 {b50Filter === 'DEFAULT' ? 'DX Rating' : 'Filtered Rating'}
               </span>
-              <span className="text-3xl font-black italic text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)] transition-all">
+              <span className={`text-3xl font-black italic transition-all ${textClipFix} ${getRatingColor(displayRating)}`}>
                 {displayRating}
               </span>
             </div>
@@ -821,8 +861,9 @@ const Profile = () => {
                       </div>
                     </div>
 
+                    {/* 🔥 列表分数应用颜色引擎 */}
                     <div className="flex items-baseline gap-1.5 shrink-0 ml-4">
-                      <span className="text-base font-mono font-bold text-purple-400">
+                      <span className={`text-base font-mono font-bold ${textClipFix} ${getPfColor(score.pf)}`}>
                         {score.pf ? score.pf.toFixed(2) : '0.00'}
                       </span>
                       <span className="text-[10px] text-gray-600 font-bold uppercase">PF</span>

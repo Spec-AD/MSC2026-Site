@@ -23,6 +23,29 @@ const Leaderboard = () => {
     fetchLeaderboard();
   }, []);
 
+  // ==========================================
+  // 🔥 新增：段位颜色引擎 (Rating & PF)
+  // ==========================================
+  const getRatingColor = (rating) => {
+    const r = Number(rating) || 0;
+    if (r >= 16000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]';
+    if (r >= 15000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]';
+    if (r >= 13000) return 'text-purple-400';
+    if (r >= 10001) return 'text-blue-400';
+    return 'text-[#cd7f32]'; // 铜色/棕色
+  };
+
+  const getPfColor = (pf) => {
+    const p = Number(pf) || 0;
+    if (p >= 35000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]';
+    if (p >= 30000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]';
+    if (p >= 20000) return 'text-purple-400';
+    if (p >= 15000) return 'text-blue-400';
+    return 'text-[#cd7f32]'; // 铜色/棕色
+  };
+
+  const textClipFix = "pb-1 leading-tight";
+
   // 排名徽章渲染逻辑
   const renderRankBadge = (index) => {
     if (index === 0) return <FaCrown className="text-3xl text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]" />;
@@ -101,18 +124,16 @@ const Leaderboard = () => {
                   </div>
                 </div>
 
-                {/* Rating 列 (移动端隐藏) */}
+                {/* 🔥 应用 Rating 颜色引擎 */}
                 <div className="hidden md:flex w-32 justify-center shrink-0">
-                  <span className="bg-white/5 px-3 py-1 rounded-full text-xs font-mono font-bold text-gray-400 border border-white/10">
+                  <span className={`bg-white/5 px-3 py-1 rounded-full text-xs font-mono font-bold border border-white/10 ${textClipFix} ${getRatingColor(player.rating)}`}>
                     {player.rating || 0}
                   </span>
                 </div>
 
-                {/* PF 分列 */}
+                {/* 🔥 应用 PF 颜色引擎 */}
                 <div className="w-24 md:w-40 flex flex-col items-end shrink-0 pr-2 md:pr-4">
-                  <div className={`text-xl md:text-3xl font-black italic tracking-tighter drop-shadow-md font-mono
-                    ${isTop3 ? 'text-orange-400' : 'text-white'}
-                  `}>
+                  <div className={`text-xl md:text-3xl font-black italic tracking-tighter font-mono ${textClipFix} ${getPfColor(player.totalPf)}`}>
                     {player.totalPf ? player.totalPf.toFixed(2) : '0.00'}
                   </div>
                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">
