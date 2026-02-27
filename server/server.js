@@ -1530,15 +1530,21 @@ app.post('/api/osu/bind', authMiddleware, async (req, res) => {
       return res.status(500).json({ msg: '后端环境变量未配置，请检查 .env 并重启服务器' });
     }
 
-    // 1. 拿着前端传来的 code，去向 osu! 服务器换取 Access Token
-    const tokenResponse = await axios.post('https://osu.ppy.sh/oauth/token', {
-      client_id: Number(process.env.OSU_CLIENT_ID), // 🔥 核心修复：强制转换为数字
-      client_secret: process.env.OSU_CLIENT_SECRET.trim(), // 🔥 防御性去除可能首尾带上的空格
-      code: code,
-      grant_type: 'authorization_code',
-      redirect_uri: process.env.OSU_CALLBACK_URL.trim()
+// 💡 终极修复：使用标准 OAuth 表单格式 (x-www-form-urlencoded) 发送数据，而不是 JSON！
+    const params = new URLSearchParams();
+    params.append('client_id', process.env.OSU_CLIENT_ID.trim());
+    params.append('client_secret', process.env.OSU_CLIENT_SECRET.trim());
+    params.append('code', code);
+    params.append('grant_type', 'authorization_code');
+    params.append('redirect_uri', process.env.OSU_CALLBACK_URL.trim());
+
+    // 1. 拿着前端传来的 code 和表单数据，去向 osu! 服务器换取 Access Token
+    const tokenResponse = await axios.post('https://osu.ppy.sh/oauth/token', params, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json'
+      }
     });
-    // ====================================================
 
     const accessToken = tokenResponse.data.access_token;
 
