@@ -197,7 +197,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('-password') // 不返回密码
-	.populate('friends', 'username uid avatarUrl totalPf rating');
+	.populate('friends', 'username uid avatarUrl totalPf rating isB50Visible');
         if (!user) return res.status(404).json({ msg: '用户未找到' });
 	const today = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
         if (user.lastLoginDate !== today) {
@@ -461,7 +461,7 @@ app.get('/api/users/:username', async (req, res) => {
         // 使用 .select('-password') 排除密码等敏感信息
         const user = await User.findOne({ username: req.params.username })
             .select('-password -contactValue -contactType')
-	    .populate('friends', 'username uid avatarUrl totalPf rating');
+	    .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible');
         
         if (!user) return res.status(404).json({ msg: '用户不存在' });
 
@@ -508,13 +508,14 @@ app.get('/api/users/:username', async (req, res) => {
 // 路由: PUT /api/users/profile
 app.put('/api/users/profile', authMiddleware, async (req, res) => {
     try {
-        const { bio, avatarUrl, bannerUrl, divingFishUsername, proberUsername } = req.body;
+        const { bio, avatarUrl, bannerUrl, divingFishUsername, proberUsername, isB50Visible } = req.body;
 
         // 构建更新对象 (只允许更新这几个字段)
         const updateFields = {};
         if (bio !== undefined) updateFields.bio = bio;
         if (avatarUrl !== undefined) updateFields.avatarUrl = avatarUrl;
         if (bannerUrl !== undefined) updateFields.bannerUrl = bannerUrl;
+        if (isB50Visible !== undefined) updateFields.isB50Visible = isB50Visible;
         
         // [新增] 支持用户手动更新水鱼账号绑定
         if (divingFishUsername !== undefined) updateFields.divingFishUsername = divingFishUsername;
@@ -1417,7 +1418,7 @@ app.get('/api/leaderboard/pf', async (req, res) => {
     // 核心排序逻辑：totalPf 降序 (-1)；若同分，按注册时间 createdAt 升序 (1)
     const users = await User.find()
       .sort({ totalPf: -1, createdAt: 1 })
-      .select('username uid avatarUrl totalPf rating role isRegistered') // 坚决不能下发密码等敏感信息
+      .select('username uid avatarUrl totalPf rating role isRegistered isB50Visible') // 坚决不能下发密码等敏感信息
       .limit(100); // 为了性能，暂取前 100 名，后续可做成分页
 
     res.json(users);

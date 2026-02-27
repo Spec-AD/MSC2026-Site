@@ -16,6 +16,7 @@ const UserSchema = new mongoose.Schema({
     lastCheckInDate: { type: String, default: '' }, // 上次主动点击签到的日期
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
+    isB50Visible: { type: Boolean, default: false },
     divingFishUsername: { 
        type: String, 
        default: '' 
