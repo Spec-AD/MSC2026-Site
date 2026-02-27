@@ -558,6 +558,48 @@ const Profile = () => {
           </motion.div>
         )}
 
+        {isOwnProfile && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="mt-6 p-5 md:p-6 bg-pink-500/10 border border-pink-500/20 rounded-2xl w-full backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4 z-20"
+  >
+            <div className="text-center md:text-left flex-1">
+              <label className="text-sm font-bold text-pink-400 uppercase tracking-widest block mb-1">
+                osu! Link
+              </label>
+              <div className="text-gray-400 text-xs leading-relaxed">
+                {profile.osuId 
+                  ? `已绑定 osu! 账号: ${profile.osuUsername} (ID: ${profile.osuId})`
+                  : '授权绑定你的 osu! 官方账号，解锁更多成就与专属组件！(首次绑定 +50 XP)'
+                }
+              </div>
+            </div>
+
+            {profile.osuId ? (
+              <img 
+                src={profile.osuAvatarUrl} 
+                alt="osu avatar" 
+                className="w-12 h-12 rounded-xl border border-pink-500/50 shadow-[0_0_10px_rgba(236,72,153,0.3)]"
+              />
+            ) : (
+              <button 
+                // 🔥 核心：点击按钮直接跳转到 osu! 官网的授权页
+                onClick={() => {
+                  // 注意：这里的 client_id 必须换成你刚才申请到的纯数字 Client ID！！
+                  // redirect_uri 必须和你刚在官网填写的完全一致！
+                  const clientId = "49210"; 
+                  const redirectUri = encodeURIComponent("http://www.purebeat.top/osu-callback");
+                  window.location.href = `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify`;
+        }}
+                className="bg-pink-600 hover:bg-pink-500 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-[0_0_15px_rgba(236,72,153,0.4)] flex items-center gap-2 shrink-0"
+              >
+                绑定 osu! 账号
+              </button>
+            )}
+          </motion.div>
+        )}
+
+
         {/* --- 3. 详细内容网格区 --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mt-8 md:mt-12">
           
