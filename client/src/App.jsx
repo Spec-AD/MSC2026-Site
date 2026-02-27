@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Admin from './pages/Admin';
 import Inbox from './pages/Inbox';
 import Leaderboard from './pages/Leaderboard';
+import OsuCallback from './pages/OsuCallback';
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -34,6 +35,7 @@ function App() {
             
             {/* 各个功能页 */}
             <Route path="register" element={<Register />} />
+            <Route path="/osu-callback" element={<OsuCallback />} />
             <Route path="intro" element={<Intro />} />
             <Route path="rules" element={<Rules />} />
             <Route path="qualifiers" element={<Qualifiers />} />
