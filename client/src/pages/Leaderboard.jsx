@@ -1,18 +1,30 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { FaCrown, FaMedal, FaSpinner, FaFireAlt } from 'react-icons/fa';
+import { FaCrown, FaMedal, FaSpinner, FaFireAlt, FaLevelUpAlt, FaBook, FaBug, FaCalendarCheck } from 'react-icons/fa';
 
 const Leaderboard = () => {
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('pf'); // 当前激活的榜单
   const navigate = useNavigate();
 
+  // 榜单配置字典
+  const TABS = [
+    { id: 'pf', label: 'PERFORMANCE', icon: <FaFireAlt />, color: 'text-orange-500', bgHover: 'hover:bg-orange-500/20', border: 'border-orange-500' },
+    { id: 'level', label: 'THE TOWER', icon: <FaLevelUpAlt />, color: 'text-cyan-400', bgHover: 'hover:bg-cyan-500/20', border: 'border-cyan-400' },
+    { id: 'wiki', label: 'WIKI CONTRIB', icon: <FaBook />, color: 'text-purple-400', bgHover: 'hover:bg-purple-500/20', border: 'border-purple-400' },
+    { id: 'feedback', label: 'BUG HUNTER', icon: <FaBug />, color: 'text-green-400', bgHover: 'hover:bg-green-500/20', border: 'border-green-400' },
+    { id: 'checkin', label: 'CHECK-IN', icon: <FaCalendarCheck />, color: 'text-yellow-400', bgHover: 'hover:bg-yellow-500/20', border: 'border-yellow-400' },
+  ];
+
+  // 当 tab 切换时，重新拉取对应榜单数据
   useEffect(() => {
     const fetchLeaderboard = async () => {
+      setLoading(true);
       try {
-        const res = await axios.get('/api/leaderboard/pf');
+        const res = await axios.get(`/api/leaderboard/${activeTab}`);
         setPlayers(res.data);
       } catch (err) {
         console.error('获取排行榜失败', err);
@@ -21,26 +33,29 @@ const Leaderboard = () => {
       }
     };
     fetchLeaderboard();
-  }, []);
+  }, [activeTab]);
 
+  // ==========================================
+  // 🔥 段位颜色引擎 (Rating & PF) 保持不变
+  // ==========================================
   const getRatingColor = (rating) => {
     const r = Number(rating) || 0;
-    if (r >= 16500) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]'; // 发光彩色
-    if (r >= 16000) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-cyan-400 to-blue-400 drop-shadow-[0_0_10px_rgba(103,232,249,0.6)]'; // 钻石色 (有渐变)
-    if (r >= 15000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]'; // 金色
-    if (r >= 13000) return 'text-purple-400'; // 紫色
-    if (r >= 10000) return 'text-blue-400'; // 蓝色
-    return 'text-[#cd7f32]'; // 铜色/棕色 (0 - 9999)
+    if (r >= 16500) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]'; 
+    if (r >= 16000) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-cyan-400 to-blue-400 drop-shadow-[0_0_10px_rgba(103,232,249,0.6)]'; 
+    if (r >= 15000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]'; 
+    if (r >= 13000) return 'text-purple-400'; 
+    if (r >= 10000) return 'text-blue-400'; 
+    return 'text-[#cd7f32]'; 
   };
 
   const getPfColor = (pf) => {
     const p = Number(pf) || 0;
-    if (p >= 42000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]'; // 发光彩色
-    if (p >= 35000) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-cyan-400 to-blue-400 drop-shadow-[0_0_10px_rgba(103,232,249,0.6)]'; // 钻石色 (有渐变)
-    if (p >= 30000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]'; // 金色
-    if (p >= 20000) return 'text-purple-400'; // 紫色
-    if (p >= 15000) return 'text-blue-400'; // 蓝色
-    return 'text-[#cd7f32]'; // 铜色/棕色
+    if (p >= 42000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]'; 
+    if (p >= 35000) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-cyan-400 to-blue-400 drop-shadow-[0_0_10px_rgba(103,232,249,0.6)]'; 
+    if (p >= 30000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]'; 
+    if (p >= 20000) return 'text-purple-400'; 
+    if (p >= 15000) return 'text-blue-400'; 
+    return 'text-[#cd7f32]'; 
   };
 
   const textClipFix = "pb-1 leading-tight";
@@ -52,99 +67,180 @@ const Leaderboard = () => {
     return <span className="text-xl md:text-2xl font-mono font-bold text-gray-500">{index + 1}</span>;
   };
 
+  // 根据当前榜单动态渲染右侧数值列
+  const renderDynamicStat = (player) => {
+    switch(activeTab) {
+      case 'pf':
+        return (
+          <>
+            <div className={`text-xl md:text-3xl font-black italic tracking-tighter font-mono ${textClipFix} ${getPfColor(player.totalPf)}`}>
+              {player.totalPf ? player.totalPf.toFixed(2) : '0.00'}
+            </div>
+            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">Total PF</span>
+          </>
+        );
+      case 'level':
+        return (
+          <>
+            <div className="text-xl md:text-3xl font-black italic tracking-tighter font-mono text-cyan-400 pb-1 leading-tight">
+              Lv.{player.level || 1}
+            </div>
+            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">{player.xp || 0} XP</span>
+          </>
+        );
+      case 'wiki':
+        return (
+          <>
+            <div className="text-xl md:text-3xl font-black italic tracking-tighter font-mono text-purple-400 pb-1 leading-tight">
+              {player.wikiApprovedCount || 0}
+            </div>
+            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">已过审词条</span>
+          </>
+        );
+      case 'feedback':
+        return (
+          <>
+            <div className="text-xl md:text-3xl font-black italic tracking-tighter font-mono text-green-400 pb-1 leading-tight">
+              {player.feedbackApprovedCount || 0}
+            </div>
+            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">采纳建议数</span>
+          </>
+        );
+      case 'checkin':
+        return (
+          <>
+            <div className="text-xl md:text-3xl font-black italic tracking-tighter font-mono text-yellow-400 pb-1 leading-tight">
+              {player.checkInCount || 0}
+            </div>
+            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">累计签到(天)</span>
+          </>
+        );
+      default: return null;
+    }
+  };
+
   return (
     <div className="w-full min-h-screen pb-24 text-white px-4 md:px-8 max-w-5xl mx-auto pt-24">
       
-      <div className="mb-12 border-b border-white/10 pb-8 text-center md:text-left">
+      {/* 头部 Hero 区 */}
+      <div className="mb-8 text-center md:text-left">
         <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 drop-shadow-lg flex items-center justify-center md:justify-start gap-4">
-          <FaFireAlt className="text-orange-500 drop-shadow-[0_0_15px_rgba(249,115,22,0.6)]" />
-          GLOBAL RANKING.
+          <FaCrown className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.6)]" />
+          HALL OF FAME.
         </h1>
         <p className="text-gray-400 font-mono text-sm tracking-[0.2em] uppercase mt-4">
-          Purebeat Performance Top 100 Players
+          Purebeat Global Rankings & Achievements
         </p>
       </div>
 
-      {loading ? (
-        <div className="py-32 flex justify-center"><FaSpinner className="animate-spin text-5xl text-orange-500" /></div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          <div className="hidden md:flex items-center px-6 py-3 text-xs font-bold tracking-widest text-gray-500 uppercase border-b border-white/5">
-            <div className="w-20 text-center">Rank</div>
-            <div className="flex-1">Player</div>
-            <div className="w-32 text-center">DX Rating</div>
-            <div className="w-40 text-right pr-4">Performance</div>
-          </div>
-
-          {players.map((player, index) => {
-            const isTop3 = index < 3;
-            // 🔥 根据隐私开关判断 Rating 是否可见
-            const isRatingVisible = player.isB50Visible === true; 
-            
+      {/* 🌟 动态榜单切换栏 (Tabs) */}
+      <div className="mb-8 w-full overflow-x-auto hide-scrollbar border-b border-white/10">
+        <div className="flex items-center gap-2 md:gap-4 pb-4 min-w-max">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
             return (
-              <motion.div 
-                key={player._id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05, duration: 0.3 }}
-                onClick={() => navigate(`/profile/${player.username}`)}
-                className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 group
-                  ${isTop3 ? 'bg-gradient-to-r from-white/10 to-transparent border border-white/20 hover:border-orange-500/50 hover:bg-white/10' : 'bg-black/40 border border-white/5 hover:bg-white/5 hover:border-white/20'}
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 md:px-6 py-3 rounded-xl font-bold tracking-widest text-xs md:text-sm uppercase transition-all duration-300 border
+                  ${isActive 
+                    ? `bg-black/60 shadow-lg ${tab.border} ${tab.color}` 
+                    : `bg-white/5 border-transparent text-gray-400 ${tab.bgHover} hover:text-white`
+                  }
                 `}
               >
-                <div className="w-12 md:w-20 flex justify-center shrink-0">
-                  {renderRankBadge(index)}
-                </div>
-
-                <div className="flex-1 flex items-center gap-4 overflow-hidden">
-                  <img 
-                    src={player.avatarUrl || '/assets/logos.png'} 
-                    alt="avatar" 
-                    className={`w-12 h-12 md:w-16 md:h-16 rounded-xl object-cover border-2 transition-all shrink-0
-                      ${isTop3 ? 'border-orange-400/50 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'border-transparent group-hover:border-white/20'}
-                    `}
-                  />
-                  <div className="flex flex-col truncate">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-lg md:text-xl font-bold truncate transition-colors
-                        ${isTop3 ? 'text-white' : 'text-gray-300 group-hover:text-white'}
-                      `}>
-                        {player.username}
-                      </span>
-                      {player.role === 'ADM' && <span className="bg-red-500/20 text-red-400 text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider">ADM</span>}
-                    </div>
-                    <span className="text-xs text-gray-500 font-mono tracking-widest mt-0.5">
-                      UID: {player.uid || '未绑定'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 🔥 应用隐私判断后的 Rating 显示 */}
-                <div className="hidden md:flex w-32 justify-center shrink-0">
-                  <span className={`bg-white/5 px-3 py-1 rounded-full text-xs font-mono font-bold border border-white/10 ${textClipFix} ${isRatingVisible ? getRatingColor(player.rating) : 'text-gray-500'}`}>
-                    {isRatingVisible ? (player.rating || 0) : '-'}
-                  </span>
-                </div>
-
-                <div className="w-24 md:w-40 flex flex-col items-end shrink-0 pr-2 md:pr-4">
-                  <div className={`text-xl md:text-3xl font-black italic tracking-tighter font-mono ${textClipFix} ${getPfColor(player.totalPf)}`}>
-                    {player.totalPf ? player.totalPf.toFixed(2) : '0.00'}
-                  </div>
-                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-[-2px]">
-                    Total PF
-                  </span>
-                </div>
-              </motion.div>
+                {tab.icon} {tab.label}
+              </button>
             );
           })}
-
-          {players.length === 0 && (
-            <div className="text-center py-20 text-gray-500 font-mono tracking-widest">
-              NO RECORDS FOUND
-            </div>
-          )}
         </div>
-      )}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-32 flex justify-center">
+            <FaSpinner className="animate-spin text-5xl text-gray-500" />
+          </motion.div>
+        ) : (
+          <motion.div 
+            key={activeTab}
+            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+            className="flex flex-col gap-3"
+          >
+            {/* 表头 */}
+            <div className="hidden md:flex items-center px-6 py-3 text-xs font-bold tracking-widest text-gray-500 uppercase border-b border-white/5">
+              <div className="w-20 text-center">Rank</div>
+              <div className="flex-1">Player</div>
+              <div className="w-32 text-center">DX Rating</div>
+              <div className="w-40 text-right pr-4">Data / Score</div>
+            </div>
+
+            {/* 玩家列表 */}
+            {players.map((player, index) => {
+              const isTop3 = index < 3;
+              // 💡 必须严格等于 true 才显示，undefined 和 false 都会被隐藏
+              const isRatingVisible = player.isB50Visible === true; 
+              
+              return (
+                <div 
+                  key={`${activeTab}-${player._id}`}
+                  onClick={() => navigate(`/profile/${player.username}`)}
+                  className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 group
+                    ${isTop3 ? 'bg-gradient-to-r from-white/10 to-transparent border border-white/20 hover:border-white/30 hover:bg-white/10' : 'bg-black/40 border border-white/5 hover:bg-white/5 hover:border-white/20'}
+                  `}
+                >
+                  {/* 排名列 */}
+                  <div className="w-12 md:w-20 flex justify-center shrink-0">
+                    {renderRankBadge(index)}
+                  </div>
+
+                  {/* 玩家信息列 */}
+                  <div className="flex-1 flex items-center gap-4 overflow-hidden">
+                    <img 
+                      src={player.avatarUrl || '/assets/logos.png'} 
+                      alt="avatar" 
+                      className={`w-12 h-12 md:w-16 md:h-16 rounded-xl object-cover border-2 transition-all shrink-0
+                        ${isTop3 ? 'border-yellow-400/50 shadow-[0_0_15px_rgba(250,204,21,0.2)]' : 'border-transparent group-hover:border-white/20'}
+                      `}
+                    />
+                    <div className="flex flex-col truncate">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-lg md:text-xl font-bold truncate transition-colors
+                          ${isTop3 ? 'text-white' : 'text-gray-300 group-hover:text-white'}
+                        `}>
+                          {player.username}
+                        </span>
+                        {player.role === 'ADM' && <span className="bg-red-500/20 text-red-400 text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider">ADM</span>}
+                      </div>
+                      <span className="text-xs text-gray-500 font-mono tracking-widest mt-0.5">
+                        UID: {player.uid || '未绑定'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Rating 列 (保护隐私) */}
+                  <div className="hidden md:flex w-32 justify-center shrink-0">
+                    <span className={`bg-white/5 px-3 py-1 rounded-full text-xs font-mono font-bold border border-white/10 ${textClipFix} ${isRatingVisible ? getRatingColor(player.rating) : 'text-gray-500'}`}>
+                      {isRatingVisible ? (player.rating || 0) : '-'}
+                    </span>
+                  </div>
+
+                  {/* 🔥 动态渲染右侧数值列 */}
+                  <div className="w-24 md:w-40 flex flex-col items-end shrink-0 pr-2 md:pr-4">
+                    {renderDynamicStat(player)}
+                  </div>
+                </div>
+              );
+            })}
+
+            {players.length === 0 && (
+              <div className="text-center py-20 text-gray-500 font-mono tracking-widest border border-white/5 bg-black/20 rounded-2xl">
+                AWAITING HEROES / 虚位以待
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
