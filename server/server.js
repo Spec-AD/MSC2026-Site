@@ -957,9 +957,10 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
     const { level, scope } = req.query;
     const songId = req.params.songId;
 
-    let query = { songId: String(songId), level: Number(level) };
-
-    // 如果选了好友范围，拦截并鉴权
+  let query = { 
+      songId: { $in: [String(songId), Number(songId)] }, 
+      level: Number(level) 
+    };   
     if (scope === 'friends') {
       if (!req.user) return res.status(401).json({ msg: '请先登录以查看好友排行榜' });
       const currentUser = await User.findById(req.user.id);
