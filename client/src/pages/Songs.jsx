@@ -36,7 +36,9 @@ export default function Songs() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedVersions, setSelectedVersions] = useState([]);
 
-  // 初始化拉取数据
+  // ==========================================
+  // 初始化拉取数据并处理【宴会场】定数
+  // ==========================================
   useEffect(() => {
     const fetchSongs = async () => {
       try {
@@ -44,8 +46,27 @@ export default function Songs() {
         const response = await fetch('/proxy/diving-fish/music_data');
         if (!response.ok) throw new Error('网络请求失败');
         
-        const data = await response.json();
-        setSongs(data.reverse()); 
+        const rawData = await response.json();
+        
+        // 🔥 数据预处理：将【宴会场】相关曲目的定数强制设为 0
+        const processedData = rawData.map(song => {
+          // 判断是否为宴会场谱面（兼容多种可能的字段标记）
+          const isUtage = 
+            song.basic_info?.genre === '宴会场' || 
+            song.basic_info?.from === '宴会场' || 
+            song.type === 'UTAGE';
+
+          if (isUtage) {
+            return {
+              ...song,
+              // 将原有的 ds 数组全部替换为 0 (例如 [0, 0, 0, 0, 0])
+              ds: song.ds ? song.ds.map(() => 0) : [0, 0, 0, 0, 0]
+            };
+          }
+          return song;
+        });
+
+        setSongs(processedData.reverse()); 
       } catch (err) {
         console.error("获取曲目数据失败:", err);
         setError("无法连接到查分器服务器，请检查网络或跨域设置");
@@ -70,6 +91,7 @@ export default function Songs() {
 
     return {
       categories: Array.from(catSet),
+      // 排除掉被设为 0 的宴会场在版本列表里的干扰排序（如果有需要也可以保留）
       versions: Array.from(verSet).sort().reverse() 
     };
   }, [songs]);
@@ -84,9 +106,9 @@ export default function Songs() {
     if (isNaN(min)) min = 1.0;
     if (isNaN(max)) max = 15.0;
 
-    // 绝对范围限制
-    min = Math.max(1.0, Math.min(min, 15.0));
-    max = Math.max(1.0, Math.min(max, 15.0));
+    // 允许下限设置为 0，这样如果用户想看宴会场谱面，可以把下限拉到 0
+    min = Math.max(0.0, Math.min(min, 15.0));
+    max = Math.max(0.0, Math.min(max, 15.0));
 
     // 逻辑冲突限制：如果下限 > 上限
     if (min > max) {
@@ -123,7 +145,7 @@ export default function Songs() {
   // 超级过滤引擎 (Ultimate Filter Engine)
   // ==========================================
   const filteredSongs = useMemo(() => {
-    const numDsMin = parseFloat(dsMin) || 1.0;
+    const numDsMin = parseFloat(dsMin) || 0.0;
     const numDsMax = parseFloat(dsMax) || 15.0;
     const numBpmMin = parseInt(bpmMin) || 0;
     const numBpmMax = parseInt(bpmMax) || 400;
@@ -172,7 +194,7 @@ export default function Songs() {
   const resetFilters = () => {
     setIsNewOnly(false);
     setSelectedDiffs([]);
-    setDsMin("1.0");
+    setDsMin("1.0"); // 默认重置回 1.0，自动隐藏定数为 0 的宴会场
     setDsMax("15.0");
     setBpmMin("0");
     setBpmMax("400");
@@ -294,14 +316,14 @@ export default function Songs() {
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex justify-between">
                 <span>DS Range (定数)</span>
                 <span className="text-purple-400 font-mono">
-                  {(parseFloat(dsMin)||1.0).toFixed(1)} - {(parseFloat(dsMax)||15.0).toFixed(1)}
+                  {(parseFloat(dsMin)||0.0).toFixed(1)} - {(parseFloat(dsMax)||15.0).toFixed(1)}
                 </span>
               </label>
               <div className="flex items-center gap-2">
                 <input 
                   type="number" 
                   step="0.1"
-                  min="1.0"
+                  min="0.0"
                   max="15.0"
                   value={dsMin} 
                   onChange={e => setDsMin(e.target.value)} 
@@ -312,7 +334,7 @@ export default function Songs() {
                 <input 
                   type="number" 
                   step="0.1" 
-                  min="1.0"
+                  min="0.0"
                   max="15.0"
                   value={dsMax} 
                   onChange={e => setDsMax(e.target.value)} 
@@ -414,7 +436,7 @@ export default function Songs() {
                 let displayDs = song.ds[song.ds.length - 1]; 
                 let dsTagClass = 'text-purple-400 bg-purple-500/10 border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.1)]'; 
                 
-                const numDsMin = parseFloat(dsMin) || 1.0;
+                const numDsMin = parseFloat(dsMin) || 0.0;
                 const numDsMax = parseFloat(dsMax) || 15.0;
                 const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : [0, 1, 2, 3, 4];
                 
@@ -427,6 +449,9 @@ export default function Songs() {
                   }
                 }
 
+                // 宴会场视觉特殊标记（可选，让界面更有层次感）
+                const isUtageVisual = displayDs === 0;
+
                 return (
                   <div 
                     className="flex items-center justify-between p-4 border-b border-gray-800/40 hover:bg-white/5 cursor-pointer transition-all duration-200 group"
@@ -434,9 +459,11 @@ export default function Songs() {
                   >
                     <div className="flex items-center gap-4 overflow-hidden">
                       <div className={`shrink-0 w-10 text-center text-[10px] font-black py-1 rounded border ${
-                        isDX ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' : 'text-orange-400 border-orange-500/30 bg-orange-500/10'
+                        isDX ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' : 
+                        song.type === 'UTAGE' ? 'text-pink-400 border-pink-500/30 bg-pink-500/10' : 
+                        'text-orange-400 border-orange-500/30 bg-orange-500/10'
                       }`}>
-                        {song.type}
+                        {song.type === 'UTAGE' ? 'UT' : song.type}
                       </div>
                       
                       <div className="flex flex-col truncate">
@@ -454,8 +481,8 @@ export default function Songs() {
                       <span className="px-2 py-1 bg-gray-800/80 text-gray-400 text-xs rounded hidden md:block max-w-[150px] truncate text-right">
                         {song.basic_info.from}
                       </span>
-                      <span className={`font-mono font-bold border px-2.5 py-1 rounded-lg text-sm ${dsTagClass}`}>
-                        {displayDs.toFixed(1)}
+                      <span className={`font-mono font-bold border px-2.5 py-1 rounded-lg text-sm ${isUtageVisual ? 'text-pink-400 bg-pink-500/10 border-pink-500/20' : dsTagClass}`}>
+                        {isUtageVisual ? 'UTAGE' : displayDs.toFixed(1)}
                       </span>
                     </div>
                   </div>
