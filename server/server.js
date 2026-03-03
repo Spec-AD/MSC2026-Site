@@ -23,9 +23,9 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'msc2026_profiles', // 自动在云端创建的文件夹名
+    folder: 'msc2026_profiles', 
     allowed_formats: ['jpg', 'png', 'jpeg'],
-    transformation: [{ width: 1000, crop: 'limit' }] // 自动调整大图尺寸
+    transformation: [{ width: 1000, crop: 'limit' }] 
   }
 });
 
@@ -48,22 +48,19 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// --- 刚才创建的模型文件 ---
 const User = require('./models/User');
 const Score = require('./models/Score');
 const app = express();
 
-// --- 中间件配置 ---
 app.use(cors());
-app.use(express.json()); // 解析 JSON 请求体
+app.use(express.json()); 
 
-// --- 数据库连接 ---
 // 使用环境变量中的 MONGO_URI 连接
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ MongoDB Connected'))
     .catch(err => {
         console.error('❌ MongoDB Connection Error:', err);
-        process.exit(1); // 连接失败直接退出进程
+        process.exit(1); 
     });
 
 // ==========================================
@@ -75,7 +72,6 @@ const addXp = async (userId, amount) => {
     const user = await User.findById(userId);
     if (!user) return;
     user.xp = (user.xp || 0) + amount;
-    // 核心算法：1级开始，每 300 经验升 1 级，无穷无尽！
     user.level = Math.floor(user.xp / 300) + 1;
     await user.save();
   } catch (err) {
@@ -83,34 +79,25 @@ const addXp = async (userId, amount) => {
   }
 };
 
-// JWT 验证中间件 (保护需要登录的路由)
 const authMiddleware = (req, res, next) => {
-    // 从请求头获取 Token (格式: Bearer <token>)
     const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-        return res.status(401).json({ msg: '无权限，请先登录' });
-    }
+    if (!token) return res.status(401).json({ msg: '无权限，请先登录' });
 
     try {
-        // 验证 Token 是否合法
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded; // 将解密出的用户ID存入 req.user，供后续路由使用
+        req.user = decoded; 
         next();
     } catch (e) {
         res.status(401).json({ msg: 'Token 无效或已过期' });
     }
 };
 
-// [新增] 可选验证中间件 (供单曲排行榜等功能：访客可看全局，登录可看好友)
 const optionalAuth = (req, res, next) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     if (token) {
         try {
             req.user = jwt.verify(token, process.env.JWT_SECRET);
-        } catch (e) {
-            // 忽略错误，仅仅将其当做未登录访客处理
-        }
+        } catch (e) {}
     }
     next();
 };
@@ -119,21 +106,15 @@ const optionalAuth = (req, res, next) => {
 // API 路由逻辑
 // ==========================================
 
-// --- A. 认证模块 (注册/登录/自动登录) ---
-
-// 1. 注册账号
+// --- A. 认证模块 ---
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password } = req.body;
-
-        // 检查用户名是否存在
         const existingUser = await User.findOne({ username });
         if (existingUser) return res.status(400).json({ msg: '该用户名已被占用' });
 
-        // 密码加密
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
-        // 注意：生产环境中最好用原子计数器防止重复，但小规模比赛随机碰撞概率极低
         let randomUid;
         let uidExists = true;
         while (uidExists) {
@@ -142,59 +123,33 @@ app.post('/api/auth/register', async (req, res) => {
             if (!checkUid) uidExists = false;
         }
 
-        // 创建新用户
-        const newUser = new User({
-            username,
-            password: hashedPassword,
-            uid: randomUid,
-        });
-
+        const newUser = new User({ username, password: hashedPassword, uid: randomUid });
         const savedUser = await newUser.save();
-
-        // 注册成功后直接签发 Token 实现自动登录
         const token = jwt.sign({ id: savedUser._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
-        res.json({
-            token,
-            user: {
-                id: savedUser._id,
-                username: savedUser.username,
-                isRegistered: false
-            }
-        });
+        res.json({ token, user: { id: savedUser._id, username: savedUser.username, isRegistered: false } });
     } catch (err) {
         console.error(err);
         res.status(500).json({ msg: '服务器错误' });
     }
 });
 
-// 2. 登录
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-
-        // 查找用户
         const user = await User.findOne({ username });
         if (!user) return res.status(400).json({ msg: '用户不存在' });
 
-        // 验证密码
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ msg: '密码错误' });
 
-        // 签发 Token
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
         res.json({
             token,
             user: {
-                id: user._id,
-                username: user.username,
-                isRegistered: user.isRegistered,
-                nickname: user.nickname,
-                // [新增] 登录返回 PF 与水鱼账号信息
-                totalPf: user.totalPf || 0,
-                divingFishUsername: user.divingFishUsername,
-                proberUsername: user.proberUsername
+                id: user._id, username: user.username, isRegistered: user.isRegistered, nickname: user.nickname,
+                totalPf: user.totalPf || 0, divingFishUsername: user.divingFishUsername, proberUsername: user.proberUsername
             }
         });
     } catch (err) {
@@ -202,17 +157,14 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// 3. 验证 Token (用于页面刷新后的自动登录)
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select('-password') // 不返回密码
+        const user = await User.findById(req.user.id).select('-password')
 	.populate('friends', 'username uid avatarUrl totalPf rating isB50Visible');
         if (!user) return res.status(404).json({ msg: '用户未找到' });
 	const today = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
         if (user.lastLoginDate !== today) {
-          user.lastLoginDate = today;
-          user.xp = (user.xp || 0) + 10;
-          user.level = Math.floor(user.xp / 300) + 1;
+          user.lastLoginDate = today; user.xp = (user.xp || 0) + 10; user.level = Math.floor(user.xp / 300) + 1;
           await user.save();
         }
         res.json(user);
@@ -225,7 +177,6 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 // 同步水鱼查分器成绩并结算 PF 分 (普通查分器版本)
 // ==========================================
 app.post('/api/users/sync-diving-fish', async (req, res) => {
-  // 1. JWT 鉴权验证
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: '请先登录' });
 
@@ -238,7 +189,6 @@ app.post('/api/users/sync-diving-fish', async (req, res) => {
       return res.status(400).json({ message: '请先在个人主页绑定水鱼查分器用户名！' });
     }
 
-    // 2. 请求水鱼 API
     const dfResponse = await axios.post('https://www.diving-fish.com/api/maimaidxprober/query/player', {
       username: user.divingFishUsername
     });
@@ -246,20 +196,22 @@ app.post('/api/users/sync-diving-fish', async (req, res) => {
     const allRecords = [...(dfResponse.data.records || []), ...(dfResponse.data.records_new || [])];
     let processedScores = [];
 
-    // 3. 遍历计算每首歌的 PF
     for (const record of allRecords) {
       const song = await Song.findOne({ id: record.song_id.toString() });
       if (!song) continue; 
 
       const chartInfo = song.charts[record.level_index];
       if (!chartInfo) continue;
-      const isUtage = song.basic_info?.genre === '宴会場' || song.basic_info?.from === '宴会場' || song.type === 'UTAGE';
+      
+      // 🔥 兼容繁体/日文“宴会場”和简体“宴会场”
+      const isUtage = song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场' || song.basic_info?.from === '宴会場' || song.basic_info?.from === '宴会场' || song.type === 'UTAGE';
 
       const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
       const maxDxScore = totalNotes * 3;
+      
+      // 🔥 彻底解决重复声明：直接在这里使用三元运算符赋值给唯一的 const
       const constant = isUtage ? 0 : (record.ds || song.ds[record.level_index]);
       
-      // ✨ 调用计算器 ✨
       const dxRatio = maxDxScore > 0 ? (record.dxScore / maxDxScore) : 0;
       const pf = calculatePF(constant, record.achievements, record.dxScore, maxDxScore);
 
@@ -281,26 +233,16 @@ app.post('/api/users/sync-diving-fish', async (req, res) => {
       });
     }
 
-    // 4. 更新数据库
     await Score.deleteMany({ userId: userId });
     await Score.insertMany(processedScores);
 
-    // 5. 结算 Total PF
-    const top50 = processedScores
-      .sort((a, b) => b.pf - a.pf)
-      .slice(0, 50);
-    
+    const top50 = processedScores.sort((a, b) => b.pf - a.pf).slice(0, 50);
     const totalPf = top50.reduce((sum, score) => sum + score.pf, 0);
 
-    // 6. 更新用户
     user.totalPf = Number(totalPf.toFixed(2));
     await user.save();
 
-    res.json({ 
-      message: '数据同步成功！', 
-      totalPf: user.totalPf,
-      syncedCount: processedScores.length 
-    });
+    res.json({ message: '数据同步成功！', totalPf: user.totalPf, syncedCount: processedScores.length });
 
   } catch (error) {
     console.error('同步失败:', error);
@@ -318,9 +260,8 @@ app.post('/api/users/sync-diving-fish', async (req, res) => {
 app.post('/api/match/register', authMiddleware, async (req, res) => {
     try {
         const { nickname, contactType, contactValue, prizeWish, intro } = req.body;
-        if (!nickname || !contactValue) {
-            return res.status(400).json({ msg: '昵称和联系方式内容为必填项' });
-        }
+        if (!nickname || !contactValue) return res.status(400).json({ msg: '昵称和联系方式内容为必填项' });
+        
         const updatedUser = await User.findByIdAndUpdate(
             req.user.id,
             { isRegistered: true, nickname, contactType, contactValue, prizeWish, intro, regTime: new Date() },
@@ -341,9 +282,7 @@ const CACHE_DURATION = 2 * 60 * 60 * 1000;
 
 app.get('/api/leaderboard', async (req, res) => {
     try {
-        const scores = await Score.find()
-            .sort({ achievement: -1, dxScore: -1, finishTime: 1 })
-            .limit(100); 
+        const scores = await Score.find().sort({ achievement: -1, dxScore: -1, finishTime: 1 }).limit(100); 
         res.json(scores);
     } catch (err) {
         console.error(err);
@@ -397,7 +336,6 @@ app.get('/api/users/:username', async (req, res) => {
             pfRank = await User.countDocuments({ totalPf: { $gt: user.totalPf } }) + 1;
         }
 	const allScores = await Score.find({ userId: user._id }).lean();
-
         const topScores = await Score.find({ userId: user._id }).sort({ rating: -1, achievement: -1 }).limit(50);
         const topPfScores = await Score.find({ userId: user._id }).sort({ pf: -1 }).limit(50);
         const qualifierScores = await QualifierScore.find({ userId: user._id }).sort({ entryTime: -1 });
@@ -477,13 +415,19 @@ app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
 
     await Song.collection.dropIndexes().catch(() => {});
 
-    const bulkOps = songs.map(song => ({
-      updateOne: {
-        filter: { id: String(song.id) }, 
-        update: { $set: { id: String(song.id), title: song.title, type: song.type, ds: song.ds, level: song.level, basic_info: song.basic_info, charts: song.charts } },
-        upsert: true
-      }
-    }));
+    const bulkOps = songs.map(song => {
+      // 🔥 补充宴会场过滤
+      const isUtage = song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场' || song.basic_info?.from === '宴会場' || song.basic_info?.from === '宴会场' || song.type === 'UTAGE';
+      const finalDs = isUtage ? (song.ds ? song.ds.map(() => 0) : [0, 0, 0, 0, 0]) : song.ds;
+
+      return {
+        updateOne: {
+          filter: { id: String(song.id) }, 
+          update: { $set: { id: String(song.id), title: song.title, type: song.type, ds: finalDs, level: song.level, basic_info: song.basic_info, charts: song.charts } },
+          upsert: true
+        }
+      };
+    });
 
     await Song.bulkWrite(bulkOps);
     res.json({ msg: `✅ 成功同步 ${songs.length} 首乐曲！` });
@@ -751,13 +695,18 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
       
       if (song) {
         isNew = song.basic_info?.is_new || false; 
-        const isUtage = song.basic_info?.genre === '宴会场' || song.basic_info?.from === '宴会场' || song.type === 'UTAGE';
+        
+        // 🔥 兼容繁体/日文“宴会場”和简体“宴会场”
+        const isUtage = song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场' || song.basic_info?.from === '宴会場' || song.basic_info?.from === '宴会场' || song.type === 'UTAGE';
+        
         if (song.charts && song.charts[rec.level_index]) {
           const chartInfo = song.charts[rec.level_index];
           const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
           const maxDxScore = totalNotes * 3;
+          
+          // 🔥 修改：这里直接把判定好的值给到外层声明过的 constant，并去除了原本的那句重复赋值
           constant = isUtage ? 0 : (rec.ds || song.ds[rec.level_index]);
-          constant = rec.ds || song.ds[rec.level_index];
+          
           dxRatio = maxDxScore > 0 ? (rec.dxScore / maxDxScore) : 0;
           if (maxDxScore > 0) pf = calculatePF(constant, rec.achievements, rec.dxScore, maxDxScore);
         }
@@ -814,7 +763,6 @@ app.get('/api/wiki/page/:slug', async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '失败' }); }
 });
 
-// 🔥 [优化] 维基提交更新：留存历史版本与 ADM 奖励机制
 app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
   try {
     const { slug, title, categoryId, content } = req.body; 
@@ -828,7 +776,6 @@ app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
     const newStatus = isAdmin ? 'APPROVED' : 'PENDING';
 
     if (page) {
-      // 💡 核心逻辑：备份当前旧版本到 history 数组中
       if (!page.history) page.history = [];
       page.history.push({
         title: page.title,
@@ -863,7 +810,6 @@ app.get('/api/admin/wiki/pending', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '失败' }); }
 });
 
-// 🔥 [优化] 管理员审核：自动发放经验并向作者发送站内信
 app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
   try {
     const currentUser = await User.findById(req.user.id || req.user._id);
@@ -881,7 +827,6 @@ app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
       await addXp(targetUserId, xpReward); 
       await User.findByIdAndUpdate(targetUserId, { $inc: { wikiApprovedCount: 1 } });
       
-      // 🚀 发送系统站内信 (审核通过)
       await Message.create({
         receiver: targetUserId,
         sender: currentUser._id,
@@ -894,7 +839,6 @@ app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
     } else if (action === 'REJECT') {
       page.status = 'REJECTED'; page.rejectReason = rejectReason || '不符合规范';
       
-      // ❌ 发送系统站内信 (审核驳回)
       const targetUserId = page.isPendingUpdate ? page.lastEditedBy : page.author;
       await Message.create({
         receiver: targetUserId,
@@ -920,21 +864,14 @@ app.post('/api/wiki/read-reward', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '奖励发放失败' }); }
 });
 
-
 // ==========================================
 // 🏆 核心：单图最佳排行榜 (全站最高成绩 Top 100) 
-// 必须放在 :type 路由之前！
 // ==========================================
 app.get('/api/leaderboard/single-best', async (req, res) => {
   try {
     const leaderboard = await Score.aggregate([
-      // 1. 直接对全站所有成绩按 PF 进行降序排列（不再按玩家分组去重）
       { $sort: { pf: -1 } },
-      
-      // 2. 截取全站最高的 100 个成绩
       { $limit: 100 },
-      
-      // 3. 联表获取打出该成绩的玩家信息
       {
         $lookup: {
           from: 'users',
@@ -946,14 +883,12 @@ app.get('/api/leaderboard/single-best', async (req, res) => {
         }
       },
       { $unwind: '$userInfo' },
-      
-      // 4. 数据清洗：强制只获取 username，不获取 nickname
       {
         $project: {
           _id: 0, 
-          scoreId: '$_id', // 导出成绩的独立ID，防止前端列表渲染出现 key 重复
+          scoreId: '$_id', 
           userId: '$userId',
-          username: '$userInfo.username', // 🔥 强制只取用户名
+          username: '$userInfo.username', 
           avatarUrl: '$userInfo.avatarUrl', 
           uid: '$userInfo.uid', 
           sponsorTier: '$userInfo.sponsorTier',
@@ -1060,25 +995,22 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
       if (!req.user) return res.status(401).json({ msg: '请先登录以查看好友排行榜' });
       const currentUser = await User.findById(req.user.id);
       
-      // 鉴权：检查 Sponsor Tier 是否 >= 1
       if (!currentUser || (currentUser.sponsorTier || 0) < 1) {
         return res.status(403).json({ msg: '好友排行榜特权需要 赞助者 Tier 1 或以上' });
       }
       
-      // 连同自己和所有好友的 ID 加入查询条件
       const friendIds = currentUser.friends || [];
       query.userId = { $in: [...friendIds, currentUser._id] };
     }
 
-    // 使用聚合管道连表查询用户信息（非常健壮的写法）
     const leaderboard = await Score.aggregate([
       { $match: query },
-      { $sort: { achievement: -1, dxScore: -1 } }, // 排序：完成率降序，同分看DX降序
+      { $sort: { achievement: -1, dxScore: -1 } }, 
       { $limit: 100 },
       {
         $lookup: {
           from: 'users', 
-          let: { uId: '$userId' }, // 确保类型容错，将字符串转为ObjectId查询
+          let: { uId: '$userId' }, 
           pipeline: [
             { $match: { $expr: { $eq: ['$_id', { $convert: { input: '$$uId', to: 'objectId', onError: '$$uId', onNull: '$$uId' } }] } } }
           ],
@@ -1093,7 +1025,7 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
           dxScore: 1,
           pf: 1,
           rating: 1,
-          fcStatus: { $ifNull: ['$fc', '$fcStatus'] }, // 兼容旧版数据库字段名
+          fcStatus: { $ifNull: ['$fc', '$fcStatus'] }, 
           fsStatus: { $ifNull: ['$fs', '$fsStatus'] },
           username: '$userInfo.username',
           avatarUrl: '$userInfo.avatarUrl',
