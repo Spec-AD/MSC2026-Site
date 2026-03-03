@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { FaCamera, FaUserPlus, FaUserEdit, FaTrophy, FaUsers, FaSpinner, FaSave, FaTimes, FaSyncAlt, FaClock, FaHeart, FaLock, FaUnlock, FaGamepad } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
@@ -18,29 +18,26 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [proberId, setProberId] = useState('');
-  const [activeGame, setActiveGame] = useState('maimai'); // 'maimai' | 'osu'
+  const [activeGame, setActiveGame] = useState('maimai'); 
   const [isSyncingOsu, setIsSyncingOsu] = useState(false);
-  const [osuSyncMode, setOsuSyncMode] = useState('osu'); // 🔥 新增：用于控制下拉菜单当前选中的模式
+  const [osuSyncMode, setOsuSyncMode] = useState('osu');
   
-  // 🔥 高级筛选 B50 状态
+  // 🔥 新增：用于控制 PF 详情弹窗的状态
+  const [selectedPfScore, setSelectedPfScore] = useState(null);
+  
   const [b50Filter, setB50Filter] = useState('DEFAULT');
-  
-  // --- 编辑与同步状态 ---
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [importToken, setImportToken] = useState(''); 
   const [isSyncingMaimai, setIsSyncingMaimai] = useState(false);
   
-  // 保存文本、图片预览和隐私设置
   const [editData, setEditData] = useState({ bio: '', avatarUrl: '', bannerUrl: '', isB50Visible: false });
-  
   const [newAvatarFile, setNewAvatarFile] = useState(null);
   const [newBannerFile, setNewBannerFile] = useState(null);
 
   const avatarInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
-  // --- 身份判定 ---
   const targetUsername = routeUsername || currentUser?.username;
   const isOwnProfile = profile && currentUser && (
     profile.username.toLowerCase() === currentUser.username.toLowerCase()
@@ -69,7 +66,7 @@ const Profile = () => {
         bio: res.data.bio || '',
         avatarUrl: res.data.avatarUrl || '/assets/logos.png',
         bannerUrl: res.data.bannerUrl || '/assets/bg.png',
-        isB50Visible: res.data.isB50Visible || false // 初始化隐私状态
+        isB50Visible: res.data.isB50Visible || false 
       });
     } catch (err) {
       setError(err.response?.data?.msg || '用户不存在');
@@ -97,14 +94,13 @@ const Profile = () => {
     }
   };
 
-  // 🔥 OSU 数据同步 (支持模式选择)
   const handleSyncOsu = async () => {
     setIsSyncingOsu(true);
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post('/api/users/sync-osu', { mode: osuSyncMode }, { headers: { Authorization: `Bearer ${token}` }});
       addToast(res.data.msg, 'success');
-      setTimeout(() => window.location.reload(), 1500); // 刷新以渲染新成绩
+      setTimeout(() => window.location.reload(), 1500); 
     } catch (err) {
       addToast(err.response?.data?.msg || '同步失败，请稍后重试', 'error');
     } finally {
@@ -218,9 +214,6 @@ const Profile = () => {
     setIsEditing(false);
   };
 
-  // ==========================================
-  // 🔥 超级引擎：动态 B50 计算核心 (Maimai)
-  // ==========================================
   const displayScores = useMemo(() => {
     if (!profile) return [];
     const sourceScores = profile.allScores || profile.topScores || [];
@@ -314,11 +307,10 @@ const Profile = () => {
     return 'text-[#cd7f32]'; 
   };
 
-  // osu! 评级专属颜色映射
   const getOsuGradeColor = (grade) => {
     const g = grade.toUpperCase();
-    if (['XH', 'SH'].includes(g)) return 'text-gray-300 drop-shadow-[0_0_8px_rgba(209,213,219,0.8)]'; // 银 SS/S
-    if (['X', 'S'].includes(g)) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]'; // 金 SS/S
+    if (['XH', 'SH'].includes(g)) return 'text-gray-300 drop-shadow-[0_0_8px_rgba(209,213,219,0.8)]';
+    if (['X', 'S'].includes(g)) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]';
     if (g === 'A') return 'text-green-400';
     if (g === 'B') return 'text-blue-400';
     if (g === 'C') return 'text-purple-400';
@@ -880,7 +872,11 @@ const Profile = () => {
                     const diffColor = diffColors[score.difficulty] || diffColors[score.level] || 'text-gray-400';
 
                     return (
-                      <div key={score._id || index} className="flex justify-between items-center py-2.5 border-b border-gray-800/50 hover:bg-white/5 transition-colors group px-2">
+                      <div 
+                        key={score._id || index} 
+                        onClick={() => setSelectedPfScore(score)}
+                        className="flex justify-between items-center py-2.5 border-b border-gray-800/50 hover:bg-white/10 hover:px-4 transition-all group px-2 cursor-pointer rounded-lg mt-1"
+                      >
                         <div className="flex items-center gap-4 truncate">
                           <div className="text-gray-600 font-mono text-sm w-6 text-right shrink-0">
                             {index + 1}
@@ -1082,6 +1078,128 @@ const Profile = () => {
           </motion.div>
         )}
 
+      {/* ========================================================= */}
+      {/* 🌟 PF 详情极简弹窗 (v1.2.2 osu!lazer 风格) */}
+      {/* ========================================================= */}
+      <AnimatePresence>
+        {selectedPfScore && (
+          <div 
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+            onClick={() => setSelectedPfScore(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-gray-900 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-sm flex flex-col items-center shadow-2xl relative"
+              onClick={e => e.stopPropagation()} // 阻止事件冒泡，防止点击面板本身关闭
+            >
+              <button 
+                onClick={() => setSelectedPfScore(null)}
+                className="absolute top-5 right-5 text-gray-500 hover:text-white transition-colors"
+              >
+                <FaTimes className="text-xl" />
+              </button>
+
+              <div className="text-center mb-6 px-4 w-full">
+                <h3 className="text-lg md:text-xl font-bold text-white mb-2 line-clamp-2 leading-snug">
+                  {selectedPfScore.songName}
+                </h3>
+                <span className="text-[10px] md:text-xs font-bold text-gray-900 bg-cyan-400 px-3 py-1 rounded-full uppercase tracking-widest">
+                  Level {selectedPfScore.level}
+                </span>
+              </div>
+
+              {(() => {
+                const ach = selectedPfScore.achievement || 0;
+                const dxScore = selectedPfScore.dxScore || 0;
+                const constant = selectedPfScore.constant || 0;
+                const dxRatio = selectedPfScore.dxRatio || 0;
+                const pf = selectedPfScore.pf || 0;
+
+                // 精确还原计算逻辑：总加成 = PF / 基数
+                const totalMultiplier = constant > 0 ? (pf / constant) : 0;
+                const dxMultiplier = dxRatio * 0.4;
+                const achMultiplier = totalMultiplier - dxMultiplier;
+
+                // 计算理论百分比 (满分 = 1.0)
+                const percent = totalMultiplier * 100;
+                const displayPercent = Math.min(percent, 100); // 环形进度条不超过 100%
+
+                let grade = 'D';
+                let gradeColor = 'text-gray-400';
+                let ringColor = 'text-gray-500';
+
+                // 左闭右开评级体系
+                if (percent >= 98) { 
+                  grade = 'X'; gradeColor = 'text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.6)]'; ringColor = 'text-yellow-400'; 
+                } else if (percent >= 95) { 
+                  grade = 'S'; gradeColor = 'text-pink-400 drop-shadow-[0_0_15px_rgba(244,114,182,0.6)]'; ringColor = 'text-pink-400'; 
+                } else if (percent >= 88) { 
+                  grade = 'A'; gradeColor = 'text-green-400 drop-shadow-[0_0_15px_rgba(74,222,128,0.6)]'; ringColor = 'text-green-400'; 
+                } else if (percent >= 80) { 
+                  grade = 'B'; gradeColor = 'text-blue-400 drop-shadow-[0_0_15px_rgba(96,165,250,0.6)]'; ringColor = 'text-blue-400'; 
+                } else if (percent >= 70) { 
+                  grade = 'C'; gradeColor = 'text-orange-400 drop-shadow-[0_0_15px_rgba(251,146,60,0.6)]'; ringColor = 'text-orange-400'; 
+                } else { 
+                  grade = 'D'; gradeColor = 'text-gray-500 drop-shadow-[0_0_15px_rgba(107,114,128,0.6)]'; ringColor = 'text-gray-600'; 
+                }
+
+                // SVG 环形进度条数学配置
+                const radius = 65;
+                const circumference = 2 * Math.PI * radius;
+                const strokeDashoffset = circumference - (displayPercent / 100) * circumference;
+
+                return (
+                  <>
+                    <div className="relative w-48 h-48 flex items-center justify-center mb-8">
+                      <svg className="transform -rotate-90 w-full h-full drop-shadow-xl">
+                        <circle cx="96" cy="96" r="65" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-gray-800" />
+                        <circle cx="96" cy="96" r="65" stroke="currentColor" strokeWidth="10" fill="transparent"
+                                strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
+                                className={`${ringColor} transition-all duration-1000 ease-out`} strokeLinecap="round" />
+                      </svg>
+                      <div className="absolute flex flex-col items-center justify-center">
+                         <span className={`text-6xl font-black ${gradeColor}`}>{grade}</span>
+                         <span className="text-sm font-bold text-gray-300 mt-1 font-mono">{percent.toFixed(2)}%</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full bg-black/50 border border-white/5 rounded-2xl p-5 space-y-3.5 font-mono text-sm shadow-inner">
+                       <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                         <span className="text-gray-400 font-sans text-xs">完成率</span>
+                         <span className="text-white font-bold">{ach.toFixed(4)}%</span>
+                       </div>
+                       <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                         <span className="text-gray-400 font-sans text-xs">完成率达成</span>
+                         <span className="text-green-400 font-bold">{achMultiplier.toFixed(4)} <span className="text-gray-600 text-[10px]">/ 0.6</span></span>
+                       </div>
+                       <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                         <span className="text-gray-400 font-sans text-xs">DX分</span>
+                         <span className="text-white font-bold">{dxScore}</span>
+                       </div>
+                       <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                         <span className="text-gray-400 font-sans text-xs">DX分达成</span>
+                         <span className="text-blue-400 font-bold">{dxMultiplier.toFixed(4)} <span className="text-gray-600 text-[10px]">/ 0.4</span></span>
+                       </div>
+                       <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                         <span className="text-gray-400 font-sans text-xs">难度基数</span>
+                         <span className="text-purple-400 font-bold">{constant.toFixed(1)}</span>
+                       </div>
+                       <div className="flex justify-between items-center pt-1">
+                         <span className="text-gray-300 font-sans font-bold text-sm">总加成</span>
+                         <span className="text-yellow-400 font-bold text-base">{totalMultiplier.toFixed(4)} <span className="text-gray-600 text-[10px]">/ 1.0</span></span>
+                       </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
       </div>
     </div>
   );
