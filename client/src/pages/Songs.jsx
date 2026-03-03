@@ -13,30 +13,30 @@ export default function Songs() {
   const [selectedSong, setSelectedSong] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   
-  // 🔥 新增：UI 状态
+  // UI 状态
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   // ==========================================
-  // 🔥 核心筛选状态 (Filter States)
+  // 核心筛选状态 (Filter States)
   // ==========================================
   const [isNewOnly, setIsNewOnly] = useState(false);
   
   // 难度分离：0=绿, 1=黄, 2=红, 3=紫, 4=白。空数组代表不限
   const [selectedDiffs, setSelectedDiffs] = useState([]); 
   
-  // 定数上下限 (Maimai DX 定数范围大约 1.0 ~ 15.0)
-  const [dsMin, setDsMin] = useState(1.0);
-  const [dsMax, setDsMax] = useState(15.0);
+  // 定数上下限 (为了更好的输入体验，暂存为字符串，计算时转为数字)
+  const [dsMin, setDsMin] = useState("1.0");
+  const [dsMax, setDsMax] = useState("15.0");
   
   // BPM 上下限
-  const [bpmMin, setBpmMin] = useState(0);
-  const [bpmMax, setBpmMax] = useState(400);
+  const [bpmMin, setBpmMin] = useState("0");
+  const [bpmMax, setBpmMax] = useState("400");
 
   // 高级多选状态
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedVersions, setSelectedVersions] = useState([]);
 
-  // 初始化拉取水鱼真实数据
+  // 初始化拉取数据
   useEffect(() => {
     const fetchSongs = async () => {
       try {
@@ -56,9 +56,7 @@ export default function Songs() {
     fetchSongs();
   }, []);
 
-  // ==========================================
   // 动态提取所有可选的“分类(Genre)”和“版本(From)”
-  // ==========================================
   const filterOptions = useMemo(() => {
     if (songs.length === 0) return { categories: [], versions: [] };
     
@@ -67,7 +65,7 @@ export default function Songs() {
     
     songs.forEach(song => {
       if (song.basic_info?.genre) catSet.add(song.basic_info.genre);
-      if (song.basic_info?.from) verSet.add(song.basic_info.from); // 水鱼数据中 from 对应版本名
+      if (song.basic_info?.from) verSet.add(song.basic_info.from); 
     });
 
     return {
@@ -77,11 +75,61 @@ export default function Songs() {
   }, [songs]);
 
   // ==========================================
+  // 输入限制校验逻辑 (在输入框失焦时触发)
+  // ==========================================
+  const handleDsBlur = (type) => {
+    let min = parseFloat(dsMin);
+    let max = parseFloat(dsMax);
+    
+    if (isNaN(min)) min = 1.0;
+    if (isNaN(max)) max = 15.0;
+
+    // 绝对范围限制
+    min = Math.max(1.0, Math.min(min, 15.0));
+    max = Math.max(1.0, Math.min(max, 15.0));
+
+    // 逻辑冲突限制：如果下限 > 上限
+    if (min > max) {
+      if (type === 'min') min = max;
+      else max = min;
+    }
+
+    setDsMin(min.toFixed(1));
+    setDsMax(max.toFixed(1));
+  };
+
+  const handleBpmBlur = (type) => {
+    let min = parseInt(bpmMin);
+    let max = parseInt(bpmMax);
+    
+    if (isNaN(min)) min = 0;
+    if (isNaN(max)) max = 400;
+
+    // 绝对范围限制
+    min = Math.max(0, Math.min(min, 1000));
+    max = Math.max(0, Math.min(max, 1000));
+
+    // 逻辑冲突限制
+    if (min > max) {
+      if (type === 'min') min = max;
+      else max = min;
+    }
+
+    setBpmMin(min.toString());
+    setBpmMax(max.toString());
+  };
+
+  // ==========================================
   // 超级过滤引擎 (Ultimate Filter Engine)
   // ==========================================
   const filteredSongs = useMemo(() => {
+    const numDsMin = parseFloat(dsMin) || 1.0;
+    const numDsMax = parseFloat(dsMax) || 15.0;
+    const numBpmMin = parseInt(bpmMin) || 0;
+    const numBpmMax = parseInt(bpmMax) || 400;
+
     return songs.filter(song => {
-      // 1. 文本搜索 (标题或曲师)
+      // 1. 文本搜索
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const titleMatch = song.title.toLowerCase().includes(query);
@@ -93,26 +141,25 @@ export default function Songs() {
       // 2. 仅看新曲
       if (isNewOnly && !song.basic_info.is_new) return false;
 
-      // 3. 分类筛选 (Genre)
+      // 3. 分类筛选
       if (selectedCategories.length > 0 && !selectedCategories.includes(song.basic_info.genre)) {
         return false;
       }
 
-      // 4. 版本筛选 (From)
+      // 4. 版本筛选
       if (selectedVersions.length > 0 && !selectedVersions.includes(song.basic_info.from)) {
         return false;
       }
 
       // 5. BPM 范围筛选
       const bpm = song.basic_info.bpm;
-      if (bpm < bpmMin || bpm > bpmMax) return false;
+      if (bpm < numBpmMin || bpm > numBpmMax) return false;
 
-      // 6. 🔥 难度分离 & 定数范围筛选
-      // 如果没有指定难度类型，就查该歌的所有难度；如果指定了，只查指定难度
+      // 6. 难度分离 & 定数范围筛选
       const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : [0, 1, 2, 3, 4];
       const hasMatchingDs = diffsToCheck.some(diffIndex => {
         const constant = song.ds[diffIndex];
-        return constant !== undefined && constant >= dsMin && constant <= dsMax;
+        return constant !== undefined && constant >= numDsMin && constant <= numDsMax;
       });
 
       if (!hasMatchingDs) return false;
@@ -125,10 +172,10 @@ export default function Songs() {
   const resetFilters = () => {
     setIsNewOnly(false);
     setSelectedDiffs([]);
-    setDsMin(1.0);
-    setDsMax(15.0);
-    setBpmMin(0);
-    setBpmMax(400);
+    setDsMin("1.0");
+    setDsMax("15.0");
+    setBpmMin("0");
+    setBpmMax("400");
     setSelectedCategories([]);
     setSelectedVersions([]);
   };
@@ -199,10 +246,10 @@ export default function Songs() {
         </div>
       </div>
 
-      {/* 主体区域：侧边栏(筛选) + 列表 */}
+      {/* 主体区域 */}
       <div className="flex flex-col md:flex-row flex-1 gap-4 overflow-hidden">
         
-        {/* 高级筛选控制台 (Sidebar) */}
+        {/* 高级筛选控制台 */}
         {isFilterOpen && (
           <div className="w-full md:w-80 shrink-0 max-h-[55vh] md:max-h-none bg-gray-900/40 rounded-2xl border border-gray-800/60 shadow-2xl backdrop-blur-sm overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex flex-col gap-6">
             
@@ -242,29 +289,69 @@ export default function Songs() {
               </div>
             </div>
 
-            {/* 3. 定数范围 */}
+            {/* 3. 定数范围 (带输入限制) */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex justify-between">
                 <span>DS Range (定数)</span>
-                <span className="text-purple-400 font-mono">{dsMin.toFixed(1)} - {dsMax.toFixed(1)}</span>
+                <span className="text-purple-400 font-mono">
+                  {(parseFloat(dsMin)||1.0).toFixed(1)} - {(parseFloat(dsMax)||15.0).toFixed(1)}
+                </span>
               </label>
               <div className="flex items-center gap-2">
-                <input type="number" step="0.1" value={dsMin} onChange={e => setDsMin(Number(e.target.value))} className="w-full bg-black/50 border border-gray-700 rounded-lg p-2 text-center font-mono text-sm text-gray-200 focus:border-purple-500 outline-none" />
+                <input 
+                  type="number" 
+                  step="0.1"
+                  min="1.0"
+                  max="15.0"
+                  value={dsMin} 
+                  onChange={e => setDsMin(e.target.value)} 
+                  onBlur={() => handleDsBlur('min')}
+                  className="w-full bg-black/50 border border-gray-700 rounded-lg p-2 text-center font-mono text-sm text-gray-200 focus:border-purple-500 outline-none" 
+                />
                 <span className="text-gray-600">-</span>
-                <input type="number" step="0.1" value={dsMax} onChange={e => setDsMax(Number(e.target.value))} className="w-full bg-black/50 border border-gray-700 rounded-lg p-2 text-center font-mono text-sm text-gray-200 focus:border-purple-500 outline-none" />
+                <input 
+                  type="number" 
+                  step="0.1" 
+                  min="1.0"
+                  max="15.0"
+                  value={dsMax} 
+                  onChange={e => setDsMax(e.target.value)} 
+                  onBlur={() => handleDsBlur('max')}
+                  className="w-full bg-black/50 border border-gray-700 rounded-lg p-2 text-center font-mono text-sm text-gray-200 focus:border-purple-500 outline-none" 
+                />
               </div>
             </div>
 
-            {/* 4. BPM 范围 */}
+            {/* 4. BPM 范围 (带输入限制) */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex justify-between">
                 <span>BPM Range</span>
-                <span className="text-purple-400 font-mono">{bpmMin} - {bpmMax}</span>
+                <span className="text-purple-400 font-mono">
+                  {parseInt(bpmMin)||0} - {parseInt(bpmMax)||0}
+                </span>
               </label>
               <div className="flex items-center gap-2">
-                <input type="number" step="1" value={bpmMin} onChange={e => setBpmMin(Number(e.target.value))} className="w-full bg-black/50 border border-gray-700 rounded-lg p-2 text-center font-mono text-sm text-gray-200 focus:border-purple-500 outline-none" />
+                <input 
+                  type="number" 
+                  step="1" 
+                  min="0"
+                  max="1000"
+                  value={bpmMin} 
+                  onChange={e => setBpmMin(e.target.value)} 
+                  onBlur={() => handleBpmBlur('min')}
+                  className="w-full bg-black/50 border border-gray-700 rounded-lg p-2 text-center font-mono text-sm text-gray-200 focus:border-purple-500 outline-none" 
+                />
                 <span className="text-gray-600">-</span>
-                <input type="number" step="1" value={bpmMax} onChange={e => setBpmMax(Number(e.target.value))} className="w-full bg-black/50 border border-gray-700 rounded-lg p-2 text-center font-mono text-sm text-gray-200 focus:border-purple-500 outline-none" />
+                <input 
+                  type="number" 
+                  step="1" 
+                  min="0"
+                  max="1000"
+                  value={bpmMax} 
+                  onChange={e => setBpmMax(e.target.value)} 
+                  onBlur={() => handleBpmBlur('max')}
+                  className="w-full bg-black/50 border border-gray-700 rounded-lg p-2 text-center font-mono text-sm text-gray-200 focus:border-purple-500 outline-none" 
+                />
               </div>
             </div>
 
@@ -323,14 +410,17 @@ export default function Songs() {
               itemContent={(index, song) => {
                 const isDX = song.type === 'DX';
 
-                // 🔥 智能定数高亮系统：找出符合当前筛选条件的最高难度进行展示
-                let displayDs = song.ds[song.ds.length - 1]; // 默认取最高定数
+                // 智能定数高亮系统
+                let displayDs = song.ds[song.ds.length - 1]; 
                 let dsTagClass = 'text-purple-400 bg-purple-500/10 border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.1)]'; 
                 
+                const numDsMin = parseFloat(dsMin) || 1.0;
+                const numDsMax = parseFloat(dsMax) || 15.0;
                 const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : [0, 1, 2, 3, 4];
+                
                 for (let i = 4; i >= 0; i--) {
                   const constant = song.ds[i];
-                  if (constant !== undefined && diffsToCheck.includes(i) && constant >= dsMin && constant <= dsMax) {
+                  if (constant !== undefined && diffsToCheck.includes(i) && constant >= numDsMin && constant <= numDsMax) {
                     displayDs = constant;
                     dsTagClass = DIFF_CONFIG[i].tagClass;
                     break;
@@ -343,7 +433,6 @@ export default function Songs() {
                     onClick={() => handleOpenDrawer(song)}
                   >
                     <div className="flex items-center gap-4 overflow-hidden">
-                      {/* SD / DX 标签 */}
                       <div className={`shrink-0 w-10 text-center text-[10px] font-black py-1 rounded border ${
                         isDX ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' : 'text-orange-400 border-orange-500/30 bg-orange-500/10'
                       }`}>
@@ -365,7 +454,6 @@ export default function Songs() {
                       <span className="px-2 py-1 bg-gray-800/80 text-gray-400 text-xs rounded hidden md:block max-w-[150px] truncate text-right">
                         {song.basic_info.from}
                       </span>
-                      {/* 🔥 动态显示的定数和颜色框 */}
                       <span className={`font-mono font-bold border px-2.5 py-1 rounded-lg text-sm ${dsTagClass}`}>
                         {displayDs.toFixed(1)}
                       </span>
