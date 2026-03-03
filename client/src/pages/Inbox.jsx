@@ -102,7 +102,7 @@ const Inbox = () => {
         onClick={() => navigate(-1)}
         classname="flex items-center gap-2 text-gray-400 hover:text-white mb-6 font-bold tracking-widest transition-colors w-max"
       >
-        <FaArrowLeft /> BACK
+        <FaArrowLeft />
       </button>
 
       <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col relative z-10 h-full">
