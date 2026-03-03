@@ -98,7 +98,12 @@ const Inbox = () => {
 
   return (
     <div className="w-full min-h-screen text-white pt-24 pb-8 px-4 md:px-8 font-sans relative overflow-hidden bg-gradient-to-b from-transparent to-black/80 flex flex-col">
-      <FallingIcons />
+      <button
+        onClick={() => navigate(-1)}
+        classname="flex items-center gap-2 text-gray-400 hover:text-white mb-6 font-bold tracking-widest transition-colors w-max"
+      >
+        <FaArrowLeft /> BACK
+      </button>
 
       <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col relative z-10 h-full">
         

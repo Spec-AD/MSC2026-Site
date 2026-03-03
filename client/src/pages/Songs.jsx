@@ -204,7 +204,7 @@ export default function Songs() {
         
         {/* 高级筛选控制台 (Sidebar) */}
         {isFilterOpen && (
-          <div className="w-full md:w-80 shrink-0 bg-gray-900/40 rounded-2xl border border-gray-800/60 shadow-2xl backdrop-blur-sm overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex flex-col gap-6">
+          <div className="w-full md:w-80 shrink-0 max-h-[55vh] md:max-h-none bg-gray-900/40 rounded-2xl border border-gray-800/60 shadow-2xl backdrop-blur-sm overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex flex-col gap-6">
             
             <div className="flex items-center justify-between border-b border-gray-700 pb-3">
               <span className="font-bold text-purple-400 tracking-widest flex items-center gap-2"><FaFilter/> ADVANCED FILTER</span>

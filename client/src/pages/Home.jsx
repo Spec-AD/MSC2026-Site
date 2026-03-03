@@ -54,7 +54,7 @@ const Home = () => {
       const res = await axios.post('/api/users/check-in', {}, { headers: { Authorization: `Bearer ${token}` }});
       addToast(`${res.data.msg}\n当前等级: Lv.${res.data.level} | 经验: ${res.data.xp}`, 'success');
       // 签到成功后刷新页面以更新最新数据
-      window.location.reload(); 
+      setTimeout(() => window.location.reload(), 4000); 
     } catch (err) {
       addToast(err.response?.data?.msg || '签到失败', 'error');
     } finally {
@@ -77,7 +77,7 @@ const Home = () => {
             purebeat.top
           </span>
           <span className="text-[10px] font-mono text-purple-400 font-bold tracking-widest mt-1 uppercase">
-            Version 1.2.0
+            Version 1.1.3
           </span>
         </div>
 
@@ -257,6 +257,5 @@ const Home = () => {
     </div>
   );
 };
-
 
 export default Home;
