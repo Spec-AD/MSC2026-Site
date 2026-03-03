@@ -204,7 +204,7 @@ app.post('/api/users/sync-diving-fish', async (req, res) => {
       if (!chartInfo) continue;
       
       // 🔥 兼容繁体/日文“宴会場”和简体“宴会场”
-      const isUtage = song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场' || song.basic_info?.from === '宴会場' || song.basic_info?.from === '宴会场' || song.type === 'UTAGE';
+      const isUtage = /^\[.+?\]/.test(record.title) || /^\[.+?\]/.test(song.title) || song.type === 'UTAGE' || song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场';
 
       const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
       const maxDxScore = totalNotes * 3;
@@ -697,7 +697,7 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
         isNew = song.basic_info?.is_new || false; 
         
         // 🔥 兼容繁体/日文“宴会場”和简体“宴会场”
-        const isUtage = song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场' || song.basic_info?.from === '宴会場' || song.basic_info?.from === '宴会场' || song.type === 'UTAGE';
+        const isUtage = /^\[.+?\]/.test(rec.title) || /^\[.+?\]/.test(song.title) || song.type === 'UTAGE' || song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场';
         
         if (song.charts && song.charts[rec.level_index]) {
           const chartInfo = song.charts[rec.level_index];
