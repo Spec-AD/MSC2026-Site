@@ -14,15 +14,8 @@ export default function SongDrawer({ isOpen, onClose, song }) {
   const [boardScope, setBoardScope] = useState('global'); // 'global' | 'friends'
   const [boardLevel, setBoardLevel] = useState(3);        // 默认紫谱
 
-  // 舞萌标准的难度命名与颜色映射
   const diffNames = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'Re:MASTER'];
-  const diffColors = [
-    'text-green-400',  // 绿
-    'text-yellow-400', // 黄
-    'text-red-400',    // 红
-    'text-purple-400', // 紫
-    'text-pink-300'    // 白
-  ];
+  const diffColors = ['text-green-400', 'text-yellow-400', 'text-red-400', 'text-purple-400', 'text-pink-300'];
   const diffBgColors = [
     'bg-green-500/10 border-green-500/20',
     'bg-yellow-500/10 border-yellow-500/20',
@@ -31,24 +24,29 @@ export default function SongDrawer({ isOpen, onClose, song }) {
     'bg-pink-500/10 border-pink-500/20'
   ];
 
-  // 当点开新歌时，重置并智能推断默认难度
+  const isUtage = song?.basic_info?.genre === '宴会场' || song?.type === 'UTAGE';
+
+  // 1. 初始化机制：只有打开抽屉的瞬间，才初始化难度 (防止后台乱跑)
   useEffect(() => {
-    if (song) {
-      if (song.basic_info?.genre === '宴会场' || song.type === 'UTAGE') {
-        setBoardLevel(0); // 宴会场不需要切难度
+    if (song && isOpen) {
+      if (isUtage) {
+        setBoardLevel(0);
       } else {
-        if (song.ds[4] !== undefined) setBoardLevel(4);      // 优先白
-        else if (song.ds[3] !== undefined) setBoardLevel(3); // 其次紫
-        else if (song.ds[2] !== undefined) setBoardLevel(2); // 其次红
+        if (song.ds[4] !== undefined) setBoardLevel(4);
+        else if (song.ds[3] !== undefined) setBoardLevel(3);
+        else if (song.ds[2] !== undefined) setBoardLevel(2);
         else setBoardLevel(0);
       }
-      setBoardScope('global'); // 每次切歌重置为全局排行榜
+      setBoardScope('global'); 
     }
-  }, [song]);
+  }, [song, isOpen, isUtage]);
 
-  // 触发排行榜拉取
+  // 2. 🔥 极致防抖请求引擎：只在参数全部就绪时拉取数据
   useEffect(() => {
-    if (!song || !isOpen) return;
+    if (!isOpen || !song) return; // 严格拦截：没打开绝不发请求
+    
+    // 拦截 React 的异步状态差：如果当前准备请求的难度在歌里不存在，坚决不发请求，等状态同步
+    if (!isUtage && song.ds[boardLevel] === undefined) return;
     
     const fetchLeaderboard = async () => {
       setBoardLoading(true);
@@ -70,7 +68,7 @@ export default function SongDrawer({ isOpen, onClose, song }) {
     };
     
     fetchLeaderboard();
-  }, [song, boardLevel, boardScope, isOpen]);
+  }, [song, boardLevel, boardScope, isOpen, isUtage]);
 
   // 范围切换逻辑拦截 (判断 Sponsor Tier)
   const handleScopeSwitch = (targetScope) => {
@@ -99,8 +97,6 @@ export default function SongDrawer({ isOpen, onClose, song }) {
     if (index === 2) return 'text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.6)]';
     return 'text-gray-500';
   };
-
-  const isUtage = song?.basic_info?.genre === '宴会场' || song?.type === 'UTAGE';
 
   return (
     <>
