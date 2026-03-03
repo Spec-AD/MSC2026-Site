@@ -253,10 +253,11 @@ app.post('/api/users/sync-diving-fish', async (req, res) => {
 
       const chartInfo = song.charts[record.level_index];
       if (!chartInfo) continue;
+      const isUtage = song.basic_info?.genre === '宴会場' || song.basic_info?.from === '宴会場' || song.type === 'UTAGE';
 
       const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
       const maxDxScore = totalNotes * 3;
-
+      const constant = isUtage ? 0 : (record.ds || song.ds[record.level_index]);
       const constant = record.ds || song.ds[record.level_index];
 
       // ✨ 调用计算器 ✨
@@ -751,10 +752,12 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
       
       if (song) {
         isNew = song.basic_info?.is_new || false; 
+        const isUtage = song.basic_info?.genre === '宴会场' || song.basic_info?.from === '宴会场' || song.type === 'UTAGE';
         if (song.charts && song.charts[rec.level_index]) {
           const chartInfo = song.charts[rec.level_index];
           const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
           const maxDxScore = totalNotes * 3;
+          constant = isUtage ? 0 : (rec.ds || song.ds[rec.level_index]);
           constant = rec.ds || song.ds[rec.level_index];
           dxRatio = maxDxScore > 0 ? (rec.dxScore / maxDxScore) : 0;
           if (maxDxScore > 0) pf = calculatePF(constant, rec.achievements, rec.dxScore, maxDxScore);
