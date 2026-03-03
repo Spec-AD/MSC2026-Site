@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { FaCrown, FaMedal, FaSpinner, FaFireAlt, FaLevelUpAlt, FaBook, FaBug, FaCalendarCheck } from 'react-icons/fa';
+import { FaCrown, FaMedal, FaSpinner, FaFireAlt, FaLevelUpAlt, FaBook, FaBug, FaCalendarCheck, FaFire } from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
 
 const Leaderboard = () => {
@@ -12,10 +12,11 @@ const Leaderboard = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
 
-  // 榜单配置字典
+  // 榜单配置字典 (已加入单图最佳排行榜)
   const TABS = [
     { id: 'pf', label: 'PERFORMANCE', icon: <FaFireAlt />, color: 'text-orange-500', bgHover: 'hover:bg-orange-500/20', border: 'border-orange-500' },
     { id: 'level', label: 'LEVELS', icon: <FaLevelUpAlt />, color: 'text-cyan-400', bgHover: 'hover:bg-cyan-500/20', border: 'border-cyan-400' },
+    { id: 'single-best', label: 'SINGLE BEST', icon: <FaFire />, color: 'text-pink-500', bgHover: 'hover:bg-pink-500/20', border: 'border-pink-500' },
     { id: 'wiki', label: 'WIKI CONTRIB', icon: <FaBook />, color: 'text-purple-400', bgHover: 'hover:bg-purple-500/20', border: 'border-purple-400' },
     { id: 'feedback', label: 'BUG HUNTER', icon: <FaBug />, color: 'text-green-400', bgHover: 'hover:bg-green-500/20', border: 'border-green-400' },
     { id: 'checkin', label: 'CHECK-IN', icon: <FaCalendarCheck />, color: 'text-yellow-400', bgHover: 'hover:bg-yellow-500/20', border: 'border-yellow-400' },
@@ -26,10 +27,15 @@ const Leaderboard = () => {
     const fetchLeaderboard = async () => {
       setLoading(true);
       try {
-        const res = await axios.get(`/api/leaderboard/${activeTab}`);
+        const endpoint = activeTab === 'single-best' 
+          ? '/api/leaderboard/single-best' 
+          : `/api/leaderboard/${activeTab}`;
+          
+        const res = await axios.get(endpoint);
         setPlayers(res.data);
       } catch (err) {
         console.error('获取排行榜失败', err);
+        addToast('获取排行榜数据失败', 'error');
       } finally {
         setLoading(false);
       }
@@ -38,7 +44,7 @@ const Leaderboard = () => {
   }, [activeTab]);
 
   // ==========================================
-  // 🔥 段位颜色引擎 (Rating & PF) 保持不变
+  // 🔥 段位颜色引擎 (Rating & PF)
   // ==========================================
   const getRatingColor = (rating) => {
     const r = Number(rating) || 0;
@@ -88,6 +94,15 @@ const Leaderboard = () => {
               Lv.{player.level || 1}
             </div>
             <span className="text-[10px] text-white font-bold uppercase tracking-widest mt-[-2px]">{player.xp || 0} XP</span>
+          </>
+        );
+      case 'single-best':
+        return (
+          <>
+            <div className="text-xl md:text-3xl font-black italic tracking-tighter font-mono text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-500 drop-shadow-md pb-1 leading-tight">
+              {player.pf ? player.pf.toFixed(2) : '0.00'}
+            </div>
+            <span className="text-[10px] text-white font-bold uppercase tracking-widest mt-[-2px]">Max PF</span>
           </>
         );
       case 'wiki':
@@ -188,6 +203,7 @@ const Leaderboard = () => {
                   switch (activeTab) {
                     case 'pf': currentVal = player.totalPf; prevVal = prevPlayer.totalPf; break;
                     case 'level': currentVal = player.xp; prevVal = prevPlayer.xp; break;
+                    case 'single-best': currentVal = player.pf; prevVal = prevPlayer.pf; break;
                     case 'wiki': currentVal = player.wikiApprovedCount; prevVal = prevPlayer.wikiApprovedCount; break;
                     case 'feedback': currentVal = player.feedbackApprovedCount; prevVal = prevPlayer.feedbackApprovedCount; break;
                     case 'checkin': currentVal = player.checkInCount; prevVal = prevPlayer.checkInCount; break;
@@ -201,14 +217,12 @@ const Leaderboard = () => {
                 
                 // 此时 rankIndex 即为并列排名对应的索引 (0=第一名, 1=第二名...)
                 const rankIndex = currentRank - 1; 
-                
-                // 2. 将之前用到 index 的地方全部替换为 rankIndex
                 const isTop3 = rankIndex < 3;
                 const isRatingVisible = player.isB50Visible === true; 
                 
                 return (
                 <div 
-                  key={`${activeTab}-${player._id}`}
+                  key={`${activeTab}-${player.userId || player._id}`}
                   onClick={() => navigate(`/profile/${player.username}`)}
                   className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 group
                     ${isTop3 ? 'bg-gradient-to-r from-white/10 to-transparent border border-white/20 hover:border-white/30 hover:bg-white/10' : 'bg-black/40 border border-white/5 hover:bg-white/5 hover:border-white/20'}
@@ -237,13 +251,33 @@ const Leaderboard = () => {
                         </span>
                         {player.role === 'ADM' && <span className="bg-red-500/20 text-red-400 text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider">ADM</span>}
                       </div>
-                      <span className="text-xs text-gray-500 font-mono tracking-widest mt-0.5">
-                        UID: {player.uid || '未绑定'}
-                      </span>
+                      
+                      {/* 单曲最佳榜单的副标题展示曲目数据，其他榜单展示 UID */}
+                      {activeTab === 'single-best' ? (
+                        <div className="flex flex-col mt-0.5">
+                          <span className="text-cyan-300 font-bold text-xs md:text-sm truncate max-w-[200px] md:max-w-full">
+                            {player.songName}
+                          </span>
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] md:text-xs font-mono mt-0.5">
+                            <span className="bg-white/10 px-1.5 rounded text-gray-300">Lv.{player.level} ({player.constant?.toFixed(1)})</span>
+                            <span className="text-gray-500">|</span>
+                            <span className="text-green-400 font-bold">{player.achievement?.toFixed(4)}%</span>
+                            {player.fcStatus && ['fc', 'fcp', 'ap', 'app'].includes(player.fcStatus) && (
+                              <span className={`px-1 rounded font-black text-white ${player.fcStatus.includes('ap') ? 'bg-yellow-500' : 'bg-pink-500'}`}>
+                                {player.fcStatus.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-500 font-mono tracking-widest mt-0.5">
+                          UID: {player.uid || '未绑定'}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* Rating 列 (保护隐私) - 🔥 仅在 PF 榜单显示 */}
+                  {/* Rating 列 (保护隐私) - 仅在 PF 榜单显示 */}
                   {activeTab === 'pf' && (
                     <div className="hidden md:flex w-32 justify-center shrink-0">
                       <span className={`bg-white/5 px-3 py-1 rounded-full text-xs font-mono font-bold border border-white/10 ${textClipFix} ${isRatingVisible ? getRatingColor(player.rating) : 'text-gray-500'}`}>
@@ -252,7 +286,7 @@ const Leaderboard = () => {
                     </div>
                   )}
 
-                  {/* 🔥 动态渲染右侧数值列 */}
+                  {/* 动态渲染右侧数值列 */}
                   <div className="w-24 md:w-40 flex flex-col items-end shrink-0 pr-2 md:pr-4">
                     {renderDynamicStat(player)}
                   </div>
@@ -260,7 +294,6 @@ const Leaderboard = () => {
               );
               });
             })()} 
-            {/* ⬆️ 致命错误修复点：将 }) 补全为 })()}，让这个匿名函数真正执行并返回结果数组 */}
 
             {players.length === 0 && (
               <div className="text-center py-20 text-gray-500 font-mono tracking-widest border border-white/5 bg-black/20 rounded-2xl">
