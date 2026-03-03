@@ -222,7 +222,7 @@ const Leaderboard = () => {
                 
                 return (
                 <div 
-                  key={`${activeTab}-${player.userId || player._id}`}
+                  key={`${activeTab}-${player.scoreId || player.userId || player._id}`}
                   onClick={() => navigate(`/profile/${player.username}`)}
                   className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 group
                     ${isTop3 ? 'bg-gradient-to-r from-white/10 to-transparent border border-white/20 hover:border-white/30 hover:bg-white/10' : 'bg-black/40 border border-white/5 hover:bg-white/5 hover:border-white/20'}
