@@ -44,7 +44,15 @@ const wikiPageSchema = new mongoose.Schema({
   rejectReason: { 
     type: String, 
     default: '' 
-  } // 如果被打回，ADM填写的退回理由
+  }, // 如果被打回，ADM填写的退回理由
+  
+  // 🔥 新增：用于存储词条的历史版本备份
+  history: [{
+    title: String,
+    content: String,
+    editedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    editedAt: { type: Date, default: Date.now }
+  }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('WikiPage', wikiPageSchema);

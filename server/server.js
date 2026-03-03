@@ -812,20 +812,38 @@ app.get('/api/wiki/page/:slug', async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '失败' }); }
 });
 
+// 🔥 [优化] 维基提交更新：留存历史版本与 ADM 奖励机制
 app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
   try {
     const { slug, title, categoryId, content } = req.body; 
+    if (!slug || !title || !categoryId || !content) return res.status(400).json({ msg: '请填写完整信息，包括分类' });
+
     const formattedSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     let page = await WikiPage.findOne({ slug: formattedSlug });
+    
     const currentUser = await User.findById(req.user.id || req.user._id);
     const isAdmin = currentUser && ['ADM', 'TO'].includes(currentUser.role);
     const newStatus = isAdmin ? 'APPROVED' : 'PENDING';
 
     if (page) {
+      // 💡 核心逻辑：备份当前旧版本到 history 数组中
+      if (!page.history) page.history = [];
+      page.history.push({
+        title: page.title,
+        content: page.content,
+        editedBy: page.lastEditedBy,
+        editedAt: page.updatedAt || new Date()
+      });
+
       page.title = title; page.category = categoryId; page.content = content; page.lastEditedBy = currentUser._id; page.status = newStatus; page.isPendingUpdate = !isAdmin;
       await page.save();
-      if (isAdmin) { await addXp(currentUser._id, 30); await User.findByIdAndUpdate(currentUser._id, { $inc: { wikiApprovedCount: 1 } }); }
-      return res.json({ msg: isAdmin ? '✅ 更新成功！' : '已提交审核。' });
+      
+      if (isAdmin) { 
+        await addXp(currentUser._id, 30); 
+        await User.findByIdAndUpdate(currentUser._id, { $inc: { wikiApprovedCount: 1 } }); 
+        return res.json({ msg: '✅ 更新成功！经验+30，自动留存历史版本。' });
+      }
+      return res.json({ msg: '更新已提交审核并生成历史快照。' });
     } else {
       const newPage = new WikiPage({ title, slug: formattedSlug, category: categoryId, content, author: currentUser._id, lastEditedBy: currentUser._id, status: newStatus, isPendingUpdate: false });
       await newPage.save();
@@ -843,21 +861,48 @@ app.get('/api/admin/wiki/pending', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '失败' }); }
 });
 
+// 🔥 [优化] 管理员审核：自动发放经验并向作者发送站内信
 app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
   try {
     const currentUser = await User.findById(req.user.id || req.user._id);
     if (!currentUser || !['ADM', 'TO'].includes(currentUser.role)) return res.status(403).json({ msg: '权限不足' });
+    
     const { action, rejectReason } = req.body;
     const page = await WikiPage.findById(req.params.id);
+    if (!page) return res.status(404).json({ msg: '文章不存在' });
+    
     if (action === 'APPROVE') {
       page.status = 'APPROVED'; page.rejectReason = '';
-      const xpReward = page.isPendingUpdate ? 30 : 50; const targetUserId = page.isPendingUpdate ? page.lastEditedBy : page.author;
-      await addXp(targetUserId, xpReward); await User.findByIdAndUpdate(targetUserId, { $inc: { wikiApprovedCount: 1 } });
+      const xpReward = page.isPendingUpdate ? 30 : 50; 
+      const targetUserId = page.isPendingUpdate ? page.lastEditedBy : page.author;
+      
+      await addXp(targetUserId, xpReward); 
+      await User.findByIdAndUpdate(targetUserId, { $inc: { wikiApprovedCount: 1 } });
+      
+      // 🚀 发送系统站内信 (审核通过)
+      await Message.create({
+        receiver: targetUserId,
+        sender: currentUser._id,
+        type: 'SYSTEM',
+        title: page.isPendingUpdate ? '📝 维基更新已通过' : '📝 新维基词条已收录',
+        content: `恭喜！您${page.isPendingUpdate ? '更新' : '创建'}的维基词条 [${page.title}] 已通过审核并发布！\n经验值奖励: +${xpReward}`
+      });
+      
       page.isPendingUpdate = false;
     } else if (action === 'REJECT') {
       page.status = 'REJECTED'; page.rejectReason = rejectReason || '不符合规范';
+      
+      // ❌ 发送系统站内信 (审核驳回)
+      const targetUserId = page.isPendingUpdate ? page.lastEditedBy : page.author;
+      await Message.create({
+        receiver: targetUserId,
+        sender: currentUser._id,
+        type: 'SYSTEM',
+        title: '❌ 维基审核未通过',
+        content: `很遗憾，您提交的维基词条 [${page.title}] 未通过审核。\n原因: ${page.rejectReason}`
+      });
     }
-    await page.save(); res.json({ msg: `文章已被标记` });
+    await page.save(); res.json({ msg: `文章审核操作成功，已发送站内信通知！` });
   } catch (err) { res.status(500).json({ msg: '失败' }); }
 });
 
@@ -871,6 +916,62 @@ app.post('/api/wiki/read-reward', authMiddleware, async (req, res) => {
     }
     res.json({ awarded: false });
   } catch (err) { res.status(500).json({ msg: '奖励发放失败' }); }
+});
+
+
+// ==========================================
+// 🏆 核心：单图最佳排行榜 (Single-Best Leaderboard) 
+// ==========================================
+app.get('/api/leaderboard/single-best', async (req, res) => {
+  try {
+    const leaderboard = await Score.aggregate([
+      // 1. 按 PF 降序排列全站所有成绩
+      { $sort: { pf: -1 } },
+      // 2. 按用户分组，每个玩家仅提取其历史最高的一条 PF 记录
+      {
+        $group: {
+          _id: '$userId',
+          bestScoreId: { $first: '$_id' },
+          songName: { $first: '$songName' },
+          pf: { $first: '$pf' },
+          level: { $first: '$level' },
+          constant: { $first: '$constant' },
+          achievement: { $first: '$achievement' },
+          dxScore: { $first: '$dxScore' },
+          fcStatus: { $first: '$fcStatus' },
+          difficulty: { $first: '$difficulty' },
+          songId: { $first: '$songId' }
+        }
+      },
+      // 3. 将所有玩家的最高成绩再次按全站进行降序排名
+      { $sort: { pf: -1 } },
+      { $limit: 100 },
+      // 4. 联表获取玩家的名片信息
+      {
+        $lookup: {
+          from: 'users',
+          let: { uId: '$_id' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$_id', { $convert: { input: '$$uId', to: 'objectId', onError: '$$uId', onNull: '$$uId' } }] } } }
+          ],
+          as: 'userInfo'
+        }
+      },
+      { $unwind: '$userInfo' },
+      {
+        $project: {
+          _id: 0, scoreId: '$bestScoreId', userId: '$_id',
+          username: { $ifNull: ['$userInfo.nickname', '$userInfo.username'] },
+          avatarUrl: '$userInfo.avatarUrl', uid: '$userInfo.uid', sponsorTier: '$userInfo.sponsorTier',
+          songName: 1, songId: 1, pf: 1, level: 1, constant: 1, achievement: 1, dxScore: 1, fcStatus: 1, difficulty: 1
+        }
+      }
+    ]);
+    res.json(leaderboard);
+  } catch (err) {
+    console.error('单图最佳排行榜获取失败:', err);
+    res.status(500).json({ msg: '获取排行榜失败' });
+  }
 });
 
 app.get('/api/leaderboard/:type', async (req, res) => {
