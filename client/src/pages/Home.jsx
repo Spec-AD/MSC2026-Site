@@ -77,7 +77,7 @@ const Home = () => {
             purebeat.top
           </span>
           <span className="text-[10px] font-mono text-purple-400 font-bold tracking-widest mt-1 uppercase">
-            Version 1.2.1
+            Version 1.2.2
           </span>
         </div>
 
@@ -260,3 +260,4 @@ const Home = () => {
 
 
 export default Home;
+
