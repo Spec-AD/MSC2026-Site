@@ -43,9 +43,8 @@ export default function SongDrawer({ isOpen, onClose, song }) {
 
   // 2. 🔥 极致防抖请求引擎：只在参数全部就绪时拉取数据
   useEffect(() => {
-    if (!isOpen || !song) return; // 严格拦截：没打开绝不发请求
+    if (!isOpen || !song) return; 
     
-    // 拦截 React 的异步状态差：如果当前准备请求的难度在歌里不存在，坚决不发请求，等状态同步
     if (!isUtage && song.ds[boardLevel] === undefined) return;
     
     const fetchLeaderboard = async () => {
@@ -61,7 +60,7 @@ export default function SongDrawer({ isOpen, onClose, song }) {
         setBoardData(res.data);
       } catch (err) {
         addToast(err.response?.data?.msg || '获取排行榜失败', 'error');
-        if (boardScope === 'friends') setBoardScope('global'); // 失败打回原形
+        if (boardScope === 'friends') setBoardScope('global'); 
       } finally {
         setBoardLoading(false);
       }
@@ -140,7 +139,7 @@ export default function SongDrawer({ isOpen, onClose, song }) {
 
             <div className="p-6 space-y-8 flex-1">
               
-              {/* 1. 原版基础信息卡片 */}
+              {/* 1. 基础信息卡片 */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
                   <div className="text-[10px] text-gray-500 mb-1">所属分类</div>
@@ -162,7 +161,7 @@ export default function SongDrawer({ isOpen, onClose, song }) {
                 </div>
               </div>
 
-              {/* 2. 原版定数与谱面信息 */}
+              {/* 2. 定数与谱面信息 */}
               <div>
                 <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-widest">Difficulty & Charter</h3>
                 <div className="space-y-2">
@@ -203,7 +202,7 @@ export default function SongDrawer({ isOpen, onClose, song }) {
                 </div>
               </div>
 
-              {/* 3. 🔥 [v1.2.3] 单曲排行榜模块 */}
+              {/* 3. 🔥 单曲排行榜模块 */}
               <div className="pt-4 border-t border-gray-800">
                 <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 font-mono">
                   <FaMedal className="text-yellow-500" /> LEADERBOARD
@@ -212,7 +211,7 @@ export default function SongDrawer({ isOpen, onClose, song }) {
                 {/* 排行榜双重控制台 */}
                 <div className="bg-gray-900/80 border border-white/5 rounded-2xl p-4 mb-4 shadow-inner">
                   
-                  {/* 控制面板 1: 难度切换 (非宴会场独占) */}
+                  {/* 控制面板 1: 难度切换 */}
                   {!isUtage && (
                     <div className="flex items-center gap-3 mb-4 pb-4 border-b border-white/5">
                       <span className="text-xs text-gray-500 font-bold uppercase tracking-widest shrink-0">Diff</span>
@@ -269,42 +268,67 @@ export default function SongDrawer({ isOpen, onClose, song }) {
                     </div>
                   ) : (
                     <div className="space-y-2 pb-10">
-                      {boardData.map((score, index) => (
-                        <div key={score._id} className="flex items-center bg-white/5 border border-white/5 rounded-xl p-3 hover:bg-white/10 transition-colors">
-                          
-                          {/* 排名序号 */}
-                          <div className={`w-8 text-center font-mono font-black text-lg ${getRankColor(index)}`}>
-                            {index + 1}
-                          </div>
+                      {boardData.map((score, index) => {
+                        // 动态计算 DX 星级理论分和评级
+                        const chartInfo = song.charts && song.charts[boardLevel];
+                        let maxDxScore = 0;
+                        if (chartInfo && chartInfo.notes) {
+                          maxDxScore = chartInfo.notes.reduce((a, b) => a + b, 0) * 3;
+                        }
+                        const dxRatio = maxDxScore > 0 ? score.dxScore / maxDxScore : 0;
+                        
+                        let starCount = 0;
+                        if (dxRatio >= 0.97) starCount = 5;
+                        else if (dxRatio >= 0.95) starCount = 4;
+                        else if (dxRatio >= 0.93) starCount = 3;
+                        else if (dxRatio >= 0.90) starCount = 2;
+                        else if (dxRatio >= 0.85) starCount = 1;
 
-                          {/* 头像 */}
-                          <img src={score.avatarUrl || '/assets/logos.png'} alt="avatar" className="w-10 h-10 rounded-lg object-cover ml-2 mr-3 border border-white/10" />
-
-                          {/* 玩家信息 */}
-                          <div className="flex-1 overflow-hidden">
-                            <div className="text-white font-bold text-sm truncate flex items-center gap-2">
-                              {score.username}
-                              {score.sponsorTier >= 1 && <span className="bg-yellow-500/20 text-yellow-400 text-[8px] px-1 rounded font-bold">PRO</span>}
+                        return (
+                          <div key={score._id} className="flex items-center bg-white/5 border border-white/5 rounded-xl p-3 hover:bg-white/10 transition-colors">
+                            
+                            {/* 排名序号 */}
+                            <div className={`w-8 text-center font-mono font-black text-lg ${getRankColor(index)}`}>
+                              {index + 1}
                             </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-cyan-400 font-mono font-bold text-sm">
-                                {score.achievement.toFixed(4)}%
-                              </span>
-                              {score.fcStatus && ['fc', 'fcp', 'ap', 'app'].includes(score.fcStatus) && (
-                                <span className={`text-[9px] font-black text-white px-1 rounded ${score.fcStatus.includes('ap') ? 'bg-yellow-500' : 'bg-pink-500'}`}>
-                                  {score.fcStatus.toUpperCase()}
+
+                            {/* 头像 */}
+                            <img src={score.avatarUrl || '/assets/logos.png'} alt="avatar" className="w-10 h-10 rounded-lg object-cover ml-2 mr-3 border border-white/10" />
+
+                            {/* 玩家信息 */}
+                            <div className="flex-1 overflow-hidden">
+                              <div className="text-white font-bold text-sm truncate flex items-center gap-2">
+                                {score.username}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-cyan-400 font-mono font-bold text-sm">
+                                  {score.achievement.toFixed(4)}%
                                 </span>
+                                {score.fcStatus && ['fc', 'fcp', 'ap', 'app'].includes(score.fcStatus) && (
+                                  <span className={`text-[9px] font-black text-white px-1 rounded ${score.fcStatus.includes('ap') ? 'bg-yellow-500' : 'bg-pink-500'}`}>
+                                    {score.fcStatus.toUpperCase()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* DX 分信息与星级 */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {starCount > 0 && (
+                                <img 
+                                  src={`/assets/${starCount}dxstar.png`} 
+                                  alt={`DX Star ${starCount}`} 
+                                  className="h-[14px] md:h-4 object-contain drop-shadow-md"
+                                />
                               )}
+                              <div className="text-right flex flex-col items-end">
+                                <span className="text-gray-300 font-mono font-bold text-sm">{score.dxScore}</span>
+                                <span className="text-gray-500 text-[9px] font-bold uppercase mt-0.5">DX Score</span>
+                              </div>
                             </div>
                           </div>
-
-                          {/* DX 分信息 */}
-                          <div className="text-right flex flex-col items-end shrink-0">
-                            <span className="text-gray-300 font-mono font-bold text-sm">{score.dxScore}</span>
-                            <span className="text-gray-500 text-[9px] font-bold uppercase mt-0.5">DX Score</span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
