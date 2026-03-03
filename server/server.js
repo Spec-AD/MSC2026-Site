@@ -920,37 +920,23 @@ app.post('/api/wiki/read-reward', authMiddleware, async (req, res) => {
 
 
 // ==========================================
-// 🏆 核心：单图最佳排行榜 (Single-Best Leaderboard) 
+// 🏆 核心：单图最佳排行榜 (全站最高成绩 Top 100) 
+// 必须放在 :type 路由之前！
 // ==========================================
 app.get('/api/leaderboard/single-best', async (req, res) => {
   try {
     const leaderboard = await Score.aggregate([
-      // 1. 按 PF 降序排列全站所有成绩
+      // 1. 直接对全站所有成绩按 PF 进行降序排列（不再按玩家分组去重）
       { $sort: { pf: -1 } },
-      // 2. 按用户分组，每个玩家仅提取其历史最高的一条 PF 记录
-      {
-        $group: {
-          _id: '$userId',
-          bestScoreId: { $first: '$_id' },
-          songName: { $first: '$songName' },
-          pf: { $first: '$pf' },
-          level: { $first: '$level' },
-          constant: { $first: '$constant' },
-          achievement: { $first: '$achievement' },
-          dxScore: { $first: '$dxScore' },
-          fcStatus: { $first: '$fcStatus' },
-          difficulty: { $first: '$difficulty' },
-          songId: { $first: '$songId' }
-        }
-      },
-      // 3. 将所有玩家的最高成绩再次按全站进行降序排名
-      { $sort: { pf: -1 } },
+      
+      // 2. 截取全站最高的 100 个成绩
       { $limit: 100 },
-      // 4. 联表获取玩家的名片信息
+      
+      // 3. 联表获取打出该成绩的玩家信息
       {
         $lookup: {
           from: 'users',
-          let: { uId: '$_id' },
+          let: { uId: '$userId' },
           pipeline: [
             { $match: { $expr: { $eq: ['$_id', { $convert: { input: '$$uId', to: 'objectId', onError: '$$uId', onNull: '$$uId' } }] } } }
           ],
@@ -958,11 +944,17 @@ app.get('/api/leaderboard/single-best', async (req, res) => {
         }
       },
       { $unwind: '$userInfo' },
+      
+      // 4. 数据清洗：强制只获取 username，不获取 nickname
       {
         $project: {
-          _id: 0, scoreId: '$bestScoreId', userId: '$_id',
-          username: { $ifNull: ['$userInfo.nickname', '$userInfo.username'] },
-          avatarUrl: '$userInfo.avatarUrl', uid: '$userInfo.uid', sponsorTier: '$userInfo.sponsorTier',
+          _id: 0, 
+          scoreId: '$_id', // 导出成绩的独立ID，防止前端列表渲染出现 key 重复
+          userId: '$userId',
+          username: '$userInfo.username', // 🔥 强制只取用户名
+          avatarUrl: '$userInfo.avatarUrl', 
+          uid: '$userInfo.uid', 
+          sponsorTier: '$userInfo.sponsorTier',
           songName: 1, songId: 1, pf: 1, level: 1, constant: 1, achievement: 1, dxScore: 1, fcStatus: 1, difficulty: 1
         }
       }
