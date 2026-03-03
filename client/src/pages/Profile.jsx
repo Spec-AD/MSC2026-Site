@@ -1116,16 +1116,20 @@ const Profile = () => {
                 const dxScore = selectedPfScore.dxScore || 0;
                 const constant = selectedPfScore.constant || 0;
                 const dxRatio = selectedPfScore.dxRatio || 0;
-                const pf = selectedPfScore.pf || 0;
 
-                // 精确还原计算逻辑：总加成 = PF / 基数
-                const totalMultiplier = constant > 0 ? (pf / constant) : 0;
-                const dxMultiplier = dxRatio * 0.4;
-                const achMultiplier = totalMultiplier - dxMultiplier;
+                // 🔥 核心修复：将完成率除以 100 归一化。
+                // 用 Math.min 保证即使打出了 100.5% 的成绩，完成率加成也严格封顶在满值 0.6
+                const achMultiplier = (Math.min(ach, 100) / 100) * 0.6;
+                
+                // DX 分比例也同样严谨地封顶在 1.0，满值 0.4
+                const dxMultiplier = Math.min(dxRatio, 1.0) * 0.4;
+                
+                // 最终总加成严格按照比例相加
+                const totalMultiplier = achMultiplier + dxMultiplier;
 
-                // 计算理论百分比 (满分 = 1.0)
+                // 计算用于评级和进度条展示的百分比 (满分 1.0 -> 100%)
                 const percent = totalMultiplier * 100;
-                const displayPercent = Math.min(percent, 100); // 环形进度条不超过 100%
+                const displayPercent = Math.min(percent, 100); // 环形进度条最大 100%
 
                 let grade = 'D';
                 let gradeColor = 'text-gray-400';
