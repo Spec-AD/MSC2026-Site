@@ -258,8 +258,7 @@ app.post('/api/users/sync-diving-fish', async (req, res) => {
       const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
       const maxDxScore = totalNotes * 3;
       const constant = isUtage ? 0 : (record.ds || song.ds[record.level_index]);
-      const constant = record.ds || song.ds[record.level_index];
-
+      
       // ✨ 调用计算器 ✨
       const dxRatio = maxDxScore > 0 ? (record.dxScore / maxDxScore) : 0;
       const pf = calculatePF(constant, record.achievements, record.dxScore, maxDxScore);
