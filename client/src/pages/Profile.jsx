@@ -1119,7 +1119,7 @@ const Profile = () => {
 
                 // 🔥 核心修复：将完成率除以 100 归一化。
                 // 用 Math.min 保证即使打出了 100.5% 的成绩，完成率加成也严格封顶在满值 0.6
-                const achMultiplier = (Math.min(ach, 100) / 100) * 0.6;
+                const achMultiplier = (Math.min(ach, 101) / 101) * 0.6;
                 
                 // DX 分比例也同样严谨地封顶在 1.0，满值 0.4
                 const dxMultiplier = Math.min(dxRatio, 1.0) * 0.4;
@@ -1208,5 +1208,6 @@ const Profile = () => {
     </div>
   );
 };
+
 
 export default Profile;
