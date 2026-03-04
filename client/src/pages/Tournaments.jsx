@@ -10,82 +10,76 @@ import { useToast } from '../context/ToastContext';
 
 const Tournaments = () => {
   const navigate = useNavigate();
-  const { user } = useAuth(); // 获取当前登录用户信息
+  const { user } = useAuth(); 
 
-  // 控制悬浮窗的显示状态
   const [selectedTournament, setSelectedTournament] = useState(null);
-  
-  // 当前时间，用于判断阶段是否开放
   const [now, setNow] = useState(Date.now());
   const { addToast } = useToast();
 
   useEffect(() => {
-    // 每秒更新一次当前时间，确保状态实时切换
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // 赛事列表数据
+  // 赛事列表数据 (去除了原先的高饱和度颜色配置，转为状态标识)
   const tournamentList = [
     {
       id: 'msc-2026',
       title: 'MSC 2026',
-      subtitle: '第二届MSC官方赛事',
+      subtitle: '第二届 MSC 官方锦标赛',
       status: 'ONGOING', 
+      statusLabel: '进行中',
       date: '2026.01.01 - 2026.07.13',
-      participants: '报名参赛', 
+      participants: '已开启报名', 
       coverUrl: '/assets/bg.png', 
-      themeColor: 'from-orange-500 to-yellow-500',
-      badgeColor: 'bg-green-500/20 text-green-400 border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.3)]',
-      hasStages: true // 表示点击后弹出阶段选择框
+      hasStages: true 
     },
     {
       id: 'summer-cup',
-      title: '敬请期待...',
-      subtitle: '-',
+      title: '夏季友谊赛 (代号)',
+      subtitle: '娱乐向社区交流赛',
       status: 'UPCOMING',
-      date: '-',
+      statusLabel: '筹备中',
+      date: '敬请期待',
       participants: '-',
       coverUrl: '/assets/bg.png', 
-      themeColor: 'from-blue-500 to-cyan-500',
-      badgeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.3)]',
       hasStages: false
     }
   ];
 
-  // MSC 2026 的 5 个流程阶段配置
+  // MSC 2026 流程阶段配置 (文字已本地化，剥离中二感)
   const mscStages = [
     {
       id: 'register',
-      title: 'REGISTRATION / 赛事报名',
+      title: '赛事报名',
       desc: '提交参赛信息，获取预选赛资格',
       icon: FaPenNib,
       start: new Date('2026-01-01T00:00:00').getTime(),
       end: new Date('2026-07-01T23:59:59').getTime(),
       alwaysOpen: false,
-      route: '/register' // 指向你原本做好的报名页路由
+      route: '/register' 
     },
     {
       id: 'qualifier',
-      title: 'QUALIFIERS / 预选赛 (海选)',
-      desc: '指定曲目打分，角逐正赛名额',
+      title: '预选海选',
+      desc: '完成指定曲目，角逐正赛名额',
       icon: FaMusic,
-      alwaysOpen: true, // 预选赛任何时候都可点击
+      alwaysOpen: true, 
       route: '/qualifiers'
     },
     {
       id: 'groups',
-      title: 'GROUP STAGE / 选手分组',
+      title: '选手分组',
       desc: '查看正赛分组名单与对阵表',
       icon: FaSitemap,
       start: new Date('2026-07-04T00:00:00').getTime(),
       end: Infinity,
       alwaysOpen: false,
-      route: '/groups' // 留空或填未来路由
+      route: '/groups' 
     },
     {
       id: 'main',
-      title: 'MAIN EVENT / 正赛详情',
+      title: '正赛对局',
       desc: '正赛赛程跟踪与战况速递',
       icon: FaInfoCircle,
       start: new Date('2026-07-04T00:00:00').getTime(),
@@ -95,8 +89,8 @@ const Tournaments = () => {
     },
     {
       id: 'results',
-      title: 'RESULTS / 赛事结果',
-      desc: '最终名次公示',
+      title: '赛事结果',
+      desc: '最终名次公示与赛后总结',
       icon: FaMedal,
       start: new Date('2026-07-13T00:00:00').getTime(),
       end: Infinity,
@@ -106,188 +100,191 @@ const Tournaments = () => {
   ];
 
   return (
-    <div className="w-full min-h-screen pb-24 text-white px-4 md:px-8 max-w-7xl mx-auto pt-24">
-      
-      {/* --- 头部标题区 --- */}
-      <div className="mb-12 border-b border-white/10 pb-6">
-        <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 drop-shadow-lg flex items-center gap-4">
-          <FaTrophy className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]" />
-          TOURNAMENTS.
-        </h1>
-        <p className="text-gray-400 font-mono text-sm tracking-[0.2em] uppercase mt-4 flex items-center gap-2">
-          <FaStar className="text-yellow-500" />
-          Purebeat Official & Authorized Competitions
-        </p>
-      </div>
+    <div className="w-full min-h-screen bg-[#111115] text-zinc-200 pt-20 md:pt-24 pb-20 px-4 md:px-8 font-sans selection:bg-zinc-600/40 relative">
+      <div className="max-w-7xl mx-auto relative z-10">
+        
+        {/* --- 头部标题区 --- */}
+        <div className="mb-10 md:mb-12 border-b border-white/[0.05] pb-6">
+          <h1 className="text-3xl md:text-4xl font-bold text-zinc-100 tracking-tight flex items-center gap-3">
+            <FaTrophy className="text-amber-400" />
+            赛事大厅
+          </h1>
+          <p className="text-sm text-zinc-500 mt-2 font-medium flex items-center gap-2">
+            <FaStar className="text-zinc-400" />
+            探索并参与 PUREBEAT 官方及合作赛事
+          </p>
+        </div>
 
-      {/* --- 赛事卡片矩阵 --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {tournamentList.map((tourney, index) => (
-          <motion.div 
-            key={tourney.id}
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }}
-            className={`group relative bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden transition-all duration-500 shadow-xl ${tourney.hasStages ? 'cursor-pointer hover:border-orange-500/50 hover:-translate-y-2 hover:shadow-[0_10px_30px_rgba(249,115,22,0.2)]' : 'opacity-80 grayscale-[30%]'}`}
-            onClick={() => {
-              if (tourney.hasStages) setSelectedTournament(tourney.id);
-            }}
-          >
-            {/* 赛事海报区域 */}
-            <div className="h-56 relative overflow-hidden bg-gray-900">
-              <img 
-                src={tourney.coverUrl} alt={tourney.title} 
-                className="w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-              
-              <div className={`absolute top-4 right-4 border px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest backdrop-blur-md ${tourney.badgeColor}`}>
-                {tourney.status}
-              </div>
-            </div>
-
-            {/* 赛事信息区域 */}
-            <div className="p-6 md:p-8 relative">
-              <div className={`absolute -top-8 right-8 w-16 h-16 bg-gradient-to-br ${tourney.themeColor} rounded-2xl rotate-12 flex items-center justify-center shadow-lg group-hover:rotate-0 group-hover:scale-110 transition-all duration-500 z-10`}>
-                <FaTrophy className="text-3xl text-white drop-shadow-md" />
-              </div>
-
-              <h2 className="text-2xl md:text-3xl font-black italic tracking-tight text-white mb-1 drop-shadow-md">
-                {tourney.title}
-              </h2>
-              <p className="text-gray-400 text-sm font-bold tracking-wider mb-6">
-                {tourney.subtitle}
-              </p>
-
-              <div className="space-y-3 mb-8 border-t border-white/10 pt-6">
-                <div className="flex items-center gap-3 text-sm text-gray-300 font-mono">
-                  <FaCalendarAlt className="text-gray-500 text-lg" />
-                  {tourney.date}
-                </div>
-                <div className="flex items-center gap-3 text-sm text-gray-300 font-mono">
-                  <FaUsers className="text-gray-500 text-lg" />
-                  {tourney.participants}
-                </div>
-              </div>
-
-              {/* 按钮与“已报名”状态 */}
-              {user?.isRegistered && tourney.id === 'msc-2026' ? (
-                <div className="w-full py-4 rounded-xl font-black tracking-widest uppercase transition-all flex items-center justify-center gap-2 bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
-                  <FaCheckCircle className="text-xl" /> YOU ARE REGISTERED
-                </div>
-              ) : (
-                <button 
-                  disabled={!tourney.hasStages}
-                  className={`w-full py-4 rounded-xl font-black tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${tourney.hasStages ? 'bg-white/10 hover:bg-orange-600 text-white border border-white/20 hover:border-orange-500 shadow-lg' : 'bg-gray-800/50 text-gray-500 cursor-not-allowed border border-gray-700'}`}
-                >
-                  {tourney.hasStages ? <>ENTER TOURNAMENT <FaArrowRight /></> : 'UNAVAILABLE'}
-                </button>
-              )}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* ========================================================= */}
-      {/* 赛事阶段全屏悬浮窗 (Modal) */}
-      {/* ========================================================= */}
-      <AnimatePresence>
-        {selectedTournament === 'msc-2026' && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 md:p-8"
-            onClick={() => setSelectedTournament(null)}
-          >
+        {/* --- 赛事卡片矩阵 --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {tournamentList.map((tourney, index) => (
             <motion.div 
-              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-4xl bg-gray-900 border border-orange-500/30 rounded-3xl shadow-[0_0_50px_rgba(249,115,22,0.2)] overflow-hidden relative flex flex-col max-h-[90vh]"
+              key={tourney.id}
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1, duration: 0.4 }}
+              className={`group relative bg-[#18181c] border border-white/[0.05] rounded-3xl overflow-hidden transition-all duration-300 shadow-sm ${tourney.hasStages ? 'cursor-pointer hover:bg-[#1a1a20] hover:-translate-y-1 hover:shadow-md hover:border-white/[0.1]' : 'opacity-70 grayscale-[30%]'}`}
+              onClick={() => {
+                if (tourney.hasStages) setSelectedTournament(tourney.id);
+              }}
             >
-{/* Modal 头部 */}
-              <div className="bg-black/60 p-6 md:p-8 border-b border-orange-500/20 relative flex flex-col md:flex-row md:items-center justify-between shrink-0 gap-4">
-                <div>
-                  <h2 className="text-3xl md:text-4xl font-black italic tracking-tighter text-orange-500 drop-shadow-md">
-                    TOURNAMENT STAGES
-                  </h2>
-                  <p className="text-gray-400 font-mono text-sm tracking-widest mt-1">MSC 2026 赛事规程与通道</p>
-                </div>
+              {/* 海报区域 */}
+              <div className="h-48 md:h-52 relative overflow-hidden bg-[#0a0a0c] border-b border-white/[0.05]">
+                <img 
+                  src={tourney.coverUrl} alt={tourney.title} 
+                  className="w-full h-full object-cover opacity-50 group-hover:opacity-70 group-hover:scale-105 transition-all duration-700"
+                />
                 
-                {/* 🔥 新增：右侧操作区 (了解赛事 + 关闭按钮) */}
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => navigate('/tournament-info')}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-orange-500/20 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/50 rounded-full transition-all text-xs font-bold tracking-widest uppercase shadow-[0_0_10px_rgba(249,115,22,0.2)]"
-                  >
-                    <FaInfoCircle className="text-lg" />
-                    了解赛事详情
-                  </button>
-
-                  <button 
-                    onClick={() => setSelectedTournament(null)}
-                    className="w-10 h-10 bg-white/10 hover:bg-red-500 text-white rounded-full flex items-center justify-center transition-colors"
-                  >
-                    <FaTimes />
-                  </button>
+                {/* 状态徽章 */}
+                <div className={`absolute top-4 right-4 px-3 py-1 rounded-lg text-xs font-bold backdrop-blur-md border ${tourney.status === 'ONGOING' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-zinc-800/50 text-zinc-300 border-white/[0.05]'}`}>
+                  {tourney.statusLabel}
                 </div>
               </div>
 
-              {/* Modal 阶段列表主体 */}
-              <div className="p-6 md:p-8 overflow-y-auto flex-1 custom-scrollbar">
-                <div className="relative border-l-2 border-orange-500/20 ml-6 md:ml-10 space-y-8 pb-4">
+              {/* 信息区域 */}
+              <div className="p-6 md:p-8 relative flex flex-col">
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-zinc-100 mb-1.5 group-hover:text-white transition-colors">
+                    {tourney.title}
+                  </h2>
+                  <p className="text-zinc-400 text-sm font-medium">
+                    {tourney.subtitle}
+                  </p>
+                </div>
+
+                <div className="space-y-2.5 mb-8">
+                  <div className="flex items-center gap-3 text-sm text-zinc-300 font-medium">
+                    <div className="w-6 flex justify-center"><FaCalendarAlt className="text-zinc-500" /></div>
+                    {tourney.date}
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-zinc-300 font-medium">
+                    <div className="w-6 flex justify-center"><FaUsers className="text-zinc-500" /></div>
+                    {tourney.participants}
+                  </div>
+                </div>
+
+                {/* 底部按钮 */}
+                {user?.isRegistered && tourney.id === 'msc-2026' ? (
+                  <div className="w-full py-3.5 mt-auto rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-sm">
+                    <FaCheckCircle /> 您已报名
+                  </div>
+                ) : (
+                  <button 
+                    disabled={!tourney.hasStages}
+                    className={`w-full py-3.5 mt-auto rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm active:scale-95 ${tourney.hasStages ? 'bg-zinc-200 hover:bg-white text-zinc-900 shadow-sm' : 'bg-[#141418] text-zinc-500 cursor-not-allowed border border-white/[0.05]'}`}
+                  >
+                    {tourney.hasStages ? <>进入赛事 <FaArrowRight className="text-xs" /></> : '暂未开放'}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* ========================================================= */}
+        {/* 赛事阶段全屏悬浮窗 (Modal) */}
+        {/* ========================================================= */}
+        <AnimatePresence>
+          {selectedTournament === 'msc-2026' && (
+            <motion.div 
+              initial={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+              animate={{ opacity: 1, backdropFilter: 'blur(8px)' }} 
+              exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+              className="fixed inset-0 z-[200] bg-[#0a0a0c]/80 flex items-center justify-center p-4 md:p-8"
+              onClick={() => setSelectedTournament(null)}
+            >
+              <motion.div 
+                initial={{ scale: 0.95, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 15 }}
+                transition={{ duration: 0.2 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-3xl bg-[#18181c] border border-white/[0.05] rounded-[2rem] shadow-2xl overflow-hidden relative flex flex-col max-h-[85vh] md:max-h-[90vh]"
+              >
+                {/* Modal 头部 */}
+                <div className="bg-[#141418] p-6 md:p-8 border-b border-white/[0.05] relative flex flex-col md:flex-row md:items-center justify-between shrink-0 gap-5">
+                  <div>
+                    <h2 className="text-2xl md:text-3xl font-bold text-zinc-100 tracking-tight">
+                      MSC 2026 赛事通道
+                    </h2>
+                    <p className="text-zinc-500 text-sm font-medium mt-1">请选择您要进入的阶段环节</p>
+                  </div>
                   
-                  {mscStages.map((stage, index) => {
-                    const isClickable = stage.alwaysOpen || (now >= stage.start && now <= stage.end);
-                    const Icon = stage.icon;
+                  {/* 右侧操作区 */}
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => navigate('/tournament-info')}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 border border-white/[0.05] rounded-xl transition-all text-sm font-semibold active:scale-95"
+                    >
+                      <FaInfoCircle />
+                      了解详情
+                    </button>
 
-                    return (
-                      <div key={stage.id} className="relative pl-8 md:pl-12 group">
-                        {/* 时间轴节点 (圆圈) */}
-                        <div className={`absolute -left-[25px] md:-left-[25px] top-1 w-12 h-12 rounded-full border-4 flex items-center justify-center transition-all duration-300 z-10 
-                          ${isClickable ? 'bg-gray-900 border-orange-500 text-orange-400 group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(249,115,22,0.5)]' : 'bg-gray-800 border-gray-600 text-gray-500'}`}
-                        >
-                          {isClickable ? <Icon className="text-xl" /> : <FaLock className="text-lg" />}
-                        </div>
+                    <button 
+                      onClick={() => setSelectedTournament(null)}
+                      className="w-10 h-10 bg-white/[0.04] hover:bg-white/[0.1] text-zinc-400 hover:text-white rounded-full flex items-center justify-center transition-colors active:scale-90"
+                    >
+                      <FaTimes />
+                    </button>
+                  </div>
+                </div>
 
-                        {/* 阶段卡片 */}
-                        <div 
-                          onClick={() => {
-                            if (isClickable && stage.route) navigate(stage.route);
-                          }}
-                          className={`p-5 md:p-6 rounded-2xl border transition-all duration-300 ${isClickable ? 'bg-white/5 border-orange-500/30 cursor-pointer hover:bg-orange-500/10 hover:border-orange-500 hover:-translate-y-1 hover:shadow-lg' : 'bg-gray-800/30 border-gray-700/50 cursor-not-allowed opacity-60 grayscale'}`}
-                        >
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                              <h3 className={`text-xl md:text-2xl font-black italic tracking-wide ${isClickable ? 'text-white' : 'text-gray-500'}`}>
-                                {stage.title}
-                              </h3>
-                              <p className={`mt-1 text-sm ${isClickable ? 'text-gray-300' : 'text-gray-600'}`}>
-                                {stage.desc}
-                              </p>
-                              
-                              {/* 开放时间提示 */}
-                              {!stage.alwaysOpen && (
-                                <div className="mt-3 inline-flex items-center gap-2 text-xs font-mono px-2 py-1 rounded bg-black/40 text-gray-400 border border-white/5">
-                                  <FaCalendarAlt /> 
-                                  {new Date(stage.start).toLocaleDateString()} - {stage.end === Infinity ? 'TBD' : new Date(stage.end).toLocaleDateString()}
-                                </div>
-                              )}
-                            </div>
+                {/* Modal 阶段列表主体 (干净的时间轴) */}
+                <div className="p-6 md:p-10 overflow-y-auto flex-1 custom-scrollbar bg-[#18181c]">
+                  <div className="relative border-l-[3px] border-white/[0.05] ml-4 md:ml-6 space-y-8 pb-2">
+                    
+                    {mscStages.map((stage, index) => {
+                      const isClickable = stage.alwaysOpen || (now >= stage.start && now <= stage.end);
+                      const Icon = stage.icon;
 
-                            {/* 操作提示箭头 */}
-                            <div className="hidden md:flex items-center justify-center w-12 h-12 rounded-full bg-black/40">
-                              {isClickable ? <FaArrowRight className="text-orange-400 group-hover:translate-x-1 transition-transform" /> : <FaLock className="text-gray-600" />}
+                      return (
+                        <div key={stage.id} className="relative pl-8 md:pl-10 group">
+                          {/* 时间轴节点 (圆圈) */}
+                          <div className={`absolute -left-[22px] top-1 w-10 h-10 rounded-full border-[3px] flex items-center justify-center transition-all duration-300 z-10 
+                            ${isClickable ? 'bg-[#1a1a20] border-zinc-200 text-zinc-100 group-hover:scale-110' : 'bg-[#141418] border-zinc-800 text-zinc-600'}`}
+                          >
+                            {isClickable ? <Icon className="text-[15px]" /> : <FaLock className="text-sm" />}
+                          </div>
+
+                          {/* 阶段卡片 */}
+                          <div 
+                            onClick={() => {
+                              if (isClickable && stage.route) navigate(stage.route);
+                            }}
+                            className={`p-5 md:p-6 rounded-2xl border transition-all duration-300 ${isClickable ? 'bg-[#141418] border-white/[0.05] cursor-pointer hover:bg-[#1a1a20] hover:border-zinc-500/50 hover:-translate-y-1 hover:shadow-sm' : 'bg-transparent border-transparent cursor-not-allowed opacity-50'}`}
+                          >
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div>
+                                <h3 className={`text-lg md:text-xl font-bold ${isClickable ? 'text-zinc-100 group-hover:text-white' : 'text-zinc-500'}`}>
+                                  {stage.title}
+                                </h3>
+                                <p className={`mt-1.5 text-[15px] ${isClickable ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                                  {stage.desc}
+                                </p>
+                                
+                                {/* 开放时间提示 */}
+                                {!stage.alwaysOpen && (
+                                  <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md bg-white/[0.03] text-zinc-500 border border-white/[0.05]">
+                                    <FaCalendarAlt /> 
+                                    {new Date(stage.start).toLocaleDateString()} - {stage.end === Infinity ? 'TBD' : new Date(stage.end).toLocaleDateString()}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 操作提示箭头 */}
+                              <div className="hidden md:flex items-center justify-center w-10 h-10 rounded-full bg-white/[0.02] border border-white/[0.05]">
+                                {isClickable ? <FaArrowRight className="text-zinc-400 group-hover:translate-x-1 group-hover:text-zinc-100 transition-all" /> : <FaLock className="text-zinc-700" />}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
 
+                  </div>
                 </div>
-              </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
+      </div>
     </div>
   );
 };
