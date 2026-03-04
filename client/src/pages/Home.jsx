@@ -7,7 +7,8 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { 
   FaCalendarCheck, FaSpinner, FaCommentDots, FaHeart, 
-  FaChevronRight, FaTimes, FaUserCircle, FaBell, FaMedal
+  FaChevronRight, FaTimes, FaUserCircle, FaBell, FaMedal,
+  FaDiscord, FaPoll, FaUserFriends
 } from 'react-icons/fa'; 
 
 const Home = () => {
@@ -24,8 +25,11 @@ const Home = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   
   const [userStats, setUserStats] = useState(null);
+  
+  // 个人看板的游戏与模式筛选状态
+  const [activeGame, setActiveGame] = useState('maimai'); 
+  const [osuMode, setOsuMode] = useState('standard');
 
-  // 1. 获取并排序公告与新闻 (按时间降序)
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
@@ -39,7 +43,6 @@ const Home = () => {
     fetchAnnouncements();
   }, []);
 
-  // 2. 获取服务器时间并启动时钟
   useEffect(() => {
     let timeOffset = 0;
     let timer;
@@ -60,7 +63,6 @@ const Home = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // 3. 获取用户状态（含 Banner 和 排名）
   useEffect(() => {
     if (user && user.username) {
       axios.get(`/api/users/${user.username}`)
@@ -69,7 +71,6 @@ const Home = () => {
     }
   }, [user]);
 
-  // 4. 获取未读消息数量
   useEffect(() => {
     if (user) {
       const fetchUnread = async () => {
@@ -109,9 +110,34 @@ const Home = () => {
     return 'text-blue-400';
   };
 
-  // --- 新闻分级切片逻辑 ---
-  const fullPreviewNews = announcements.slice(0, 3); // 前3条：完整图文
-  const compactNews = showAllNews ? announcements.slice(3) : announcements.slice(3, 8); // 3-8条或全部剩余：紧凑列表
+  // 根据筛选器计算看板显示的数值
+  const getDisplayData = () => {
+    if (activeGame === 'maimai') {
+      return {
+        scoreLabel: '综合战力 (PF)',
+        scoreValue: userStats?.totalPf ? userStats.totalPf.toFixed(2) : '0.00',
+        scoreColor: userStats?.totalPf ? 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400' : 'text-zinc-400',
+        rankValue: userStats?.pfRank !== '-' && userStats?.pfRank ? `#${userStats.pfRank}` : '-'
+      };
+    } else {
+      // Osu 模式：尝试读取对应的模式数据，否则占位
+      const modeMatch = userStats?.osuMode?.toLowerCase() === osuMode.toLowerCase();
+      const pp = userStats?.osuDetails?.[osuMode]?.pp || (modeMatch ? userStats?.osuPp : null);
+      const rank = userStats?.osuDetails?.[osuMode]?.rank || (modeMatch ? userStats?.osuGlobalRank : null);
+      
+      return {
+        scoreLabel: 'Performance (PP)',
+        scoreValue: pp ? Math.round(pp) : '--',
+        scoreColor: pp ? 'text-pink-400' : 'text-zinc-500',
+        rankValue: rank ? `#${rank}` : '-'
+      };
+    }
+  };
+
+  const displayData = getDisplayData();
+
+  const fullPreviewNews = announcements.slice(0, 3); 
+  const compactNews = showAllNews ? announcements.slice(3) : announcements.slice(3, 8); 
   const hasMoreNews = announcements.length > 8 && !showAllNews;
 
   return (
@@ -138,7 +164,7 @@ const Home = () => {
       </div>
 
       {/* ==================================================== */}
-      {/* 顶部 Header：Logo、Quicksand 时钟、图标控制台 */}
+      {/* 顶部 Header：Logo、Quicksand 时钟、控制台 */}
       {/* ==================================================== */}
       <header className="w-full max-w-7xl mx-auto px-6 py-8 flex justify-between items-center z-50 relative">
         <div className="flex items-center shrink-0">
@@ -148,8 +174,7 @@ const Home = () => {
             <span className="text-[10px] text-indigo-400/80 font-bold uppercase tracking-widest">Community Hub</span>
           </div>
           
-          {/* 大号高精度时钟 (采用 Quicksand 字体) */}
-          <div className="hidden md:flex flex-col justify-center ml-8 pl-8 border-l border-white/[0.08]">
+          <div className="hidden lg:flex flex-col justify-center ml-8 pl-8 border-l border-white/[0.08]">
             <span 
               className="text-2xl font-bold text-zinc-200 tracking-wider drop-shadow-md leading-none" 
               style={{ fontFamily: "'Quicksand', sans-serif" }}
@@ -165,9 +190,9 @@ const Home = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* 顶部功能图标矩阵 */}
+        <div className="flex items-center gap-2 md:gap-3">
           
-          {/* 收件箱按钮 (铃铛 + 纯数字) */}
           {user && (
             <button 
               onClick={() => navigate('/inbox')}
@@ -176,10 +201,23 @@ const Home = () => {
             >
               <FaBell className="text-[16px]" />
               {unreadCount > 0 && (
-                <span className="text-[13px] font-bold text-rose-400 font-mono leading-none pt-0.5">{unreadCount}</span>
+                <span 
+                  className="text-[13px] font-bold text-rose-400 leading-none pt-0.5"
+                  style={{ fontFamily: "'Quicksand', sans-serif" }}
+                >
+                  {unreadCount}
+                </span>
               )}
             </button>
           )}
+
+          <button 
+            onClick={() => navigate('/voting')}
+            className="flex items-center justify-center w-10 h-10 bg-[#16161e] hover:bg-[#1d1d28] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 shadow-sm"
+            title="曲目投票箱"
+          >
+            <FaPoll className="text-[16px]" />
+          </button>
 
           {user && (
             <button 
@@ -201,10 +239,20 @@ const Home = () => {
           </button>
 
           <a 
+            href="https://discord.gg/EnYB5GeB58" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center justify-center w-10 h-10 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 border border-[#5865F2]/20 text-[#5865F2] hover:text-white rounded-xl transition-all active:scale-95 shadow-sm"
+            title="加入 Discord 服务器"
+          >
+            <FaDiscord className="text-[18px]" />
+          </a>
+
+          <a 
             href="https://afdian.com/a/purebeat" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="flex items-center justify-center w-10 h-10 bg-zinc-200 text-zinc-900 rounded-xl hover:bg-white transition-all shadow-sm active:scale-95"
+            className="hidden md:flex items-center justify-center w-10 h-10 bg-zinc-200 text-zinc-900 rounded-xl hover:bg-white transition-all shadow-sm active:scale-95"
             title="支持我们"
           >
             <FaHeart className="text-[16px]" />
@@ -243,16 +291,15 @@ const Home = () => {
             </Link>
           </motion.div>
 
-          {/* 2. 社区新闻报纸流 */}
+          {/* 2. 社区新闻流 */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
             <div className="flex items-center gap-3 mb-6 px-1">
               <div className="w-1 h-5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
               <h2 className="text-xl font-bold text-zinc-100 tracking-tight">
-                社区新闻速递
+                新闻
               </h2>
             </div>
 
-            {/* 新闻展示区 */}
             <div className="flex flex-col gap-6">
               
               {/* 层级 1: 完整图文展示 (最多3条) */}
@@ -297,7 +344,7 @@ const Home = () => {
                 );
               })}
 
-              {/* 层级 2: 紧凑标题列表 (第4-8条，或展开全部) */}
+              {/* 层级 2: 紧凑标题列表 */}
               {compactNews.length > 0 && (
                 <div className="flex flex-col gap-2 mt-2">
                   {compactNews.map((news) => {
@@ -351,52 +398,110 @@ const Home = () => {
           
           {/* 1. 个人信息面板 */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden">
-            <div className="flex items-center gap-2.5 mb-6">
-              <div className="w-1 h-4 bg-zinc-400 rounded-full shadow-[0_0_6px_rgba(161,161,170,0.5)]"></div>
-              <h3 className="text-xs uppercase tracking-widest text-zinc-400 font-bold">
-                个人信息
-              </h3>
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-1 h-4 bg-zinc-400 rounded-full shadow-[0_0_6px_rgba(161,161,170,0.5)]"></div>
+                <h3 className="text-xs uppercase tracking-widest text-zinc-400 font-bold">
+                  个人信息
+                </h3>
+              </div>
             </div>
             
             {user ? (
               <div className="flex flex-col">
-                <div className="flex items-center gap-4 mb-6 border-b border-white/[0.05] pb-5">
+                <div className="flex items-center gap-4 mb-4 pb-4 border-b border-white/[0.05]">
                   <img 
                     src={userStats?.avatarUrl || user.avatarUrl || '/assets/logos.png'} 
                     alt="Avatar" 
-                    className="w-14 h-14 rounded-full object-cover bg-[#0c0c11] border border-white/[0.05] shrink-0 shadow-sm" 
+                    className="w-12 h-12 rounded-full object-cover bg-[#0c0c11] border border-white/[0.05] shrink-0 shadow-sm" 
                   />
                   <div className="flex flex-col min-w-0">
                     <span className="text-lg font-bold text-zinc-100 truncate">{userStats?.username || user.username}</span>
-                    <span className="text-xs text-cyan-400 font-bold mt-0.5">Lv.{userStats?.level || user.level || 1}</span>
+                    <span 
+                      className="text-xs text-cyan-400 font-bold mt-0.5"
+                      style={{ fontFamily: "'Quicksand', sans-serif" }}
+                    >
+                      Lv.{userStats?.level || user.level || 1}
+                    </span>
                   </div>
                 </div>
 
+                {/* 多游戏系统切换器 */}
+                <div className="flex flex-col gap-2 mb-4">
+                  <div className="flex items-center gap-1.5 bg-[#0c0c11] p-1 rounded-xl border border-white/[0.02] w-fit">
+                    <button 
+                      onClick={() => setActiveGame('maimai')} 
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'maimai' ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-600 hover:text-zinc-400'}`}
+                    >
+                      Maimai DX
+                    </button>
+                    <button 
+                      onClick={() => setActiveGame('osu')} 
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'osu' ? 'bg-pink-500/10 text-pink-400' : 'text-zinc-600 hover:text-zinc-400'}`}
+                    >
+                      osu!
+                    </button>
+                  </div>
+                  
+                  {/* osu! 模式子菜单 */}
+                  <AnimatePresence>
+                    {activeGame === 'osu' && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-1 overflow-hidden"
+                      >
+                        {['standard', 'taiko', 'catch', 'mania'].map(m => (
+                          <button 
+                            key={m} 
+                            onClick={() => setOsuMode(m)} 
+                            className={`px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${osuMode === m ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30' : 'text-zinc-600 border border-transparent hover:text-zinc-400'}`}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* 动态数据网格 */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-[#0c0c11] rounded-xl p-3.5 border border-white/[0.02] flex flex-col justify-center items-center text-center">
-                    <span className="text-[10px] text-zinc-500 font-bold mb-1">综合战力 (PF)</span>
-                    <span className={`text-lg font-bold tracking-tight ${userStats?.totalPf ? 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400' : 'text-zinc-300'}`}>
-                      {userStats?.totalPf ? userStats.totalPf.toFixed(2) : '0.00'}
+                  <div className="bg-[#0c0c11] rounded-xl p-3 border border-white/[0.02] flex flex-col justify-center items-center text-center">
+                    <span className="text-[10px] text-zinc-500 font-bold mb-1">{displayData.scoreLabel}</span>
+                    <span 
+                      className={`text-lg font-bold tracking-tight ${displayData.scoreColor}`}
+                      style={{ fontFamily: "'Quicksand', sans-serif" }}
+                    >
+                      {displayData.scoreValue}
                     </span>
                   </div>
-                  <div className="bg-[#0c0c11] rounded-xl p-3.5 border border-white/[0.02] flex flex-col justify-center items-center text-center">
+                  <div className="bg-[#0c0c11] rounded-xl p-3 border border-white/[0.02] flex flex-col justify-center items-center text-center">
                     <span className="text-[10px] text-zinc-500 font-bold mb-1">全站排位</span>
-                    <span className={`text-lg font-bold tracking-tight ${getRankColor(userStats?.pfRank)}`}>
-                      {userStats?.pfRank !== '-' && userStats?.pfRank ? `#${userStats.pfRank}` : '-'}
+                    <span 
+                      className={`text-lg font-bold tracking-tight ${getRankColor(displayData.rankValue.replace('#',''))}`}
+                      style={{ fontFamily: "'Quicksand', sans-serif" }}
+                    >
+                      {displayData.rankValue}
                     </span>
                   </div>
                 </div>
 
-                <Link to={`/profile/${user.username}`} className="w-full mt-5 py-3 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] rounded-xl text-center text-sm font-semibold text-zinc-300 transition-colors active:scale-95">
-                  进入个人空间
-                </Link>
+                {/* 快捷操作按钮组 */}
+                <div className="flex items-center gap-2 mt-4">
+                  <Link to={`/profile/${user.username}`} className="flex-1 py-2.5 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] rounded-xl text-center text-xs font-semibold text-zinc-300 transition-colors active:scale-95">
+                    进入个人空间
+                  </Link>
+                  <Link to="/friends" className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] rounded-xl text-xs font-semibold text-zinc-300 transition-colors active:scale-95">
+                    <FaUserFriends /> 好友
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center text-center py-2">
                 <div className="w-14 h-14 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center mb-4">
                   <FaUserCircle className="text-2xl text-zinc-600" />
                 </div>
-                <p className="text-xs font-medium text-zinc-400 mb-5 leading-relaxed px-2">登录系统，在此查阅您的战力档案、全站排名与游戏动态。</p>
+                <p className="text-xs font-medium text-zinc-400 mb-5 leading-relaxed px-2">登录系统，在此查阅您的多栖战力档案与社交动态。</p>
                 <Link to="/login" className="w-full py-2.5 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95">
                   立即登录
                 </Link>
