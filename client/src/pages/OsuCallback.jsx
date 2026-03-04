@@ -1,20 +1,19 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { FaSpinner } from 'react-icons/fa';
+import { FaSpinner, FaCheckCircle } from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
 
 const OsuCallback = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { addToast } = useToast();
-  const hasRequested = useRef(false); // 防止 React 18 严格模式发两次请求
+  const hasRequested = useRef(false);
 
   useEffect(() => {
     const bindOsuAccount = async () => {
       if (hasRequested.current) return;
       
-      // 从 URL 地址栏里把 ?code=XXXXX 提取出来
       const urlParams = new URLSearchParams(location.search);
       const code = urlParams.get('code');
 
@@ -27,13 +26,12 @@ const OsuCallback = () => {
 
       try {
         const token = localStorage.getItem('token');
-        // 把 code 扔给后端去处理
         const res = await axios.post('/api/osu/bind', { code }, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
         addToast(res.data.msg, 'success');
-        navigate('/profile'); // 绑定成功，送回个人资料页
+        navigate('/profile'); 
       } catch (err) {
         addToast(err.response?.data?.msg || '网络错误，绑定失败', 'error');
         navigate('/profile');
@@ -44,12 +42,16 @@ const OsuCallback = () => {
   }, [location, navigate, addToast]);
 
   return (
-    <div className="w-full min-h-screen flex flex-col items-center justify-center text-white pb-20">
-      <FaSpinner className="animate-spin text-5xl text-pink-500 mb-6" />
-      <h2 className="text-2xl font-black italic tracking-widest text-pink-400 animate-pulse">
-        CONNECTING TO OSU! ...
-      </h2>
-      <p className="text-gray-400 mt-2 font-mono text-sm tracking-widest">正在与 Peppy 进行神秘的 PY 交易</p>
+    <div className="w-full min-h-screen bg-[#111115] flex flex-col items-center justify-center px-4 font-sans selection:bg-zinc-600/40">
+      <div className="bg-[#18181c] border border-white/[0.05] rounded-3xl p-8 md:p-12 flex flex-col items-center shadow-xl w-full max-w-sm text-center">
+        <FaSpinner className="animate-spin text-4xl text-pink-500 mb-6" />
+        <h2 className="text-xl font-bold text-zinc-100 mb-2 tracking-tight">
+          正在验证 osu! 授权
+        </h2>
+        <p className="text-zinc-500 text-sm font-medium leading-relaxed">
+          正在与 osu! 官方服务器建立安全连接<br/>请稍候，不要关闭此页面...
+        </p>
+      </div>
     </div>
   );
 };

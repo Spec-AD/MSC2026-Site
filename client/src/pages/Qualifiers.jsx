@@ -4,7 +4,7 @@ import axios from 'axios';
 import { FaClock, FaTrophy, FaMedal, FaArrowLeft } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
-// --- 自定义 Hook：监听窗口大小以适配 3D 位移 ---
+// --- 自定义 Hook：监听窗口大小 ---
 const useWindowSize = () => {
   const [windowSize, setWindowSize] = useState({
     width: typeof window !== 'undefined' ? window.innerWidth : 1200,
@@ -19,64 +19,43 @@ const useWindowSize = () => {
   return windowSize;
 };
 
-// --- 子组件：曲绘卡片 (修复了手机端遮挡问题) ---
+// --- 子组件：曲绘卡片 (柔和化重构) ---
 const SongCard = ({ position, status, img, delay, title, artist }) => {
   const { width } = useWindowSize();
   const isMobile = width < 768;
   const isHidden = status === 'pending' || status === 'loading';
   
-  // 🔥 核心修复 A：手机端偏移量从 60 改为 140
-  // 这样左右两张卡片会大幅度向两侧推开，不再被中间的卡片挡住
   const xOffset = isMobile ? (position === 'left' ? -140 : 140) : (position === 'left' ? -380 : 380);
   
   const variants = {
-    // 中间卡片：手机端稍微缩小
     center: { x: 0, scale: isMobile ? 0.85 : 1.1, zIndex: 30, rotateY: 0, filter: "brightness(1)", opacity: 1 },
-    
-    // 两侧卡片：缩小并后退，配合 xOffset 确保可见
     left: { 
-      x: xOffset, 
-      scale: isMobile ? 0.7 : 0.95, 
-      zIndex: 20, 
-      rotateY: isMobile ? 15 : 20, 
-      filter: "brightness(0.6)", 
-      opacity: 0.8
+      x: xOffset, scale: isMobile ? 0.7 : 0.95, zIndex: 20, rotateY: isMobile ? 15 : 20, 
+      filter: "brightness(0.5)", opacity: 0.6
     },
     right: { 
-      x: xOffset, 
-      scale: isMobile ? 0.7 : 0.95, 
-      zIndex: 20, 
-      rotateY: isMobile ? -15 : -20, 
-      filter: "brightness(0.6)", 
-      opacity: 0.8
+      x: xOffset, scale: isMobile ? 0.7 : 0.95, zIndex: 20, rotateY: isMobile ? -15 : -20, 
+      filter: "brightness(0.5)", opacity: 0.6
     }
   };
 
-  const displayTitle = isHidden ? "???" : title;
+  const displayTitle = isHidden ? "未解禁曲目" : title;
   const displayArtist = isHidden ? "???" : artist;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 50 }}
-      animate={{ 
-        y: 0, 
-        ...variants[position] 
-      }}
-      transition={{ delay: delay, duration: 0.8 }}
-      className="absolute flex flex-col items-center gap-2 md:gap-4 cursor-pointer"
-      // 🔥 核心修复 B：固定手机端卡片容器宽度为 140px，防止计算错误
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ y: 0, ...variants[position] }}
+      transition={{ delay: delay, duration: 0.8, ease: "easeOut" }}
+      className="absolute flex flex-col items-center gap-3 md:gap-4 cursor-default"
       style={{ transformStyle: 'preserve-3d', width: isMobile ? '140px' : '300px' }}
     >
-      
       {/* 封面区域 */}
-      <div className="w-[140px] h-[140px] md:w-[300px] md:h-[300px] rounded-xl shadow-2xl overflow-hidden bg-black border border-white/10 relative group">
+      <div className="w-[140px] h-[140px] md:w-[300px] md:h-[300px] rounded-2xl shadow-2xl overflow-hidden bg-[#18181c] border border-white/[0.05] relative">
         <AnimatePresence mode='wait'>
           {isHidden ? (
-            <motion.div
-              key="hidden"
-              className="w-full h-full flex items-center justify-center bg-black relative"
-            >
-              <span className="text-5xl md:text-8xl font-bold text-white/80 drop-shadow-[0_0_10px_rgba(255,255,255,0.8)] z-10">?</span>
+            <motion.div key="hidden" className="w-full h-full flex flex-col items-center justify-center bg-[#141418] relative border border-white/[0.02]">
+              <span className="text-5xl md:text-7xl font-bold text-zinc-800 z-10">?</span>
             </motion.div>
           ) : (
             <motion.img
@@ -91,10 +70,10 @@ const SongCard = ({ position, status, img, delay, title, artist }) => {
 
       {/* 文字区域 */}
       <div className="text-center w-full px-1 space-y-1">
-        <div className="text-xs md:text-xl font-bold text-white tracking-wide truncate">
+        <div className="text-sm md:text-lg font-bold text-zinc-100 tracking-tight truncate">
           {displayTitle}
         </div>
-        <div className="text-[10px] md:text-sm font-light text-gray-400 truncate">
+        <div className="text-[11px] md:text-sm font-medium text-zinc-500 truncate">
           {displayArtist}
         </div>
       </div>
@@ -107,18 +86,14 @@ const Qualifiers = () => {
   const [status, setStatus] = useState('loading');
   const [timeLeft, setTimeLeft] = useState('-- 天 -- 小时 -- 分 -- 秒');
   const [leaderboard, setLeaderboard] = useState([]);
-  const { width } = useWindowSize();
   const navigate = useNavigate();
-  const isMobile = width < 768;
   
-  // 比赛时间设置
   const START_TIME = new Date('2026-04-30T10:00:00').getTime();
   const END_TIME = new Date('2026-07-03T21:30:00').getTime();
 
   useEffect(() => {
     const initData = async () => {
       try {
-        // 🔥 核心升级 1：请求专属的赛事总分接口
         const scoreRes = await axios.get('/api/leaderboard/qualifiers');
         setLeaderboard(scoreRes.data);
 
@@ -136,7 +111,7 @@ const Qualifiers = () => {
             calcTimeLeft(END_TIME - now);
           } else {
             setStatus('ended');
-            setTimeLeft('预选赛已结束');
+            setTimeLeft('预选阶段已结束');
             clearInterval(timer);
           }
         }, 1000);
@@ -157,105 +132,116 @@ const Qualifiers = () => {
     setTimeLeft(`${d}天 ${h}时 ${m}分 ${s}秒`);
   };
 
-  // 🔥 核心升级 2：前端防呆排序，按照 totalAchievement 和 totalDxScore 排序
   const sortedLeaderboard = [...leaderboard].sort((a, b) => {
     const achA = Number(a.totalAchievement || 0);
     const achB = Number(b.totalAchievement || 0);
-    
-    // 如果差值不为 0，则按达成率排
-    if (Math.abs(achB - achA) !== 0) {
-      return achB - achA;
-    }
-    
-    // 否则按 DX 分数排
+    if (Math.abs(achB - achA) !== 0) return achB - achA;
     return (b.totalDxScore || 0) - (a.totalDxScore || 0);
   });
 
   return (
-    <div className="w-full min-h-screen flex flex-col items-center pt-6 md:pt-10 pb-24 overflow-x-hidden relative">
+    <div className="w-full min-h-screen bg-[#111115] text-zinc-200 flex flex-col items-center pt-8 md:pt-12 pb-24 overflow-x-hidden relative font-sans selection:bg-zinc-600/40">
       
-      {/* 返回大厅按钮 */}
-      <div className="w-full max-w-7xl px-4 md:px-8 flex justify-start mb-4 z-30 relative top-14 md:top-0">
+      {/* 顶部返回导航 */}
+      <div className="w-full max-w-7xl px-4 md:px-8 flex justify-start mb-6 z-30 relative top-10 md:top-0">
         <button 
           onClick={() => navigate('/tournaments')}
-          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors font-bold tracking-widest text-xs md:text-sm uppercase bg-black/40 px-4 py-2 rounded-full border border-white/10"
+          className="flex items-center gap-2 text-zinc-500 hover:text-zinc-200 transition-colors font-semibold text-sm bg-[#18181c] px-4 py-2.5 rounded-xl border border-white/[0.05] active:scale-95 shadow-sm"
         >
-          <FaArrowLeft /> BACK TO TOURNAMENTS
+          <FaArrowLeft className="text-xs" /> 返回赛事大厅
         </button>
       </div>
 
-      {/* 1. 倒计时抬头 */}
-      <motion.div className="text-center mb-6 md:mb-12 z-20 px-4 mt-16 md:mt-0">
-        <h2 className="text-xs md:text-xl text-blue-300 tracking-[0.3em] md:tracking-[0.5em] mb-2 uppercase">Qualifiers Stage</h2>
-        <div className="text-2xl md:text-6xl font-mono font-bold text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+      {/* 1. 倒计时抬头 (褪去霓虹感，改为现代终端风) */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10 md:mb-16 z-20 px-4 mt-12 md:mt-0">
+        <h2 className="text-xs md:text-sm font-bold text-zinc-500 tracking-widest mb-3">
+          {status === 'pending' ? '距离预选赛开启还有' : status === 'active' ? '距离预选赛结束还有' : '赛事状态'}
+        </h2>
+        <div className="text-3xl md:text-5xl font-mono font-bold text-zinc-100 tracking-tight">
           {timeLeft}
         </div>
       </motion.div>
 
       {/* 2. 3D 舞台区域 */}
-      <div className="relative w-full max-w-7xl h-[220px] md:h-[450px] flex justify-center items-center mb-6 md:mb-16 perspective-[1000px]">
+      <div className="relative w-full max-w-7xl h-[240px] md:h-[450px] flex justify-center items-center mb-10 md:mb-20 perspective-[1000px]">
         <SongCard position="left" status={status} img="/assets/pre1.png" delay={0.2} title="Ultra Synergy Matrix" artist="t+pazolite" />
         <SongCard position="right" status={status} img="/assets/pre3.png" delay={0.4} title="Oshama Scramble!" artist="t+pazolite" />
         <SongCard position="center" status={status} img="/assets/pre2.png" delay={0} title="PANDORA PARADOXXX" artist="Gram" />
       </div>
 
-      {/* 3. 榜单区域 */}
-      <div className="w-full max-w-4xl px-2 md:px-4 z-10">
-        <div className="flex items-center gap-2 mb-4 border-b border-white/20 pb-2 pl-2">
-          <FaTrophy className="text-yellow-400 text-lg md:text-2xl" />
-          <h3 className="text-base md:text-2xl font-light tracking-widest text-white">预选赛总分排行榜 (Total Score)</h3>
+      {/* 3. 榜单区域 (现代卡片列表) */}
+      <div className="w-full max-w-4xl px-4 z-10">
+        <div className="flex items-center gap-3 mb-6 border-b border-white/[0.05] pb-4 px-2">
+          <div className="w-10 h-10 rounded-xl bg-[#18181c] border border-white/[0.05] flex items-center justify-center text-amber-400 shadow-sm">
+            <FaTrophy className="text-lg" />
+          </div>
+          <div>
+            <h3 className="text-xl md:text-2xl font-bold text-zinc-100 tracking-tight">预选赛阶段积分榜</h3>
+            <p className="text-xs text-zinc-500 mt-1 font-medium">Qualifier Stage Total Score Ranking</p>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">
           
           {/* 表头 */}
-          <div className="grid grid-cols-12 text-gray-500 text-[10px] md:text-sm px-2 md:px-4 pb-1 uppercase tracking-wider">
-            <div className="col-span-2 md:col-span-1">Rank</div>
-            <div className="col-span-4 md:col-span-5">Player</div>
-            <div className="col-span-3 md:col-span-3 text-right">Total Achiev.</div>
-            <div className="col-span-3 md:col-span-3 text-right">Total DX</div>
+          <div className="flex items-center text-zinc-500 text-xs font-semibold px-4 md:px-6 pb-2">
+            <div className="w-12 md:w-16 text-center shrink-0">排名</div>
+            <div className="flex-1 pl-2">选手信息</div>
+            <div className="w-24 md:w-32 text-right shrink-0">总达成率</div>
+            <div className="w-20 md:w-28 text-right shrink-0 pr-2">DX 总分</div>
           </div>
 
           {sortedLeaderboard.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 bg-white/5 border border-white/10 rounded-xl text-xs font-mono tracking-widest uppercase shadow-lg">
-              Awaiting Contenders... <br/><span className="text-[10px] opacity-60">暂无成绩录入</span>
+            <div className="text-center py-16 text-zinc-500 bg-[#18181c] border border-white/[0.05] rounded-2xl text-sm font-medium flex flex-col items-center justify-center shadow-sm">
+              <FaClock className="text-3xl mb-3 opacity-20" />
+              暂无选手成绩录入
             </div>
           ) : (
-            sortedLeaderboard.map((score, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-                onClick={() => navigate(`/profile/${score.username}`)}
-                className={`grid grid-cols-12 items-center px-2 md:px-4 py-3 md:py-4 rounded-xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors ${
-                  index === 0 ? 'bg-gradient-to-r from-yellow-500/20 to-transparent border-l-4 border-l-yellow-400' : ''
-                }`}
-              >
-                {/* 排名 */}
-                <div className="col-span-2 md:col-span-1 font-mono font-bold text-sm md:text-xl">
-                  {index < 3 ? <FaMedal className={index === 0 ? 'text-yellow-400 drop-shadow-md scale-125' : index === 1 ? 'text-gray-300 drop-shadow-md scale-110' : 'text-orange-400 drop-shadow-md scale-110'} /> : `#${index + 1}`}
-                </div>
-                
-                {/* 玩家名及进度 */}
-                <div className="col-span-4 md:col-span-5 flex flex-col pr-1 truncate">
-                  <span className="font-bold text-xs md:text-lg text-white truncate">{score.username}</span>
-                  <span className="text-[8px] md:text-[10px] font-mono text-gray-400 uppercase tracking-widest mt-0.5">
-                    Progress: <span className={score.playCount === 3 ? "text-green-400" : "text-yellow-500"}>{score.playCount || 0}/3</span>
-                  </span>
-                </div>
-                
-                {/* 总达成率 */}
-                <div className="col-span-3 md:col-span-3 text-right font-mono text-[11px] md:text-xl text-yellow-400 font-bold leading-tight">
-                  {Number(score.totalAchievement || 0).toFixed(4)}%
-                </div>
-                
-                {/* 总 DX 分数 */}
-                <div className="col-span-3 md:col-span-3 text-right font-mono text-[11px] md:text-lg text-white font-bold leading-tight">
-                  {score.totalDxScore || 0}
-                </div>
-              </motion.div>
-            ))
+            sortedLeaderboard.map((score, index) => {
+              const isTop3 = index < 3;
+              
+              return (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.03, duration: 0.3 }}
+                  onClick={() => navigate(`/profile/${score.username}`)}
+                  className={`flex items-center px-4 md:px-6 py-3 md:py-4 rounded-2xl border cursor-pointer transition-all ${
+                    isTop3 
+                      ? 'bg-[#18181c] border-white/[0.05] hover:bg-[#1a1a20] shadow-sm' 
+                      : 'bg-transparent border-transparent hover:bg-[#18181c] hover:border-white/[0.05]'
+                  }`}
+                >
+                  {/* 排名 */}
+                  <div className="w-12 md:w-16 flex justify-center shrink-0">
+                    {isTop3 ? (
+                      <FaMedal className={`text-2xl ${index === 0 ? 'text-amber-400' : index === 1 ? 'text-zinc-300' : 'text-[#b87333]'}`} />
+                    ) : (
+                      <span className="font-bold text-zinc-500">{index + 1}</span>
+                    )}
+                  </div>
+                  
+                  {/* 玩家名及进度 */}
+                  <div className="flex-1 flex flex-col pl-2 truncate min-w-0">
+                    <span className="font-bold text-base md:text-lg text-zinc-100 truncate">{score.username}</span>
+                    <span className="text-[11px] font-medium text-zinc-500 mt-0.5 flex items-center gap-1.5">
+                      进度 <span className={score.playCount === 3 ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>{score.playCount || 0} / 3</span>
+                    </span>
+                  </div>
+                  
+                  {/* 总达成率 */}
+                  <div className="w-24 md:w-32 text-right shrink-0 font-mono text-sm md:text-lg text-amber-400 font-bold">
+                    {Number(score.totalAchievement || 0).toFixed(4)}%
+                  </div>
+                  
+                  {/* 总 DX 分数 */}
+                  <div className="w-20 md:w-28 text-right shrink-0 font-mono text-sm md:text-lg text-zinc-200 font-bold pr-2">
+                    {score.totalDxScore || 0}
+                  </div>
+                </motion.div>
+              );
+            })
           )}
         </div>
       </div>
