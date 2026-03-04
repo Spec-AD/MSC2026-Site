@@ -6,6 +6,7 @@ import Inbox from './pages/Inbox';
 import Leaderboard from './pages/Leaderboard';
 import OsuCallback from './pages/OsuCallback';
 import Friends from './pages/Friends';
+import MaimaiProfile from './pages/MaimaiProfile';
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -51,6 +52,7 @@ function App() {
             <Route path="/wiki/:slug" element={<WikiArticle />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/friends" element={<Friends />} />
+            <Route path="/profile/:username/maimai" element={<MaimaiProfile />} />
             
             {/* 曲目图鉴页路由 */}
             <Route path="songs" element={<Songs />} />
