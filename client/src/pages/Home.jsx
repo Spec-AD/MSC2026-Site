@@ -7,8 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { 
   FaCalendarCheck, FaSpinner, FaCommentDots, FaHeart, 
-  FaClock, FaChevronRight, FaTimes, FaUserCircle, 
-  FaMusic, FaFireAlt, FaNewspaper
+  FaClock, FaChevronRight, FaTimes, FaUserCircle
 } from 'react-icons/fa'; 
 
 const Home = () => {
@@ -94,26 +93,30 @@ const Home = () => {
   };
 
   return (
-    // 主背景改为极深的暗靛蓝，脱离纯黑的死板
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans selection:bg-indigo-500/30 relative pb-20 overflow-x-hidden">
       
       {/* ==================================================== */}
       {/* 全局环境光与顶部个人 Banner 融合区 */}
       {/* ==================================================== */}
       
-      {/* 环境散光层 (Ambient Light) - 提供青绿与淡紫的柔和交织 */}
+      {/* 环境散光层 (Ambient Light) */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-cyan-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
         <div className="absolute top-[10%] right-[-10%] w-[50vw] h-[50vw] bg-purple-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
       </div>
 
-      {/* 用户 Banner 渐黑下沉层 */}
+      {/* 用户 Banner 渐黑下沉层 (安全渲染) */}
       <div className="absolute top-0 left-0 w-full h-[45vh] pointer-events-none z-0">
-        <img 
-          src={userStats?.bannerUrl || '/assets/bg.png'} 
-          alt="User Banner"
-          className="w-full h-full object-cover opacity-[0.3] transition-opacity duration-1000"
-        />
+        {userStats?.bannerUrl ? (
+          <img 
+            src={userStats.bannerUrl} 
+            alt="User Banner"
+            className="w-full h-full object-cover opacity-[0.12] transition-opacity duration-1000"
+            onError={(e) => { e.target.style.display = 'none'; }} // 图片加载失败时隐藏，防止破裂图标
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-b from-indigo-900/10 to-transparent opacity-50"></div>
+        )}
         {/* 垂直渐变遮罩，完美无缝融入背景颜色 */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0c0c11]/80 to-[#0c0c11]"></div>
       </div>
@@ -178,7 +181,7 @@ const Home = () => {
                   src="/assets/register_banner.png" 
                   alt="Tournament Banner"
                   className="w-full h-full object-cover opacity-60 grayscale-[30%] group-hover:grayscale-0 group-hover:opacity-90 group-hover:scale-105 transition-all duration-700"
-                  onError={(e) => { e.target.src = 'https://placehold.co/1200x400/18181c/525252?text=PUREBEAT+CHAMPIONSHIP'; }} 
+                  onError={(e) => { e.target.style.display = 'none'; }} 
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-transparent to-transparent pointer-events-none" />
                 <div className="absolute bottom-5 md:bottom-6 left-6 md:left-8">
@@ -199,8 +202,8 @@ const Home = () => {
             {/* 今日推荐曲目占位 */}
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-5 md:p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
               <div className="flex items-center justify-between mb-4 relative z-10">
-                <div className="flex items-center gap-2">
-                  <FaMusic className="text-cyan-400" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-1 h-3.5 bg-cyan-400 rounded-full shadow-[0_0_6px_rgba(34,211,238,0.5)]"></div>
                   <h3 className="text-sm font-bold text-zinc-100 tracking-wide">今日推荐曲目</h3>
                 </div>
                 <span className="text-[10px] font-mono text-zinc-500 border border-white/[0.05] px-2 py-0.5 rounded-md">WIP</span>
@@ -219,8 +222,8 @@ const Home = () => {
             {/* 今日挑战占位 */}
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-5 md:p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
               <div className="flex items-center justify-between mb-3 relative z-10">
-                <div className="flex items-center gap-2">
-                  <FaFireAlt className="text-purple-400" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-1 h-3.5 bg-purple-400 rounded-full shadow-[0_0_6px_rgba(192,132,252,0.5)]"></div>
                   <h3 className="text-sm font-bold text-zinc-100 tracking-wide">今日挑战</h3>
                 </div>
                 <span className="text-[10px] font-mono text-zinc-500 border border-white/[0.05] px-2 py-0.5 rounded-md">WIP</span>
@@ -239,9 +242,12 @@ const Home = () => {
           {/* 3. 社区新闻报纸流 (The Purebeat Times) */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
             <div className="flex items-center justify-between mb-4 px-1">
-              <h2 className="text-lg font-bold text-zinc-100 tracking-tight flex items-center gap-2">
-                <FaNewspaper className="text-indigo-400" /> 社区新闻速递
-              </h2>
+              <div className="flex items-center gap-2.5">
+                <div className="w-1 h-4 bg-indigo-400 rounded-full shadow-[0_0_6px_rgba(129,140,248,0.5)]"></div>
+                <h2 className="text-lg font-bold text-zinc-100 tracking-tight">
+                  社区新闻速递
+                </h2>
+              </div>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -299,9 +305,12 @@ const Home = () => {
           
           {/* 1. 个人数据微看板 (Mini Dashboard) */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden">
-            <h3 className="text-[11px] uppercase tracking-widest text-zinc-500 font-bold mb-5 flex items-center gap-2">
-              <FaUserCircle className="text-zinc-400" /> 终端概览
-            </h3>
+            <div className="flex items-center gap-2 mb-5">
+              <div className="w-1 h-3.5 bg-zinc-400 rounded-full shadow-[0_0_6px_rgba(161,161,170,0.4)]"></div>
+              <h3 className="text-[11px] uppercase tracking-widest text-zinc-400 font-bold">
+                个人信息
+              </h3>
+            </div>
             
             {user ? (
               <div className="flex flex-col">
@@ -355,9 +364,12 @@ const Home = () => {
             <div className="absolute -right-6 -bottom-6 opacity-[0.03] text-8xl pointer-events-none">
               <FaClock />
             </div>
-            <h3 className="text-[11px] uppercase tracking-widest text-zinc-500 font-bold mb-3 flex items-center gap-2">
-              <FaClock className="text-zinc-400" /> Server Time
-            </h3>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1 h-3.5 bg-zinc-500 rounded-full shadow-[0_0_6px_rgba(113,113,122,0.4)]"></div>
+              <h3 className="text-[11px] uppercase tracking-widest text-zinc-400 font-bold">
+                服务器时间
+              </h3>
+            </div>
             <div className="flex flex-col">
               <span className="text-3xl md:text-4xl font-light tracking-tight text-zinc-100 font-mono">
                 {serverTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
