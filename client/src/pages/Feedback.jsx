@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { FaBug, FaLightbulb, FaExclamationTriangle, FaCheckCircle, FaClock, FaTimesCircle, FaEdit, FaTrash, FaRedoAlt, FaSpinner, FaThumbtack, FaReply, FaFilter } from 'react-icons/fa';
-import FallingIcons from '../components/FallingIcons';
+import { 
+  FaBug, FaLightbulb, FaExclamationTriangle, FaCheckCircle, 
+  FaClock, FaTimesCircle, FaEdit, FaTrash, FaRedoAlt, 
+  FaSpinner, FaThumbtack, FaReply, FaFilter, FaCommentDots 
+} from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
 
 const Feedback = () => {
@@ -17,10 +20,10 @@ const Feedback = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState(null); 
   
-  // 筛选器状态 (默认全选)
+  // 筛选器状态
   const [filters, setFilters] = useState(['PENDING', 'SOLVED', 'CLOSED']);
   
-  // 回复输入框状态 (对象结构，键为 feedbackId，值为输入内容)
+  // 回复输入框状态
   const [replyInputs, setReplyInputs] = useState({});
   const [isReplying, setIsReplying] = useState(false);
 
@@ -111,7 +114,7 @@ const Feedback = () => {
     try {
       const token = localStorage.getItem('token');
       await axios.post(`/api/feedback/${feedbackId}/reply`, { content }, { headers: { Authorization: `Bearer ${token}` } });
-      setReplyInputs({ ...replyInputs, [feedbackId]: '' }); // 清空该帖子的输入框
+      setReplyInputs({ ...replyInputs, [feedbackId]: '' }); 
       fetchFeedbacks();
     } catch (err) {
       addToast('回复失败', 'error');
@@ -128,13 +131,13 @@ const Feedback = () => {
 
   const renderTypeBadge = (type) => {
     const config = {
-      FEATURE: { color: 'text-green-400 border-green-500/30 bg-green-500/10', icon: <FaLightbulb />, text: 'Feature' },
-      PROBLEM: { color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10', icon: <FaExclamationTriangle />, text: 'Problem' },
-      BUG: { color: 'text-red-400 border-red-500/30 bg-red-500/10', icon: <FaBug />, text: 'Bug' },
+      FEATURE: { color: 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10', icon: <FaLightbulb />, text: '建议' },
+      PROBLEM: { color: 'text-amber-400 border-amber-500/20 bg-amber-500/10', icon: <FaExclamationTriangle />, text: '问题' },
+      BUG: { color: 'text-rose-400 border-rose-500/20 bg-rose-500/10', icon: <FaBug />, text: '故障' },
     };
     const c = config[type] || config.FEATURE;
     return (
-      <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] uppercase font-bold tracking-wider border ${c.color}`}>
+      <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${c.color}`}>
         {c.icon} {c.text}
       </span>
     );
@@ -142,13 +145,13 @@ const Feedback = () => {
 
   const renderStatusBadge = (status) => {
     const config = {
-      PENDING: { color: 'text-yellow-400', icon: <FaClock className="animate-pulse" />, text: 'PENDING' },
-      SOLVED: { color: 'text-green-400', icon: <FaCheckCircle />, text: 'SOLVED' },
-      CLOSED: { color: 'text-gray-500', icon: <FaTimesCircle />, text: 'CLOSED' },
+      PENDING: { color: 'text-amber-400', icon: <FaClock />, text: '待处理' },
+      SOLVED: { color: 'text-emerald-400', icon: <FaCheckCircle />, text: '已解决' },
+      CLOSED: { color: 'text-zinc-500', icon: <FaTimesCircle />, text: '已关闭' },
     };
     const c = config[status] || config.PENDING;
     return (
-      <div className={`flex items-center gap-1.5 text-xs font-black tracking-widest ${c.color}`}>
+      <div className={`flex items-center gap-1.5 text-xs font-semibold ${c.color}`}>
         {c.icon} {c.text}
       </div>
     );
@@ -159,9 +162,9 @@ const Feedback = () => {
     const uTime = new Date(updatedAt);
     const isEdited = uTime.getTime() - cTime.getTime() > 1000;
     return (
-      <div className="text-[10px] text-gray-500 font-mono tracking-wider">
-        {isEdited ? '重编于 ' : '发布于 '}
-        {(isEdited ? uTime : cTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+      <div className="text-xs text-zinc-500 font-medium mt-0.5">
+        {isEdited ? '重新编辑于 ' : '发布于 '}
+        {(isEdited ? uTime : cTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
       </div>
     );
   };
@@ -172,52 +175,56 @@ const Feedback = () => {
     return hoursSinceSolved >= 2;
   };
 
-  // 过滤后的反馈列表
+  const STATUS_DISPLAY = { PENDING: '待处理', SOLVED: '已解决', CLOSED: '已关闭' };
   const filteredFeedbacks = feedbacks.filter(fb => filters.includes(fb.status));
 
   return (
-    <div className="w-full min-h-screen text-white pt-24 pb-20 px-4 md:px-8 font-sans relative overflow-x-hidden bg-gradient-to-b from-transparent to-black/80">
-      <FallingIcons />
-
+    <div className="w-full min-h-screen bg-[#111115] text-zinc-200 pt-20 md:pt-24 pb-20 px-4 md:px-8 font-sans selection:bg-zinc-600/40">
       <div className="max-w-4xl mx-auto relative z-10">
         
-        {/* Header */}
-        <div className="mb-12 border-b border-white/10 pb-6 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        {/* 头部标题区 */}
+        <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
-            <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter drop-shadow-lg text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500">
-              FEEDBACK HALL.
+            <h1 className="text-3xl font-bold text-zinc-100 tracking-tight flex items-center gap-3">
+              反馈中心
             </h1>
-            <p className="text-gray-400 text-xs md:text-sm mt-3 tracking-widest uppercase font-mono">
-              Help us shape the future of purebeat.top
+            <p className="text-sm text-zinc-500 mt-1.5 font-medium">
+              提交您的建议、问题报告或功能诉求，帮助改进社区体验。
             </p>
           </div>
 
-          {/* 状态多选过滤器 */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-gray-500 text-[10px] uppercase tracking-widest font-bold flex items-center gap-1 mr-2"><FaFilter/> Filter:</span>
-            {['PENDING', 'SOLVED', 'CLOSED'].map(status => {
+          {/* 状态筛选器 - 现代化药丸按钮 */}
+          <div className="flex items-center gap-2 bg-[#18181c] p-1 rounded-xl border border-white/[0.05]">
+            <span className="text-zinc-500 text-sm font-medium pl-3 pr-2 flex items-center gap-1.5">
+              <FaFilter className="text-xs"/> 筛选
+            </span>
+            {Object.entries(STATUS_DISPLAY).map(([status, label]) => {
                const isActive = filters.includes(status);
                return (
                  <button 
                    key={status}
                    onClick={() => toggleFilter(status)}
-                   className={`px-3 py-1.5 rounded-full text-[10px] font-bold tracking-widest uppercase transition-all border ${
-                     isActive ? 'bg-white text-black border-white' : 'bg-black/40 text-gray-400 border-gray-700 hover:border-gray-500'
+                   className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
+                     isActive 
+                     ? 'bg-zinc-200 text-zinc-900 shadow-sm' 
+                     : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
                    }`}
                  >
-                   {status}
+                   {label}
                  </button>
                )
             })}
           </div>
         </div>
 
-        {/* 提交反馈表单 (需登录) */}
+        {/* ========================================= */}
+        {/* 提交反馈表单 */}
+        {/* ========================================= */}
         {user ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-16 bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-2xl p-6 shadow-2xl">
-            <h2 className="text-sm font-bold text-gray-300 uppercase tracking-widest mb-4 flex items-center gap-2">
-              {editingId ? <FaEdit className="text-blue-400"/> : <FaLightbulb className="text-yellow-400"/>}
-              {editingId ? 'Edit Your Post' : 'Submit a New Post'}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-12 bg-[#18181c] border border-white/[0.05] rounded-2xl p-6 md:p-8 shadow-sm">
+            <h2 className="text-base font-semibold text-zinc-100 mb-5 flex items-center gap-2">
+              {editingId ? <FaEdit className="text-blue-400"/> : <FaCommentDots className="text-zinc-400"/>}
+              {editingId ? '编辑反馈' : '发布新反馈'}
             </h2>
             
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -225,18 +232,18 @@ const Feedback = () => {
                 <select 
                   value={formData.type} 
                   onChange={(e) => setFormData({...formData, type: e.target.value})}
-                  className="bg-black/60 border border-gray-700 text-sm font-bold text-gray-200 rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors w-full md:w-1/4 uppercase tracking-wider"
+                  className="bg-[#141418] border border-white/[0.05] text-sm font-medium text-zinc-200 rounded-xl px-4 py-3 outline-none focus:border-zinc-500 transition-colors md:w-40 appearance-none"
                 >
-                  <option value="FEATURE">💡 Feature (建议)</option>
-                  <option value="PROBLEM">⚠️ Problem (非代码问题)</option>
-                  <option value="BUG">🐛 Bug (代码报错)</option>
+                  <option value="FEATURE">💡 建议 (Feature)</option>
+                  <option value="PROBLEM">⚠️ 问题 (Problem)</option>
+                  <option value="BUG">🐛 故障 (Bug)</option>
                 </select>
                 <input 
                   type="text" 
                   placeholder="标题 (一句话概括)..." 
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
-                  className="bg-black/60 border border-gray-700 text-white text-sm rounded-lg px-4 py-3 outline-none focus:border-blue-500 transition-colors flex-1 placeholder:text-gray-600"
+                  className="bg-[#141418] border border-white/[0.05] text-zinc-100 text-sm rounded-xl px-4 py-3 outline-none focus:border-zinc-500 focus:bg-[#1a1a20] transition-colors flex-1 placeholder-zinc-600"
                   required
                 />
               </div>
@@ -244,40 +251,46 @@ const Feedback = () => {
                 placeholder="详细描述你的问题或建议..." 
                 value={formData.content}
                 onChange={(e) => setFormData({...formData, content: e.target.value})}
-                className="w-full bg-black/60 border border-gray-700 text-gray-300 text-sm rounded-lg p-4 h-32 outline-none focus:border-blue-500 transition-colors resize-none placeholder:text-gray-600"
+                className="w-full bg-[#141418] border border-white/[0.05] text-zinc-300 text-[15px] leading-relaxed rounded-xl p-4 h-32 outline-none focus:border-zinc-500 focus:bg-[#1a1a20] transition-colors resize-none placeholder-zinc-600"
                 required
               />
               <div className="flex justify-end gap-3 pt-2">
                 {editingId && (
-                  <button type="button" onClick={handleCancelEdit} className="px-6 py-2 rounded-full text-xs font-bold text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 transition-all uppercase tracking-widest">
-                    Cancel
+                  <button type="button" onClick={handleCancelEdit} className="px-6 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 hover:text-zinc-100 bg-white/[0.02] hover:bg-white/[0.05] transition-all active:scale-95">
+                    取消
                   </button>
                 )}
                 <button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className="px-8 py-2 rounded-full text-xs font-bold text-black bg-white hover:bg-gray-200 transition-all uppercase tracking-widest flex items-center gap-2 disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl text-sm font-bold text-zinc-900 bg-zinc-200 hover:bg-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 min-w-[120px] active:scale-95 shadow-sm"
                 >
-                  {isSubmitting ? <FaSpinner className="animate-spin" /> : (editingId ? 'Update Post' : 'Submit Post')}
+                  {isSubmitting ? <FaSpinner className="animate-spin" /> : (editingId ? '更新内容' : '提交反馈')}
                 </button>
               </div>
             </form>
           </motion.div>
         ) : (
-          <div className="mb-16 bg-gray-900/30 border border-gray-800/50 rounded-2xl p-8 text-center backdrop-blur-sm">
-            <p className="text-gray-500 text-sm font-bold tracking-widest uppercase mb-4">Login required to submit feedback</p>
-            <button onClick={() => window.location.href='/login'} className="px-6 py-2 rounded-full text-xs font-bold text-white border border-white/20 hover:bg-white/10 transition-all uppercase tracking-widest">
-              Go to Login
+          <div className="mb-12 bg-[#18181c] border border-white/[0.05] rounded-2xl p-10 text-center flex flex-col items-center justify-center">
+            <FaCommentDots className="text-4xl text-zinc-700 mb-4" />
+            <p className="text-zinc-400 text-sm font-medium mb-5">登录后即可提交反馈或参与讨论</p>
+            <button onClick={() => window.location.href='/login'} className="px-6 py-2.5 rounded-xl text-sm font-bold text-zinc-900 bg-zinc-200 hover:bg-white transition-all active:scale-95 shadow-sm">
+              前往登录
             </button>
           </div>
         )}
 
-        {/* 反馈大厅列表 */}
+        {/* ========================================= */}
+        {/* 反馈信息流列表 */}
+        {/* ========================================= */}
         <div className="space-y-6">
           {loading ? (
-            <div className="text-center py-20"><FaSpinner className="animate-spin text-3xl text-gray-600 mx-auto" /></div>
+            <div className="py-20 flex justify-center"><FaSpinner className="animate-spin text-3xl text-zinc-600" /></div>
           ) : filteredFeedbacks.length === 0 ? (
-            <div className="text-center py-20 text-gray-600 font-mono text-sm uppercase tracking-widest">No matching posts found.</div>
+            <div className="text-center py-20 text-zinc-500 text-sm font-medium flex flex-col items-center">
+              <FaFilter className="text-3xl mb-3 opacity-20" />
+              未找到符合条件的反馈
+            </div>
           ) : (
             filteredFeedbacks.map((fb, index) => {
               const currentUserId = user ? (user.id || user._id) : null; 
@@ -286,63 +299,58 @@ const Feedback = () => {
 
               return (
                 <motion.div 
-                  layout // 允许动画平滑过渡过滤
-                  initial={{ opacity: 0, y: 20 }} 
+                  layout
+                  initial={{ opacity: 0, y: 15 }} 
                   animate={{ opacity: 1, y: 0 }} 
-                  transition={{ delay: index * 0.05 }}
+                  transition={{ delay: index * 0.03, duration: 0.3 }}
                   key={fb._id} 
-                  className={`bg-black/40 backdrop-blur-md border rounded-xl transition-colors ${fb.isPinned ? 'border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.1)]' : 'border-gray-800 hover:border-gray-700'} ${fb.status === 'CLOSED' ? 'opacity-60 grayscale' : ''}`}
+                  className={`bg-[#18181c] border border-white/[0.05] rounded-2xl transition-all shadow-sm ${fb.isPinned ? 'ring-1 ring-zinc-500/30' : ''} ${fb.status === 'CLOSED' ? 'opacity-70 grayscale-[30%]' : ''}`}
                 >
-                  {/* 主帖区域 */}
-                  <div className="p-5 md:p-6">
-                    {/* 顶部：头像、信息与状态 */}
-                    <div className="flex justify-between items-start mb-4 border-b border-gray-800/50 pb-4 relative">
-                      {fb.isPinned && (
-                        <div className="absolute -top-6 -left-2 text-purple-400 text-xl transform -rotate-45 drop-shadow-md">
-                          <FaThumbtack />
-                        </div>
-                      )}
-                      
-                      <div className="flex items-center gap-3">
-                        <img src={fb.author?.avatarUrl || '/assets/logos.png'} alt="avatar" className="w-10 h-10 rounded-full border border-gray-700 object-cover bg-gray-900" />
+                  {/* 反馈卡片主体 */}
+                  <div className="p-6 md:p-8">
+                    {/* 头部信息区 */}
+                    <div className="flex justify-between items-start mb-6 border-b border-white/[0.05] pb-5 relative">
+                      <div className="flex items-center gap-4">
+                        <img src={fb.author?.avatarUrl || '/assets/logos.png'} alt="avatar" className="w-11 h-11 rounded-full border border-white/[0.05] object-cover bg-[#141418]" />
                         <div>
-                          <div className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                            {fb.author?.username || 'Unknown User'}
-                            {fb.author?.role === 'ADM' && <span className="text-[8px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded uppercase tracking-wider">ADM</span>}
+                          <div className="text-[15px] font-bold text-zinc-100 flex items-center gap-2">
+                            {fb.author?.username || '注销用户'}
+                            {fb.author?.role === 'ADM' && <span className="text-[10px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded-md font-bold">ADM</span>}
                           </div>
                           {renderTime(fb.createdAt, fb.updatedAt)}
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        {renderStatusBadge(fb.status)}
-                        {fb.isPinned && <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest">Pinned</span>}
+                      
+                      <div className="flex flex-col items-end gap-2 shrink-0 ml-4">
+                        <div className="flex items-center gap-3">
+                          {fb.isPinned && <FaThumbtack className="text-zinc-500 text-sm" title="置顶" />}
+                          {renderStatusBadge(fb.status)}
+                        </div>
                       </div>
                     </div>
 
-                    {/* 中部：徽章、标题与正文 */}
+                    {/* 正文内容区 */}
                     <div className="mb-4">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-3 mb-3">
                         {renderTypeBadge(fb.type)}
-                        <h3 className="text-lg font-bold text-white leading-tight">{fb.title}</h3>
+                        <h3 className="text-xl font-bold text-zinc-100 leading-snug">{fb.title}</h3>
                       </div>
-                      <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap mt-3 pl-1">
+                      <p className="text-[15px] text-zinc-300 leading-relaxed whitespace-pre-wrap mt-2 selection:bg-zinc-600/40">
                         {fb.content}
                       </p>
                     </div>
 
-                    {/* 底部：操作按钮区 */}
-                    <div className="flex flex-wrap items-center justify-end gap-3 pt-4">
-                      
-                      {/* ADM 专属：置顶/取消置顶 */}
+                    {/* 操作按钮区 (微小图标按钮) */}
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-4">
                       {isADM && (
-                        <button onClick={() => handleTogglePin(fb._id)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors ${fb.isPinned ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
-                          <FaThumbtack /> {fb.isPinned ? 'Unpin' : 'Pin'}
+                        <button onClick={() => handleTogglePin(fb._id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/[0.02] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200 transition-colors">
+                          <FaThumbtack /> {fb.isPinned ? '取消置顶' : '置顶'}
                         </button>
                       )}
 
                       {isADM && fb.status === 'PENDING' && (
-                        <button onClick={() => handleStatusChange(fb._id, 'SOLVE')} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 text-[10px] font-bold uppercase tracking-widest transition-colors">
-                          <FaCheckCircle /> Mark Solved
+                        <button onClick={() => handleStatusChange(fb._id, 'SOLVE')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                          <FaCheckCircle /> 标记解决
                         </button>
                       )}
 
@@ -350,77 +358,80 @@ const Feedback = () => {
                         <button 
                           onClick={() => handleStatusChange(fb._id, 'REAPPEAL')} 
                           disabled={!canReappeal(fb.statusUpdatedAt)}
-                          title={!canReappeal(fb.statusUpdatedAt) ? "需在标记解决 2 小时后方可重申" : ""}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 text-[10px] font-bold uppercase tracking-widest transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={!canReappeal(fb.statusUpdatedAt) ? "需在解决后 2 小时方可重申" : ""}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                         >
-                          <FaRedoAlt /> Re-appeal
+                          <FaRedoAlt /> 重新申诉
                         </button>
                       )}
 
                       {isAuthor && fb.status !== 'CLOSED' && (
-                        <button onClick={() => handleEditClick(fb)} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors">
-                          <FaEdit /> Edit
+                        <button onClick={() => handleEditClick(fb)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/[0.02] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200 transition-colors">
+                          <FaEdit /> 编辑
                         </button>
                       )}
 
                       {(isAuthor || isADM) && (
-                        <button onClick={() => handleDelete(fb._id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 text-[10px] font-bold uppercase tracking-widest transition-colors">
-                          <FaTrash /> Delete
+                        <button onClick={() => handleDelete(fb._id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors">
+                          <FaTrash /> 删除
                         </button>
                       )}
                     </div>
                   </div>
 
                   {/* 盖楼回复区 */}
-                  <div className="bg-black/30 border-t border-gray-800/80 p-5 md:p-6 rounded-b-xl">
+                  <div className="bg-[#141418] border-t border-white/[0.05] p-6 rounded-b-2xl">
+                    
                     {/* 历史回复列表 */}
                     {fb.replies && fb.replies.length > 0 && (
-                      <div className="space-y-4 mb-4">
+                      <div className="space-y-4 mb-5">
                         {fb.replies.map(reply => (
-                          <div key={reply._id} className="flex gap-3 items-start">
-                            <img src={reply.author?.avatarUrl || '/assets/logos.png'} alt="avatar" className="w-6 h-6 rounded-full border border-gray-700 object-cover shrink-0" />
-                            <div className="flex-1 bg-gray-900/50 border border-gray-800/50 rounded-lg p-3">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-bold text-gray-300">{reply.author?.username || 'Unknown'}</span>
-                                {reply.author?.role === 'ADM' && <span className="text-[8px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded uppercase">ADM</span>}
-                                <span className="text-[9px] text-gray-600 font-mono ml-auto">
-                                  {new Date(reply.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                               </span>
+                          <div key={reply._id} className="flex gap-4 items-start">
+                            <img src={reply.author?.avatarUrl || '/assets/logos.png'} alt="avatar" className="w-8 h-8 rounded-full border border-white/[0.05] object-cover shrink-0 bg-[#111115]" />
+                            <div className="flex-1 bg-[#1a1a20] border border-white/[0.05] rounded-xl p-4 shadow-sm">
+                              <div className="flex justify-between items-baseline mb-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-zinc-200">{reply.author?.username || '未知用户'}</span>
+                                  {reply.author?.role === 'ADM' && <span className="text-[9px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded font-bold">ADM</span>}
+                                </div>
+                                <span className="text-[11px] text-zinc-500 font-medium">
+                                  {new Date(reply.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </span>
                               </div>
-                              <p className="text-sm text-gray-400 whitespace-pre-wrap">{reply.content}</p>
+                              <p className="text-[14px] text-zinc-300 whitespace-pre-wrap leading-relaxed">{reply.content}</p>
                             </div>
                           </div>
                         ))}
                       </div>
                     )}
 
-                    {/* 回复输入框 (需登录) */}
+                    {/* 回复输入框 */}
                     {user ? (
-                      <div className="flex gap-3">
-                        <img src={user.avatarUrl || '/assets/logos.png'} alt="my-avatar" className="w-6 h-6 rounded-full border border-gray-700 object-cover shrink-0 mt-1" />
-                        <div className="flex-1 flex items-start gap-2">
+                      <div className="flex gap-4">
+                        <img src={user.avatarUrl || '/assets/logos.png'} alt="my-avatar" className="w-8 h-8 rounded-full border border-white/[0.05] object-cover shrink-0" />
+                        <div className="flex-1 flex flex-col md:flex-row items-start md:items-stretch gap-2">
                           <textarea 
                             value={replyInputs[fb._id] || ''}
                             onChange={(e) => setReplyInputs({...replyInputs, [fb._id]: e.target.value})}
-                            placeholder="Type a reply..."
-                            className="w-full bg-black/60 border border-gray-700 text-gray-300 text-xs rounded p-2.5 h-10 min-h-[40px] outline-none focus:border-blue-500 transition-colors resize-y"
+                            placeholder="写下你的回复..."
+                            className="w-full bg-[#1a1a20] border border-white/[0.05] text-zinc-200 text-sm rounded-xl p-3 h-11 min-h-[44px] outline-none focus:border-zinc-500 focus:bg-[#1f1f26] transition-colors resize-y placeholder-zinc-600"
                           />
                           <button 
                             onClick={() => handleReplySubmit(fb._id)}
                             disabled={isReplying || !replyInputs[fb._id]?.trim()}
-                            className="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 px-3 py-2.5 rounded flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                            className="bg-white/[0.05] hover:bg-zinc-200 hover:text-zinc-900 text-zinc-400 border border-white/[0.05] px-4 py-3 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 active:scale-95 w-full md:w-auto shrink-0"
                           >
-                            <FaReply className="text-[10px]" />
+                            <FaReply className="text-sm" /> 
+                            <span className="md:hidden text-sm font-semibold">提交回复</span>
                           </button>
                         </div>
                       </div>
                     ) : (
-                      <div className="text-center text-[10px] text-gray-600 uppercase tracking-widest font-mono">
-                        Login to join the discussion
+                      <div className="text-center text-sm text-zinc-500 font-medium bg-[#1a1a20] py-3 rounded-xl border border-white/[0.05]">
+                        请登录后参与讨论
                       </div>
                     )}
                   </div>
-
                 </motion.div>
               );
             })
