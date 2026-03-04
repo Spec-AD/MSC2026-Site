@@ -67,25 +67,42 @@ const MaimaiProfile = () => {
   };
 
   // ==========================================
-  // 难度字符串智能推导引擎 (解决难度索引问题)
+  // 难度与等级智能推导引擎
   // ==========================================
+  const getDiffConfig = (score) => {
+    // 兼容不同的后端字段命名习惯
+    let idx = 3; // 默认 MASTER
+    if (score.level_index !== undefined) idx = Number(score.level_index);
+    else if (score.levelIndex !== undefined) idx = Number(score.levelIndex);
+    else if (score.difficulty !== undefined) idx = Number(score.difficulty);
+
+    const config = [
+      { name: 'BASIC', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+      { name: 'ADVANCED', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+      { name: 'EXPERT', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+      { name: 'MASTER', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+      { name: 'Re:MASTER', color: 'text-zinc-100 bg-zinc-400/10 border-zinc-400/20' } // 白谱
+    ];
+    return config[idx] || config[3];
+  };
+
   const getLevelString = (score) => {
-    // 1. 如果数据库里已经存了 "14+" 这种字符串，直接使用
+    // 1. 如果已有明确的字符串 "14+"
     if (typeof score.level === 'string' && (score.level.includes('+') || Number(score.level) > 4)) {
       return score.level;
     }
-    // 2. 如果只有 constant 定数 (例如 14.8)，通过 DX 规则推导 (≥.6 即为 +)
-    if (!score.constant || score.constant === 0) return '';
+    // 2. 通过定数完美推导 (例如 14.8 -> 14+)
+    if (!score.constant || score.constant === 0) return score.level || '';
     const base = Math.floor(score.constant);
     const frac = Math.round((score.constant - base) * 10);
     return `${base}${frac >= 6 ? '+' : ''}`;
   };
 
   // ==========================================
-  // B50 超级过滤引擎
+  // B50 超级过滤与计算引擎
   // ==========================================
   const b50Data = useMemo(() => {
-    if (!profile || !profile.allScores) return { scores: [], rating: 0 };
+    if (!profile || !profile.allScores) return { b35: [], r15: [], rating: 0 };
     let scores = [...profile.allScores];
 
     const getIdealScore = (score) => {
@@ -106,6 +123,7 @@ const MaimaiProfile = () => {
       return { ...score, achievement: newAch, fcStatus: newFc, rating: newRating, isIdeal: true };
     };
 
+    // 应用过滤规则
     if (b50Filter === 'IDEAL') scores = scores.map(getIdealScore);
     else if (b50Filter === 'AP50') scores = scores.filter(s => ['ap', 'app'].includes((s.fcStatus||'').toLowerCase()));
     else if (b50Filter === 'FC50') scores = scores.filter(s => ['fc', 'fcp', 'ap', 'app'].includes((s.fcStatus||'').toLowerCase()));
@@ -116,23 +134,28 @@ const MaimaiProfile = () => {
     else if (b50Filter === 'STAR_5') scores = scores.filter(s => s.dxRatio >= 0.97);
     else if (b50Filter === 'STAR_5_5') scores = scores.filter(s => s.dxRatio >= 0.98);
     else if (b50Filter === 'STAR_6') scores = scores.filter(s => s.dxRatio >= 0.99);
-    else if (b50Filter === 'GREEN') scores = scores.filter(s => s.difficulty === 0);
-    else if (b50Filter === 'YELLOW') scores = scores.filter(s => s.difficulty === 1);
-    else if (b50Filter === 'RED') scores = scores.filter(s => s.difficulty === 2);
-    else if (b50Filter === 'PURPLE') scores = scores.filter(s => s.difficulty === 3);
-    else if (b50Filter === 'WHITE') scores = scores.filter(s => s.difficulty === 4);
+    else if (b50Filter === 'GREEN') scores = scores.filter(s => getDiffConfig(s).name === 'BASIC');
+    else if (b50Filter === 'YELLOW') scores = scores.filter(s => getDiffConfig(s).name === 'ADVANCED');
+    else if (b50Filter === 'RED') scores = scores.filter(s => getDiffConfig(s).name === 'EXPERT');
+    else if (b50Filter === 'PURPLE') scores = scores.filter(s => getDiffConfig(s).name === 'MASTER');
+    else if (b50Filter === 'WHITE') scores = scores.filter(s => getDiffConfig(s).name === 'Re:MASTER');
     else if (b50Filter === 'LOCK50') scores = scores.filter(s => s.achievement >= 100.0000 && s.achievement <= 100.1000);
     else if (b50Filter === 'CUN50') scores = scores.filter(s => s.achievement >= 99.8000 && s.achievement <= 99.9999);
     else if (b50Filter === 'YUE50') scores = scores.filter(s => s.achievement < 97.0000);
 
+    // 排序逻辑：Rating优先，达成率其次
     scores.sort((a, b) => b.rating - a.rating || b.achievement - a.achievement);
     
-    const oldScores = scores.filter(s => !s.isNew).slice(0, 35);
-    const newScores = scores.filter(s => s.isNew).slice(0, 15);
-    const finalB50 = [...oldScores, ...newScores].sort((a,b) => b.rating - a.rating);
-    const totalRating = finalB50.reduce((sum, s) => sum + s.rating, 0);
+    // 兼容不同的新曲标记命名
+    const isNewRecord = (s) => s.isNew === true || s.is_new === true || s.isNewSong === true;
 
-    return { scores: finalB50, rating: totalRating };
+    // 核心组合：旧曲 35 首 + 新曲 15 首
+    const oldScores = scores.filter(s => !isNewRecord(s)).slice(0, 35);
+    const newScores = scores.filter(s => isNewRecord(s)).slice(0, 15);
+    
+    const totalRating = [...oldScores, ...newScores].reduce((sum, s) => sum + (s.rating || 0), 0);
+
+    return { b35: oldScores, r15: newScores, rating: totalRating };
   }, [profile, b50Filter]);
 
   const pf100Data = useMemo(() => {
@@ -140,22 +163,55 @@ const MaimaiProfile = () => {
     return [...profile.allScores].sort((a, b) => b.pf - a.pf).slice(0, 100);
   }, [profile]);
 
-  const getDiffConfig = (diffIndex) => {
-    const config = [
-      { name: 'BASIC', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-      { name: 'ADVANCED', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-      { name: 'EXPERT', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
-      { name: 'MASTER', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
-      { name: 'Re:MASTER', color: 'text-zinc-200 bg-zinc-300/10 border-zinc-300/20' }
-    ];
-    return config[diffIndex] || config[3];
-  };
-
   const getFcBadge = (fc) => {
     const s = (fc || '').toLowerCase();
     if (s.includes('ap')) return <span className="bg-amber-400 text-amber-950 px-1.5 rounded-sm text-[10px] font-black">{s.toUpperCase()}</span>;
     if (s.includes('fc')) return <span className="bg-pink-400 text-pink-950 px-1.5 rounded-sm text-[10px] font-black">{s.toUpperCase()}</span>;
     return null;
+  };
+
+  const renderScoreCard = (score, index, prefix) => {
+    const diff = getDiffConfig(score);
+    const realLevel = getLevelString(score);
+
+    return (
+      <motion.div 
+        key={`${prefix}-${index}`} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * 0.01 }}
+        className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/[0.05] bg-[#0a0a0c] group shadow-sm"
+      >
+        <img 
+          src={`https://www.diving-fish.com/covers/${String(score.songId).padStart(5, '0')}.png`} alt="cover"
+          className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 group-hover:scale-105 transition-all duration-700"
+          onError={(e) => { e.target.src = '/assets/bg.png'; }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/40 to-transparent pointer-events-none" />
+
+        {/* 顶部标签 */}
+        <div className="absolute top-2 left-2 flex gap-1 z-10">
+          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex items-center gap-1 ${diff.color}`}>
+            {diff.name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{realLevel}</span>
+          </span>
+          {getFcBadge(score.fcStatus)}
+        </div>
+        {score.isIdeal && <span className="absolute top-2 right-8 bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded text-[9px] font-bold z-10">IDEAL</span>}
+        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-bold text-zinc-300 z-10" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+          #{index + 1}
+        </div>
+
+        {/* 底部信息 */}
+        <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
+          <div className="text-[13px] font-bold text-zinc-100 truncate mb-1 leading-tight">{score.songName}</div>
+          <div className="flex items-end justify-between">
+            <span className="text-lg font-bold text-zinc-100 leading-none" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+              {score.achievement.toFixed(4)}<span className="text-[10px] text-zinc-400">%</span>
+            </span>
+            <span className="bg-white/10 backdrop-blur-md border border-white/10 px-2 py-0.5 rounded text-xs font-bold text-amber-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+              {score.rating}
+            </span>
+          </div>
+        </div>
+      </motion.div>
+    );
   };
 
   if (loading) return (
@@ -273,55 +329,35 @@ const MaimaiProfile = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {b50Data.scores.length === 0 ? (
-                  <div className="col-span-full py-16 text-center text-zinc-600 font-medium bg-[#15151e]/40 rounded-2xl border border-white/5">未找到匹配的成绩</div>
-                ) : (
-                  b50Data.scores.map((score, index) => {
-                    const diff = getDiffConfig(score.difficulty);
-                    const realLevel = getLevelString(score); // 智能推导标级
+              {b50Data.b35.length === 0 && b50Data.r15.length === 0 ? (
+                <div className="py-16 text-center text-zinc-600 font-medium bg-[#15151e]/40 rounded-2xl border border-white/5">未找到匹配的成绩</div>
+              ) : (
+                <>
+                  {/* B35 历史最佳区域 */}
+                  {b50Data.b35.length > 0 && (
+                    <div className="mb-10">
+                      <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> Standard Tracks (B35)
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {b50Data.b35.map((score, index) => renderScoreCard(score, index, 'b35'))}
+                      </div>
+                    </div>
+                  )}
 
-                    return (
-                      <motion.div 
-                        key={index} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * 0.01 }}
-                        className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/[0.05] bg-[#0a0a0c] group shadow-sm"
-                      >
-                        <img 
-                          src={`https://www.diving-fish.com/covers/${String(score.songId).padStart(5, '0')}.png`} alt="cover"
-                          className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 group-hover:scale-105 transition-all duration-700"
-                          onError={(e) => { e.target.src = '/assets/bg.png'; }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/40 to-transparent pointer-events-none" />
-
-                        {/* Top Badges */}
-                        <div className="absolute top-2 left-2 flex gap-1 z-10">
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex items-center gap-1 ${diff.color}`}>
-                            {diff.name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{realLevel}</span>
-                          </span>
-                          {getFcBadge(score.fcStatus)}
-                        </div>
-                        {score.isIdeal && <span className="absolute top-2 right-8 bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded text-[9px] font-bold z-10">IDEAL</span>}
-                        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-bold text-zinc-300 z-10" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                          #{index + 1}
-                        </div>
-
-                        {/* Bottom Info */}
-                        <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
-                          <div className="text-[13px] font-bold text-zinc-100 truncate mb-1 leading-tight">{score.songName}</div>
-                          <div className="flex items-end justify-between">
-                            <span className="text-lg font-bold text-zinc-100 leading-none" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                              {score.achievement.toFixed(4)}<span className="text-[10px] text-zinc-400">%</span>
-                            </span>
-                            <span className="bg-white/10 backdrop-blur-md border border-white/10 px-2 py-0.5 rounded text-xs font-bold text-amber-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                              {score.rating}
-                            </span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })
-                )}
-              </div>
+                  {/* R15 新曲最佳区域 */}
+                  {b50Data.r15.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span> New Tracks (R15)
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {b50Data.r15.map((score, index) => renderScoreCard(score, index, 'r15'))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {/* ========================================== */}
@@ -338,12 +374,12 @@ const MaimaiProfile = () => {
                   <div className="py-16 text-center text-zinc-600 font-medium bg-[#15151e]/40 rounded-2xl border border-white/5">暂无综合表现数据</div>
                 ) : (
                   pf100Data.map((score, index) => {
-                    const diff = getDiffConfig(score.difficulty);
+                    const diff = getDiffConfig(score);
                     const realLevel = getLevelString(score);
 
                     return (
                       <div 
-                        key={index}
+                        key={`pf-${index}`}
                         onClick={() => setSelectedPfScore(score)}
                         className="flex items-center justify-between bg-[#15151e] border border-white/[0.02] hover:bg-[#1a1a24] hover:border-white/[0.05] p-3 rounded-2xl cursor-pointer transition-all group shadow-sm"
                       >
@@ -414,12 +450,12 @@ const MaimaiProfile = () => {
                   <FaTimes />
                 </button>
 
-                <div className="text-center mb-8 px-4 w-full">
+                <div className="text-center mb-8 px-4 w-full mt-2">
                   <h3 className="text-lg font-bold text-zinc-100 mb-2 line-clamp-2 leading-snug">
                     {selectedPfScore.songName}
                   </h3>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center justify-center gap-1 mx-auto w-fit ${getDiffConfig(selectedPfScore.difficulty).color}`}>
-                    {getDiffConfig(selectedPfScore.difficulty).name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{getLevelString(selectedPfScore)}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center justify-center gap-1 mx-auto w-fit ${getDiffConfig(selectedPfScore).color}`}>
+                    {getDiffConfig(selectedPfScore).name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{getLevelString(selectedPfScore)}</span>
                   </span>
                 </div>
 
