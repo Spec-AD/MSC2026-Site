@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { FaCamera, FaUserPlus, FaUserEdit, FaTrophy, FaUsers, FaSpinner, FaSave, FaTimes, FaSyncAlt, FaClock, FaHeart, FaLock, FaUnlock, FaGamepad } from 'react-icons/fa';
+import { FaCamera, FaUserPlus, FaUserEdit, FaTrophy, FaUsers, FaSpinner, FaSave, FaTimes, FaSyncAlt, FaClock, FaHeart, FaLock, FaUnlock, FaGamepad, FaChartLine } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import bbcode from 'bbcode-to-react';
 import { useToast } from '../context/ToastContext';
@@ -22,7 +22,6 @@ const Profile = () => {
   const [isSyncingOsu, setIsSyncingOsu] = useState(false);
   const [osuSyncMode, setOsuSyncMode] = useState('osu');
   
-  // 🔥 新增：用于控制 PF 详情弹窗的状态
   const [selectedPfScore, setSelectedPfScore] = useState(null);
   
   const [b50Filter, setB50Filter] = useState('DEFAULT');
@@ -85,7 +84,7 @@ const Profile = () => {
         proberUsername: proberId,
         importToken: importToken 
       });
-      addToast(`数据同步成功！\n您的当前 Rating 为: ${res.data.rating}`, 'success');
+      addToast(`数据同步成功！\n当前 Rating 为: ${res.data.rating}`, 'success');
       window.location.reload();
     } catch (err) {
       addToast(err.response?.data?.msg || '同步失败，请检查账号和 Token 是否匹配', 'error');
@@ -141,7 +140,7 @@ const Profile = () => {
 
   const handleAddFriend = async () => {
     if (!currentUser) {
-      addToast('请先登录才能添加好友！', 'info'); 
+      addToast('请先登录才能添加好友', 'info'); 
       navigate('/login');
       return;
     }
@@ -262,80 +261,79 @@ const Profile = () => {
   }, [displayScores, b50Filter, profile]);
 
   if (loading) return (
-    <div className="w-full min-h-screen flex items-center justify-center text-white pb-20">
-      <FaSpinner className="animate-spin text-4xl text-blue-500 mb-4" />
+    <div className="w-full min-h-screen bg-[#111115] flex items-center justify-center pb-20">
+      <FaSpinner className="animate-spin text-4xl text-zinc-500" />
     </div>
   );
 
   if (error || !profile) return (
-    <div className="w-full min-h-screen flex flex-col items-center justify-center text-white pb-20">
-      <div className="text-6xl mb-4">📭</div>
-      <h2 className="text-2xl font-bold mb-2">出错了</h2>
-      <p className="text-gray-400 mb-6">{error}</p>
-      <button onClick={() => navigate('/')} className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors border border-white/20">
+    <div className="w-full min-h-screen bg-[#111115] flex flex-col items-center justify-center text-zinc-200 pb-20 selection:bg-zinc-600/40">
+      <div className="text-5xl mb-4 opacity-20">📭</div>
+      <h2 className="text-2xl font-bold mb-2">未找到该玩家</h2>
+      <p className="text-zinc-500 mb-6">{error}</p>
+      <button onClick={() => navigate('/')} className="px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-colors font-medium">
         返回主页
       </button>
     </div>
   );
 
   const ROLE_CONFIG = {
-    ADM: { color: 'text-red-500', badgeUrl: '/assets/badges/adm.png', label: 'Administrator' },
-    TO:  { color: 'text-yellow-400', badgeUrl: '/assets/badges/to.png', label: 'Tournament Officer' },
-    DS:  { color: 'text-green-500', badgeUrl: '/assets/badges/ds.png', label: 'Daily Supervisioner' },
-    user:{ color: 'text-white', badgeUrl: null, label: 'Player' } 
+    ADM: { color: 'text-rose-400', badgeUrl: '/assets/badges/adm.png', label: 'Administrator' },
+    TO:  { color: 'text-amber-400', badgeUrl: '/assets/badges/to.png', label: 'Tournament Officer' },
+    DS:  { color: 'text-emerald-400', badgeUrl: '/assets/badges/ds.png', label: 'Daily Supervisioner' },
+    user:{ color: 'text-zinc-100', badgeUrl: null, label: 'Player' } 
   };
   const userRole = profile.role ? (ROLE_CONFIG[profile.role] || ROLE_CONFIG.user) : ROLE_CONFIG.user;
 
+  // 难度色彩引擎 (内敛化)
   const getDifficultyColor = (levelIndex) => {
     const colors = [
-      'border-green-400 shadow-[0_0_10px_rgba(74,222,128,0.3)] text-green-400',
-      'border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.3)] text-yellow-400',
-      'border-red-400 shadow-[0_0_10px_rgba(248,113,113,0.3)] text-red-400',
-      'border-purple-400 shadow-[0_0_10px_rgba(192,132,252,0.3)] text-purple-400',
-      'border-purple-200 shadow-[0_0_10px_rgba(233,213,255,0.5)] text-purple-200'
+      'border-emerald-500/30 text-emerald-400',
+      'border-amber-500/30 text-amber-400',
+      'border-rose-500/30 text-rose-400',
+      'border-purple-500/30 text-purple-400',
+      'border-zinc-300/30 text-zinc-200'
     ];
-    return colors[levelIndex] || 'border-gray-500 text-gray-400';
+    return colors[levelIndex] || 'border-zinc-500/30 text-zinc-400';
   };
 
   const getRatingColor = (rating) => {
     const r = Number(rating) || 0;
-    if (r >= 16500) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]'; 
-    if (r >= 16000) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-cyan-400 to-blue-400 drop-shadow-[0_0_10px_rgba(103,232,249,0.6)]'; 
-    if (r >= 15000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]'; 
+    if (r >= 16500) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-amber-400 to-cyan-400'; 
+    if (r >= 16000) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-400'; 
+    if (r >= 15000) return 'text-amber-400'; 
     if (r >= 13000) return 'text-purple-400'; 
     if (r >= 10000) return 'text-blue-400'; 
-    return 'text-[#cd7f32]'; 
+    return 'text-orange-400'; 
   };
 
   const getOsuGradeColor = (grade) => {
     const g = grade.toUpperCase();
-    if (['XH', 'SH'].includes(g)) return 'text-gray-300 drop-shadow-[0_0_8px_rgba(209,213,219,0.8)]';
-    if (['X', 'S'].includes(g)) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]';
-    if (g === 'A') return 'text-green-400';
+    if (['XH', 'SH'].includes(g)) return 'text-zinc-200';
+    if (['X', 'S'].includes(g)) return 'text-amber-400';
+    if (g === 'A') return 'text-emerald-400';
     if (g === 'B') return 'text-blue-400';
     if (g === 'C') return 'text-purple-400';
-    return 'text-gray-400';
+    return 'text-zinc-500';
   };
 
   const getPfColor = (pf) => {
     const p = Number(pf) || 0;
-    if (p >= 42000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]'; 
-    if (p >= 35000) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-cyan-400 to-blue-400 drop-shadow-[0_0_10px_rgba(103,232,249,0.6)]'; 
-    if (p >= 30000) return 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]'; 
+    if (p >= 42000) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-amber-400 to-cyan-400'; 
+    if (p >= 35000) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-400'; 
+    if (p >= 30000) return 'text-amber-400'; 
     if (p >= 20000) return 'text-purple-400'; 
     if (p >= 15000) return 'text-blue-400'; 
-    return 'text-[#cd7f32]'; 
+    return 'text-orange-400'; 
   };
 
   const getRankColor = (rank) => {
-    if (rank === '-' || !rank) return 'text-gray-500';
+    if (rank === '-' || !rank) return 'text-zinc-500';
     const r = Number(rank);
-    if (r >= 1 && r <= 10) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-red-400 via-yellow-400 via-green-400 via-cyan-400 to-purple-500 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]';
-    if (r >= 11 && r <= 100) return 'text-cyan-300 drop-shadow-[0_0_10px_rgba(103,232,249,0.8)]';
+    if (r >= 1 && r <= 10) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-amber-400 to-cyan-400';
+    if (r >= 11 && r <= 100) return 'text-cyan-400';
     return 'text-blue-400';
   };
-
-  const textClipFix = "pb-1 leading-tight";
 
   const renderSafeBBCode = (content) => {
     if (!content) return null;
@@ -347,36 +345,36 @@ const Profile = () => {
   };
 
   return (
-    <div className="w-full min-h-screen pb-24 overflow-x-hidden text-white relative">
+    <div className="w-full min-h-screen pb-24 overflow-x-hidden bg-[#111115] text-zinc-200 font-sans selection:bg-zinc-600/40 relative">
       
       <input type="file" ref={avatarInputRef} className="hidden" accept=".jpg,.jpeg,.png,.gif" onChange={(e) => handleFileChange(e, 'avatar')} />
       <input type="file" ref={bannerInputRef} className="hidden" accept=".jpg,.jpeg,.png,.gif" onChange={(e) => handleFileChange(e, 'banner')} />
 
       {/* --- 1. Banner 区域 --- */}
-      <div className="relative h-[25vh] md:h-[40vh] w-full overflow-hidden bg-gray-900 group z-0">
+      <div className="relative h-[25vh] md:h-[35vh] w-full overflow-hidden bg-[#0a0a0c] group z-0 border-b border-white/[0.05]">
         <img 
           src={isEditing ? editData.bannerUrl : (profile.bannerUrl || '/assets/bg.png')} 
           alt="Profile Banner" 
-          className={`w-full h-full object-cover transition-all duration-500 ${isEditing ? 'opacity-30 blur-sm scale-105' : 'opacity-60'}`}
+          className={`w-full h-full object-cover transition-all duration-700 ${isEditing ? 'opacity-30 blur-md scale-105' : 'opacity-50'}`}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#111115] via-transparent to-transparent pointer-events-none" />
         
         {isOwnProfile && isEditing && (
            <button 
              onClick={(e) => { e.stopPropagation(); bannerInputRef.current.click(); }}
-             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 backdrop-blur-md px-6 py-3 rounded-full border border-white/30 transition-all flex items-center gap-2 z-50 font-bold tracking-widest text-sm cursor-pointer shadow-2xl"
+             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-zinc-900/80 hover:bg-white text-zinc-200 hover:text-zinc-900 backdrop-blur-md px-6 py-3 rounded-full transition-all flex items-center gap-2 z-50 font-bold text-sm cursor-pointer shadow-lg active:scale-95"
            >
-             <FaCamera /> 更换封面图
+             <FaCamera /> 更换封面底图
            </button>
         )}
       </div>
 
-      {/* --- 2. 用户身份信息区 --- */}
-      <div className="max-w-6xl mx-auto px-4 md:px-8 -mt-16 md:-mt-24 relative z-20">
-        <div className="flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-8 text-center md:text-left">
+      {/* --- 2. 用户信息头部 --- */}
+      <div className="max-w-6xl mx-auto px-4 md:px-8 -mt-16 md:-mt-20 relative z-20">
+        <div className="flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-8 text-center md:text-left">
           
           <div className="relative group flex-shrink-0 z-30">
-            <div className="w-28 h-28 md:w-44 md:h-44 rounded-2xl md:rounded-3xl overflow-hidden border-4 border-black bg-gray-900 shadow-2xl relative">
+            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-4 border-[#111115] bg-[#18181c] shadow-xl relative">
               <img 
                 src={isEditing ? editData.avatarUrl : (profile.avatarUrl || '/assets/logos.png')} 
                 alt="Avatar" 
@@ -385,18 +383,18 @@ const Profile = () => {
               {isOwnProfile && isEditing && (
                 <div 
                   onClick={(e) => { e.stopPropagation(); avatarInputRef.current.click(); }}
-                  className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center cursor-pointer opacity-100 transition-opacity z-50"
+                  className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center cursor-pointer opacity-100 transition-opacity z-50 hover:bg-black/50"
                 >
-                  <FaCamera className="text-3xl mb-1 text-white" />
-                  <span className="text-[10px] uppercase tracking-widest text-white font-bold">Upload</span>
+                  <FaCamera className="text-2xl mb-1 text-white" />
+                  <span className="text-xs font-semibold text-white">更换头像</span>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="flex-1 pb-2 md:pb-4 z-20 w-full">
-            <div className="flex items-end gap-3 md:gap-4 flex-wrap justify-center md:justify-start">
-              <h1 className={`text-4xl md:text-6xl font-black italic tracking-tighter drop-shadow-2xl transition-colors ${userRole.color}`}>
+          <div className="flex-1 pb-2 z-20 w-full">
+            <div className="flex items-center gap-3 md:gap-4 flex-wrap justify-center md:justify-start">
+              <h1 className={`text-3xl md:text-4xl font-bold tracking-tight ${userRole.color}`}>
                 {profile.username}
               </h1>
               {userRole.badgeUrl && (
@@ -404,41 +402,43 @@ const Profile = () => {
                    src={userRole.badgeUrl} 
                    alt={userRole.label} 
                    title={userRole.label}
-                   className="h-6 md:h-8 object-contain mb-1 md:mb-2 drop-shadow-lg"
+                   className="h-5 md:h-6 object-contain opacity-90"
                  />
               )}
             </div>
             
-            <div className="flex flex-wrap items-end justify-center md:justify-start gap-6 md:gap-10 mt-4 mb-2">
+            <div className="flex flex-wrap items-end justify-center md:justify-start gap-6 md:gap-10 mt-3 mb-1">
                 <div className="flex flex-col items-start">
-                    <span className="text-[10px] text-gray-400 font-bold tracking-widest leading-none mb-1 uppercase">UID</span>
-                    <span className="text-xl md:text-2xl font-mono text-gray-200 font-semibold leading-none">{profile.uid || '未分配'}</span>
+                    <span className="text-xs text-zinc-500 font-semibold mb-0.5">UID</span>
+                    <span className="text-lg font-medium text-zinc-300 leading-none">{profile.uid || '未分配'}</span>
                 </div>
                 <div className="flex flex-col items-start">
-                    <span className="text-[10px] text-gray-400 font-bold tracking-widest leading-none mb-1 uppercase">Performance</span>
-                    <span className={`text-xl md:text-2xl font-mono font-bold ${textClipFix} ${getPfColor(profile.totalPf)}`}>
+                    <span className="text-xs text-zinc-500 font-semibold mb-0.5">综合表现 (PF)</span>
+                    <span className={`text-lg font-bold ${getPfColor(profile.totalPf)}`}>
                         {profile.totalPf ? profile.totalPf.toFixed(2) : '0.00'}
                     </span>
                 </div>
                 <div className="flex flex-col items-start">
-                    <span className="text-[10px] text-gray-400 font-bold tracking-widest leading-none mb-1 uppercase">Rank</span>
-                    <span className={`text-xl md:text-2xl font-mono font-bold ${textClipFix} ${getRankColor(profile.pfRank)}`}>
+                    <span className="text-xs text-zinc-500 font-semibold mb-0.5">全站排名</span>
+                    <span className={`text-lg font-bold ${getRankColor(profile.pfRank)}`}>
                         {profile.pfRank !== '-' && profile.pfRank ? `#${profile.pfRank}` : '-'}
                     </span>
                 </div>
                 {profile.isRegistered && (
-                   <span className="bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-1 rounded text-[10px] uppercase tracking-wider ml-auto md:ml-0 mb-1">参赛选手</span>
+                   <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg text-[11px] font-bold ml-auto md:ml-0 mb-1">
+                     参赛选手
+                   </span>
                 )}
             </div>
           </div>
 
-          <div className="pb-2 md:pb-4 w-full md:w-auto flex flex-wrap justify-center gap-3 z-20">
+          <div className="pb-2 w-full md:w-auto flex flex-wrap justify-center gap-3 z-20">
             {isOwnProfile ? (
               !isEditing ? (
                 <>
                   <button 
                     onClick={() => setIsEditing(true)} 
-                    className="px-6 py-3 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-full font-bold transition-all flex items-center gap-2 text-sm md:text-base shadow-lg"
+                    className="px-6 py-2.5 bg-[#18181c] hover:bg-[#222228] border border-white/[0.05] rounded-xl font-semibold transition-all flex items-center gap-2 text-sm shadow-sm active:scale-95"
                   >
                     <FaUserEdit /> 编辑资料
                   </button>
@@ -446,9 +446,9 @@ const Profile = () => {
                   {currentUser && currentUser.role === 'ADM' && (
                     <button 
                       onClick={() => navigate('/admin')}
-                      className="px-6 py-3 bg-red-600/20 hover:bg-red-600/40 text-red-500 border border-red-500/50 rounded-full font-bold transition-all flex items-center gap-2 text-sm md:text-base shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+                      className="px-6 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl font-semibold transition-all flex items-center gap-2 text-sm active:scale-95"
                     >
-                      进入 ADM 中控台
+                      系统后台
                     </button>
                   )}
                 </>
@@ -457,14 +457,14 @@ const Profile = () => {
                   <button 
                     onClick={handleSaveProfile} 
                     disabled={isSaving} 
-                    className="flex-1 md:flex-none px-6 py-3 bg-green-500 hover:bg-green-400 text-white rounded-full flex items-center justify-center gap-2 transition-all font-bold disabled:opacity-50"
+                    className="flex-1 md:flex-none px-6 py-2.5 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl flex items-center justify-center gap-2 transition-all font-bold disabled:opacity-50 active:scale-95"
                   >
-                    {isSaving ? <FaSpinner className="animate-spin" /> : <FaSave />} 保存
+                    {isSaving ? <FaSpinner className="animate-spin" /> : <FaSave />} 保存修改
                   </button>
                   <button 
                     onClick={handleCancelEdit} 
                     disabled={isSaving}
-                    className="px-4 py-3 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/50 rounded-full flex items-center justify-center transition-all disabled:opacity-50"
+                    className="px-4 py-2.5 bg-[#18181c] hover:bg-[#222228] border border-white/[0.05] text-zinc-400 rounded-xl flex items-center justify-center transition-all disabled:opacity-50 active:scale-95"
                   >
                     <FaTimes />
                   </button>
@@ -478,16 +478,16 @@ const Profile = () => {
 
                 if (isFriend) {
                   return (
-                    <button disabled className="px-6 py-3 bg-pink-500 text-white rounded-full font-bold shadow-[0_0_15px_rgba(236,72,153,0.4)] flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center opacity-90 cursor-default">
-                      <FaHeart /> Friends
+                    <button disabled className="px-6 py-2.5 bg-[#18181c] text-zinc-400 border border-white/[0.05] rounded-xl font-semibold flex items-center gap-2 text-sm w-full md:w-auto justify-center opacity-80 cursor-default">
+                      <FaHeart className="text-rose-400" /> 已互为好友
                     </button>
                   );
                 }
 
                 if (isPending) {
                   return (
-                    <button disabled className="px-6 py-3 bg-gray-600/80 text-gray-300 border border-gray-500/50 rounded-full font-bold flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center cursor-not-allowed transition-all">
-                      <FaClock /> 等待验证
+                    <button disabled className="px-6 py-2.5 bg-[#18181c] text-zinc-500 border border-white/[0.05] rounded-xl font-semibold flex items-center gap-2 text-sm w-full md:w-auto justify-center cursor-not-allowed">
+                      <FaClock /> 等待对方通过
                     </button>
                   );
                 }
@@ -495,7 +495,7 @@ const Profile = () => {
                 return (
                   <button 
                     onClick={handleAddFriend}
-                    className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white rounded-full font-bold shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all flex items-center gap-2 text-sm md:text-base w-full md:w-auto justify-center"
+                    className="px-6 py-2.5 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl font-bold transition-all flex items-center gap-2 text-sm w-full md:w-auto justify-center active:scale-95 shadow-sm"
                   >
                     <FaUserPlus /> 加为好友
                   </button>
@@ -505,43 +505,42 @@ const Profile = () => {
           </div>
         </div> 
 
-        {/* 极简登塔经验条 */}
-        <div className="w-full mt-8 bg-black/40 border border-white/10 rounded-2xl p-4 md:p-5 relative overflow-hidden group shadow-lg z-20">
-          <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
-          
-          <div className="relative z-10 flex items-center gap-4 px-2 md:px-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center font-black italic text-lg md:text-xl shadow-[0_0_15px_rgba(34,211,238,0.5)] border border-white/20">
-              {profile.level || 1}
+        {/* 社区等级经验条 (内敛重构) */}
+        <div className="w-full mt-8 bg-[#18181c] border border-white/[0.05] rounded-2xl p-4 md:p-5 relative overflow-hidden group shadow-sm z-20">
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="w-12 h-12 shrink-0 rounded-full bg-[#141418] border border-white/[0.05] flex items-center justify-center font-bold text-lg text-cyan-400">
+              Lv.{profile.level || 1}
             </div>
 
-            <div className="flex-1 w-full flex flex-col gap-1.5 justify-center">
-              <div className="flex justify-end text-[10px] md:text-xs font-mono font-bold text-cyan-300 drop-shadow-md px-1 leading-none">
-                { (profile.xp || 0) % 300 } / 300 <span className="opacity-70 ml-1.5">({ (((profile.xp || 0) % 300) / 300 * 100).toFixed(1) }%)</span>
+            <div className="flex-1 w-full flex flex-col gap-2 justify-center">
+              <div className="flex justify-between items-end">
+                <span className="text-xs font-semibold text-zinc-400">社区活跃度</span>
+                <div className="text-xs font-medium text-zinc-500">
+                  <span className="text-cyan-400">{ (profile.xp || 0) % 300 }</span> / 300 XP
+                </div>
               </div>
-              <div className="h-2.5 w-full bg-gray-900 rounded-full overflow-hidden border border-white/5 shadow-inner">
+              <div className="h-2 w-full bg-[#111115] rounded-full overflow-hidden border border-white/[0.05]">
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: `${((profile.xp || 0) % 300) / 300 * 100}%` }}
-                  transition={{ duration: 1.5, ease: "easeOut", type: "spring" }}
-                  className="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-blue-500 shadow-[0_0_10px_rgba(34,211,238,0.8)] relative"
-                >
-                  <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/30 to-transparent"></div>
-                </motion.div>
+                  transition={{ duration: 1.2, ease: "easeOut" }}
+                  className="h-full bg-cyan-500/80 rounded-full relative"
+                />
               </div>
             </div>
           </div>
         </div>
 
-        {/* --- 3. 全局通用信息网格区 (About Me / Honors / Friends) --- */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mt-8 md:mt-12">
+        {/* --- 3. 全局通用信息网格区 --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
           
-          <div className="md:col-span-2 space-y-6 md:space-y-8">
+          <div className="md:col-span-2 space-y-6">
             <motion.div 
-              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-xl flex flex-col gap-4"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-[#18181c] border border-white/[0.05] rounded-2xl p-6 md:p-8 shadow-sm flex flex-col gap-4"
             >
-              <h3 className="text-gray-400 text-xs md:text-sm uppercase tracking-[0.2em] border-b border-white/10 pb-2 font-bold">
-                About Me
+              <h3 className="text-zinc-100 text-base border-b border-white/[0.05] pb-3 font-semibold flex items-center gap-2">
+                个人简介
               </h3>
               
               {isEditing ? (
@@ -550,19 +549,18 @@ const Profile = () => {
                     <textarea 
                       value={editData.bio}
                       onChange={(e) => setEditData({...editData, bio: e.target.value})}
-                      placeholder="在这里介绍一下你自己，支持 BBCode 语法"
-                      className="w-full h-48 bg-black/50 border border-white/20 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition-colors font-mono text-sm resize-none whitespace-pre-wrap"
+                      placeholder="在这里介绍一下你自己，支持基础排版语法"
+                      className="w-full h-40 bg-[#141418] border border-white/[0.05] rounded-xl p-4 text-zinc-200 outline-none focus:border-zinc-500 focus:bg-[#1a1a20] transition-colors text-[15px] resize-none whitespace-pre-wrap"
                     />
-                    <div className="absolute right-4 bottom-4 text-xs text-gray-500 font-mono pointer-events-none">BBCode Supported</div>
                   </div>
 
-                  {/* 隐私开关面板 */}
-                  <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                  <div className="flex items-center justify-between bg-[#141418] border border-white/[0.05] rounded-xl p-4">
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold text-blue-400 tracking-widest uppercase flex items-center gap-2">
-                        {editData.isB50Visible ? <FaUnlock className="text-xs" /> : <FaLock className="text-xs" />} 隐私设置 / Privacy
+                      <span className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                        {editData.isB50Visible ? <FaUnlock className="text-zinc-400" /> : <FaLock className="text-zinc-500" />} 
+                        数据隐私设置
                       </span>
-                      <span className="text-xs text-gray-400 mt-1 hidden sm:inline">公开展示我的 Maimai Rating 和 B50 成绩单给访客</span>
+                      <span className="text-xs text-zinc-500 mt-1 hidden sm:inline">对外公开展示我的 Maimai Rating 和 B50 成绩单</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0">
                       <input 
@@ -571,29 +569,27 @@ const Profile = () => {
                         checked={editData.isB50Visible}
                         onChange={(e) => setEditData({...editData, isB50Visible: e.target.checked})}
                       />
-                      <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-                      <span className="ml-3 text-xs font-mono font-bold w-12 text-center text-gray-300">
-                        {editData.isB50Visible ? 'PUBLIC' : 'HIDDEN'}
+                      <div className="w-11 h-6 bg-[#222228] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white"></div>
+                      <span className="ml-3 text-sm font-medium w-10 text-center text-zinc-400">
+                        {editData.isB50Visible ? '公开' : '隐藏'}
                       </span>
                     </label>
                   </div>
                 </>
               ) : (
-                <div className="text-sm md:text-base leading-relaxed text-gray-200 bbcode-content break-words whitespace-pre-wrap">
-                  {renderSafeBBCode(profile.bio) || <span className="text-gray-500 italic">这个人很懒，什么都没写...</span>}
+                <div className="text-[15px] leading-relaxed text-zinc-300 bbcode-content break-words whitespace-pre-wrap min-h-[60px]">
+                  {renderSafeBBCode(profile.bio) || <span className="text-zinc-600">这个人很懒，什么都没留下。</span>}
                 </div>
               )}
             </motion.div>
 
             <motion.div 
-              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-              className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-xl"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+              className="bg-[#18181c] border border-white/[0.05] rounded-2xl p-6 md:p-8 shadow-sm"
             >
-              <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
-                <FaTrophy className="text-yellow-400 text-xl" />
-                <h3 className="text-gray-400 text-xs md:text-sm uppercase tracking-[0.2em] font-bold">
-                  Tournament Honors
-                </h3>
+              <div className="flex items-center gap-2 mb-5 border-b border-white/[0.05] pb-3">
+                <FaTrophy className="text-amber-400 text-lg" />
+                <h3 className="text-zinc-100 text-base font-semibold">赛事荣誉</h3>
               </div>
               
               <div className="space-y-4">
@@ -601,72 +597,71 @@ const Profile = () => {
                   profile.honors.map((imgUrl, index) => (
                     <motion.div
                       key={index}
-                      whileHover={{ scale: 1.02 }}
-                      className="relative w-full overflow-hidden rounded-xl border border-white/5 shadow-lg group cursor-pointer"
+                      whileHover={{ scale: 1.01 }}
+                      className="relative w-full overflow-hidden rounded-xl border border-white/[0.05] shadow-sm cursor-pointer"
                     >
-                      <div className="aspect-[4/1] w-full bg-gray-800/50">
+                      <div className="aspect-[4/1] w-full bg-[#141418]">
                         <img 
                           src={imgUrl} 
                           alt={`Honor Badge ${index + 1}`}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
                       </div>
                     </motion.div>
                   ))
                 ) : (
-                  <div className="text-center py-12 border-2 border-dashed border-white/5 rounded-2xl">
-                    <div className="text-gray-600 text-4xl mb-2">🧊</div>
-                    <div className="text-gray-500 text-sm italic">暂无荣誉陈列</div>
+                  <div className="text-center py-10 bg-[#141418] rounded-xl border border-white/[0.05]">
+                    <div className="text-zinc-600 text-3xl mb-2 opacity-30">🏆</div>
+                    <div className="text-zinc-500 text-sm font-medium">暂无荣誉陈列</div>
                   </div>
                 )}
               </div>
             </motion.div>
           </div>
 
-          <div className="space-y-6 md:space-y-8">
+          <div className="space-y-6">
             <motion.div 
-              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-              className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+              className="bg-[#18181c] border border-white/[0.05] rounded-2xl p-6 shadow-sm"
             >
-              <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-2">
+              <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3">
                 <div className="flex items-center gap-2">
-                  <FaUsers className="text-blue-400" />
-                  <h3 className="text-gray-400 text-xs uppercase tracking-[0.2em] font-bold">Friends</h3>
+                  <FaUsers className="text-zinc-400" />
+                  <h3 className="text-zinc-100 text-base font-semibold">好友列表</h3>
                 </div>
-                <span className="text-xs bg-white/10 px-2 py-1 rounded-full text-gray-300">
-                  {profile.friends?.length || profile.friendsCount || 0}
+                <span className="text-xs bg-white/[0.05] px-2.5 py-1 rounded-lg text-zinc-400 font-medium">
+                  {profile.friends?.length || profile.friendsCount || 0} 人
                 </span>
               </div>
               
               {!profile.friends || profile.friends.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-xs font-mono tracking-widest">
-                  还是个独行侠...
+                <div className="text-center py-10 text-zinc-500 text-sm font-medium bg-[#141418] rounded-xl border border-white/[0.05]">
+                  还没有添加任何好友
                 </div>
               ) : (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
                   {profile.friends.map(friend => (
                     <div 
                       key={friend._id} 
                       onClick={() => navigate(`/profile/${friend.username}`)}
-                      className="flex items-center gap-4 bg-white/5 border border-white/10 p-3 md:p-4 rounded-2xl hover:bg-white/10 hover:border-blue-400/50 transition-all cursor-pointer group"
+                      className="flex items-center gap-3 bg-[#141418] border border-white/[0.02] p-3 rounded-xl hover:bg-[#1a1a20] hover:border-white/[0.05] transition-all cursor-pointer group"
                     >
                       <img 
                         src={friend.avatarUrl || '/assets/logos.png'} 
                         alt="avatar"
-                        className="w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 border-transparent group-hover:border-blue-400 transition-all object-cover bg-gray-800 shrink-0"
+                        className="w-10 h-10 rounded-full object-cover bg-[#111115] shrink-0 border border-white/[0.05]"
                       />
                       <div className="flex-1 overflow-hidden flex flex-col justify-center">
-                        <span className="text-base md:text-lg font-bold text-gray-300 group-hover:text-white truncate w-full transition-colors">
+                        <span className="text-[15px] font-bold text-zinc-200 group-hover:text-white truncate w-full transition-colors">
                           {friend.username}
                         </span>
-                        <span className="text-xs text-gray-500 font-mono tracking-widest mt-0.5">
-                          UID: <span className="text-gray-400">{friend.uid || '未绑定'}</span>
+                        <span className="text-xs text-zinc-500 font-medium mt-0.5">
+                          UID: <span className="text-zinc-400">{friend.uid || '-'}</span>
                         </span>
                       </div>
-                      <div className="text-right shrink-0 pr-2 md:pr-4">
-                        <div className={`text-xl md:text-2xl font-black drop-shadow-md font-mono tracking-tighter ${textClipFix} ${friend.totalPf ? getPfColor(friend.totalPf) : (friend.isB50Visible === true ? getRatingColor(friend.rating) : 'text-gray-500')}`}>
-                          {friend.totalPf ? friend.totalPf.toFixed(2) : (friend.isB50Visible !== false ? (friend.rating || '0') : '-')}
+                      <div className="text-right shrink-0 pr-1">
+                        <div className={`text-lg font-bold tracking-tight ${friend.totalPf ? getPfColor(friend.totalPf) : (friend.isB50Visible === true ? getRatingColor(friend.rating) : 'text-zinc-600')}`}>
+                          {friend.totalPf ? friend.totalPf.toFixed(1) : (friend.isB50Visible !== false ? (friend.rating || '0') : '-')}
                         </div>
                       </div>
                     </div>
@@ -678,20 +673,20 @@ const Profile = () => {
         </div>
 
         {/* ========================================================= */}
-        {/* 🎮 游戏生态 Tab 切换器 (Game Ecosystem Tabs) */}
+        {/* 🎮 游戏生态 Tab 切换器 */}
         {/* ========================================================= */}
-        <div className="mt-16 flex items-center gap-6 border-b border-white/10 pb-2 overflow-x-auto hide-scrollbar z-20 relative">
+        <div className="mt-12 flex items-center gap-2 border-b border-white/[0.05] pb-3 overflow-x-auto custom-scrollbar z-20 relative">
           <button 
             onClick={() => setActiveGame('maimai')}
-            className={`text-lg md:text-2xl font-black italic tracking-widest px-4 py-2 transition-all whitespace-nowrap ${activeGame === 'maimai' ? 'text-cyan-400 border-b-4 border-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]' : 'text-gray-600 hover:text-gray-400'}`}
+            className={`text-sm md:text-base font-bold px-4 py-2 rounded-xl transition-all whitespace-nowrap ${activeGame === 'maimai' ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02]'}`}
           >
-            MAIMAI DX
+            Maimai DX
           </button>
           <button 
             onClick={() => setActiveGame('osu')}
-            className={`text-lg md:text-2xl font-black italic tracking-widest px-4 py-2 transition-all whitespace-nowrap ${activeGame === 'osu' ? 'text-pink-400 border-b-4 border-pink-400 drop-shadow-[0_0_10px_rgba(236,72,153,0.5)]' : 'text-gray-600 hover:text-gray-400'}`}
+            className={`text-sm md:text-base font-bold px-4 py-2 rounded-xl transition-all whitespace-nowrap ${activeGame === 'osu' ? 'bg-pink-500/10 text-pink-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02]'}`}
           >
-            OSU! V2
+            osu!
           </button>
         </div>
 
@@ -701,17 +696,17 @@ const Profile = () => {
         {activeGame === 'maimai' && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col">
             
-            {/* 水鱼数据同步模块 (仅本人可见) */}
+            {/* 数据同步模块 (仅本人可见) */}
             {isOwnProfile && (
-              <div className="mt-8 p-5 md:p-6 bg-cyan-900/10 border border-cyan-500/20 rounded-2xl w-full backdrop-blur-md flex flex-col gap-4 z-20">
+              <div className="mt-6 p-5 md:p-6 bg-[#18181c] border border-cyan-500/20 rounded-2xl w-full flex flex-col gap-4 z-20 shadow-sm">
                 <div className="text-center md:text-left">
-                  <label className="text-sm font-bold text-cyan-400 uppercase tracking-widest block mb-1">
-                    Maimai DX Data Synchronization
-                  </label>
-                  <div className="text-gray-400 text-xs leading-relaxed">
-                    绑定查分器账号并提供 Import-Token即可获取您的B50<br/>
-                    <a href="https://www.diving-fish.com/maimaidx/prober/" target="_blank" rel="noopener noreferrer" className="text-cyan-400 underline hover:text-cyan-300 mt-1 inline-block">
-                      不知道怎么获取？点击前往水鱼查分器主页 {'>'} 编辑个人资料 {'>'} 成绩导入Token（复制即可）
+                  <h3 className="text-sm font-semibold text-cyan-400 mb-1 flex items-center gap-2">
+                    <FaSyncAlt /> 查分器数据同步
+                  </h3>
+                  <div className="text-zinc-500 text-xs leading-relaxed">
+                    绑定水鱼查分器账号并提供 Import-Token 即可获取或更新您的 B50 成绩单。<br/>
+                    <a href="https://www.diving-fish.com/maimaidx/prober/" target="_blank" rel="noopener noreferrer" className="text-cyan-400/80 hover:text-cyan-400 underline transition-colors mt-1 inline-block">
+                      如何获取？前往水鱼查分器主页 {'>'} 编辑个人资料 {'>'} 成绩导入Token
                     </a>
                   </div>
                 </div>
@@ -721,78 +716,71 @@ const Profile = () => {
                     type="text" 
                     value={proberId}
                     onChange={(e) => setProberId(e.target.value)}
-                    placeholder="水鱼用户名或QQ"
-                    className="w-full md:w-48 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-cyan-500 outline-none transition-colors"
+                    placeholder="查分器用户名或 QQ"
+                    className="w-full md:w-56 bg-[#141418] border border-white/[0.05] rounded-xl px-4 py-3 text-sm text-zinc-200 focus:border-cyan-500 outline-none transition-colors"
                   />
                   <input 
                     type="password" 
                     value={importToken}
                     onChange={(e) => setImportToken(e.target.value)}
-                    placeholder="在此粘贴您的超长 Import-Token"
-                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-cyan-500 outline-none transition-colors font-mono"
+                    placeholder="在此粘贴您的 Import-Token"
+                    className="flex-1 bg-[#141418] border border-white/[0.05] rounded-xl px-4 py-3 text-sm text-zinc-200 focus:border-cyan-500 outline-none transition-colors font-mono"
                   />
                   <button 
                     onClick={handleSyncMaimai}
                     disabled={isSyncingMaimai}
-                    className="bg-gray-800 hover:bg-gray-700 text-cyan-400 border border-gray-700 hover:border-cyan-500 px-8 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap shadow-lg flex items-center justify-center gap-2 shrink-0"
+                    className="bg-cyan-600/10 hover:bg-cyan-500 text-cyan-500 hover:text-white border border-cyan-500/30 px-6 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 whitespace-nowrap flex items-center justify-center gap-2 shrink-0 active:scale-95"
                   >
-                    {isSyncingMaimai ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
-                    {isSyncingMaimai ? 'SYNCING...' : 'SYNC'}
+                    {isSyncingMaimai ? <FaSpinner className="animate-spin" /> : '开始同步'}
                   </button>
                 </div>
               </div>
             )}
 
-            {/* B50 成绩面板 (带隐私拦截锁) */}
+            {/* B50 成绩面板 */}
             {(isOwnProfile || profile.isB50Visible) ? (
-              <div className="mt-12 z-20 relative">
-                <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 border-b border-white/10 pb-4 gap-4">
+              <div className="mt-8 z-20 relative">
+                <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 border-b border-white/[0.05] pb-4 gap-4">
                   <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
                     <div>
-                      <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 drop-shadow-lg">
-                        BEST 50.
+                      <h2 className="text-2xl md:text-3xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                        <FaChartLine className="text-cyan-400" /> Best 50 成绩单
                       </h2>
-                      <div className="text-gray-400 font-mono text-sm tracking-[0.3em] uppercase mt-2">
-                        Diving Fish / Maimai DX Records
+                      <div className="text-zinc-500 font-medium text-sm mt-1">
+                        基于 Maimai DX 真实游玩数据计算
                       </div>
                     </div>
                     
                     <select
                       value={b50Filter}
                       onChange={(e) => setB50Filter(e.target.value)}
-                      className="bg-black/80 backdrop-blur-md border border-cyan-500/50 text-cyan-300 rounded-xl px-4 py-2 outline-none font-bold text-sm uppercase tracking-widest cursor-pointer hover:bg-cyan-900/30 transition-colors shadow-[0_0_15px_rgba(34,211,238,0.2)] mt-2 md:mt-0"
+                      className="bg-[#141418] border border-white/[0.05] text-zinc-300 rounded-xl px-4 py-2.5 outline-none font-medium text-sm cursor-pointer hover:bg-[#1a1a20] transition-colors mt-2 md:mt-0 appearance-none min-w-[180px]"
                     >
                        <option value="DEFAULT">默认 B50 (Default)</option>
-                       <option value="AP50">AP 50 (All Perfect)</option>
-                       <option value="FC50">FC 50 (Full Combo)</option>
-                       <option value="I50">理想 B50 (Ideal-50)</option>
-                       <option value="STAR_1">1星 B50 (DX≥85%)</option>
-                       <option value="STAR_2">2星 B50 (DX≥90%)</option>
-                       <option value="STAR_3">3星 B50 (DX≥93%)</option>
-                       <option value="STAR_4">4星 B50 (DX≥95%)</option>
-                       <option value="STAR_5">5星 B50 (DX≥97%)</option>
-                       <option value="STAR_5_5">5.5星 B50 (DX≥98%)</option>
-                       <option value="STAR_6">6星 B50 (DX≥99%)</option>
-                       <option value="RED">红谱 B50 (EXPERT)</option>
-                       <option value="PURPLE">紫谱 B50 (MASTER)</option>
-                       <option value="WHITE">白谱 B50 (Re:MASTER)</option>
+                       <option value="AP50">纯 AP 榜单</option>
+                       <option value="FC50">纯 FC/AP 榜单</option>
+                       <option value="I50">理想 B50 (满分假设)</option>
+                       <option value="STAR_5">五星水平 (DX≥97%)</option>
+                       <option value="RED">红谱专榜 (EXPERT)</option>
+                       <option value="PURPLE">紫谱专榜 (MASTER)</option>
+                       <option value="WHITE">白谱专榜 (Re:MASTER)</option>
                     </select>
                   </div>
                   
-                  <div className="mt-4 md:mt-0 flex items-center gap-4 bg-black/40 backdrop-blur-md border border-white/10 px-6 py-3 rounded-2xl">
-                    <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">
-                      {b50Filter === 'DEFAULT' ? 'DX Rating' : 'Filtered Rating'}
+                  <div className="flex flex-col items-end gap-1 bg-[#18181c] border border-white/[0.05] px-5 py-2.5 rounded-xl">
+                    <span className="text-zinc-500 text-xs font-semibold">
+                      {b50Filter === 'DEFAULT' ? '综合 Rating' : '当前筛选 Rating'}
                     </span>
-                    <span className={`text-3xl font-black italic transition-all ${textClipFix} ${getRatingColor(displayRating)}`}>
+                    <span className={`text-2xl font-bold tracking-tight ${getRatingColor(displayRating)}`}>
                       {displayRating}
                     </span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
                   {displayScores.length === 0 ? (
-                    <div className="col-span-full py-20 text-center text-gray-500 font-mono tracking-widest border border-white/5 rounded-2xl bg-black/20">
-                      NO RECORDS FOUND UNDER THIS FILTER
+                    <div className="col-span-full py-16 text-center text-zinc-500 text-sm font-medium border border-white/[0.05] rounded-2xl bg-[#141418]">
+                      在当前筛选条件下未找到任何成绩
                     </div>
                   ) : (
                     displayScores.map((record, index) => {
@@ -803,45 +791,46 @@ const Profile = () => {
                           key={`${b50Filter}-${index}`}
                           initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: index * 0.02 }}
-                          className={`relative aspect-[4/3] rounded-2xl overflow-hidden border-2 bg-gray-900 group cursor-default transition-all duration-300 ${colorClasses}`}
+                          transition={{ delay: index * 0.02, duration: 0.2 }}
+                          className={`relative aspect-[4/3] rounded-xl overflow-hidden border bg-[#18181c] group cursor-default transition-all ${colorClasses}`}
                         >
                           <img 
                             src={`https://www.diving-fish.com/covers/${String(record.songId).padStart(5, '0')}.png`} 
                             alt={record.songName}
-                            className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
+                            className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 group-hover:scale-105 transition-all duration-500"
                             onError={(e) => { e.target.src = '/assets/bg.png'; }}
                           />
                           
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#111115] via-[#111115]/40 to-transparent pointer-events-none" />
 
+                          {/* 状态徽章 */}
                           {record.fcStatus && ['fc', 'fcp', 'ap', 'app'].includes(record.fcStatus) && (
-                            <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-black italic text-white shadow-lg z-10 
-                              ${record.fcStatus.includes('ap') ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' : 'bg-gradient-to-r from-pink-400 to-pink-600'}`}>
+                            <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold text-zinc-900 z-10 shadow-sm
+                              ${record.fcStatus.includes('ap') ? 'bg-amber-400' : 'bg-pink-400'}`}>
                               {record.fcStatus.toUpperCase()}
                             </div>
                           )}
 
                           {record.isIdeal && (
-                            <div className="absolute top-2 left-10 bg-cyan-500/80 backdrop-blur-sm border border-cyan-300 px-1.5 py-0.5 rounded text-[9px] font-black italic text-white z-10 shadow-[0_0_10px_rgba(6,182,212,0.8)]">
-                              BOOSTED
+                            <div className="absolute top-2 left-12 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-1.5 py-0.5 rounded-md text-[9px] font-bold z-10">
+                              假设
                             </div>
                           )}
 
-                          <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm border border-white/20 px-2 py-0.5 rounded text-[10px] font-black italic text-white z-10">
+                          <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md border border-white/[0.05] px-2 py-0.5 rounded-md text-[10px] font-bold text-zinc-300 z-10">
                             #{index + 1}
                           </div>
 
                           <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
-                            <div className="text-xs md:text-sm font-bold text-white truncate drop-shadow-md mb-1">
+                            <div className="text-xs md:text-[13px] font-bold text-zinc-100 truncate mb-1">
                               {record.songName}
                             </div>
                             <div className="flex items-end justify-between">
-                              <div className="text-lg md:text-xl font-black italic tracking-tighter text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                                {record.achievement ? record.achievement.toFixed(4) : '0.0000'}<span className="text-[10px] text-gray-300 ml-0.5">%</span>
+                              <div className="text-base md:text-lg font-bold text-zinc-100 tracking-tight">
+                                {record.achievement ? record.achievement.toFixed(4) : '0.0000'}<span className="text-[10px] text-zinc-400 ml-0.5 font-medium">%</span>
                               </div>
-                              <div className="bg-white/10 backdrop-blur-md border border-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-white flex items-center gap-1 shadow-lg">
-                                <span className="text-[8px] opacity-70">➔</span> {record.rating || 0}
+                              <div className="bg-white/[0.05] backdrop-blur-md border border-white/[0.05] px-2 py-1 rounded-lg text-xs font-semibold text-zinc-200 flex items-center gap-1">
+                                {record.rating || 0}
                               </div>
                             </div>
                           </div>
@@ -852,54 +841,54 @@ const Profile = () => {
                 </div>
               </div>
             ) : (
-              <div className="mt-12 z-20 relative border border-white/5 bg-black/40 backdrop-blur-md rounded-3xl p-16 md:p-24 flex flex-col items-center justify-center text-center shadow-xl">
-                <FaLock className="text-6xl text-gray-700 mb-6 drop-shadow-md" />
-                <h2 className="text-2xl md:text-3xl font-black italic tracking-widest text-gray-400 mb-2">B50 数据已隐藏</h2>
-                <p className="text-gray-500 font-mono text-sm tracking-widest">该玩家未开放访客查看权限 / ACCESS DENIED</p>
+              <div className="mt-8 z-20 relative border border-white/[0.05] bg-[#141418] rounded-2xl p-16 md:p-24 flex flex-col items-center justify-center text-center">
+                <FaLock className="text-5xl text-zinc-700 mb-4" />
+                <h2 className="text-xl font-bold text-zinc-300 mb-2">成绩单已设为私密</h2>
+                <p className="text-zinc-500 text-sm font-medium">该玩家选择不向访客公开 Maimai 表现数据</p>
               </div>
             )}
 
             {/* PF Top 50 列表 */}
             {profile.topPfScores && profile.topPfScores.length > 0 && (
-              <div className="mt-16 md:mt-24 z-20 relative border-t border-white/10 pt-12">
-                <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter text-gray-300 drop-shadow-lg mb-6 flex items-center gap-3">
+              <div className="mt-12 z-20 relative border-t border-white/[0.05] pt-8">
+                <h2 className="text-2xl font-bold text-zinc-100 mb-6 flex items-center gap-2">
                   <FaTrophy className="text-cyan-400" />
-                  PERFORMANCE TOP 50.
+                  单曲综合表现 Top 50
                 </h2>
-                <div className="flex flex-col border-t border-gray-800/50">
+                <div className="flex flex-col bg-[#141418] border border-white/[0.05] rounded-2xl overflow-hidden">
                   {profile.topPfScores.map((score, index) => {
-                    const diffColors = ['text-green-400', 'text-yellow-400', 'text-red-400', 'text-purple-400', 'text-pink-300'];
-                    const diffColor = diffColors[score.difficulty] || diffColors[score.level] || 'text-gray-400';
+                    const diffColors = ['text-emerald-400', 'text-amber-400', 'text-rose-400', 'text-purple-400', 'text-zinc-300'];
+                    const diffColor = diffColors[score.difficulty] || diffColors[score.level] || 'text-zinc-400';
 
                     return (
                       <div 
                         key={score._id || index} 
                         onClick={() => setSelectedPfScore(score)}
-                        className="flex justify-between items-center py-2.5 border-b border-gray-800/50 hover:bg-white/10 hover:px-4 transition-all group px-2 cursor-pointer rounded-lg mt-1"
+                        className="flex justify-between items-center py-3 border-b border-white/[0.02] last:border-0 hover:bg-[#1a1a20] transition-colors group px-4 cursor-pointer"
                       >
-                        <div className="flex items-center gap-4 truncate">
-                          <div className="text-gray-600 font-mono text-sm w-6 text-right shrink-0">
+                        <div className="flex items-center gap-3 truncate">
+                          <div className="text-zinc-600 font-bold text-sm w-6 text-center shrink-0">
                             {index + 1}
                           </div>
                           <div className="flex flex-col truncate">
-                            <span className="text-gray-200 font-semibold text-sm truncate group-hover:text-cyan-300 transition-colors">
-                              {score.songName || 'Unknown'}
+                            <span className="text-zinc-200 font-semibold text-[15px] truncate group-hover:text-cyan-400 transition-colors">
+                              {score.songName || 'Unknown Track'}
                             </span>
-                            <div className="flex items-center gap-2 mt-0.5 text-[11px]">
-                              <span className={`font-black ${diffColor}`}>Lv.{score.level}</span>
-                              <span className="text-gray-600">|</span>
-                              <span className="text-gray-500 font-mono">{score.constant?.toFixed(1)}</span>
-                              <span className="text-gray-600 hidden md:inline">|</span>
-                              <span className="text-gray-500 font-mono hidden md:inline">{score.achievement?.toFixed(4)}%</span>
+                            <div className="flex items-center gap-2 mt-0.5 text-xs font-medium">
+                              <span className={`${diffColor}`}>Lv.{score.level}</span>
+                              <span className="text-zinc-600">·</span>
+                              <span className="text-zinc-500">{score.constant?.toFixed(1)}</span>
+                              <span className="text-zinc-600 hidden md:inline">·</span>
+                              <span className="text-zinc-400 hidden md:inline">{score.achievement?.toFixed(4)}%</span>
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex items-baseline gap-1.5 shrink-0 ml-4">
-                          <span className={`text-base font-mono font-bold ${textClipFix} ${getPfColor(score.pf)}`}>
+                        <div className="flex flex-col items-end shrink-0 ml-4">
+                          <span className={`text-lg font-bold tracking-tight ${getPfColor(score.pf)}`}>
                             {score.pf ? score.pf.toFixed(2) : '0.00'}
                           </span>
-                          <span className="text-[10px] text-gray-600 font-bold uppercase">PF</span>
+                          <span className="text-[10px] text-zinc-500 font-bold">PF</span>
                         </div>
                       </div>
                     );
@@ -915,52 +904,50 @@ const Profile = () => {
         {/* 🌸 OSU! 生态系统区 */}
         {/* ========================================================= */}
         {activeGame === 'osu' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col mt-8">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col mt-6">
             
-            {/* osu! 玩家名片与绑定控制台 */}
-            <div className="bg-pink-900/10 border border-pink-500/20 rounded-3xl p-6 md:p-8 backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden z-20 shadow-xl">
-              <div className="absolute inset-0 bg-gradient-to-r from-pink-500/5 to-transparent pointer-events-none"></div>
+            {/* osu! 名片面板 */}
+            <div className="bg-[#18181c] border border-pink-500/20 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden z-20 shadow-sm">
               
-              <div className="flex items-center gap-4 md:gap-6 z-10 w-full md:w-auto">
+              <div className="flex items-center gap-5 z-10 w-full md:w-auto">
                 {profile.osuId ? (
                   <img 
                     src={profile.osuAvatarUrl || '/assets/logos.png'} 
-                    className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.4)] object-cover bg-gray-900 shrink-0" 
+                    className="w-20 h-20 md:w-24 md:h-24 rounded-full border-2 border-[#18181c] ring-2 ring-pink-500/50 object-cover bg-[#111115] shrink-0" 
                     alt="osu avatar" 
                   />
                 ) : (
-                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-dashed border-pink-500/50 flex items-center justify-center bg-pink-900/20 shrink-0">
-                    <FaGamepad className="text-3xl text-pink-500/50" />
+                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-2 border-dashed border-pink-500/30 flex items-center justify-center bg-pink-500/5 shrink-0">
+                    <FaGamepad className="text-3xl text-pink-500/40" />
                   </div>
                 )}
                 
                 <div className="flex flex-col">
                   {profile.osuId ? (
                     <>
-                      <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-white drop-shadow-md">
+                      <h3 className="text-2xl font-bold text-zinc-100 tracking-tight">
                         {profile.osuUsername}
                       </h3>
-                      <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-2 font-mono text-sm font-bold text-pink-300">
-                        {/* 动态显示玩家当前同步的是什么模式 */}
-                        <span className="bg-black/50 px-2 py-0.5 rounded border border-pink-500/30">
-                          {profile.osuMode ? profile.osuMode.toUpperCase() : 'OSU'} | {Math.round(profile.osuPp || 0)} pp
+                      <div className="flex flex-wrap items-center gap-2 md:gap-3 mt-1.5 text-sm font-semibold text-pink-400">
+                        <span className="bg-pink-500/10 px-2 py-0.5 rounded border border-pink-500/20">
+                          {profile.osuMode ? profile.osuMode.toUpperCase() : 'OSU'} · {Math.round(profile.osuPp || 0)} pp
                         </span>
-                        <span className="text-gray-500 hidden md:inline">|</span>
-                        <span className="text-gray-300 flex items-center gap-1">🌍 <span className="text-white">#{profile.osuGlobalRank || '-'}</span></span>
-                        <span className="text-gray-500 hidden md:inline">|</span>
-                        <span className="text-gray-300 flex items-center gap-1">🏳️ <span className="text-white">#{profile.osuCountryRank || '-'}</span></span>
+                        <span className="text-zinc-600 hidden md:inline">|</span>
+                        <span className="text-zinc-400 flex items-center gap-1.5">🌍 <span className="text-zinc-200">#{profile.osuGlobalRank || '-'}</span></span>
+                        <span className="text-zinc-600 hidden md:inline">|</span>
+                        <span className="text-zinc-400 flex items-center gap-1.5">🏳️ <span className="text-zinc-200">#{profile.osuCountryRank || '-'}</span></span>
                       </div>
                     </>
                   ) : (
                     <>
-                      <h3 className="text-xl md:text-2xl font-black italic tracking-widest text-gray-400">OSU! DISCONNECTED</h3>
-                      <p className="text-xs text-gray-500 mt-1">该玩家尚未绑定 osu! 官方账号</p>
+                      <h3 className="text-xl font-bold text-zinc-400">未绑定账号</h3>
+                      <p className="text-sm font-medium text-zinc-500 mt-1">该玩家尚未关联 osu! 官方档案</p>
                     </>
                   )}
                 </div>
               </div>
 
-              {/* 同步按钮与模式切换入口 */}
+              {/* 操作区 */}
               <div className="flex flex-col gap-2 w-full md:w-auto shrink-0 z-10">
                 {!profile.osuId ? (
                   isOwnProfile && (
@@ -968,18 +955,17 @@ const Profile = () => {
                       const clientId = "49210"; 
                       const redirectUri = encodeURIComponent("https://www.purebeat.top/osu-callback");
                       window.location.href = `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=public+identify`;
-                    }} className="bg-pink-600 hover:bg-pink-500 text-white px-8 py-3.5 rounded-xl font-bold tracking-widest uppercase transition-all shadow-[0_0_20px_rgba(236,72,153,0.4)] flex items-center justify-center gap-2">
-                      <FaLock className="text-sm" /> 前往授权绑定
+                    }} className="bg-pink-600 hover:bg-pink-500 text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 active:scale-95">
+                      <FaLock /> 前往授权绑定
                     </button>
                   )
                 ) : (
                   isOwnProfile && (
                     <div className="flex flex-col md:flex-row gap-2">
-                      {/* 🌟 核心：游戏模式下拉框 */}
                       <select
                         value={osuSyncMode}
                         onChange={(e) => setOsuSyncMode(e.target.value)}
-                        className="bg-gray-900 border border-pink-500/50 text-pink-300 px-4 py-3 rounded-xl font-bold uppercase outline-none shadow-lg appearance-none cursor-pointer text-center md:text-left transition-colors hover:bg-pink-900/30"
+                        className="bg-[#141418] border border-pink-500/30 text-pink-400 px-4 py-2.5 rounded-xl font-semibold outline-none appearance-none cursor-pointer text-center md:text-left transition-colors hover:bg-pink-500/10"
                       >
                         <option value="osu">osu! (STD)</option>
                         <option value="mania">osu!mania</option>
@@ -990,10 +976,10 @@ const Profile = () => {
                       <button 
                         onClick={handleSyncOsu}
                         disabled={isSyncingOsu}
-                        className="flex-1 bg-gray-900 border border-pink-500/50 hover:bg-pink-600/20 text-pink-400 px-6 py-3 rounded-xl font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg"
+                        className="flex-1 bg-zinc-200 hover:bg-white text-zinc-900 px-6 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
                       >
                         {isSyncingOsu ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
-                        {isSyncingOsu ? 'SYNCING...' : 'SYNC DATA'}
+                        刷新数据
                       </button>
                     </div>
                   )
@@ -1001,71 +987,66 @@ const Profile = () => {
               </div>
             </div>
 
-            {/* BP100 展示区 */}
+            {/* BP100 成绩区 */}
             {profile.osuId && (
-              <div className="mt-12 z-20 relative">
-                <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 border-b border-white/10 pb-4 gap-4">
+              <div className="mt-10 z-20 relative">
+                <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 border-b border-white/[0.05] pb-4 gap-4">
                   <div>
-                    <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-red-500 drop-shadow-lg">
-                      BEST PERFORMANCE.
+                    <h2 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
+                      <FaTrophy className="text-pink-400" /> Best Performance
                     </h2>
-                    <div className="text-gray-400 font-mono text-sm tracking-[0.3em] uppercase mt-2">
-                      Osu! {profile.osuMode || 'Standard'} Top 100 Plays
+                    <div className="text-zinc-500 font-medium text-sm mt-1">
+                      {profile.osuMode || 'osu!'} 模式历史 Top 100 表现
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   {(!profile.osuScores || profile.osuScores.length === 0) ? (
-                    <div className="col-span-full py-20 text-center text-pink-500/50 font-mono tracking-widest border border-pink-500/10 rounded-2xl bg-pink-900/10">
-                      NO RECORDS FOUND (CLICK SYNC TO FETCH)
+                    <div className="col-span-full py-16 text-center text-zinc-500 text-sm font-medium border border-white/[0.05] rounded-2xl bg-[#141418]">
+                      暂无数据 (点击刷新获取最新成绩)
                     </div>
                   ) : (
                     profile.osuScores.map((score, index) => (
                       <motion.div 
-                        initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.01 }}
+                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.01 }}
                         key={score._id || index} 
-                        className="flex items-center bg-gray-900/40 backdrop-blur-sm border border-white/5 rounded-xl overflow-hidden hover:border-pink-500/50 transition-all group shadow-md hover:shadow-[0_0_15px_rgba(236,72,153,0.2)]"
+                        className="flex items-center bg-[#18181c] border border-white/[0.05] rounded-xl overflow-hidden hover:bg-[#1a1a20] transition-colors group p-1.5"
                       >
-                        {/* 排名序号 */}
-                        <div className="w-12 text-center font-mono font-black text-gray-500 italic group-hover:text-pink-400 transition-colors">
-                          #{index + 1}
+                        <div className="w-10 text-center font-bold text-zinc-600 group-hover:text-pink-500 transition-colors">
+                          {index + 1}
                         </div>
                         
-                        {/* 曲绘 */}
-                        <div className="relative w-16 h-16 md:w-20 md:h-20 shrink-0">
+                        <div className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden border border-white/[0.05]">
                           <img src={score.coverUrl || '/assets/bg.png'} className="w-full h-full object-cover" alt="cover" />
-                          <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-all"></div>
                         </div>
                         
-                        {/* 详细信息 */}
-                        <div className="flex-1 p-3 overflow-hidden flex flex-col justify-center">
-                          <div className="text-sm md:text-base font-bold text-white truncate group-hover:text-pink-300 transition-colors drop-shadow-md">
+                        <div className="flex-1 px-3 overflow-hidden flex flex-col justify-center">
+                          <div className="text-sm font-bold text-zinc-100 truncate group-hover:text-pink-300 transition-colors">
                             {score.title}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs text-yellow-500 font-bold truncate max-w-[150px] md:max-w-[200px]">
+                            <span className="text-[11px] text-amber-400 font-semibold truncate max-w-[140px] md:max-w-[180px]">
                               [{score.version}]
                             </span>
                             {score.mods && score.mods.length > 0 && (
-                              <span className="text-[10px] font-mono font-black text-red-400 bg-red-500/10 px-1 rounded border border-red-500/20">
+                              <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">
                                 +{score.mods.join('')}
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 mt-1.5">
-                            <span className="text-xs md:text-sm font-black italic text-pink-400 tracking-tighter">
-                              {Math.round(score.pp)} PP
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-sm font-bold text-pink-400">
+                              {Math.round(score.pp)} pp
                             </span>
-                            <span className="text-[10px] md:text-xs font-mono font-bold text-gray-400">
+                            <span className="text-xs font-medium text-zinc-500">
                               {score.accuracy.toFixed(2)}%
                             </span>
                           </div>
                         </div>
                         
-                        {/* 评级 */}
-                        <div className="w-16 md:w-20 flex justify-center shrink-0 pr-2">
-                          <span className={`text-2xl md:text-3xl font-black italic tracking-tighter ${getOsuGradeColor(score.grade)}`}>
+                        <div className="w-14 flex justify-center shrink-0 pr-2">
+                          <span className={`text-2xl font-black ${getOsuGradeColor(score.grade)}`}>
                             {score.grade}
                           </span>
                         </div>
@@ -1079,35 +1060,35 @@ const Profile = () => {
         )}
 
       {/* ========================================================= */}
-      {/* 🌟 PF 详情极简弹窗 (v1.2.2 osu!lazer 风格) */}
+      {/* 🌟 PF 详情极简弹窗 (柔和化重构) */}
       {/* ========================================================= */}
       <AnimatePresence>
         {selectedPfScore && (
           <div 
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0a0a0c]/80 backdrop-blur-sm p-4"
             onClick={() => setSelectedPfScore(null)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 20 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="bg-gray-900 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-sm flex flex-col items-center shadow-2xl relative"
-              onClick={e => e.stopPropagation()} // 阻止事件冒泡，防止点击面板本身关闭
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="bg-[#18181c] border border-white/[0.05] rounded-3xl p-6 md:p-8 w-full max-w-sm flex flex-col items-center shadow-2xl relative"
+              onClick={e => e.stopPropagation()}
             >
               <button 
                 onClick={() => setSelectedPfScore(null)}
-                className="absolute top-5 right-5 text-gray-500 hover:text-white transition-colors"
+                className="absolute top-5 right-5 text-zinc-500 hover:text-zinc-200 transition-colors p-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-full active:scale-90"
               >
-                <FaTimes className="text-xl" />
+                <FaTimes />
               </button>
 
-              <div className="text-center mb-6 px-4 w-full">
-                <h3 className="text-lg md:text-xl font-bold text-white mb-2 line-clamp-2 leading-snug">
+              <div className="text-center mb-6 px-4 w-full pt-2">
+                <h3 className="text-lg font-bold text-zinc-100 mb-2 line-clamp-2 leading-snug">
                   {selectedPfScore.songName}
                 </h3>
-                <span className="text-[10px] md:text-xs font-bold text-gray-900 bg-cyan-400 px-3 py-1 rounded-full uppercase tracking-widest">
-                  Level {selectedPfScore.level}
+                <span className="text-xs font-semibold text-cyan-900 bg-cyan-400 px-2.5 py-0.5 rounded-md">
+                  Lv.{selectedPfScore.level}
                 </span>
               </div>
 
@@ -1117,83 +1098,65 @@ const Profile = () => {
                 const constant = selectedPfScore.constant || 0;
                 const dxRatio = selectedPfScore.dxRatio || 0;
 
-                // 🔥 核心修复：将完成率除以 100 归一化。
-                // 用 Math.min 保证即使打出了 100.5% 的成绩，完成率加成也严格封顶在满值 0.6
-                const achMultiplier = (Math.min(ach, 101) / 101) * 0.6;
-                
-                // DX 分比例也同样严谨地封顶在 1.0，满值 0.4
+                const achMultiplier = (Math.min(ach, 100) / 100) * 0.6;
                 const dxMultiplier = Math.min(dxRatio, 1.0) * 0.4;
-                
-                // 最终总加成严格按照比例相加
                 const totalMultiplier = achMultiplier + dxMultiplier;
-
-                // 计算用于评级和进度条展示的百分比 (满分 1.0 -> 100%)
                 const percent = totalMultiplier * 100;
-                const displayPercent = Math.min(percent, 100); // 环形进度条最大 100%
+                const displayPercent = Math.min(percent, 100); 
 
                 let grade = 'D';
-                let gradeColor = 'text-gray-400';
-                let ringColor = 'text-gray-500';
+                let gradeColor = 'text-zinc-500';
+                let ringColor = 'text-zinc-600';
 
-                // 左闭右开评级体系
-                if (percent >= 98) { 
-                  grade = 'X'; gradeColor = 'text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.6)]'; ringColor = 'text-yellow-400'; 
-                } else if (percent >= 95) { 
-                  grade = 'S'; gradeColor = 'text-pink-400 drop-shadow-[0_0_15px_rgba(244,114,182,0.6)]'; ringColor = 'text-pink-400'; 
-                } else if (percent >= 88) { 
-                  grade = 'A'; gradeColor = 'text-green-400 drop-shadow-[0_0_15px_rgba(74,222,128,0.6)]'; ringColor = 'text-green-400'; 
-                } else if (percent >= 80) { 
-                  grade = 'B'; gradeColor = 'text-blue-400 drop-shadow-[0_0_15px_rgba(96,165,250,0.6)]'; ringColor = 'text-blue-400'; 
-                } else if (percent >= 70) { 
-                  grade = 'C'; gradeColor = 'text-orange-400 drop-shadow-[0_0_15px_rgba(251,146,60,0.6)]'; ringColor = 'text-orange-400'; 
-                } else { 
-                  grade = 'D'; gradeColor = 'text-gray-500 drop-shadow-[0_0_15px_rgba(107,114,128,0.6)]'; ringColor = 'text-gray-600'; 
-                }
+                if (percent >= 98) { grade = 'X'; gradeColor = 'text-amber-400'; ringColor = 'text-amber-400'; } 
+                else if (percent >= 95) { grade = 'S'; gradeColor = 'text-pink-400'; ringColor = 'text-pink-400'; } 
+                else if (percent >= 88) { grade = 'A'; gradeColor = 'text-emerald-400'; ringColor = 'text-emerald-400'; } 
+                else if (percent >= 80) { grade = 'B'; gradeColor = 'text-blue-400'; ringColor = 'text-blue-400'; } 
+                else if (percent >= 70) { grade = 'C'; gradeColor = 'text-orange-400'; ringColor = 'text-orange-400'; } 
 
-                // SVG 环形进度条数学配置
-                const radius = 65;
+                const radius = 60;
                 const circumference = 2 * Math.PI * radius;
                 const strokeDashoffset = circumference - (displayPercent / 100) * circumference;
 
                 return (
                   <>
-                    <div className="relative w-48 h-48 flex items-center justify-center mb-8">
-                      <svg className="transform -rotate-90 w-full h-full drop-shadow-xl">
-                        <circle cx="96" cy="96" r="65" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-gray-800" />
-                        <circle cx="96" cy="96" r="65" stroke="currentColor" strokeWidth="10" fill="transparent"
+                    <div className="relative w-40 h-40 flex items-center justify-center mb-8">
+                      <svg className="transform -rotate-90 w-full h-full">
+                        <circle cx="80" cy="80" r="60" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-[#222228]" />
+                        <circle cx="80" cy="80" r="60" stroke="currentColor" strokeWidth="8" fill="transparent"
                                 strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
                                 className={`${ringColor} transition-all duration-1000 ease-out`} strokeLinecap="round" />
                       </svg>
                       <div className="absolute flex flex-col items-center justify-center">
-                         <span className={`text-6xl font-black ${gradeColor}`}>{grade}</span>
-                         <span className="text-sm font-bold text-gray-300 mt-1 font-mono">{percent.toFixed(2)}%</span>
+                         <span className={`text-5xl font-black ${gradeColor}`}>{grade}</span>
+                         <span className="text-sm font-semibold text-zinc-300 mt-1">{percent.toFixed(2)}%</span>
                       </div>
                     </div>
 
-                    <div className="w-full bg-black/50 border border-white/5 rounded-2xl p-5 space-y-3.5 font-mono text-sm shadow-inner">
-                       <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                         <span className="text-gray-400 font-sans text-xs">完成率</span>
-                         <span className="text-white font-bold">{ach.toFixed(4)}%</span>
+                    <div className="w-full bg-[#141418] border border-white/[0.05] rounded-2xl p-5 space-y-3.5 text-[13px] font-medium shadow-sm">
+                       <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
+                         <span className="text-zinc-500">完成率</span>
+                         <span className="text-zinc-200">{ach.toFixed(4)}%</span>
                        </div>
-                       <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                         <span className="text-gray-400 font-sans text-xs">完成率达成</span>
-                         <span className="text-green-400 font-bold">{achMultiplier.toFixed(4)} <span className="text-gray-600 text-[10px]">/ 0.6</span></span>
+                       <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
+                         <span className="text-zinc-500">完成率得分</span>
+                         <span className="text-emerald-400">{achMultiplier.toFixed(4)} <span className="text-zinc-600 text-[10px]">/ 0.6</span></span>
                        </div>
-                       <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                         <span className="text-gray-400 font-sans text-xs">DX分</span>
-                         <span className="text-white font-bold">{dxScore}</span>
+                       <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
+                         <span className="text-zinc-500">DX 原始分</span>
+                         <span className="text-zinc-200">{dxScore}</span>
                        </div>
-                       <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                         <span className="text-gray-400 font-sans text-xs">DX分达成</span>
-                         <span className="text-blue-400 font-bold">{dxMultiplier.toFixed(4)} <span className="text-gray-600 text-[10px]">/ 0.4</span></span>
+                       <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
+                         <span className="text-zinc-500">DX 分折算</span>
+                         <span className="text-blue-400">{dxMultiplier.toFixed(4)} <span className="text-zinc-600 text-[10px]">/ 0.4</span></span>
                        </div>
-                       <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                         <span className="text-gray-400 font-sans text-xs">难度基数</span>
-                         <span className="text-purple-400 font-bold">{constant.toFixed(1)}</span>
+                       <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
+                         <span className="text-zinc-500">难度定数</span>
+                         <span className="text-purple-400">{constant.toFixed(1)}</span>
                        </div>
                        <div className="flex justify-between items-center pt-1">
-                         <span className="text-gray-300 font-sans font-bold text-sm">总加成</span>
-                         <span className="text-yellow-400 font-bold text-base">{totalMultiplier.toFixed(4)} <span className="text-gray-600 text-[10px]">/ 1.0</span></span>
+                         <span className="text-zinc-300 font-bold">总系数</span>
+                         <span className="text-amber-400 font-bold text-sm">{totalMultiplier.toFixed(4)} <span className="text-zinc-600 text-[10px]">/ 1.0</span></span>
                        </div>
                     </div>
                   </>
@@ -1208,6 +1171,5 @@ const Profile = () => {
     </div>
   );
 };
-
 
 export default Profile;
