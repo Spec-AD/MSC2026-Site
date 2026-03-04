@@ -1,11 +1,10 @@
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import FallingIcons from '../components/FallingIcons'; 
 import { useAuth } from '../context/AuthContext'; 
 import bbcode from 'bbcode-to-react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaEnvelope, FaCalendarCheck, FaSpinner } from 'react-icons/fa'; 
+import { FaEnvelope, FaCalendarCheck, FaSpinner, FaChevronRight, FaBullhorn } from 'react-icons/fa'; 
 import { useToast } from '../context/ToastContext';
 
 const Home = () => {
@@ -14,11 +13,8 @@ const Home = () => {
   const [announcements, setAnnouncements] = useState([]); 
   const [unreadCount, setUnreadCount] = useState(0);
   const { addToast } = useToast(); 
-  
-  // 🔥 新增：签到状态
   const [isCheckingIn, setIsCheckingIn] = useState(false);
 
-  // 页面加载时拉取公告数据
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
@@ -31,7 +27,6 @@ const Home = () => {
     fetchAnnouncements();
   }, []);
 
-  // 如果用户已登录，拉取未读消息数（小红点）
   useEffect(() => {
     if (user) {
       const fetchUnread = async () => {
@@ -46,15 +41,13 @@ const Home = () => {
     }
   }, [user]);
 
-  // 🔥 新增：签到处理函数
   const handleCheckIn = async () => {
     setIsCheckingIn(true);
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post('/api/users/check-in', {}, { headers: { Authorization: `Bearer ${token}` }});
-      addToast(`${res.data.msg}\n当前等级: Lv.${res.data.level} | 经验: ${res.data.xp}`, 'success');
-      // 签到成功后刷新页面以更新最新数据
-      setTimeout(() => window.location.reload(), 4000); 
+      addToast(`${res.data.msg}\nLv.${res.data.level} | XP: ${res.data.xp}`, 'success');
+      setTimeout(() => window.location.reload(), 2000); 
     } catch (err) {
       addToast(err.response?.data?.msg || '签到失败', 'error');
     } finally {
@@ -63,201 +56,186 @@ const Home = () => {
   };
 
   return (
-    // 外层容器：支持滚动，隐藏横向溢出
-    <div className="w-full min-h-screen text-white flex flex-col items-center overflow-x-hidden relative bg-gradient-to-b from-transparent to-black/80">
+    // 采用与 Inbox 一致的经典深渊色背景
+    <div className="w-full min-h-screen bg-[#111115] text-zinc-200 flex flex-col items-center overflow-x-hidden font-sans selection:bg-zinc-600/40">
       
       {/* ==================================================== */}
-      {/* 主页右上角专属标志与按钮群 */}
+      {/* 顶部导航 - 干净明了的现代化毛玻璃 Header */}
       {/* ==================================================== */}
-      <div className="absolute top-6 right-6 md:right-8 z-[100] flex flex-col md:flex-row items-end md:items-center gap-3 md:gap-6 pointer-events-auto">
+      <div className="fixed top-0 w-full z-[100] px-6 py-4 flex justify-between items-center bg-[#111115]/80 backdrop-blur-xl border-b border-white/[0.05] transition-all">
         
         {/* 品牌标识 */}
-        <div className="text-right flex flex-col items-end cursor-default select-none">
-          <span className="text-xl md:text-2xl font-black italic tracking-widest text-white drop-shadow-md leading-none">
-            purebeat.top
+        <div className="flex items-center gap-3">
+          <span className="text-xl font-bold tracking-tight text-zinc-100">
+            PUREBEAT
           </span>
-          <span className="text-[10px] font-mono text-purple-400 font-bold tracking-widest mt-1 uppercase">
-            Version 1.2.2
+          <span className="hidden md:inline-block px-2 py-0.5 rounded-md bg-white/[0.05] text-xs font-medium text-zinc-400">
+            Hub
           </span>
         </div>
 
-        {/* 极简风操作按钮群 */}
-        <div className="flex items-center gap-2 md:gap-3">
-          
-          {/* 1. 信封 (收件箱) - 仅登录可见 */}
+        {/* 交互区：统一大圆角社区风格按钮 */}
+        <div className="flex items-center gap-3">
           {user && (
             <button 
               onClick={() => navigate('/inbox')}
-              className="relative text-gray-300 hover:text-white bg-black/40 p-2 md:p-2.5 rounded-full transition-all backdrop-blur-md border border-gray-600 hover:border-gray-400 flex items-center justify-center"
+              className="relative flex items-center justify-center w-10 h-10 bg-[#1a1a20] hover:bg-[#222228] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95"
               title="收件箱"
             >
-              <FaEnvelope className="text-sm md:text-base" />
-              
-              {/* 小红点逻辑 */}
+              <FaEnvelope className="text-[15px]" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-black animate-pulse">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-200 rounded-full border-2 border-[#111115] shadow-sm"></span>
               )}
             </button>
           )}
 
-          {/* 🔥 2. 新增：每日签到按钮 (仅登录可见) */}
           {user && (
             <button 
               onClick={handleCheckIn}
               disabled={isCheckingIn}
-              className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 hover:from-cyan-500 hover:to-blue-500 text-cyan-400 hover:text-white border border-cyan-500/30 hover:border-transparent rounded-full font-bold text-[10px] md:text-xs tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(34,211,238,0.1)] hover:shadow-[0_0_20px_rgba(34,211,238,0.4)] disabled:opacity-50 backdrop-blur-md"
-              title="每日签到 (获得经验)"
+              className="flex items-center gap-2 px-4 py-2 bg-[#1a1a20] hover:bg-[#222228] border border-white/[0.05] text-zinc-300 hover:text-zinc-100 rounded-xl transition-all text-sm font-medium active:scale-95 disabled:opacity-50"
             >
-              {isCheckingIn ? <FaSpinner className="animate-spin text-sm md:text-base" /> : <FaCalendarCheck className="text-sm md:text-base" />}
-              <span className="hidden md:inline">Check-In</span>
+              {isCheckingIn ? <FaSpinner className="animate-spin" /> : <FaCalendarCheck />}
+              <span className="hidden md:inline">每日签到</span>
             </button>
           )}
 
-          {/* 3. 反馈按钮 */}
           <button 
             onClick={() => navigate('/feedback')}
-            className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-white border border-gray-600 hover:border-gray-400 bg-black/40 px-3 md:px-4 py-2 rounded-full transition-all backdrop-blur-md"
+            className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.05] rounded-xl transition-all"
           >
-            Feedback
+            反馈
           </button>
 
-          {/* 4. 捐赠按钮 */}
           <a 
             href="https://afdian.com/a/purebeat" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-yellow-400 hover:text-yellow-300 border border-yellow-500/50 hover:border-yellow-400 bg-yellow-500/10 px-3 md:px-4 py-2 rounded-full transition-all backdrop-blur-md shadow-[0_0_10px_rgba(234,179,8,0.2)] flex items-center"
+            className="px-5 py-2 bg-zinc-200 text-zinc-900 text-sm font-bold rounded-xl hover:bg-white transition-all shadow-sm active:scale-95"
           >
-            Donate
+            支持我们
           </a>
         </div>
       </div>
 
       {/* ==================================================== */}
-      {/* 1. 英雄区域 (Hero Section) */}
+      {/* 英雄区域 - 柔和聚焦、稳重视效 */}
       {/* ==================================================== */}
-      <div className="relative w-full h-full min-h-screen flex flex-col items-center justify-center overflow-hidden px-6">
+      <div className="relative w-full pt-32 pb-16 flex flex-col items-center justify-center px-6">
         
-        <FallingIcons />
-
-        <div className="z-10 flex flex-col items-center text-center w-full">
-          
+        <div className="z-10 flex flex-col items-center w-full max-w-5xl">
+          {/* Logo 优雅淡入 */}
           <motion.div
-            initial={{ scale: 0.8, opacity: 0, y: 30 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            transition={{ duration: 1.2, ease: "easeOut" }}
-            className="relative group"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="relative drop-shadow-2xl"
           >
             <img 
               src="/assets/logos.png" 
-              alt="MSC 2026 Logo" 
-              className="w-[100vw] md:w-[80vw] max-w-[1000px] object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.3)] md:drop-shadow-[0_0_25px_rgba(255,255,255,0.4)]"
+              alt="PUREBEAT Logo" 
+              className="w-[80vw] md:w-[50vw] max-w-[600px] object-contain"
             />
-            
-            <div className="absolute inset-0 bg-white/10 blur-[40px] md:blur-[50px] rounded-full opacity-0 group-hover:opacity-30 transition-opacity duration-1000"></div>
           </motion.div>
 
-          <div className="h-10 md:h-16"></div>
-
-          {/* 🚀 核心替换：osu! 风格长图广告位 Banner 🚀 */}
-          <Link to="/register" className="w-full max-w-[850px] px-4 group">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1, duration: 1 }}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="relative w-full aspect-[5/1] md:aspect-[8/1] rounded-2xl md:rounded-3xl overflow-hidden border border-white/10 shadow-2xl group-hover:border-white/30 transition-all duration-500 bg-gray-900"
-            >
-              {/* Banner 背景图片 - 建议尺寸 1600x200 */}
-              <img 
-                src="/assets/register_banner.png" 
-                alt="Register for MSC 2026"
-                className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500"
-                onError={(e) => { e.target.src = 'https://placehold.co/1600x200/0a0a0a/ffffff?text=ENTER+THE+STAGE+MSC+2026'; }} 
-              />
-
-              {/* 动态扫光层 */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
-            </motion.div>
-          </Link>
+          {/* Banner 区域：极具质感的圆角卡片包装 */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
+            className="w-full max-w-[800px] mt-12"
+          >
+            <Link to="/register" className="group block">
+              <div className="relative w-full aspect-[10/2] md:aspect-[10/1.5] rounded-2xl overflow-hidden border border-white/[0.05] shadow-[0_8px_30px_rgb(0,0,0,0.5)] transition-all duration-500 group-hover:border-zinc-500/30 group-hover:-translate-y-1 bg-[#0a0a0c]">
+                <img 
+                  src="/assets/register_banner.png" 
+                  alt="Register Banner"
+                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500"
+                  onError={(e) => { e.target.src = 'https://placehold.co/1600x400/18181c/525252?text=PUREBEAT+CHAMPIONSHIP'; }} 
+                />
+              </div>
+            </Link>
+          </motion.div>
         </div>
       </div>
 
       {/* ==================================================== */}
-      {/* 2. 史诗级公告区域 (Latest Directives) */}
+      {/* 公告与资讯区域 - 现代卡片流布局 */}
       {/* ==================================================== */}
-      <div className="w-full max-w-6xl mx-auto px-4 md:px-8 py-24 z-10 relative">
+      <div className="w-full max-w-4xl mx-auto px-6 py-16 z-10 relative flex-1">
         
-        <motion.div 
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mb-16 md:mb-24"
-        >
-          <h2 className="text-[3rem] md:text-[6rem] font-black italic tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-600 drop-shadow-2xl">
-            DIRECTIVES.
-          </h2>
-          <div className="text-blue-400 font-mono font-bold tracking-[0.3em] uppercase mt-2 md:mt-4 pl-1">
-            Latest Announcements & News
+        <div className="mb-10 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#1a1a20] border border-white/[0.05] flex items-center justify-center text-zinc-400 shadow-sm">
+            <FaBullhorn className="text-lg" />
           </div>
-        </motion.div>
+          <div>
+            <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">
+              社区资讯
+            </h2>
+            <p className="text-sm text-zinc-500 mt-0.5">
+              Announcements & Updates
+            </p>
+          </div>
+        </div>
 
-        <div className="space-y-16 md:space-y-24">
+        <div className="flex flex-col gap-6">
           {announcements.length > 0 ? (
             announcements.map((announcement, index) => {
               const d = new Date(announcement.createdAt);
-              const dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-              const yearStr = d.getFullYear().toString();
+              const dateStr = d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 
               return (
                 <motion.div 
                   key={announcement._id}
-                  initial={{ opacity: 0, y: 40 }}
+                  initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                  transition={{ duration: 0.6, delay: index * 0.1 }}
-                  className="flex flex-col md:flex-row gap-6 md:gap-12 relative group"
+                  viewport={{ once: true, margin: "-50px" }}
+                  transition={{ duration: 0.5 }}
+                  className="bg-[#18181c] border border-white/[0.05] rounded-2xl p-6 md:p-8 hover:bg-[#1a1a20] transition-colors shadow-sm group"
                 >
-                  <div className="md:w-1/4 flex-shrink-0 flex md:flex-col items-baseline md:items-start gap-3 md:gap-0 border-b border-white/10 md:border-none pb-4 md:pb-0">
-                    <div className="text-5xl md:text-7xl font-black italic tracking-tighter text-gray-300 group-hover:text-white transition-colors duration-500">
-                      {dateStr}
-                    </div>
-                    <div className="text-xl md:text-2xl font-bold text-gray-600 font-mono">
-                      {yearStr}
-                    </div>
-                    <div className="mt-0 md:mt-4 ml-auto md:ml-0 bg-white/5 border border-white/10 px-3 py-1 rounded-full text-[10px] md:text-xs tracking-widest uppercase text-blue-400 font-bold">
+                  <div className="flex justify-between items-start mb-4">
+                    <span className="px-3 py-1 bg-white/[0.04] border border-white/[0.05] rounded-lg text-xs font-medium text-zinc-400">
                       {announcement.type}
-                    </div>
+                    </span>
+                    <span className="text-sm font-medium text-zinc-500">
+                      {dateStr}
+                    </span>
                   </div>
-
-                  <div className="md:w-3/4">
-                    <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl group-hover:bg-white/[0.03] transition-colors duration-500">
-                      <h3 className="text-2xl md:text-4xl font-bold mb-6 md:mb-8 text-white tracking-tight">
-                        {announcement.title}
-                      </h3>
-                      <div className="text-gray-300 leading-loose text-sm md:text-base bbcode-content whitespace-pre-wrap break-words">
-                        {bbcode.toReact(announcement.content)}
-                      </div>
+                  
+                  <h3 className="text-xl md:text-2xl font-bold mb-4 text-zinc-100 tracking-tight group-hover:text-white transition-colors">
+                    {announcement.title}
+                  </h3>
+                  
+                  <div className="text-zinc-400 leading-relaxed text-[15px] bbcode-content">
+                    {bbcode.toReact(announcement.content)}
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-white/[0.05] flex justify-end">
+                    <div className="flex items-center gap-2 text-sm font-medium text-zinc-500 group-hover:text-zinc-300 transition-colors">
+                      查看详情 <FaChevronRight className="text-xs transition-transform group-hover:translate-x-1" />
                     </div>
                   </div>
                 </motion.div>
               );
             })
           ) : (
-            <div className="text-center py-20 text-gray-500 border border-white/5 rounded-3xl bg-black/20 backdrop-blur-md">
-               <span className="font-mono tracking-widest">AWAITING DIRECTIVES...</span>
+            <div className="flex flex-col items-center justify-center py-20 bg-[#18181c] border border-white/[0.05] rounded-2xl">
+               <FaEnvelope className="text-4xl text-zinc-600 mb-4 opacity-30" />
+               <span className="text-sm font-medium text-zinc-500">暂无最新资讯</span>
             </div>
           )}
         </div>
-        
       </div>
+
+      {/* ==================================================== */}
+      {/* 极简页脚 */}
+      {/* ==================================================== */}
+      <footer className="w-full py-10 mt-10 border-t border-white/[0.05] flex flex-col items-center bg-[#0a0a0c]">
+         <span className="text-sm font-medium text-zinc-600">PUREBEAT © 2026</span>
+         <span className="text-xs text-zinc-700 mt-2">Community-driven Game Hub</span>
+      </footer>
     </div>
   );
 };
 
-
 export default Home;
-
