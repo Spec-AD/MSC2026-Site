@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { 
   FaCalendarCheck, FaSpinner, FaCommentDots, FaHeart, 
-  FaClock, FaTimes 
+  FaChevronRight, FaTimes, FaUserCircle
 } from 'react-icons/fa'; 
 
 const Home = () => {
@@ -17,17 +17,20 @@ const Home = () => {
   
   const [announcements, setAnnouncements] = useState([]); 
   const [selectedNews, setSelectedNews] = useState(null); 
+  const [showAllNews, setShowAllNews] = useState(false); // 控制是否展开所有新闻
   
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [serverTime, setServerTime] = useState(new Date());
   
   const [userStats, setUserStats] = useState(null);
 
+  // 1. 获取并排序公告与新闻 (按时间降序)
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
         const res = await axios.get('/api/announcements');
-        setAnnouncements(res.data);
+        const sortedData = res.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        setAnnouncements(sortedData);
       } catch (err) {
         console.error('拉取公告失败', err);
       }
@@ -35,6 +38,7 @@ const Home = () => {
     fetchAnnouncements();
   }, []);
 
+  // 2. 获取服务器时间并启动时钟
   useEffect(() => {
     let timeOffset = 0;
     let timer;
@@ -55,6 +59,7 @@ const Home = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // 3. 获取用户状态（含 Banner 和 排名）
   useEffect(() => {
     if (user && user.username) {
       axios.get(`/api/users/${user.username}`)
@@ -88,10 +93,15 @@ const Home = () => {
     return 'text-blue-400';
   };
 
+  // --- 新闻分级切片逻辑 ---
+  const fullPreviewNews = announcements.slice(0, 3); // 前3条：完整图文
+  const compactNews = showAllNews ? announcements.slice(3) : announcements.slice(3, 8); // 3-8条或全部剩余：紧凑列表
+  const hasMoreNews = announcements.length > 8 && !showAllNews;
+
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans selection:bg-indigo-500/30 relative pb-20 overflow-x-hidden">
       
-      {/* 环境光与顶部个人 Banner */}
+      {/* 环境光与顶部个人 Banner 融合区 */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-cyan-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
         <div className="absolute top-[10%] right-[-10%] w-[50vw] h-[50vw] bg-purple-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
@@ -111,19 +121,31 @@ const Home = () => {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0c0c11]/80 to-[#0c0c11]"></div>
       </div>
 
-      {/* Header：包含服务器时间与图标 */}
+      {/* ==================================================== */}
+      {/* 顶部 Header：Logo、Quicksand 时钟、图标控制台 */}
+      {/* ==================================================== */}
       <header className="w-full max-w-7xl mx-auto px-6 py-8 flex justify-between items-center z-50 relative">
-        <div className="flex items-center gap-4 shrink-0">
+        <div className="flex items-center shrink-0">
           <img src="/assets/logos.png" alt="PUREBEAT Logo" className="h-8 md:h-10 object-contain drop-shadow-lg" />
-          <div className="hidden sm:flex flex-col">
+          <div className="hidden sm:flex flex-col ml-3">
             <span className="text-sm font-bold text-zinc-100 tracking-wider">PUREBEAT</span>
             <span className="text-[10px] text-indigo-400/80 font-bold uppercase tracking-widest">Community Hub</span>
           </div>
           
-          {/* 服务器时间置于顶端 */}
-          <div className="hidden lg:flex items-center gap-2 text-zinc-500 font-mono text-[11px] ml-4 pl-5 border-l border-white/[0.05]">
-            <FaClock className="opacity-70"/>
-            {serverTime.toLocaleDateString('zh-CN')} {serverTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          {/* 大号高精度时钟 (采用 Quicksand 字体) */}
+          <div className="hidden md:flex flex-col justify-center ml-8 pl-8 border-l border-white/[0.08]">
+            <span 
+              className="text-2xl font-bold text-zinc-200 tracking-wider drop-shadow-md leading-none" 
+              style={{ fontFamily: "'Quicksand', sans-serif" }}
+            >
+              {serverTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+            <span 
+              className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mt-1.5 leading-none"
+              style={{ fontFamily: "'Quicksand', sans-serif" }}
+            >
+              {serverTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
           </div>
         </div>
 
@@ -159,12 +181,15 @@ const Home = () => {
         </div>
       </header>
 
-      {/* 主体 Dashboard */}
+      {/* ==================================================== */}
+      {/* 核心 Bento 网格布局 (Dashboard) */}
+      {/* ==================================================== */}
       <main className="w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 z-10 relative">
         
-        {/* 左侧：赛事横幅与新闻流 (占 8 列) */}
+        {/* === 左侧主要内容区 (占 8 列) === */}
         <div className="lg:col-span-8 flex flex-col gap-8">
           
+          {/* 1. 赛事引流 Banner */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <Link to="/tournaments" className="block group">
               <div className="relative w-full aspect-[21/9] md:aspect-[21/7] rounded-3xl overflow-hidden border border-white/[0.05] bg-[#0a0a0c] shadow-sm transition-all duration-500 hover:border-indigo-500/30 hover:shadow-[0_8px_30px_rgba(99,102,241,0.1)]">
@@ -187,6 +212,7 @@ const Home = () => {
             </Link>
           </motion.div>
 
+          {/* 2. 社区新闻报纸流 */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
             <div className="flex items-center gap-3 mb-6 px-1">
               <div className="w-1 h-5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
@@ -195,63 +221,104 @@ const Home = () => {
               </h2>
             </div>
 
+            {/* 新闻展示区 */}
             <div className="flex flex-col gap-6">
-              {announcements.length > 0 ? (
-                announcements.map((news) => {
-                  const d = new Date(news.createdAt);
-
-                  return (
-                    <div 
-                      key={news._id}
-                      onClick={() => setSelectedNews(news)}
-                      className="bg-[#15151e] border border-white/[0.05] rounded-3xl cursor-pointer hover:bg-[#1a1a24] hover:border-white/[0.1] transition-all group overflow-hidden shadow-sm flex flex-col"
-                    >
-                      {/* 新闻版面图 (Cover) */}
-                      <div className="relative w-full aspect-[21/9] md:aspect-[21/7] bg-[#0a0a0c] border-b border-white/[0.05] overflow-hidden">
-                        {news.coverUrl ? (
-                           <img 
-                             src={news.coverUrl} 
-                             alt="News Cover" 
-                             className="w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
-                             onError={(e) => { e.target.style.display = 'none'; }}
-                           />
-                        ) : (
-                           <div className="w-full h-full bg-gradient-to-br from-indigo-900/20 to-transparent group-hover:scale-105 transition-transform duration-700"></div>
-                        )}
-                        <div className="absolute top-5 right-5 px-3 py-1 rounded-lg text-xs font-bold tracking-widest uppercase bg-indigo-500 text-white shadow-lg">
-                          {news.type || 'NEWS'}
-                        </div>
-                      </div>
-                      
-                      {/* 新闻标题与说明 */}
-                      <div className="p-6 md:p-8">
-                        <div className="flex items-center gap-3 mb-3">
-                          <span className="text-xs font-medium text-zinc-500">
-                            {d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        </div>
-                        <h3 className="text-xl md:text-2xl font-bold text-zinc-100 tracking-tight group-hover:text-indigo-400 transition-colors leading-snug">
-                          {news.title}
-                        </h3>
-                        <p className="text-sm text-zinc-400 mt-3 leading-relaxed line-clamp-2">
-                          {news.subtitle || '这是一段占位的说明文字。在这里可以简要概括本篇新闻的核心内容、主要更新点或是活动前瞻，吸引读者点击阅读正文。'}
-                        </p>
+              
+              {/* 层级 1: 完整图文展示 (最多3条) */}
+              {fullPreviewNews.map((news) => {
+                const d = new Date(news.createdAt);
+                return (
+                  <div 
+                    key={news._id}
+                    onClick={() => setSelectedNews(news)}
+                    className="bg-[#15151e] border border-white/[0.05] rounded-3xl cursor-pointer hover:bg-[#1a1a24] hover:border-white/[0.1] transition-all group overflow-hidden shadow-sm flex flex-col"
+                  >
+                    <div className="relative w-full aspect-[21/9] md:aspect-[21/8] bg-[#0a0a0c] border-b border-white/[0.05] overflow-hidden">
+                      {news.coverUrl ? (
+                         <img 
+                           src={news.coverUrl} 
+                           alt="News Cover" 
+                           className="w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
+                           onError={(e) => { e.target.style.display = 'none'; }}
+                         />
+                      ) : (
+                         <div className="w-full h-full bg-gradient-to-br from-indigo-900/20 to-transparent group-hover:scale-105 transition-transform duration-700"></div>
+                      )}
+                      <div className="absolute top-5 right-5 px-3 py-1 rounded-lg text-xs font-bold tracking-widest uppercase bg-indigo-500 text-white shadow-lg">
+                        {news.type || 'NEWS'}
                       </div>
                     </div>
-                  );
-                })
-              ) : (
+                    
+                    <div className="p-6 md:p-8">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="text-xs font-medium text-zinc-500" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                          {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </div>
+                      <h3 className="text-xl md:text-2xl font-bold text-zinc-100 tracking-tight group-hover:text-indigo-400 transition-colors leading-snug">
+                        {news.title}
+                      </h3>
+                      <p className="text-sm text-zinc-400 mt-3 leading-relaxed line-clamp-2">
+                        {news.subtitle || '这是一段占位的说明文字。在这里可以简要概括本篇新闻的核心内容、主要更新点或是活动前瞻，吸引读者点击阅读正文。'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* 层级 2: 紧凑标题列表 (第4-8条，或展开全部) */}
+              {compactNews.length > 0 && (
+                <div className="flex flex-col gap-2 mt-2">
+                  {compactNews.map((news) => {
+                    const d = new Date(news.createdAt);
+                    return (
+                      <div 
+                        key={news._id}
+                        onClick={() => setSelectedNews(news)}
+                        className="flex items-center justify-between p-5 bg-[#15151e] border border-white/[0.05] rounded-2xl cursor-pointer hover:bg-[#1a1a24] hover:border-white/[0.1] transition-all group"
+                      >
+                        <div className="flex items-center gap-4 md:gap-6 min-w-0 flex-1">
+                          <span 
+                            className="text-xs font-bold text-zinc-500 w-12 shrink-0 text-center uppercase tracking-wider"
+                            style={{ fontFamily: "'Quicksand', sans-serif" }}
+                          >
+                            {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                          <span className="text-[15px] font-bold text-zinc-200 truncate group-hover:text-indigo-400 transition-colors">
+                            {news.title}
+                          </span>
+                        </div>
+                        <FaChevronRight className="text-[10px] text-zinc-600 group-hover:text-zinc-300 shrink-0 ml-4 transition-colors" />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 展开更多按钮 */}
+              {hasMoreNews && (
+                <button 
+                  onClick={() => setShowAllNews(true)}
+                  className="w-full py-4 mt-2 bg-transparent border border-white/[0.05] hover:bg-white/[0.02] text-zinc-400 hover:text-zinc-200 text-sm font-bold rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                >
+                  查看更多新闻 <FaChevronRight className="text-[10px]" />
+                </button>
+              )}
+
+              {announcements.length === 0 && (
                 <div className="text-center py-16 bg-[#15151e] border border-white/[0.05] rounded-3xl text-zinc-500 text-sm font-medium">
                   报社正在排版中，暂无新闻
                 </div>
               )}
+
             </div>
           </motion.div>
         </div>
 
-        {/* 右侧：看板、推荐与挑战 (占 4 列) */}
-        <div className="lg:col-span-4 flex flex-col gap-6 md:gap-8">
+        {/* === 右侧边栏 (占 4 列) === */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
           
+          {/* 1. 个人信息面板 */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden">
             <div className="flex items-center gap-2.5 mb-6">
               <div className="w-1 h-4 bg-zinc-400 rounded-full shadow-[0_0_6px_rgba(161,161,170,0.5)]"></div>
@@ -296,16 +363,17 @@ const Home = () => {
             ) : (
               <div className="flex flex-col items-center text-center py-2">
                 <div className="w-14 h-14 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center mb-4">
-                  <span className="text-2xl text-zinc-600 font-bold">?</span>
+                  <FaUserCircle className="text-2xl text-zinc-600" />
                 </div>
                 <p className="text-xs font-medium text-zinc-400 mb-5 leading-relaxed px-2">登录系统，在此查阅您的战力档案、全站排名与游戏动态。</p>
-                <Link to="/login" className="w-full py-3 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95">
+                <Link to="/login" className="w-full py-2.5 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95">
                   立即登录
                 </Link>
               </div>
             )}
           </motion.div>
 
+          {/* 2. 今日推荐曲目 */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
             <div className="flex items-center justify-between mb-5 relative z-10">
               <div className="flex items-center gap-2.5">
@@ -325,6 +393,7 @@ const Home = () => {
             </div>
           </motion.div>
 
+          {/* 3. 今日挑战 */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
             <div className="flex items-center justify-between mb-5 relative z-10">
               <div className="flex items-center gap-2.5">
@@ -365,8 +434,8 @@ const Home = () => {
                     <span className="px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest uppercase bg-indigo-500 text-white">
                       {selectedNews.type || 'NEWS'}
                     </span>
-                    <span className="text-xs font-medium text-zinc-500">
-                      {new Date(selectedNews.createdAt).toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
+                    <span className="text-xs font-medium text-zinc-500" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                      {new Date(selectedNews.createdAt).toLocaleString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
                     </span>
                   </div>
                   <h2 className="text-2xl md:text-3xl font-bold text-zinc-100 tracking-tight leading-snug">
