@@ -58,12 +58,27 @@ const MaimaiProfile = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       addToast(`同步成功！当前 Rating: ${res.data.rating}`, 'success');
-      await fetchProfile(); // 刷新数据
+      await fetchProfile(); 
     } catch (err) {
       addToast(err.response?.data?.msg || '同步失败，请检查 Token', 'error');
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  // ==========================================
+  // 难度字符串智能推导引擎 (解决难度索引问题)
+  // ==========================================
+  const getLevelString = (score) => {
+    // 1. 如果数据库里已经存了 "14+" 这种字符串，直接使用
+    if (typeof score.level === 'string' && (score.level.includes('+') || Number(score.level) > 4)) {
+      return score.level;
+    }
+    // 2. 如果只有 constant 定数 (例如 14.8)，通过 DX 规则推导 (≥.6 即为 +)
+    if (!score.constant || score.constant === 0) return '';
+    const base = Math.floor(score.constant);
+    const frac = Math.round((score.constant - base) * 10);
+    return `${base}${frac >= 6 ? '+' : ''}`;
   };
 
   // ==========================================
@@ -73,7 +88,6 @@ const MaimaiProfile = () => {
     if (!profile || !profile.allScores) return { scores: [], rating: 0 };
     let scores = [...profile.allScores];
 
-    // 辅助工具：转换为理想成绩
     const getIdealScore = (score) => {
       let newAch = score.achievement;
       let newFc = (score.fcStatus || '').toLowerCase();
@@ -92,7 +106,6 @@ const MaimaiProfile = () => {
       return { ...score, achievement: newAch, fcStatus: newFc, rating: newRating, isIdeal: true };
     };
 
-    // 应用过滤规则
     if (b50Filter === 'IDEAL') scores = scores.map(getIdealScore);
     else if (b50Filter === 'AP50') scores = scores.filter(s => ['ap', 'app'].includes((s.fcStatus||'').toLowerCase()));
     else if (b50Filter === 'FC50') scores = scores.filter(s => ['fc', 'fcp', 'ap', 'app'].includes((s.fcStatus||'').toLowerCase()));
@@ -114,7 +127,6 @@ const MaimaiProfile = () => {
 
     scores.sort((a, b) => b.rating - a.rating || b.achievement - a.achievement);
     
-    // Maimai 标准 B50: 旧曲35首 + 新曲15首
     const oldScores = scores.filter(s => !s.isNew).slice(0, 35);
     const newScores = scores.filter(s => s.isNew).slice(0, 15);
     const finalB50 = [...oldScores, ...newScores].sort((a,b) => b.rating - a.rating);
@@ -123,13 +135,11 @@ const MaimaiProfile = () => {
     return { scores: finalB50, rating: totalRating };
   }, [profile, b50Filter]);
 
-  // PF 100 引擎
   const pf100Data = useMemo(() => {
     if (!profile || !profile.allScores) return [];
     return [...profile.allScores].sort((a, b) => b.pf - a.pf).slice(0, 100);
   }, [profile]);
 
-  // UI 辅助函数
   const getDiffConfig = (diffIndex) => {
     const config = [
       { name: 'BASIC', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
@@ -195,13 +205,13 @@ const MaimaiProfile = () => {
               onClick={() => navigate(`/profile/${profile.username}`)}
               className="flex items-center gap-2 text-zinc-500 hover:text-zinc-200 transition-colors font-bold text-sm w-fit active:scale-95"
             >
-              <FaArrowLeft /> 返回个人资料
+              <FaArrowLeft /> 返回个人主页
             </button>
             <div className="flex items-center gap-3">
               <div className="w-1 h-8 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
               <div>
                 <h1 className="text-3xl font-bold text-zinc-100 tracking-tight flex items-center gap-3">
-                  <FaGamepad className="text-cyan-400 text-2xl" /> Maimai DX 档案库
+                  <FaGamepad className="text-cyan-400 text-2xl" /> Maimai DX 数据档案
                 </h1>
                 <span className="text-sm font-medium text-zinc-500 mt-1 block">Player: {profile.username}</span>
               </div>
@@ -215,16 +225,16 @@ const MaimaiProfile = () => {
                 type="password" 
                 value={importToken}
                 onChange={(e) => setImportToken(e.target.value)}
-                placeholder="粘贴 Import-token 以同步数据"
+                placeholder="粘贴 Import-token 更新数据"
                 className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
               />
               <button 
                 onClick={handleSync}
                 disabled={isSyncing}
-                className="bg-cyan-500 text-zinc-900 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center gap-2 shrink-0 active:scale-95"
+                className="bg-cyan-500 hover:bg-cyan-400 text-zinc-900 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center gap-2 shrink-0 active:scale-95"
               >
                 {isSyncing ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
-                更新数据
+                同步云端
               </button>
             </div>
           )}
@@ -243,7 +253,7 @@ const MaimaiProfile = () => {
             {/* ========================================== */}
             <div className="mb-16">
               <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-white/[0.05] pb-4 mb-6 gap-4">
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                   <h2 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
                     <FaChartLine className="text-cyan-400" /> Best 50 
                   </h2>
@@ -255,7 +265,7 @@ const MaimaiProfile = () => {
                     {B50_FILTERS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                   </select>
                 </div>
-                <div className="flex flex-col items-end">
+                <div className="flex flex-col items-start sm:items-end">
                   <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Total Rating</span>
                   <span className="text-2xl font-bold text-cyan-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                     {b50Data.rating}
@@ -269,6 +279,8 @@ const MaimaiProfile = () => {
                 ) : (
                   b50Data.scores.map((score, index) => {
                     const diff = getDiffConfig(score.difficulty);
+                    const realLevel = getLevelString(score); // 智能推导标级
+
                     return (
                       <motion.div 
                         key={index} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * 0.01 }}
@@ -276,15 +288,15 @@ const MaimaiProfile = () => {
                       >
                         <img 
                           src={`https://www.diving-fish.com/covers/${String(score.songId).padStart(5, '0')}.png`} alt="cover"
-                          className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 group-hover:scale-110 transition-all duration-700"
+                          className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 group-hover:scale-105 transition-all duration-700"
                           onError={(e) => { e.target.src = '/assets/bg.png'; }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/40 to-transparent pointer-events-none" />
 
                         {/* Top Badges */}
                         <div className="absolute top-2 left-2 flex gap-1 z-10">
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${diff.color}`}>
-                            {diff.name} {score.level}
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex items-center gap-1 ${diff.color}`}>
+                            {diff.name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{realLevel}</span>
                           </span>
                           {getFcBadge(score.fcStatus)}
                         </div>
@@ -327,6 +339,8 @@ const MaimaiProfile = () => {
                 ) : (
                   pf100Data.map((score, index) => {
                     const diff = getDiffConfig(score.difficulty);
+                    const realLevel = getLevelString(score);
+
                     return (
                       <div 
                         key={index}
@@ -347,8 +361,8 @@ const MaimaiProfile = () => {
                               {score.songName}
                             </span>
                             <div className="flex items-center gap-2 mt-1">
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${diff.color}`}>
-                                {diff.name} {score.level}
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${diff.color}`}>
+                                {diff.name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{realLevel}</span>
                               </span>
                               <span className="text-[11px] font-bold text-zinc-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                                 {score.achievement.toFixed(4)}%
@@ -374,7 +388,7 @@ const MaimaiProfile = () => {
         )}
 
         {/* ========================================== */}
-        {/* PF 详情模态窗 (环形进度条设计) */}
+        {/* PF 详情模态窗 */}
         {/* ========================================== */}
         <AnimatePresence>
           {selectedPfScore && (
@@ -404,8 +418,8 @@ const MaimaiProfile = () => {
                   <h3 className="text-lg font-bold text-zinc-100 mb-2 line-clamp-2 leading-snug">
                     {selectedPfScore.songName}
                   </h3>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getDiffConfig(selectedPfScore.difficulty).color}`}>
-                    {getDiffConfig(selectedPfScore.difficulty).name} {selectedPfScore.level}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center justify-center gap-1 mx-auto w-fit ${getDiffConfig(selectedPfScore.difficulty).color}`}>
+                    {getDiffConfig(selectedPfScore.difficulty).name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{getLevelString(selectedPfScore)}</span>
                   </span>
                 </div>
 
