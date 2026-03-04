@@ -13,40 +13,32 @@ body {
 }
 
 /* =======================================================
-   1. 英文字体 (Nunito - 可变字体 Variable Font)
-   只需要声明范围，浏览器会自动计算中间的粗细 
+   1. 英文字体 (Quicksand - 可变字体 Variable Font)
+   圆润现代无衬线体，支持字重平滑过渡
 ======================================================= */
 @font-face {
-  font-family: 'Nunito';
-  src: url('/fonts/Nunito-VariableFont_wght.ttf') format('truetype');
-  font-weight: 200 1000; /* Nunito 的可变字重轴范围 */
+  font-family: 'Quicksand';
+  src: url('/fonts/Quicksand-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900; /* 声明可变字重范围 */
   font-style: normal;
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'Nunito';
-  src: url('/fonts/Nunito-Italic-VariableFont_wght.ttf') format('truetype');
-  font-weight: 200 1000;
-  font-style: italic; /* 声明为斜体 */
-  font-display: swap;
-}
-
 /* =======================================================
-   2. 中文字体 (日本花园明朝体 - 静态单字重)
-   由于只有一个文件，标准做法是声明为 400，遇到加粗时浏览器会使用算法“伪加粗(Faux Bold)” 
+   2. 中文字体 (Noto Sans SC 思源黑体 - 可变字体 Variable Font)
+   原生支持字重平滑过渡，极其清晰
 ======================================================= */
 @font-face {
-  font-family: 'HuaYuanMincho';
-  src: url('/fonts/RiBenHuaYuanMingChaoTi-2.ttf') format('truetype');
-  font-weight: 400;
+  font-family: 'NotoSansSC';
+  src: url('/fonts/NotoSansSC-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900; /* 声明可变字重范围 */
   font-style: normal;
   font-display: swap;
 }
 
 /* =======================================================
    3. 日文字体 (M PLUS 1p - 静态多字重)
-   需要将 7 个文件一一对应到 Tailwind 的 100-900 字重标准上 
+   对应 Tailwind 的固定字重断点
 ======================================================= */
 @font-face {
   font-family: 'MPLUS1p';
@@ -106,14 +98,14 @@ body {
 
 /* =======================================================
    全局默认字体回退链 (Fallback Chain) 
-   排位逻辑：英文 (Nunito) -> 中文 (花园明朝) -> 日文 (M PLUS) -> 系统后备
+   排位逻辑：英文 (Quicksand) -> 中文 (NotoSansSC) -> 日文 (M PLUS) -> 系统后备
 ======================================================= */
 body {
-  font-family: 'Nunito', 'HuaYuanMincho', 'MPLUS1p', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: 'Quicksand', 'NotoSansSC', 'MPLUS1p', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-weight: 500; /* 现代深色模式社区通常用 500 作为正文基准字重，看起来更清晰 */
 }
 
-/* 核心背景设置 (已剥离背景图，改为深渊色以贴合你的现代社区风格) */
+/* 核心背景设置 */
 #root {
   min-height: 100vh;
   background-color: #111115;
