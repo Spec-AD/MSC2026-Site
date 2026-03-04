@@ -112,7 +112,7 @@ const Home = () => {
         <img 
           src={userStats?.bannerUrl || '/assets/bg.png'} 
           alt="User Banner"
-          className="w-full h-full object-cover opacity-[0.12] transition-opacity duration-1000"
+          className="w-full h-full object-cover opacity-[0.3] transition-opacity duration-1000"
         />
         {/* 垂直渐变遮罩，完美无缝融入背景颜色 */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0c0c11]/80 to-[#0c0c11]"></div>
