@@ -19,7 +19,7 @@ const Leaderboard = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
 
-  // 榜单配置字典 (已高度精简并去图标化)
+  // 榜单配置字典
   const TABS = [
     { id: 'pf', label: '综合实力' },
     { id: 'level', label: '等级' },
@@ -34,7 +34,6 @@ const Leaderboard = () => {
       try {
         let endpoint = `/api/leaderboard/${activeTab}`;
         
-        // 针对综合实力的路由参数拼接
         if (activeTab === 'pf') {
           endpoint += `?game=${activeGame}`;
           if (activeGame === 'osu') {
@@ -54,9 +53,6 @@ const Leaderboard = () => {
     fetchLeaderboard();
   }, [activeTab, activeGame, osuMode]);
 
-  // ==========================================
-  // 色彩引擎 (保持克制的高级感)
-  // ==========================================
   const getRatingColor = (rating) => {
     const r = Number(rating) || 0;
     if (r >= 16500) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-amber-400 to-cyan-400 font-bold'; 
@@ -81,7 +77,14 @@ const Leaderboard = () => {
     if (index === 0) return <FaMedal className="text-[22px] text-amber-400 drop-shadow-sm" />;
     if (index === 1) return <FaMedal className="text-[22px] text-zinc-300 drop-shadow-sm" />;
     if (index === 2) return <FaMedal className="text-[22px] text-[#b87333] drop-shadow-sm" />;
-    return <span className="text-base font-bold text-zinc-500 font-mono">{index + 1}</span>;
+    return (
+      <span 
+        className="text-base font-bold text-zinc-500" 
+        style={{ fontFamily: "'Quicksand', sans-serif" }}
+      >
+        {index + 1}
+      </span>
+    );
   };
 
   const renderDynamicStat = (player) => {
@@ -90,56 +93,95 @@ const Leaderboard = () => {
         if (activeGame === 'osu') {
           return (
             <>
-              <div className="text-xl font-bold tracking-tight pb-0.5 text-pink-400 font-mono">
+              <div 
+                className="text-xl font-bold tracking-tight pb-0.5 text-pink-400" 
+                style={{ fontFamily: "'Quicksand', sans-serif" }}
+              >
                 {player.pp ? Math.round(player.pp) : (player.totalPf ? Math.round(player.totalPf) : '0')}
               </div>
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Performance (pp)</span>
+              <span 
+                className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5"
+                style={{ fontFamily: "'Quicksand', sans-serif" }}
+              >
+                PP
+              </span>
             </>
           );
         } else {
           return (
             <>
-              <div className={`text-xl font-bold tracking-tight pb-0.5 font-mono ${getPfColor(player.totalPf)}`}>
+              <div 
+                className={`text-xl font-bold tracking-tight pb-0.5 ${getPfColor(player.totalPf)}`}
+                style={{ fontFamily: "'Quicksand', sans-serif" }}
+              >
                 {player.totalPf ? player.totalPf.toFixed(2) : '0.00'}
               </div>
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">DX Rating</span>
+              <span 
+                className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5"
+                style={{ fontFamily: "'Quicksand', sans-serif" }}
+              >
+                PF
+              </span>
             </>
           );
         }
       case 'level':
         return (
           <>
-            <div className="text-xl font-bold text-cyan-400 tracking-tight pb-0.5 font-mono">
+            <div 
+              className="text-xl font-bold text-cyan-400 tracking-tight pb-0.5"
+              style={{ fontFamily: "'Quicksand', sans-serif" }}
+            >
               Lv.{player.level || 1}
             </div>
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">{player.xp || 0} XP</span>
+            <span 
+              className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5"
+              style={{ fontFamily: "'Quicksand', sans-serif" }}
+            >
+              {player.xp || 0} XP
+            </span>
           </>
         );
       case 'wiki':
         return (
           <>
-            <div className="text-xl font-bold text-purple-400 tracking-tight pb-0.5 font-mono">
+            <div 
+              className="text-xl font-bold text-purple-400 tracking-tight pb-0.5"
+              style={{ fontFamily: "'Quicksand', sans-serif" }}
+            >
               {player.wikiApprovedCount || 0}
             </div>
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">过审词条</span>
+            <span className="text-[11px] text-zinc-500 font-bold tracking-widest mt-0.5">
+              过审词条
+            </span>
           </>
         );
       case 'feedback':
         return (
           <>
-            <div className="text-xl font-bold text-emerald-400 tracking-tight pb-0.5 font-mono">
+            <div 
+              className="text-xl font-bold text-emerald-400 tracking-tight pb-0.5"
+              style={{ fontFamily: "'Quicksand', sans-serif" }}
+            >
               {player.feedbackApprovedCount || 0}
             </div>
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">采纳建议</span>
+            <span className="text-[11px] text-zinc-500 font-bold tracking-widest mt-0.5">
+              采纳建议
+            </span>
           </>
         );
       case 'checkin':
         return (
           <>
-            <div className="text-xl font-bold text-amber-400 tracking-tight pb-0.5 font-mono">
+            <div 
+              className="text-xl font-bold text-amber-400 tracking-tight pb-0.5"
+              style={{ fontFamily: "'Quicksand', sans-serif" }}
+            >
               {player.checkInCount || 0}
             </div>
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">累计签到</span>
+            <span className="text-[11px] text-zinc-500 font-bold tracking-widest mt-0.5">
+              累计签到
+            </span>
           </>
         );
       default: return null;
@@ -149,9 +191,7 @@ const Leaderboard = () => {
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 pt-20 md:pt-24 pb-20 px-4 md:px-8 font-sans selection:bg-indigo-500/30 relative overflow-x-hidden">
       
-      {/* ==================================================== */}
       {/* 背景：高级晕影与环境散光 */}
-      {/* ==================================================== */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-cyan-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-purple-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
@@ -159,7 +199,7 @@ const Leaderboard = () => {
 
       <div className="max-w-4xl mx-auto relative z-10">
         
-        {/* 头部标题区：高亮竖线代替图标 */}
+        {/* 头部标题区 */}
         <div className="mb-10 text-left">
           <div className="flex items-center gap-3">
             <div className="w-1 h-6 bg-zinc-300 rounded-full shadow-[0_0_8px_rgba(212,212,216,0.5)]"></div>
@@ -229,6 +269,7 @@ const Leaderboard = () => {
                       key={mode} 
                       onClick={() => setOsuMode(mode)} 
                       className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all active:scale-95 ${osuMode === mode ? 'bg-pink-500 text-white shadow-md' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}
+                      style={{ fontFamily: "'Quicksand', sans-serif" }}
                     >
                       {mode}
                     </button>
@@ -255,14 +296,17 @@ const Leaderboard = () => {
               className="flex flex-col gap-3"
             >
               {/* 表头 */}
-              <div className="hidden md:flex items-center px-6 py-2 text-xs font-bold uppercase tracking-widest text-zinc-500 border-b border-white/[0.05] mb-2">
-                <div className="w-16 text-center">Rank</div>
-                <div className="flex-1 pl-4">Player</div>
-                {activeTab === 'pf' && activeGame === 'maimai' && <div className="w-32 text-center">Rating</div>}
-                <div className="w-32 text-right pr-2">Data</div>
+              <div 
+                className="hidden md:flex items-center px-6 py-2 text-[11px] font-bold uppercase tracking-widest text-zinc-500 border-b border-white/[0.05] mb-2"
+                style={{ fontFamily: "'Quicksand', sans-serif" }}
+              >
+                <div className="w-16 text-center">RANK</div>
+                <div className="flex-1 pl-4">PLAYER</div>
+                {activeTab === 'pf' && activeGame === 'maimai' && <div className="w-32 text-center">RATING</div>}
+                <div className="w-32 text-right pr-2">DATA</div>
               </div>
 
-              {/* 玩家列表 (并列排名计算) */}
+              {/* 玩家列表 */}
               {(() => {
                 let currentRank = 1;
                 return players.map((player, index) => {
@@ -320,8 +364,11 @@ const Leaderboard = () => {
                           </span>
                           {player.role === 'ADM' && <span className="bg-rose-500/10 text-rose-400 text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-md font-bold">ADM</span>}
                         </div>
-                        <span className="text-xs text-zinc-500 font-mono font-medium">
-                          UID: {player.uid || '未分配'}
+                        <span 
+                          className="text-xs text-zinc-500 font-medium tracking-widest"
+                          style={{ fontFamily: "'Quicksand', sans-serif" }}
+                        >
+                          UID: {player.uid || 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -329,7 +376,10 @@ const Leaderboard = () => {
                     {/* 原生评分列 (仅 Maimai 显示) */}
                     {activeTab === 'pf' && activeGame === 'maimai' && (
                       <div className="hidden md:flex w-32 justify-center shrink-0 border-l border-white/[0.05]">
-                        <span className={`bg-[#0c0c11]/50 border border-white/[0.05] px-3.5 py-1 rounded-full text-xs font-bold font-mono ${isRatingVisible ? getRatingColor(player.rating) : 'text-zinc-600'}`}>
+                        <span 
+                          className={`bg-[#0c0c11]/50 border border-white/[0.05] px-3.5 py-1 rounded-full text-[13px] font-bold ${isRatingVisible ? getRatingColor(player.rating) : 'text-zinc-600'}`}
+                          style={{ fontFamily: "'Quicksand', sans-serif" }}
+                        >
                           {isRatingVisible ? (player.rating || 0) : 'HIDDEN'}
                         </span>
                       </div>
