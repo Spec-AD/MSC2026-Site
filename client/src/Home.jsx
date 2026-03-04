@@ -1,11 +1,10 @@
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import FallingIcons from '../components/FallingIcons'; 
 import { useAuth } from '../context/AuthContext'; 
 import bbcode from 'bbcode-to-react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaEnvelope, FaCalendarCheck, FaSpinner, FaChevronRight } from 'react-icons/fa'; 
+import { FaEnvelope, FaCalendarCheck, FaSpinner, FaChevronRight, FaBullhorn } from 'react-icons/fa'; 
 import { useToast } from '../context/ToastContext';
 
 const Home = () => {
@@ -57,222 +56,183 @@ const Home = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#050505] text-zinc-100 flex flex-col items-center overflow-x-hidden relative selection:bg-zinc-500/30">
+    // 采用与 Inbox 一致的经典深渊色背景
+    <div className="w-full min-h-screen bg-[#111115] text-zinc-200 flex flex-col items-center overflow-x-hidden font-sans selection:bg-zinc-600/40">
       
-      {/* 极细网格背景纹理 - 增加稳重感 */}
-      <div className="fixed inset-0 pointer-events-none opacity-[0.03]" 
-           style={{ backgroundImage: `linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)`, size: '40px 40px', backgroundSize: '40px 40px' }}>
-      </div>
-
       {/* ==================================================== */}
-      {/* 顶部导航 - 极简主义改造 */}
+      {/* 顶部导航 - 干净明了的现代化毛玻璃 Header */}
       {/* ==================================================== */}
-      <div className="fixed top-0 w-full z-[100] px-6 py-8 flex justify-between items-start pointer-events-none">
+      <div className="fixed top-0 w-full z-[100] px-6 py-4 flex justify-between items-center bg-[#111115]/80 backdrop-blur-xl border-b border-white/[0.05] transition-all">
         
-        {/* 左侧品牌：内敛稳重 */}
-        <div className="flex flex-col pointer-events-auto">
-          <span className="text-xl md:text-2xl font-bold tracking-[0.2em] text-zinc-200">
-            PUREBEAT.TOP
+        {/* 品牌标识 */}
+        <div className="flex items-center gap-3">
+          <span className="text-xl font-bold tracking-tight text-zinc-100">
+            PUREBEAT
           </span>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="w-2 h-2 rounded-full bg-zinc-600 animate-pulse"></span>
-            <span className="text-[9px] font-mono text-zinc-500 tracking-[0.3em] uppercase">
-              System Online / v1.1.3
-            </span>
-          </div>
+          <span className="hidden md:inline-block px-2 py-0.5 rounded-md bg-white/[0.05] text-xs font-medium text-zinc-400">
+            Hub
+          </span>
         </div>
 
-        {/* 右侧交互区：标准化、去色化 */}
-        <div className="flex flex-col items-end gap-4 pointer-events-auto">
-          <div className="flex items-center gap-2 bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/50 p-1 rounded-full">
-            
-            {user && (
-              <button 
-                onClick={() => navigate('/inbox')}
-                className="relative text-zinc-400 hover:text-zinc-100 p-2.5 rounded-full transition-colors group"
-                title="收件箱"
-              >
-                <FaEnvelope className="text-sm" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-2 right-2 w-2 h-2 bg-zinc-100 rounded-full border border-zinc-900"></span>
-                )}
-              </button>
-            )}
-
-            {user && (
-              <button 
-                onClick={handleCheckIn}
-                disabled={isCheckingIn}
-                className="flex items-center gap-2 px-4 py-1.5 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-full transition-all text-[10px] tracking-widest uppercase font-medium"
-              >
-                {isCheckingIn ? <FaSpinner className="animate-spin" /> : <FaCalendarCheck />}
-                <span>Check-in</span>
-              </button>
-            )}
-
+        {/* 交互区：统一大圆角社区风格按钮 */}
+        <div className="flex items-center gap-3">
+          {user && (
             <button 
-              onClick={() => navigate('/feedback')}
-              className="text-[10px] font-medium uppercase tracking-widest text-zinc-400 hover:text-zinc-100 px-4 py-1.5 rounded-full transition-all"
+              onClick={() => navigate('/inbox')}
+              className="relative flex items-center justify-center w-10 h-10 bg-[#1a1a20] hover:bg-[#222228] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95"
+              title="收件箱"
             >
-              Feedback
+              <FaEnvelope className="text-[15px]" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-200 rounded-full border-2 border-[#111115] shadow-sm"></span>
+              )}
             </button>
+          )}
 
-            <a 
-              href="https://afdian.com/a/purebeat" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-[10px] font-bold uppercase tracking-widest bg-zinc-100 text-zinc-900 px-5 py-1.5 rounded-full hover:bg-zinc-300 transition-all shadow-lg"
+          {user && (
+            <button 
+              onClick={handleCheckIn}
+              disabled={isCheckingIn}
+              className="flex items-center gap-2 px-4 py-2 bg-[#1a1a20] hover:bg-[#222228] border border-white/[0.05] text-zinc-300 hover:text-zinc-100 rounded-xl transition-all text-sm font-medium active:scale-95 disabled:opacity-50"
             >
-              Support
-            </a>
-          </div>
+              {isCheckingIn ? <FaSpinner className="animate-spin" /> : <FaCalendarCheck />}
+              <span className="hidden md:inline">每日签到</span>
+            </button>
+          )}
+
+          <button 
+            onClick={() => navigate('/feedback')}
+            className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.05] rounded-xl transition-all"
+          >
+            反馈
+          </button>
+
+          <a 
+            href="https://afdian.com/a/purebeat" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="px-5 py-2 bg-zinc-200 text-zinc-900 text-sm font-bold rounded-xl hover:bg-white transition-all shadow-sm active:scale-95"
+          >
+            支持我们
+          </a>
         </div>
       </div>
 
       {/* ==================================================== */}
-      {/* 英雄区域 - 视觉中心稳健处理 */}
+      {/* 英雄区域 - 柔和聚焦、稳重视效 */}
       {/* ==================================================== */}
-      <div className="relative w-full h-screen flex flex-col items-center justify-center px-6">
+      <div className="relative w-full pt-32 pb-16 flex flex-col items-center justify-center px-6">
         
-        {/* FallingIcons 透明度调低作为背景肌理 */}
-        <div className="opacity-20">
-          <FallingIcons />
-        </div>
-
         <div className="z-10 flex flex-col items-center w-full max-w-5xl">
+          {/* Logo 优雅淡入 */}
           <motion.div
-            initial={{ opacity: 0, filter: 'blur(10px)' }}
-            animate={{ opacity: 1, filter: 'blur(0px)' }}
-            transition={{ duration: 1.5 }}
-            className="relative"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="relative drop-shadow-2xl"
           >
             <img 
               src="/assets/logos.png" 
-              alt="MSC 2026 Logo" 
-              className="w-[85vw] md:w-[60vw] max-w-[800px] object-contain opacity-90 brightness-110 contrast-125"
+              alt="PUREBEAT Logo" 
+              className="w-[80vw] md:w-[50vw] max-w-[600px] object-contain"
             />
           </motion.div>
 
-          {/* 连续交互性：微小的滚动提示 */}
-          <motion.div 
-            animate={{ y: [0, 5, 0] }}
-            transition={{ repeat: Infinity, duration: 2 }}
-            className="mt-12 flex flex-col items-center gap-2 opacity-30"
+          {/* Banner 区域：极具质感的圆角卡片包装 */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
+            className="w-full max-w-[800px] mt-12"
           >
-             <div className="w-[1px] h-12 bg-gradient-to-b from-zinc-100 to-transparent"></div>
-          </motion.div>
-
-          {/* Banner：统一为暗色系的高级质感 */}
-          <Link to="/register" className="w-full max-w-[700px] mt-16 group">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.8 }}
-              className="relative w-full aspect-[10/1] rounded-lg overflow-hidden border border-zinc-800/50 bg-zinc-900 shadow-2xl transition-all duration-700 group-hover:border-zinc-500/50"
-            >
-              <img 
-                src="/assets/register_banner.png" 
-                alt="Register"
-                className="w-full h-full object-cover opacity-40 grayscale group-hover:grayscale-0 group-hover:opacity-70 transition-all duration-1000"
-                onError={(e) => { e.target.src = 'https://placehold.co/1600x200/0a0a0a/525252?text=CONSCRIPTION+ACTIVE+2026'; }} 
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                 <span className="text-[10px] tracking-[0.8em] font-light text-zinc-500 group-hover:text-zinc-100 transition-colors uppercase">
-                    Enter the Protocol
-                 </span>
+            <Link to="/register" className="group block">
+              <div className="relative w-full aspect-[10/2] md:aspect-[10/1.5] rounded-2xl overflow-hidden border border-white/[0.05] shadow-[0_8px_30px_rgb(0,0,0,0.5)] transition-all duration-500 group-hover:border-zinc-500/30 group-hover:-translate-y-1 bg-[#0a0a0c]">
+                <img 
+                  src="/assets/register_banner.png" 
+                  alt="Register Banner"
+                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500"
+                  onError={(e) => { e.target.src = 'https://placehold.co/1600x400/18181c/525252?text=PUREBEAT+CHAMPIONSHIP'; }} 
+                />
               </div>
-            </motion.div>
-          </Link>
+            </Link>
+          </motion.div>
         </div>
       </div>
 
       {/* ==================================================== */}
-      {/* 公告区域 - 连续性纵轴线设计 */}
+      {/* 公告与资讯区域 - 现代卡片流布局 */}
       {/* ==================================================== */}
-      <div className="w-full max-w-5xl mx-auto px-6 py-32 z-10 relative">
+      <div className="w-full max-w-4xl mx-auto px-6 py-16 z-10 relative flex-1">
         
-        <motion.div 
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          className="mb-24 flex items-end gap-4 border-b border-zinc-800 pb-8"
-        >
-          <div className="flex flex-col">
-            <h2 className="text-5xl md:text-7xl font-bold tracking-tighter text-zinc-100">
-              DIRECTIVES
+        <div className="mb-10 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#1a1a20] border border-white/[0.05] flex items-center justify-center text-zinc-400 shadow-sm">
+            <FaBullhorn className="text-lg" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">
+              社区资讯
             </h2>
-            <p className="text-zinc-500 font-mono text-[10px] tracking-[0.4em] uppercase mt-2">
-              Operational News & System Updates
+            <p className="text-sm text-zinc-500 mt-0.5">
+              Announcements & Updates
             </p>
           </div>
-        </motion.div>
+        </div>
 
-        <div className="relative space-y-32">
-          {/* 纵向连续线 */}
-          <div className="absolute left-[24px] md:left-[50px] top-0 bottom-0 w-[1px] bg-gradient-to-b from-zinc-800 via-zinc-800 to-transparent"></div>
-
+        <div className="flex flex-col gap-6">
           {announcements.length > 0 ? (
             announcements.map((announcement, index) => {
               const d = new Date(announcement.createdAt);
-              const dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+              const dateStr = d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 
               return (
                 <motion.div 
                   key={announcement._id}
-                  initial={{ opacity: 0, x: -10 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                  transition={{ duration: 0.8 }}
-                  className="flex gap-8 md:gap-20 items-start group"
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-50px" }}
+                  transition={{ duration: 0.5 }}
+                  className="bg-[#18181c] border border-white/[0.05] rounded-2xl p-6 md:p-8 hover:bg-[#1a1a20] transition-colors shadow-sm group"
                 >
-                  {/* 日期点指示器 */}
-                  <div className="relative z-10 flex-shrink-0 mt-2">
-                    <div className="w-12 h-12 md:w-24 md:h-24 rounded-full bg-[#050505] border border-zinc-800 flex items-center justify-center group-hover:border-zinc-500 transition-colors duration-500">
-                      <span className="text-xs md:text-sm font-mono font-medium text-zinc-400">
-                        {dateStr}
-                      </span>
-                    </div>
+                  <div className="flex justify-between items-start mb-4">
+                    <span className="px-3 py-1 bg-white/[0.04] border border-white/[0.05] rounded-lg text-xs font-medium text-zinc-400">
+                      {announcement.type}
+                    </span>
+                    <span className="text-sm font-medium text-zinc-500">
+                      {dateStr}
+                    </span>
                   </div>
-
-                  {/* 公告卡片：更内敛的排版 */}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-4">
-                      <span className="text-[9px] font-mono py-1 px-3 border border-zinc-800 rounded-full text-zinc-500 uppercase tracking-widest bg-zinc-900/30">
-                        {announcement.type}
-                      </span>
-                      <div className="h-[1px] flex-1 bg-zinc-900 group-hover:bg-zinc-700 transition-all duration-1000"></div>
-                    </div>
-                    
-                    <h3 className="text-2xl md:text-3xl font-bold mb-6 text-zinc-100 tracking-tight group-hover:translate-x-1 transition-transform duration-500">
-                      {announcement.title}
-                    </h3>
-                    
-                    <div className="bg-zinc-900/20 border border-zinc-900/50 rounded-lg p-6 md:p-8 transition-all duration-500 group-hover:border-zinc-800 group-hover:bg-zinc-900/40 shadow-inner">
-                      <div className="text-zinc-400 leading-[1.8] text-sm md:text-base bbcode-content font-light tracking-wide">
-                        {bbcode.toReact(announcement.content)}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex justify-end">
-                      <div className="flex items-center gap-2 text-zinc-600 text-[10px] font-mono tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-all duration-700 translate-x-4 group-hover:translate-x-0">
-                        Read full protocol <FaChevronRight className="text-[8px]"/>
-                      </div>
+                  
+                  <h3 className="text-xl md:text-2xl font-bold mb-4 text-zinc-100 tracking-tight group-hover:text-white transition-colors">
+                    {announcement.title}
+                  </h3>
+                  
+                  <div className="text-zinc-400 leading-relaxed text-[15px] bbcode-content">
+                    {bbcode.toReact(announcement.content)}
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-white/[0.05] flex justify-end">
+                    <div className="flex items-center gap-2 text-sm font-medium text-zinc-500 group-hover:text-zinc-300 transition-colors">
+                      查看详情 <FaChevronRight className="text-xs transition-transform group-hover:translate-x-1" />
                     </div>
                   </div>
                 </motion.div>
               );
             })
           ) : (
-            <div className="text-center py-32 border border-zinc-900 rounded-lg bg-zinc-900/10">
-               <span className="font-mono text-[10px] tracking-[0.5em] text-zinc-600">AWAITING SYSTEM BROADCAST...</span>
+            <div className="flex flex-col items-center justify-center py-20 bg-[#18181c] border border-white/[0.05] rounded-2xl">
+               <FaEnvelope className="text-4xl text-zinc-600 mb-4 opacity-30" />
+               <span className="text-sm font-medium text-zinc-500">暂无最新资讯</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* 页脚装饰 */}
-      <footer className="w-full py-20 flex flex-col items-center opacity-20 border-t border-zinc-900">
-         <span className="text-[10px] font-mono tracking-[0.5em]">PUREBEAT © 2026</span>
+      {/* ==================================================== */}
+      {/* 极简页脚 */}
+      {/* ==================================================== */}
+      <footer className="w-full py-10 mt-10 border-t border-white/[0.05] flex flex-col items-center bg-[#0a0a0c]">
+         <span className="text-sm font-medium text-zinc-600">PUREBEAT © 2026</span>
+         <span className="text-xs text-zinc-700 mt-2">Community-driven Game Hub</span>
       </footer>
     </div>
   );
