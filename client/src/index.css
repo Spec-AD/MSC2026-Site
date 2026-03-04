@@ -6,66 +6,135 @@
 body {
   margin: 0;
   padding: 0;
-  overflow-x: hidden; /* 防止左右滑动 */
-  background-color: #000; /* 图片加载前的底色 */
-  color: white;
-  font-family: 'Noto Sans SC', sans-serif;
+  overflow-x: hidden;
+  background-color: #111115; /* 已同步为现代社区风格底色 */
+  color: #e4e4e7; /* text-zinc-200 */
   -webkit-font-smoothing: antialiased;
 }
 
-/* --- 引入本地 EIms_Sans 字体 --- */
+/* =======================================================
+   1. 英文字体 (Nunito - 可变字体 Variable Font)
+   只需要声明范围，浏览器会自动计算中间的粗细 
+======================================================= */
 @font-face {
-  font-family: 'EIms_Sans';
-  src: url('/fonts/elms-sans-regular.ttf') format('truetype');
-  font-weight: 400; 
+  font-family: 'Nunito';
+  src: url('/fonts/Nunito-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 1000; /* Nunito 的可变字重轴范围 */
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'EIms_Sans';
-  src: url('/fonts/elms-sans-bold.ttf') format('truetype');
-  font-weight: 700; 
+  font-family: 'Nunito';
+  src: url('/fonts/Nunito-Italic-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 1000;
+  font-style: italic; /* 声明为斜体 */
+  font-display: swap;
+}
+
+/* =======================================================
+   2. 中文字体 (日本花园明朝体 - 静态单字重)
+   由于只有一个文件，标准做法是声明为 400，遇到加粗时浏览器会使用算法“伪加粗(Faux Bold)” 
+======================================================= */
+@font-face {
+  font-family: 'HuaYuanMincho';
+  src: url('/fonts/RiBenHuaYuanMingChaoTi-2.ttf') format('truetype');
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
-body {
-  /* 600 对应 Semibold */
-  font-family: 'Noto Sans SC', sans-serif;
-  font-weight: 600; 
+/* =======================================================
+   3. 日文字体 (M PLUS 1p - 静态多字重)
+   需要将 7 个文件一一对应到 Tailwind 的 100-900 字重标准上 
+======================================================= */
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Thin.ttf') format('truetype');
+  font-weight: 100; /* font-thin */
+  font-style: normal;
+  font-display: swap;
 }
 
-/* --- 设置全局默认字体 --- */
-body {
-  font-family: 'EIms_Sans', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Light.ttf') format('truetype');
+  font-weight: 300; /* font-light */
+  font-style: normal;
+  font-display: swap;
 }
 
-/* 核心背景设置 */
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Regular.ttf') format('truetype');
+  font-weight: 400; /* font-normal */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Medium.ttf') format('truetype');
+  font-weight: 500; /* font-medium */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Bold.ttf') format('truetype');
+  font-weight: 700; /* font-bold */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-ExtraBold.ttf') format('truetype');
+  font-weight: 800; /* font-extrabold */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Black.ttf') format('truetype');
+  font-weight: 900; /* font-black */
+  font-style: normal;
+  font-display: swap;
+}
+
+/* =======================================================
+   全局默认字体回退链 (Fallback Chain) 
+   排位逻辑：英文 (Nunito) -> 中文 (花园明朝) -> 日文 (M PLUS) -> 系统后备
+======================================================= */
+body {
+  font-family: 'Nunito', 'HuaYuanMincho', 'MPLUS1p', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-weight: 500; /* 现代深色模式社区通常用 500 作为正文基准字重，看起来更清晰 */
+}
+
+/* 核心背景设置 (已剥离背景图，改为深渊色以贴合你的现代社区风格) */
 #root {
   min-height: 100vh;
-  /* 引用 public/assets 下的图片 */
-  background-image: url('/assets/bg.png'); 
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed; /* 关键：背景固定，内容滚动，制造视觉平滑感 */
-  background-repeat: no-repeat;
+  background-color: #111115;
 }
 
-/* 自定义滚动条 (可选，为了更好看) */
+/* 自定义滚动条 (内敛现代化) */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.2);
 }
+
 /* 添加扫光动画 */
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
@@ -73,6 +142,6 @@ body {
 }
 
 /* 去除输入框默认聚焦轮廓 */
-input:focus, textarea:focus {
+input:focus, textarea:focus, select:focus {
   outline: none;
 }
