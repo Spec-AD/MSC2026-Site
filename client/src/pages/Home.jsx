@@ -4,14 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import bbcode from 'bbcode-to-react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaEnvelope, FaCalendarCheck, FaSpinner, FaChevronRight, FaBullhorn } from 'react-icons/fa'; 
+// 🔥 新增了 FaCommentDots (反馈) 和 FaHeart (捐赠) 图标
+import { FaCalendarCheck, FaSpinner, FaChevronRight, FaBullhorn, FaCommentDots, FaHeart } from 'react-icons/fa'; 
 import { useToast } from '../context/ToastContext';
 
 const Home = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [announcements, setAnnouncements] = useState([]); 
-  const [unreadCount, setUnreadCount] = useState(0);
   const { addToast } = useToast(); 
   const [isCheckingIn, setIsCheckingIn] = useState(false);
 
@@ -26,20 +26,6 @@ const Home = () => {
     };
     fetchAnnouncements();
   }, []);
-
-  useEffect(() => {
-    if (user) {
-      const fetchUnread = async () => {
-        try {
-          const res = await axios.get('/api/messages/unread-count', {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-          });
-          setUnreadCount(res.data.count);
-        } catch (err) {}
-      };
-      fetchUnread();
-    }
-  }, [user]);
 
   const handleCheckIn = async () => {
     setIsCheckingIn(true);
@@ -56,72 +42,50 @@ const Home = () => {
   };
 
   return (
-    // 采用与 Inbox 一致的经典深渊色背景
-    <div className="w-full min-h-screen bg-[#111115] text-zinc-200 flex flex-col items-center overflow-x-hidden font-sans selection:bg-zinc-600/40">
+    <div className="w-full min-h-screen bg-[#111115] text-zinc-200 flex flex-col items-center overflow-x-hidden font-sans selection:bg-zinc-600/40 relative">
       
       {/* ==================================================== */}
-      {/* 顶部导航 - 干净明了的现代化毛玻璃 Header */}
+      {/* 悬浮工具区 (右上角) - 纯图标极简风格 */}
       {/* ==================================================== */}
-      <div className="fixed top-0 w-full z-[100] px-6 py-4 flex justify-between items-center bg-[#111115]/80 backdrop-blur-xl border-b border-white/[0.05] transition-all">
+      <div className="absolute top-6 right-6 md:top-8 md:right-8 z-[100] flex items-center gap-3">
         
-        {/* 品牌标识 */}
-        <div className="flex items-center gap-3">
-          <span className="text-xl font-bold tracking-tight text-zinc-100">
-            PUREBEAT
-          </span>
-          <span className="hidden md:inline-block px-2 py-0.5 rounded-md bg-white/[0.05] text-xs font-medium text-zinc-400">
-            Hub
-          </span>
-        </div>
-
-        {/* 交互区：统一大圆角社区风格按钮 */}
-        <div className="flex items-center gap-3">
-          {user && (
-            <button 
-              onClick={() => navigate('/inbox')}
-              className="relative flex items-center justify-center w-10 h-10 bg-[#1a1a20] hover:bg-[#222228] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95"
-              title="收件箱"
-            >
-              <FaEnvelope className="text-[15px]" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-200 rounded-full border-2 border-[#111115] shadow-sm"></span>
-              )}
-            </button>
-          )}
-
-          {user && (
-            <button 
-              onClick={handleCheckIn}
-              disabled={isCheckingIn}
-              className="flex items-center gap-2 px-4 py-2 bg-[#1a1a20] hover:bg-[#222228] border border-white/[0.05] text-zinc-300 hover:text-zinc-100 rounded-xl transition-all text-sm font-medium active:scale-95 disabled:opacity-50"
-            >
-              {isCheckingIn ? <FaSpinner className="animate-spin" /> : <FaCalendarCheck />}
-              <span className="hidden md:inline">每日签到</span>
-            </button>
-          )}
-
+        {/* 1. 签到功能 (仅登录可见) */}
+        {user && (
           <button 
-            onClick={() => navigate('/feedback')}
-            className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.05] rounded-xl transition-all"
+            onClick={handleCheckIn}
+            disabled={isCheckingIn}
+            className="flex items-center justify-center w-10 h-10 bg-[#1a1a20] hover:bg-[#222228] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 disabled:opacity-50 shadow-sm"
+            title="每日签到"
           >
-            反馈
+            {isCheckingIn ? <FaSpinner className="animate-spin text-[16px]" /> : <FaCalendarCheck className="text-[16px]" />}
           </button>
+        )}
 
-          <a 
-            href="https://afdian.com/a/purebeat" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="px-5 py-2 bg-zinc-200 text-zinc-900 text-sm font-bold rounded-xl hover:bg-white transition-all shadow-sm active:scale-95"
-          >
-            支持我们
-          </a>
-        </div>
+        {/* 2. 反馈功能 */}
+        <button 
+          onClick={() => navigate('/feedback')}
+          className="flex items-center justify-center w-10 h-10 bg-[#1a1a20] hover:bg-[#222228] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 shadow-sm"
+          title="意见反馈"
+        >
+          <FaCommentDots className="text-[16px]" />
+        </button>
+
+        {/* 3. 捐赠/支持功能 (高亮色块) */}
+        <a 
+          href="https://afdian.com/a/purebeat" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex items-center justify-center w-10 h-10 bg-zinc-200 text-zinc-900 rounded-xl hover:bg-white transition-all shadow-sm active:scale-95"
+          title="支持我们"
+        >
+          <FaHeart className="text-[16px]" />
+        </a>
       </div>
 
       {/* ==================================================== */}
       {/* 英雄区域 - 柔和聚焦、稳重视效 */}
       {/* ==================================================== */}
-      <div className="relative w-full pt-32 pb-16 flex flex-col items-center justify-center px-6">
+      <div className="relative w-full pt-32 md:pt-40 pb-16 flex flex-col items-center justify-center px-6">
         
         <div className="z-10 flex flex-col items-center w-full max-w-5xl">
           {/* Logo 优雅淡入 */}
@@ -220,7 +184,6 @@ const Home = () => {
             })
           ) : (
             <div className="flex flex-col items-center justify-center py-20 bg-[#18181c] border border-white/[0.05] rounded-2xl">
-               <FaEnvelope className="text-4xl text-zinc-600 mb-4 opacity-30" />
                <span className="text-sm font-medium text-zinc-500">暂无最新资讯</span>
             </div>
           )}
@@ -232,7 +195,7 @@ const Home = () => {
       {/* ==================================================== */}
       <footer className="w-full py-10 mt-10 border-t border-white/[0.05] flex flex-col items-center bg-[#0a0a0c]">
          <span className="text-sm font-medium text-zinc-600">PUREBEAT © 2026</span>
-         <span className="text-xs text-zinc-700 mt-2">Community-driven Game Hub</span>
+         <span className="text-xs text-zinc-700 mt-2">Community Driven Rhythm Game Hub</span>
       </footer>
     </div>
   );
