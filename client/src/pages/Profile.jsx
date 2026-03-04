@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { 
-  FaCamera, FaUserPlus, FaUserEdit, FaSpinner, FaSave, FaTimes, 
-  FaUserFriends, FaLock, FaUnlock, FaMedal, FaChevronRight, FaGamepad
+  FaCamera, FaUserEdit, FaSpinner, FaSave, FaTimes, 
+  FaUserFriends, FaLock, FaUnlock, FaMedal, FaChevronRight, FaGamepad, FaCrown
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import bbcode from 'bbcode-to-react';
@@ -16,7 +16,6 @@ const Profile = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
   
-  // --- 核心状态 ---
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -50,9 +49,7 @@ const Profile = () => {
       setLoading(true);
       setError('');
       const res = await axios.get(`/api/users/${targetUsername}?t=${Date.now()}`);
-      
       setProfile(res.data);
-      
       setEditData({
         bio: res.data.bio || '',
         avatarUrl: res.data.avatarUrl || '/assets/logos.png',
@@ -146,14 +143,11 @@ const Profile = () => {
       });
       
       await fetchProfile();
-      
       setNewAvatarFile(null);
       setNewBannerFile(null);
       setIsEditing(false);
-      
       addToast('资料更新成功！', 'success');
     } catch (err) {
-      console.error(err);
       addToast(err.response?.data?.msg || '保存失败，请检查网络或图片尺寸', 'error');
     } finally {
       setIsSaving(false);
@@ -185,7 +179,7 @@ const Profile = () => {
       <h2 className="text-2xl font-bold mb-2">未找到该玩家档案</h2>
       <p className="text-zinc-500 mb-8">{error}</p>
       <button onClick={() => navigate('/')} className="px-6 py-3 bg-zinc-200 text-zinc-900 rounded-xl font-bold transition-all active:scale-95 shadow-sm">
-        返回终端主页
+        返回主页
       </button>
     </div>
   );
@@ -210,7 +204,6 @@ const Profile = () => {
   return (
     <div className="w-full min-h-screen pb-24 overflow-x-hidden bg-[#0c0c11] text-zinc-200 font-sans selection:bg-indigo-500/30 relative">
       
-      {/* 隐藏的文件输入框 */}
       <input type="file" ref={avatarInputRef} className="hidden" accept=".jpg,.jpeg,.png,.gif" onChange={(e) => handleFileChange(e, 'avatar')} />
       <input type="file" ref={bannerInputRef} className="hidden" accept=".jpg,.jpeg,.png,.gif" onChange={(e) => handleFileChange(e, 'banner')} />
 
@@ -230,7 +223,6 @@ const Profile = () => {
           className={`w-full h-full object-cover transition-all duration-700 ${isEditing ? 'opacity-30 blur-md scale-105' : 'opacity-40'}`}
           onError={(e) => { e.target.style.display = 'none'; }}
         />
-        {/* 底部融合遮罩 */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/40 to-transparent pointer-events-none" />
         
         {isOwnProfile && isEditing && (
@@ -248,18 +240,20 @@ const Profile = () => {
       {/* ==================================================== */}
       <div className="max-w-5xl mx-auto px-6 -mt-20 md:-mt-24 relative z-20">
         
-        {/* 顶部：头像、名牌与操作按钮 */}
-        <div className="flex flex-col md:flex-row items-center md:items-end justify-between gap-6 md:gap-8 bg-[#15151e]/60 backdrop-blur-xl border border-white/[0.05] p-6 md:p-8 rounded-[2rem] shadow-xl">
+        <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6 md:gap-8 bg-[#15151e]/60 backdrop-blur-xl border border-white/[0.05] p-6 md:p-8 rounded-[2rem] shadow-xl">
           
-          <div className="flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-8 text-center md:text-left w-full md:w-auto">
-            {/* 互动式头像 */}
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 text-center md:text-left w-full md:w-auto">
+            {/* 头像 - 正圆形 + 扫光效果 */}
             <div className="relative group shrink-0 -mt-16 md:-mt-20">
-              <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2rem] overflow-hidden border-[6px] border-[#15151e] bg-[#0c0c11] shadow-2xl relative rotate-3 group-hover:rotate-0 transition-transform duration-500">
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-[6px] border-[#15151e] bg-[#0c0c11] shadow-2xl relative">
                 <img 
                   src={isEditing ? editData.avatarUrl : (profile.avatarUrl || '/assets/logos.png')} 
                   alt="Avatar" 
-                  className="w-full h-full object-cover -rotate-3 group-hover:rotate-0 transition-transform duration-500" 
+                  className="w-full h-full object-cover relative z-0" 
                 />
+                {/* 隐藏的扫光层 */}
+                <div className="absolute inset-0 z-10 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1.5s_infinite]"></div>
+                
                 {isOwnProfile && isEditing && (
                   <div 
                     onClick={(e) => { e.stopPropagation(); avatarInputRef.current.click(); }}
@@ -272,8 +266,8 @@ const Profile = () => {
               </div>
             </div>
 
-            {/* 玩家基础信息 */}
-            <div className="flex flex-col gap-2 md:gap-1.5 pb-2">
+            {/* 玩家基础信息与荣誉前置 */}
+            <div className="flex flex-col gap-2 md:gap-1.5 pt-1">
               <div className="flex items-center justify-center md:justify-start gap-3 flex-wrap">
                 <h1 className={`text-3xl md:text-4xl font-bold tracking-tight ${userRole.color}`}>
                   {profile.username}
@@ -295,32 +289,40 @@ const Profile = () => {
                 >
                   UID: {profile.uid || 'N/A'}
                 </span>
-                
-                {/* 极简好友指示器 */}
-                <div 
-                  className="flex items-center gap-1.5 text-xs font-bold text-zinc-500 bg-black/20 border border-white/5 px-2.5 py-1 rounded-lg cursor-pointer hover:bg-white/5 transition-colors"
-                  onClick={() => navigate('/friends')}
-                  title="查看好友列表"
-                >
-                  <FaUserFriends /> 
-                  <span style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                    {profile.friendsCount || profile.friends?.length || 0}
-                  </span>
-                </div>
               </div>
+
+              {/* 荣誉图片陈列区 (无需标题，直接排布) */}
+              {profile.honors && profile.honors.length > 0 && (
+                <div className="flex flex-wrap justify-center md:justify-start gap-2.5 mt-3">
+                  {profile.honors.map((imgUrl, index) => (
+                    <img 
+                      key={index} 
+                      src={imgUrl} 
+                      alt="Honor" 
+                      className="h-7 md:h-8 rounded object-cover shadow-sm border border-white/10" 
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* 右侧：操作中心 */}
-          <div className="flex items-center justify-center gap-3 w-full md:w-auto shrink-0 border-t md:border-t-0 border-white/[0.05] pt-6 md:pt-0">
+          {/* 右侧：操作中心 & 好友逻辑按钮 */}
+          <div className="flex items-center justify-center gap-3 w-full md:w-auto shrink-0 border-t md:border-t-0 border-white/[0.05] pt-6 md:pt-2">
             {isOwnProfile ? (
               !isEditing ? (
                 <>
                   <button 
-                    onClick={() => setIsEditing(true)} 
-                    className="px-6 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 rounded-xl font-bold transition-all flex items-center gap-2 text-sm shadow-sm active:scale-95"
+                    onClick={() => navigate('/friends')}
+                    className="px-5 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 rounded-xl font-bold flex items-center gap-2 text-sm shadow-sm active:scale-95 transition-all"
                   >
-                    <FaUserEdit /> 编辑终端档案
+                    <FaUserFriends /> <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{profile.friendsCount || profile.friends?.length || 0}</span>
+                  </button>
+                  <button 
+                    onClick={() => setIsEditing(true)} 
+                    className="px-5 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 rounded-xl font-bold transition-all flex items-center gap-2 text-sm shadow-sm active:scale-95"
+                  >
+                    <FaUserEdit /> 编辑个人资料
                   </button>
                 </>
               ) : (
@@ -346,19 +348,20 @@ const Profile = () => {
                 const currentUserId = currentUser?.id || currentUser?._id;
                 const isFriend = currentUserId && profile.friends?.some(f => (f._id || f).toString() === currentUserId.toString());
                 const isPending = currentUserId && profile.friendRequests?.some(reqId => reqId.toString() === currentUserId.toString());
+                const friendCount = profile.friends?.length || 0;
 
                 if (isFriend) {
                   return (
-                    <button disabled className="px-6 py-3 bg-[#1a1a24] text-zinc-500 border border-white/[0.05] rounded-xl font-bold flex items-center justify-center gap-2 text-sm w-full md:w-auto cursor-default">
-                      <FaUserFriends /> 你们已是好友
+                    <button className="px-5 py-3 bg-pink-500/10 text-pink-400 border border-pink-500/20 rounded-xl font-bold flex items-center gap-2 text-sm cursor-default">
+                      <FaUserFriends /> <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{friendCount}</span>
                     </button>
                   );
                 }
 
                 if (isPending) {
                   return (
-                    <button disabled className="px-6 py-3 bg-[#1a1a24] text-zinc-500 border border-white/[0.05] rounded-xl font-bold flex items-center justify-center gap-2 text-sm w-full md:w-auto cursor-not-allowed">
-                      等待对方接受
+                    <button className="px-5 py-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl font-bold flex items-center gap-2 text-sm cursor-default">
+                      <FaUserFriends /> 等待回复
                     </button>
                   );
                 }
@@ -366,9 +369,9 @@ const Profile = () => {
                 return (
                   <button 
                     onClick={handleAddFriend}
-                    className="px-6 py-3 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm w-full md:w-auto active:scale-95 shadow-sm"
+                    className="px-5 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-400 hover:text-zinc-200 rounded-xl font-bold transition-all flex items-center gap-2 text-sm w-full md:w-auto active:scale-95 shadow-sm"
                   >
-                    <FaUserPlus /> 发送好友请求
+                    <FaUserFriends /> <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{friendCount}</span>
                   </button>
                 );
               })()
@@ -378,17 +381,17 @@ const Profile = () => {
         </div>
 
         {/* ==================================================== */}
-        {/* 3. 个人简介与社区成长 (Bio & XP) */}
+        {/* 3. 核心内容区 (自我介绍 & 成长段位网格) */}
         {/* ==================================================== */}
-        <div className="mt-8 bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-10 shadow-sm">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
           
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-1 h-5 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
-            <h3 className="text-lg font-bold text-zinc-100 tracking-tight">终端记录</h3>
-          </div>
+          {/* 左侧大块：自我介绍 (占 2 列) */}
+          <div className="lg:col-span-2 bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-10 shadow-sm flex flex-col">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1 h-5 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
+              <h3 className="text-lg font-bold text-zinc-100 tracking-tight">自我介绍</h3>
+            </div>
 
-          <div className="flex flex-col lg:flex-row gap-10">
-            {/* 简介文本区 */}
             <div className="flex-1 min-w-0">
               {isEditing ? (
                 <>
@@ -423,84 +426,62 @@ const Profile = () => {
                 </div>
               )}
             </div>
+          </div>
 
-            {/* 等级成长环 (重构为侧边模块) */}
-            <div className="w-full lg:w-64 shrink-0 flex flex-col items-center justify-center p-6 bg-[#0c0c11] border border-white/[0.05] rounded-2xl">
-              <div className="flex items-end gap-2 mb-3">
-                <span className="text-3xl font-bold text-cyan-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                  {profile.level || 1}
+          {/* 右侧小块：经验徽章 & 段位系统 (占 1 列) */}
+          <div className="flex flex-col gap-6">
+            
+            {/* 饱满的经验徽章卡片 */}
+            <div className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 shadow-sm flex flex-col items-center">
+              <div className="flex justify-between w-full mb-4 px-2">
+                <span className="text-zinc-400 font-bold text-xs uppercase tracking-widest">Community Level</span>
+                <span className="text-cyan-400 font-bold text-sm" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                  Lv.{profile.level || 1}
                 </span>
-                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest pb-1">Level</span>
               </div>
               
-              <div className="w-full h-1.5 bg-[#15151e] rounded-full overflow-hidden mb-2">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${((profile.xp || 0) % 300) / 300 * 100}%` }}
-                  transition={{ duration: 1.2, ease: "easeOut" }}
-                  className="h-full bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]"
-                />
+              {/* 徽章中心预留位 */}
+              <div className="w-28 h-28 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center mb-8 relative group shadow-inner">
+                <FaCrown className="text-4xl text-zinc-700 opacity-30 group-hover:scale-110 transition-transform duration-500" /> 
+                <span className="absolute -bottom-3 bg-cyan-500/20 text-cyan-400 text-[9px] font-bold px-2 py-0.5 rounded border border-cyan-500/30 tracking-widest">
+                   BADGE WIP
+                </span>
               </div>
-              
-              <div className="w-full flex justify-between text-[10px] font-bold text-zinc-500 uppercase tracking-widest" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                <span>{(profile.xp || 0) % 300} XP</span>
-                <span>300 XP</span>
+
+              {/* 进度条与数值 */}
+              <div className="w-full px-2">
+                <div className="flex justify-between text-xs text-zinc-500 font-bold mb-2 uppercase" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                   <span className="text-zinc-300">{(profile.xp || 0) % 300} XP</span>
+                   <span>300 XP</span>
+                </div>
+                <div className="h-2.5 w-full bg-[#0c0c11] rounded-full overflow-hidden border border-white/[0.02]">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${((profile.xp || 0) % 300) / 300 * 100}%` }}
+                      transition={{ duration: 1.2, ease: "easeOut" }}
+                      className="h-full bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+                    />
+                </div>
               </div>
             </div>
+
+            {/* 段位系统占位卡 */}
+            <div className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 shadow-sm flex flex-col items-center relative overflow-hidden group flex-1 justify-center min-h-[160px]">
+              <div className="absolute top-4 right-5 text-[10px] font-bold text-zinc-600 uppercase tracking-widest border border-white/[0.05] px-2 py-0.5 rounded">WIP</div>
+              <div className="w-16 h-16 mb-4">
+                <div className="w-full h-full rounded-full border-4 border-dashed border-amber-500/20 flex items-center justify-center group-hover:rotate-180 transition-transform duration-1000 ease-in-out">
+                  <FaMedal className="text-2xl text-amber-500/40" />
+                </div>
+              </div>
+              <h4 className="text-base font-bold text-zinc-400">段位系统筹备中</h4>
+              <p className="text-[11px] text-zinc-600 font-medium mt-1">专属竞技排位即将揭晓</p>
+            </div>
+
           </div>
         </div>
 
         {/* ==================================================== */}
-        {/* 4. 身份与成就矩阵 (Identity & Honors) */}
-        {/* ==================================================== */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-          
-          {/* 段位占位 (WIP) */}
-          <div className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-8 shadow-sm flex flex-col items-center justify-center relative overflow-hidden group">
-            <div className="absolute top-4 right-5 text-[10px] font-bold text-zinc-600 uppercase tracking-widest border border-white/[0.05] px-2 py-0.5 rounded">WIP</div>
-            
-            <div className="w-24 h-24 mb-4">
-              {/* 模拟段位图标的占位圆环 */}
-              <div className="w-full h-full rounded-full border-4 border-dashed border-amber-500/20 flex items-center justify-center group-hover:rotate-180 transition-transform duration-1000 ease-in-out">
-                <FaMedal className="text-3xl text-amber-500/40" />
-              </div>
-            </div>
-            
-            <h4 className="text-lg font-bold text-zinc-400">段位系统筹备中</h4>
-            <p className="text-xs text-zinc-600 font-medium mt-1">专属竞技排位即将揭晓</p>
-          </div>
-
-          {/* 荣誉陈列区 (横向展开) */}
-          <div className="lg:col-span-2 bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-1 h-4 bg-amber-400 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.5)]"></div>
-              <h3 className="text-base font-bold text-zinc-100 tracking-tight">荣誉陈列柜</h3>
-            </div>
-            
-            {profile.honors && profile.honors.length > 0 ? (
-              <div className="flex gap-4 overflow-x-auto custom-scrollbar pb-4">
-                {profile.honors.map((imgUrl, index) => (
-                  <motion.div
-                    key={index}
-                    whileHover={{ y: -5 }}
-                    className="relative w-64 aspect-[3/1] shrink-0 overflow-hidden rounded-xl border border-white/[0.05] shadow-sm bg-[#0c0c11]"
-                  >
-                    <img src={imgUrl} alt="Honor Badge" className="w-full h-full object-cover" />
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              <div className="w-full h-32 flex flex-col items-center justify-center rounded-xl border border-white/[0.02] bg-[#0c0c11] text-zinc-600">
-                <FaMedal className="text-2xl mb-2 opacity-20" />
-                <span className="text-xs font-bold uppercase tracking-widest">No Honors Yet</span>
-              </div>
-            )}
-          </div>
-
-        </div>
-
-        {/* ==================================================== */}
-        {/* 5. 游戏数据档案库 (Gaming Profiles Hub) */}
+        {/* 4. 游戏数据档案库 (Gaming Profiles Hub) */}
         {/* ==================================================== */}
         <div className="mt-12">
           <div className="flex items-center gap-3 mb-6 px-2">
