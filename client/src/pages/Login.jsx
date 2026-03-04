@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { FaUser, FaLock, FaSignInAlt, FaUserPlus } from 'react-icons/fa';
 
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true); 
@@ -42,79 +43,108 @@ const Login = () => {
   };
 
   return (
-    /* 优化：
-       - 使用 min-h-screen 代替 h-screen，防止手机键盘弹出时内容溢出无法滚动
-       - 增加 py-12 确保在小屏幕上上下有留白
-    */
-    <div className="w-full min-h-screen flex flex-col items-center justify-center z-10 px-6 py-12">
+    <div className="w-full min-h-screen bg-[#111115] text-zinc-200 flex flex-col items-center justify-center z-10 px-4 py-12 font-sans selection:bg-zinc-600/40">
+      
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        /* 优化：p-6 (手机) -> p-8 (电脑) */
-        className="w-full max-w-md p-6 md:p-8 flex flex-col items-center"
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="w-full max-w-[420px] bg-[#18181c] border border-white/[0.05] rounded-[2rem] p-8 md:p-10 shadow-2xl flex flex-col relative overflow-hidden"
       >
-        {/* 优化：text-3xl (手机) -> text-4xl (电脑) */}
-        <h2 className="text-3xl md:text-4xl font-light mb-10 md:mb-12 tracking-[0.3em] text-white drop-shadow-lg">
-          {isLogin ? '登 录' : '注 册'}
-        </h2>
+        {/* 顶部装饰光效 */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-zinc-500/20 to-transparent"></div>
 
-        {error && (
-          <div className="mb-6 w-full text-red-400 bg-red-900/20 px-4 py-2 rounded text-sm text-center border border-red-500/30">
-            {error}
-          </div>
-        )}
+        {/* 标题区 */}
+        <div className="mb-10 text-center">
+          <h2 className="text-3xl font-bold text-zinc-100 tracking-tight mb-2">
+            {isLogin ? '欢迎回来' : '加入社区'}
+          </h2>
+          <p className="text-sm font-medium text-zinc-500">
+            {isLogin ? '登录以访问您的 PUREBEAT 终端' : '注册您的 PUREBEAT 专属账号'}
+          </p>
+        </div>
 
-        {/* 优化：gap-6 (手机) -> gap-8 (电脑) */}
-        <form onSubmit={handleSubmit} className="w-full flex flex-col gap-6 md:gap-8">
+        {/* 错误提示框 */}
+        <AnimatePresence>
+          {error && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              className="w-full overflow-hidden"
+            >
+              <div className="text-rose-400 bg-rose-500/10 px-4 py-3 rounded-xl text-sm font-medium border border-rose-500/20 text-center">
+                {error}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <form onSubmit={handleSubmit} className="w-full flex flex-col gap-5">
           
-          {/* 输入框组 */}
-          <div className="group relative">
+          {/* 用户名输入组 */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-zinc-400 pl-1 flex items-center gap-2">
+              <FaUser className="text-xs" /> 用户名
+            </label>
             <input
               type="text"
               name="username"
-              placeholder=" " 
-              /* 优化：text-lg (手机) -> text-xl (电脑)，防止 iOS 自动放大页面 */
-              className="block w-full bg-transparent border-b border-gray-500 text-white text-lg md:text-xl py-2 focus:border-white transition-colors peer outline-none"
+              placeholder="请输入您的用户名" 
+              className="w-full bg-[#141418] border border-white/[0.05] text-zinc-100 text-base md:text-lg rounded-xl px-4 py-3.5 outline-none focus:border-zinc-500 focus:bg-[#1a1a20] transition-colors placeholder-zinc-600"
               onChange={handleChange}
+              value={formData.username}
               required
             />
-            <label className="absolute left-0 -top-3.5 text-gray-400 text-xs md:text-sm transition-all peer-placeholder-shown:text-lg md:peer-placeholder-shown:text-xl peer-placeholder-shown:top-2 peer-placeholder-shown:text-gray-500 peer-focus:-top-3.5 peer-focus:text-gray-200 peer-focus:text-xs md:peer-focus:text-sm">
-              用户名
-            </label>
           </div>
 
-          <div className="group relative">
+          {/* 密码输入组 */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-zinc-400 pl-1 flex items-center gap-2">
+              <FaLock className="text-xs" /> 密码
+            </label>
             <input
               type="password"
               name="password"
-              placeholder=" "
-              className="block w-full bg-transparent border-b border-gray-500 text-white text-lg md:text-xl py-2 focus:border-white transition-colors peer outline-none"
+              placeholder="请输入密码"
+              className="w-full bg-[#141418] border border-white/[0.05] text-zinc-100 text-base md:text-lg rounded-xl px-4 py-3.5 outline-none focus:border-zinc-500 focus:bg-[#1a1a20] transition-colors placeholder-zinc-600"
               onChange={handleChange}
+              value={formData.password}
               required
             />
-            <label className="absolute left-0 -top-3.5 text-gray-400 text-xs md:text-sm transition-all peer-placeholder-shown:text-lg md:peer-placeholder-shown:text-xl peer-placeholder-shown:top-2 peer-placeholder-shown:text-gray-500 peer-focus:-top-3.5 peer-focus:text-gray-200 peer-focus:text-xs md:peer-focus:text-sm">
-              密码
-            </label>
           </div>
 
+          {/* 提交按钮 */}
           <button 
             type="submit"
-            /* 优化：按钮宽度在手机上占满，文字大小微调 */
-            className="mt-6 md:mt-8 py-3.5 px-6 bg-white/10 hover:bg-white/20 border border-white/30 rounded text-lg md:text-xl text-white transition-all active:scale-95 hover:tracking-widest"
+            className="mt-6 w-full py-4 bg-zinc-200 text-zinc-900 text-base font-bold rounded-xl hover:bg-white transition-all active:scale-95 shadow-sm flex items-center justify-center gap-2"
           >
-            {isLogin ? '进入系统' : '创建账号'}
+            {isLogin ? (
+              <><FaSignInAlt /> 进入系统</>
+            ) : (
+              <><FaUserPlus /> 创建账号</>
+            )}
           </button>
         </form>
 
-        {/* 切换模式：增加内边距以提高手机点击精确度 */}
-        <p 
-          className="mt-8 text-gray-400 text-sm md:text-base cursor-pointer hover:text-white transition-colors py-2 px-4" 
-          onClick={() => setIsLogin(!isLogin)}
-        >
-          {isLogin ? '没有账号？点击注册' : '已有账号？点击登录'}
-        </p>
+        {/* 模式切换 (平滑的用户引导) */}
+        <div className="mt-8 pt-6 border-t border-white/[0.05] text-center">
+          <p 
+            className="text-sm font-medium text-zinc-500 cursor-pointer hover:text-zinc-200 transition-colors inline-flex items-center gap-1.5 p-2 rounded-lg hover:bg-white/[0.02] active:scale-95" 
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError(''); // 切换时顺便清空报错
+            }}
+          >
+            {isLogin ? '没有账号？立即注册' : '已有账号？返回登录'}
+          </p>
+        </div>
 
       </motion.div>
+      
+      <div className="mt-12 text-zinc-600 text-xs font-medium text-center">
+        PUREBEAT PROTOCOL © 2026
+      </div>
     </div>
   );
 };
