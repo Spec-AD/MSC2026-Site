@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { 
   FaCalendarCheck, FaSpinner, FaCommentDots, FaHeart, 
-  FaChevronRight, FaTimes, FaUserCircle
+  FaChevronRight, FaTimes, FaUserCircle, FaBell, FaMedal
 } from 'react-icons/fa'; 
 
 const Home = () => {
@@ -17,10 +17,11 @@ const Home = () => {
   
   const [announcements, setAnnouncements] = useState([]); 
   const [selectedNews, setSelectedNews] = useState(null); 
-  const [showAllNews, setShowAllNews] = useState(false); // 控制是否展开所有新闻
+  const [showAllNews, setShowAllNews] = useState(false); 
   
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [serverTime, setServerTime] = useState(new Date());
+  const [unreadCount, setUnreadCount] = useState(0);
   
   const [userStats, setUserStats] = useState(null);
 
@@ -65,6 +66,21 @@ const Home = () => {
       axios.get(`/api/users/${user.username}`)
         .then(res => setUserStats(res.data))
         .catch(err => console.error('拉取用户状态失败', err));
+    }
+  }, [user]);
+
+  // 4. 获取未读消息数量
+  useEffect(() => {
+    if (user) {
+      const fetchUnread = async () => {
+        try {
+          const res = await axios.get('/api/messages/unread-count', {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+          setUnreadCount(res.data.count);
+        } catch (err) {}
+      };
+      fetchUnread();
     }
   }, [user]);
 
@@ -150,6 +166,21 @@ const Home = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          
+          {/* 收件箱按钮 (铃铛 + 纯数字) */}
+          {user && (
+            <button 
+              onClick={() => navigate('/inbox')}
+              className="flex items-center justify-center gap-1.5 min-w-[40px] px-2 h-10 bg-[#16161e] hover:bg-[#1d1d28] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 shadow-sm"
+              title="收件箱"
+            >
+              <FaBell className="text-[16px]" />
+              {unreadCount > 0 && (
+                <span className="text-[13px] font-bold text-rose-400 font-mono leading-none pt-0.5">{unreadCount}</span>
+              )}
+            </button>
+          )}
+
           {user && (
             <button 
               onClick={handleCheckIn}
@@ -407,6 +438,28 @@ const Home = () => {
               <span className="text-xs text-zinc-500">完成后可获取额外的社区经验</span>
               <div className="mt-3 w-fit px-3 py-1 bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold rounded-lg opacity-50">
                 奖励: +?? XP
+              </div>
+            </div>
+          </motion.div>
+
+          {/* 4. 段位与排行榜占位 (WIP) */}
+          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
+            <div className="flex items-center justify-between mb-5 relative z-10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-1 h-4 bg-amber-400 rounded-full shadow-[0_0_6px_rgba(251,191,36,0.5)]"></div>
+                <h3 className="text-sm font-bold text-zinc-100 tracking-wide">段位与排行</h3>
+              </div>
+              <span className="text-[10px] font-mono text-zinc-500 border border-white/[0.05] px-2 py-0.5 rounded-md">WIP</span>
+            </div>
+            <div className="flex flex-col gap-3 relative z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-xl bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center shrink-0">
+                  <FaMedal className="text-2xl text-zinc-600 opacity-30" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-base font-bold text-zinc-400">段位系统建设中</span>
+                  <span className="text-xs text-zinc-500 leading-relaxed">即将推出全新的竞技段位与专属排位赛面板...</span>
+                </div>
               </div>
             </div>
           </motion.div>
