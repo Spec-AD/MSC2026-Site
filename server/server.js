@@ -1042,6 +1042,27 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
   }
 });
 
+// --- [1.2.5新增] 获取用户好友列表（用于主页好友按钮） ---
+app.get('/api/users/:username/friends', async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username })
+      .populate({
+        path: 'friends',
+        select: 'username uid avatarUrl bannerUrl totalPf rating isB50Visible pfRank role',
+        options: { lean: true }
+      });
+
+    if (!user) return res.status(404).json({ msg: '用户不存在' });
+
+    // 可以在这里根据需要进行二次处理，例如重新计算实时排名
+    const friendsList = user.friends || [];
+    
+    res.json(friendsList);
+  } catch (err) {
+    console.error('获取好友列表报错:', err);
+    res.status(500).json({ msg: '获取好友列表失败' });
+  }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
