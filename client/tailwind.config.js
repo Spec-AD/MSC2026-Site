@@ -7,10 +7,10 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        // 核心全局无衬线字体链：英文 (Nunito) -> 中文 (花园明朝) -> 日文 (M PLUS) -> 现代系统后备
+        // 核心全局无衬线字体链：英文 (Quicksand) -> 中文 (思源黑体) -> 日文 (M PLUS) -> 现代系统后备
         sans: [
-          'Nunito', 
-          'HuaYuanMincho', 
+          'Quicksand', 
+          'NotoSansSC', 
           'MPLUS1p', 
           '-apple-system', 
           'BlinkMacSystemFont', 
@@ -32,15 +32,15 @@ export default {
           'Consolas', 
           '"Liberation Mono"', 
           '"Courier New"', 
-          'HuaYuanMincho', // 确保代码块或数字环境中的汉字使用你的字体
+          'NotoSansSC', 
           'MPLUS1p', 
           'monospace'
         ],
         
-        // 保留你原本的 maimai 别名，映射到新的字体链上，防止以前使用了 font-maimai 的页面崩版
+        // 兼容别名
         maimai: [
-          'Nunito', 
-          'HuaYuanMincho', 
+          'Quicksand', 
+          'NotoSansSC', 
           'MPLUS1p', 
           'sans-serif'
         ],
