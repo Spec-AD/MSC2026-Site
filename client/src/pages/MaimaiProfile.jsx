@@ -18,6 +18,9 @@ const MaimaiProfile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
+  // 新曲 ID 集合 (用于精准判断 R15)
+  const [newSongIds, setNewSongIds] = useState(new Set());
+
   // 同步状态
   const [importToken, setImportToken] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -29,21 +32,36 @@ const MaimaiProfile = () => {
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
 
   useEffect(() => {
-    fetchProfile();
-  }, [username]);
-
-  const fetchProfile = async () => {
-    try {
+    const initData = async () => {
       setLoading(true);
-      const res = await axios.get(`/api/users/${username}?t=${Date.now()}`);
-      setProfile(res.data);
-      setImportToken(res.data.importToken || '');
-    } catch (err) {
-      setError(err.response?.data?.msg || '未找到该玩家档案');
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        // 并行拉取：玩家档案 + 全局曲库数据 (用于判定新曲)
+        const [profileRes, musicRes] = await Promise.all([
+          axios.get(`/api/users/${username}?t=${Date.now()}`),
+          axios.get('/proxy/diving-fish/music_data').catch(() => ({ data: [] }))
+        ]);
+
+        setProfile(profileRes.data);
+        setImportToken(profileRes.data.importToken || '');
+
+        // 提取所有新曲的 ID，建立跨表索引
+        const newIds = new Set();
+        if (musicRes.data && Array.isArray(musicRes.data)) {
+          musicRes.data.forEach(song => {
+            if (song.basic_info?.is_new) {
+              newIds.add(String(song.id));
+            }
+          });
+        }
+        setNewSongIds(newIds);
+      } catch (err) {
+        setError(err.response?.data?.msg || '未找到该玩家档案');
+      } finally {
+        setLoading(false);
+      }
+    };
+    initData();
+  }, [username]);
 
   const handleSync = async () => {
     if (!importToken.trim()) {
@@ -58,7 +76,9 @@ const MaimaiProfile = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       addToast(`同步成功！当前 Rating: ${res.data.rating}`, 'success');
-      await fetchProfile(); 
+      // 仅刷新档案，不刷新曲库
+      const profileRes = await axios.get(`/api/users/${username}?t=${Date.now()}`);
+      setProfile(profileRes.data);
     } catch (err) {
       addToast(err.response?.data?.msg || '同步失败，请检查 Token', 'error');
     } finally {
@@ -70,29 +90,23 @@ const MaimaiProfile = () => {
   // 难度与等级智能推导引擎
   // ==========================================
   const getDiffConfig = (score) => {
-    // 兼容不同的后端字段命名习惯
     let idx = 3; // 默认 MASTER
-    if (score.level_index !== undefined) idx = Number(score.level_index);
-    else if (score.levelIndex !== undefined) idx = Number(score.levelIndex);
-    else if (score.difficulty !== undefined) idx = Number(score.difficulty);
+    // 数据库存的 level 字段实际上是难度索引: 0=绿, 1=黄, 2=红, 3=紫, 4=白
+    if (typeof score.level === 'number') idx = score.level;
 
     const config = [
       { name: 'BASIC', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
       { name: 'ADVANCED', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
       { name: 'EXPERT', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
       { name: 'MASTER', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
-      { name: 'Re:MASTER', color: 'text-zinc-100 bg-zinc-400/10 border-zinc-400/20' } // 白谱
+      { name: 'Re:MASTER', color: 'text-zinc-100 bg-zinc-400/10 border-zinc-400/20' } // 白谱正确解析
     ];
     return config[idx] || config[3];
   };
 
   const getLevelString = (score) => {
-    // 1. 如果已有明确的字符串 "14+"
-    if (typeof score.level === 'string' && (score.level.includes('+') || Number(score.level) > 4)) {
-      return score.level;
-    }
-    // 2. 通过定数完美推导 (例如 14.8 -> 14+)
-    if (!score.constant || score.constant === 0) return score.level || '';
+    // 提取定数 (Constant)，倒推评级 (如 12.7 -> 12+)
+    if (!score.constant || score.constant === 0) return '';
     const base = Math.floor(score.constant);
     const frac = Math.round((score.constant - base) * 10);
     return `${base}${frac >= 6 ? '+' : ''}`;
@@ -123,7 +137,7 @@ const MaimaiProfile = () => {
       return { ...score, achievement: newAch, fcStatus: newFc, rating: newRating, isIdeal: true };
     };
 
-    // 应用过滤规则
+    // 应用 19 种过滤规则
     if (b50Filter === 'IDEAL') scores = scores.map(getIdealScore);
     else if (b50Filter === 'AP50') scores = scores.filter(s => ['ap', 'app'].includes((s.fcStatus||'').toLowerCase()));
     else if (b50Filter === 'FC50') scores = scores.filter(s => ['fc', 'fcp', 'ap', 'app'].includes((s.fcStatus||'').toLowerCase()));
@@ -134,11 +148,11 @@ const MaimaiProfile = () => {
     else if (b50Filter === 'STAR_5') scores = scores.filter(s => s.dxRatio >= 0.97);
     else if (b50Filter === 'STAR_5_5') scores = scores.filter(s => s.dxRatio >= 0.98);
     else if (b50Filter === 'STAR_6') scores = scores.filter(s => s.dxRatio >= 0.99);
-    else if (b50Filter === 'GREEN') scores = scores.filter(s => getDiffConfig(s).name === 'BASIC');
-    else if (b50Filter === 'YELLOW') scores = scores.filter(s => getDiffConfig(s).name === 'ADVANCED');
-    else if (b50Filter === 'RED') scores = scores.filter(s => getDiffConfig(s).name === 'EXPERT');
-    else if (b50Filter === 'PURPLE') scores = scores.filter(s => getDiffConfig(s).name === 'MASTER');
-    else if (b50Filter === 'WHITE') scores = scores.filter(s => getDiffConfig(s).name === 'Re:MASTER');
+    else if (b50Filter === 'GREEN') scores = scores.filter(s => s.level === 0);
+    else if (b50Filter === 'YELLOW') scores = scores.filter(s => s.level === 1);
+    else if (b50Filter === 'RED') scores = scores.filter(s => s.level === 2);
+    else if (b50Filter === 'PURPLE') scores = scores.filter(s => s.level === 3);
+    else if (b50Filter === 'WHITE') scores = scores.filter(s => s.level === 4);
     else if (b50Filter === 'LOCK50') scores = scores.filter(s => s.achievement >= 100.0000 && s.achievement <= 100.1000);
     else if (b50Filter === 'CUN50') scores = scores.filter(s => s.achievement >= 99.8000 && s.achievement <= 99.9999);
     else if (b50Filter === 'YUE50') scores = scores.filter(s => s.achievement < 97.0000);
@@ -146,17 +160,17 @@ const MaimaiProfile = () => {
     // 排序逻辑：Rating优先，达成率其次
     scores.sort((a, b) => b.rating - a.rating || b.achievement - a.achievement);
     
-    // 兼容不同的新曲标记命名
-    const isNewRecord = (s) => s.isNew === true || s.is_new === true || s.isNewSong === true;
+    // 跨表判定：通过 newSongIds Set 来判断是否为新曲
+    const isNewRecord = (s) => newSongIds.has(String(s.songId));
 
-    // 核心组合：旧曲 35 首 + 新曲 15 首
+    // 切分 B35 与 R15
     const oldScores = scores.filter(s => !isNewRecord(s)).slice(0, 35);
     const newScores = scores.filter(s => isNewRecord(s)).slice(0, 15);
     
     const totalRating = [...oldScores, ...newScores].reduce((sum, s) => sum + (s.rating || 0), 0);
 
     return { b35: oldScores, r15: newScores, rating: totalRating };
-  }, [profile, b50Filter]);
+  }, [profile, b50Filter, newSongIds]);
 
   const pf100Data = useMemo(() => {
     if (!profile || !profile.allScores) return [];
@@ -186,7 +200,7 @@ const MaimaiProfile = () => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/40 to-transparent pointer-events-none" />
 
-        {/* 顶部标签 */}
+        {/* Top Badges */}
         <div className="absolute top-2 left-2 flex gap-1 z-10">
           <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex items-center gap-1 ${diff.color}`}>
             {diff.name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{realLevel}</span>
@@ -198,7 +212,7 @@ const MaimaiProfile = () => {
           #{index + 1}
         </div>
 
-        {/* 底部信息 */}
+        {/* Bottom Info */}
         <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
           <div className="text-[13px] font-bold text-zinc-100 truncate mb-1 leading-tight">{score.songName}</div>
           <div className="flex items-end justify-between">
@@ -261,7 +275,7 @@ const MaimaiProfile = () => {
               onClick={() => navigate(`/profile/${profile.username}`)}
               className="flex items-center gap-2 text-zinc-500 hover:text-zinc-200 transition-colors font-bold text-sm w-fit active:scale-95"
             >
-              <FaArrowLeft /> 返回个人主页
+              <FaArrowLeft /> 返回个人资料
             </button>
             <div className="flex items-center gap-3">
               <div className="w-1 h-8 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
@@ -305,7 +319,7 @@ const MaimaiProfile = () => {
         ) : (
           <>
             {/* ========================================== */}
-            {/* B50 成绩模块 */}
+            {/* B50 成绩模块 (完美切分 B35 与 R15) */}
             {/* ========================================== */}
             <div className="mb-16">
               <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-white/[0.05] pb-4 mb-6 gap-4">
