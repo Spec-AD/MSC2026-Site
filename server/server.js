@@ -870,17 +870,22 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
     const devToken = process.env.LXNS_DEV_TOKEN;
     if (!devToken) return res.status(500).json({ msg: '服务器未配置落雪开发者 Token' });
 
-    // 1. 调用落雪 Developer API 获取玩家 best50 成绩
+    // 1. 调用落雪 Developer API (⚠️ 核心修复：移除 Bearer 前缀，严格按照落雪规范)
     const response = await axios.get(`https://maimai.lxns.net/api/v0/maimai/player/${friendCode}/bests`, {
-      headers: { 'Authorization': `Bearer ${devToken}` },
+      headers: { 'Authorization': devToken.trim() },
       timeout: 20000 
     });
 
-    // 落雪标准及 DX 成绩数组
-    const standardRecords = response.data.data.standard || [];
-    const dxRecords = response.data.data.dx || [];
+    // 容错解析：防止落雪返回的数据结构不是预期的 data.standard
+    const dataObj = response.data?.data || {};
+    const standardRecords = dataObj.standard || [];
+    const dxRecords = dataObj.dx || [];
     const allRecords = [...standardRecords, ...dxRecords];
     
+    if (allRecords.length === 0) {
+       return res.status(400).json({ msg: '落雪返回的成绩为空，请确认该账号有游玩记录' });
+    }
+
     // 获取本地全量曲库用于比对
     const allSongsArray = await Song.find({}, 'id title ds charts basic_info type').lean();
 
@@ -896,7 +901,7 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
         s.type === lxType
       );
 
-      if (!song) continue; // 本地曲库未找到则跳过
+      if (!song) continue;
 
       // 3. 数据解析与宴会场拦截
       let pf = 0, dxRatio = 0, constant = 0;
@@ -908,7 +913,6 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
         const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
         const maxDxScore = totalNotes * 3;
         
-        // 拦截宴会场定数
         constant = isUtage ? 0 : (song.ds[lxLevelIndex] || 0);
         dxRatio = maxDxScore > 0 ? (rec.dx_score / maxDxScore) : 0;
         if (maxDxScore > 0) pf = calculatePF(constant, rec.achievements, rec.dx_score, maxDxScore);
@@ -919,14 +923,14 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
         nickname: 'LxPlayer', 
         imageUrl: `https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`, 
         achievementRate: rec.achievements || 0, 
-        songId: song.id, // 存入映射后的水鱼标准 ID
+        songId: song.id, 
         songName: song.title, 
         achievement: rec.achievements || 0, 
         fcStatus: rec.fc || '', 
         fsStatus: rec.fs || '',
         dxScore: rec.dx_score || 0, 
-        rating: Math.floor(rec.dx_rating || 0), // 根据落雪文档，需向下取整
-        level: lxLevelIndex, // 存入数字索引，供前端反推
+        rating: Math.floor(rec.dx_rating || 0), 
+        level: lxLevelIndex, 
         constant: isNaN(constant) || !isFinite(constant) ? 0 : constant, 
         finishTime: new Date(rec.play_time || Date.now()),
         pf: isNaN(pf) || !isFinite(pf) ? 0 : pf, 
@@ -946,7 +950,6 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
     const topRecordsByPf = [...processedScores].sort((a, b) => b.pf - a.pf).slice(0, 50);
     const totalPf = topRecordsByPf.reduce((sum, score) => sum + score.pf, 0);
     
-    // 更新用户数据，把落雪 FriendCode 存到原本 proberUsername 字段，方便后续一键同步
     await User.findByIdAndUpdate(req.user.id, { 
       proberUsername: friendCode.trim(), 
       totalPf: Number(totalPf.toFixed(2)), 
@@ -955,8 +958,18 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
 
     res.json({ msg: `落雪数据同步成功！`, rating: calculatedRating, totalPf: Number(totalPf.toFixed(2)) });
   } catch (err) { 
-    console.error('落雪同步报错:', err);
-    res.status(500).json({ msg: '落雪同步失败，请检查好友代码是否正确或 API 额度' }); 
+    console.error('落雪同步报错详细日志:', err.response?.data || err.message);
+    
+    // ⚠️ 核心修复：透传具体的落雪报错信息
+    if (err.response?.status === 403) {
+      return res.status(403).json({ msg: '被落雪拒绝：请确保你的落雪账号已开启“允许第三方获取数据”权限！' });
+    } else if (err.response?.status === 404) {
+      return res.status(404).json({ msg: '在落雪查分器中未找到该好友码对应的玩家' });
+    } else if (err.response?.status === 401) {
+      return res.status(401).json({ msg: '落雪开发者 Token 无效，请联系管理员检查后端配置' });
+    }
+    
+    res.status(500).json({ msg: err.response?.data?.message || '落雪同步失败，请稍后重试' }); 
   }
 });
 
