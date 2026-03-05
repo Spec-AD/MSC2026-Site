@@ -738,16 +738,42 @@ app.patch('/api/feedback/:id/status', authMiddleware, async (req, res) => {
     const { action } = req.body; 
     const feedback = await Feedback.findById(req.params.id);
     const user = await User.findById(req.user.id);
+    
     if (action === 'SOLVE') {
       if (user.role !== 'ADM') return res.status(403).json({ message: '仅管理员可操作' });
-      feedback.status = 'SOLVED'; feedback.statusUpdatedAt = Date.now();
-      await addXp(feedback.author, 100); await User.findByIdAndUpdate(feedback.author, { $inc: { feedbackApprovedCount: 1 } });
+      
+      // 精准捕获时间：如果是重审(PENDING且存在更新时间)，则取重审时间；否则取初始发布时间
+      const referenceTime = (feedback.status === 'PENDING' && feedback.statusUpdatedAt && feedback.statusUpdatedAt > feedback.createdAt) 
+                            ? feedback.statusUpdatedAt 
+                            : feedback.createdAt;
+                            
+      feedback.status = 'SOLVED'; 
+      feedback.statusUpdatedAt = Date.now();
+      
+      await addXp(feedback.author, 100); 
+      await User.findByIdAndUpdate(feedback.author, { $inc: { feedbackApprovedCount: 1 } });
+
+      // 发送提醒邮件 (无图标，纯参数替换)
+      const timeStr = new Date(referenceTime).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+      await Message.create({
+        receiver: feedback.author,
+        sender: user._id,
+        type: 'SYSTEM',
+        title: '反馈状态更新',
+        content: `你好，你于 ${timeStr} 发布的反馈 ${feedback.title} 被标记为 已解决，如需要重审，请在解决后至少 2 小时内发起重审。`
+      });
+
     } else if (action === 'REAPPEAL') {
-      if (feedback.author.toString() !== req.user.id) return res.status(403).json({ message: '无权' });
-      feedback.status = 'PENDING'; feedback.statusUpdatedAt = Date.now();
+      if (feedback.author.toString() !== req.user.id) return res.status(403).json({ message: '无权操作' });
+      feedback.status = 'PENDING'; 
+      feedback.statusUpdatedAt = Date.now();
     }
-    await feedback.save(); res.json(feedback);
-  } catch (err) { res.status(500).json({ message: '更新失败' }); }
+    
+    await feedback.save(); 
+    res.json(feedback);
+  } catch (err) { 
+    res.status(500).json({ message: '状态更新失败' }); 
+  }
 });
 
 app.patch('/api/feedback/:id/pin', authMiddleware, async (req, res) => {
