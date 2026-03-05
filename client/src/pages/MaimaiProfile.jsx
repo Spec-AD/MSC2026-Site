@@ -20,7 +20,7 @@ const PLATE_VERSIONS = [
   { id: '紫', label: '紫 (MURASAKi)', versions: ['maimai MURASAKi'] },
   { id: '堇', label: '堇 (MURASAKi+)', versions: ['maimai MURASAKi PLUS'] },
   { id: '白', label: '白 (MiLK)', versions: ['maimai MiLK'] },
-  { id: '雪', label: '雪 (MiLK+)', versions: ['maimai MiLK PLUS'] },
+  { id: '雪', label: '雪 (MiLK+)', versions: ['MiLK PLUS'] },
   { id: '辉', label: '辉 (FiNALE)', versions: ['maimai FiNALE'] },
   { id: '熊华', label: '熊华 (DX & DX+)', versions: ['maimai でらっくす', 'maimai でらっくす PLUS'] },
   { id: '爽煌', label: '爽煌 (Splash & Splash+)', versions: ['maimai でらっくす Splash', 'maimai でらっくす Splash PLUS'] },
@@ -838,5 +838,6 @@ const MaimaiProfile = () => {
     </div>
   );
 };
+
 
 export default MaimaiProfile;
