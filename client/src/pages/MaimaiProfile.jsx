@@ -7,10 +7,10 @@ import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, FaLock, FaTimes } from 'react-icons/fa';
 
 // ==========================================
-// 牌子世代配置引擎 (支持图片映射前缀)
+// 牌子世代配置引擎 (完美适配图片前缀与雪代修正)
 // ==========================================
 const PLATE_VERSIONS = [
-  { id: '舞', imgPrefix: 'maimai', label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'maimai MiLK PLUS', 'maimai FiNALE'] },
+  { id: '舞', imgPrefix: 'maimai', label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'MiLK PLUS', 'maimai MiLK PLUS', 'maimai FiNALE'] },
   { id: '真', imgPrefix: 'plus', label: '真 (PLUS)', versions: ['maimai PLUS'] },
   { id: '超', imgPrefix: 'green', label: '超 (GreeN)', versions: ['maimai GreeN'] },
   { id: '檄', imgPrefix: 'green_plus', label: '檄 (GreeN+)', versions: ['maimai GreeN PLUS'] },
@@ -21,7 +21,7 @@ const PLATE_VERSIONS = [
   { id: '紫', imgPrefix: 'murasaki', label: '紫 (MURASAKi)', versions: ['maimai MURASAKi'] },
   { id: '堇', imgPrefix: 'murasaki_plus', label: '堇 (MURASAKi+)', versions: ['maimai MURASAKi PLUS'] },
   { id: '白', imgPrefix: 'milk', label: '白 (MiLK)', versions: ['maimai MiLK'] },
-  { id: '雪', imgPrefix: 'milk_plus', label: '雪 (MiLK+)', versions: ['maimai MiLK PLUS'] },
+  { id: '雪', imgPrefix: 'milk_plus', label: '雪 (MiLK+)', versions: ['MiLK PLUS', 'maimai MiLK PLUS'] },
   { id: '辉', imgPrefix: 'finale', label: '辉 (FiNALE)', versions: ['maimai FiNALE'] },
   { id: '熊华', imgPrefix: 'dx', label: '熊华 (DX & DX+)', versions: ['maimai でらっくす', 'maimai でらっくす PLUS'] },
   { id: '爽煌', imgPrefix: 'splash', label: '爽煌 (Splash & Splash+)', versions: ['maimai でらっくす Splash', 'maimai でらっくす Splash PLUS'] },
@@ -40,6 +40,10 @@ const DIFF_COLORS = [
   'text-zinc-100 bg-zinc-400/10 border-zinc-400/20'
 ];
 
+// 高强度字段兼容：防 undefined 崩溃读取器
+const getFc = (s) => (s?.fcStatus || s?.fc || '').toLowerCase();
+const getFs = (s) => (s?.fsStatus || s?.fs || '').toLowerCase();
+
 const MaimaiProfile = () => {
   const { username } = useParams();
   const { user: currentUser } = useAuth();
@@ -52,7 +56,11 @@ const MaimaiProfile = () => {
   const [error, setError] = useState('');
   
   const [newSongIds, setNewSongIds] = useState(new Set());
+  
+  // --- 同步模块状态 ---
+  const [syncSource, setSyncSource] = useState('df');
   const [importToken, setImportToken] = useState('');
+  const [lxFriendCode, setLxFriendCode] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [b50Filter, setB50Filter] = useState('DEFAULT');
@@ -76,6 +84,7 @@ const MaimaiProfile = () => {
 
         setProfile(profileRes.data);
         setImportToken(profileRes.data.importToken || '');
+        setLxFriendCode(profileRes.data.proberUsername || ''); // 落雪好友码回填
         setMusicData(musicRes.data || []);
 
         const newIds = new Set();
@@ -95,16 +104,22 @@ const MaimaiProfile = () => {
   }, [username]);
 
   const handleSync = async () => {
-    if (!importToken.trim()) return addToast('请提供有效的 Import-Token！', 'error'); 
+    if (syncSource === 'df' && !importToken.trim()) return addToast('请提供水鱼 Import-Token', 'error'); 
+    if (syncSource === 'lx' && !lxFriendCode.trim()) return addToast('请提供落雪好友代码/QQ', 'error'); 
+    
     setIsSyncing(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('/api/users/sync-maimai', { importToken }, { headers: { Authorization: `Bearer ${token}` } });
-      addToast(`同步成功！当前 Rating: ${res.data.rating}`, 'success');
+      const endpoint = syncSource === 'df' ? '/api/users/sync-maimai' : '/api/users/sync-luoxue';
+      const payload = syncSource === 'df' ? { importToken } : { friendCode: lxFriendCode };
+      
+      const res = await axios.post(endpoint, payload, { headers: { Authorization: `Bearer ${token}` } });
+      
+      addToast(res.data.msg || `同步成功！当前 Rating: ${res.data.rating}`, 'success');
       const profileRes = await axios.get(`/api/users/${username}?t=${Date.now()}`);
       setProfile(profileRes.data);
     } catch (err) {
-      addToast(err.response?.data?.msg || '同步失败，请检查 Token', 'error');
+      addToast(err.response?.data?.msg || '同步失败，请检查输入或网络', 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -136,11 +151,15 @@ const MaimaiProfile = () => {
 
   const checkPlateCondition = (score, plateType) => {
     if (!score) return false;
-    if (plateType === '霸者') return score.achievement >= 80;
-    if (plateType === '将') return score.achievement >= 100.0000;
-    if (plateType === '极') return ['fc', 'fcp', 'ap', 'app'].includes((score.fcStatus || '').toLowerCase());
-    if (plateType === '神') return ['ap', 'app'].includes((score.fcStatus || '').toLowerCase());
-    if (plateType === '舞舞') return ['fsd', 'fsdp'].includes((score.fsStatus || '').toLowerCase());
+    const ach = score.achievement || score.achievementRate || 0;
+    const fc = getFc(score);
+    const fs = getFs(score);
+
+    if (plateType === '霸者') return ach >= 80;
+    if (plateType === '将') return ach >= 100; // 规避浮点数精度 100.0000 问题
+    if (plateType === '极') return ['fc', 'fcp', 'ap', 'app'].includes(fc);
+    if (plateType === '神') return ['ap', 'app'].includes(fc);
+    if (plateType === '舞舞') return ['fsd', 'fsdp'].includes(fs); // 包含 FDX 判定
     return false;
   };
 
@@ -171,12 +190,14 @@ const MaimaiProfile = () => {
         const score = userScoreMap.get(`${song.id}_${lvl}`);
         if (!score) return;
 
-        if (score.achievement >= 80) clearCount++; 
-        if (score.achievement >= 100.0000) jiangCount++;
-        const fc = (score.fcStatus || '').toLowerCase();
+        const ach = score.achievement || score.achievementRate || 0;
+        const fc = getFc(score);
+        const fs = getFs(score);
+
+        if (ach >= 80) clearCount++; 
+        if (ach >= 100) jiangCount++;
         if (['fc', 'fcp', 'ap', 'app'].includes(fc)) jiCount++;
         if (['ap', 'app'].includes(fc)) shenCount++;
-        const fs = (score.fsStatus || '').toLowerCase();
         if (['fsd', 'fsdp'].includes(fs)) maiCount++;
       });
     });
@@ -184,7 +205,8 @@ const MaimaiProfile = () => {
     const prefix = targetGroup.id;
     const result = [];
     if (isMaiSeries) {
-      result.push({ type: '霸者', imgSuffix: 'clear', name: '霸者', count: clearCount, total: totalCharts, color: 'text-zinc-300', bar: 'bg-zinc-300' });
+      // 霸者独占图片逻辑 customImg
+      result.push({ type: '霸者', customImg: 'clear_general', name: '霸者', count: clearCount, total: totalCharts, color: 'text-zinc-300', bar: 'bg-zinc-300' });
     }
     if (prefix !== '真') {
       result.push({ type: '将', imgSuffix: 'general', name: `${prefix}将`, count: jiangCount, total: totalCharts, color: 'text-emerald-400', bar: 'bg-emerald-400' });
@@ -202,7 +224,7 @@ const MaimaiProfile = () => {
 
     const getIdealScore = (score) => {
       let newAch = score.achievement;
-      let newFc = (score.fcStatus || '').toLowerCase();
+      let newFc = getFc(score);
       if (newAch < 100.0) newAch = 100.0;
       else if (newAch >= 100.0 && newAch < 100.5) { newAch = 100.5; if (!['fcp', 'ap', 'app'].includes(newFc)) newFc = 'fcp'; }
       else if (newAch >= 100.5) { newAch = 101.0; newFc = 'app'; }
@@ -219,8 +241,8 @@ const MaimaiProfile = () => {
     };
 
     if (b50Filter === 'IDEAL') scores = scores.map(getIdealScore);
-    else if (b50Filter === 'AP50') scores = scores.filter(s => ['ap', 'app'].includes((s.fcStatus||'').toLowerCase()));
-    else if (b50Filter === 'FC50') scores = scores.filter(s => ['fc', 'fcp', 'ap', 'app'].includes((s.fcStatus||'').toLowerCase()));
+    else if (b50Filter === 'AP50') scores = scores.filter(s => ['ap', 'app'].includes(getFc(s)));
+    else if (b50Filter === 'FC50') scores = scores.filter(s => ['fc', 'fcp', 'ap', 'app'].includes(getFc(s)));
     else if (b50Filter === 'STAR_1') scores = scores.filter(s => s.dxRatio >= 0.85);
     else if (b50Filter === 'STAR_2') scores = scores.filter(s => s.dxRatio >= 0.90);
     else if (b50Filter === 'STAR_3') scores = scores.filter(s => s.dxRatio >= 0.93);
@@ -252,15 +274,15 @@ const MaimaiProfile = () => {
     return [...profile.allScores].sort((a, b) => b.pf - a.pf).slice(0, 100);
   }, [profile]);
 
-  const getFcBadge = (fc) => {
-    const s = (fc || '').toLowerCase();
+  const getFcBadge = (score) => {
+    const s = getFc(score);
     if (s.includes('ap')) return <span className="bg-amber-400 text-amber-950 px-1.5 rounded-sm text-[10px] font-black">{s.toUpperCase()}</span>;
     if (s.includes('fc')) return <span className="bg-pink-400 text-pink-950 px-1.5 rounded-sm text-[10px] font-black">{s.toUpperCase()}</span>;
     return null;
   };
 
-  const getFsBadge = (fs) => {
-    const s = (fs || '').toLowerCase();
+  const getFsBadge = (score) => {
+    const s = getFs(score);
     if (['fsd', 'fsdp'].includes(s)) return <span className="bg-cyan-400 text-cyan-950 px-1.5 rounded-sm text-[10px] font-black">FDX</span>;
     return null;
   };
@@ -285,8 +307,8 @@ const MaimaiProfile = () => {
           <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex items-center gap-1 ${diff.color}`}>
             {diff.name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{realLevel}</span>
           </span>
-          {getFcBadge(score.fcStatus)}
-          {getFsBadge(score.fsStatus)}
+          {getFcBadge(score)}
+          {getFsBadge(score)}
         </div>
         {score.isIdeal && <span className="absolute top-2 right-8 bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded text-[9px] font-bold z-10">IDEAL</span>}
         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-bold text-zinc-300 z-10" style={{ fontFamily: "'Quicksand', sans-serif" }}>
@@ -364,22 +386,51 @@ const MaimaiProfile = () => {
             </div>
           </div>
 
+          {/* 智能双源同步控制台 */}
           {isOwnProfile && (
-            <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md p-2 rounded-2xl border border-white/[0.05] shadow-sm w-full md:w-auto">
-              <input 
-                type="password" 
-                value={importToken}
-                onChange={(e) => setImportToken(e.target.value)}
-                placeholder="粘贴 Import-token 更新数据"
-                className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
-              />
-              <button 
-                onClick={handleSync}
-                disabled={isSyncing}
-                className="bg-cyan-500 hover:bg-cyan-400 text-zinc-900 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shrink-0 active:scale-95"
-              >
-                {isSyncing ? <FaSpinner className="animate-spin" /> : <><FaSyncAlt /> 同步云端</>}
-              </button>
+            <div className="flex flex-col gap-3 w-full md:w-auto">
+              <div className="flex items-center gap-2 bg-[#15151e]/80 p-1 rounded-xl border border-white/[0.05] w-fit">
+                <button 
+                  onClick={() => setSyncSource('df')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${syncSource === 'df' ? 'bg-cyan-500/20 text-cyan-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  水鱼查分器
+                </button>
+                <button 
+                  onClick={() => setSyncSource('lx')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${syncSource === 'lx' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  落雪查分器
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md p-2 rounded-2xl border border-white/[0.05] shadow-sm w-full md:w-auto">
+                {syncSource === 'df' ? (
+                  <input 
+                    type="password" 
+                    value={importToken}
+                    onChange={(e) => setImportToken(e.target.value)}
+                    placeholder="粘贴水鱼 Import-token..."
+                    className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
+                  />
+                ) : (
+                  <input 
+                    type="text" 
+                    value={lxFriendCode}
+                    onChange={(e) => setLxFriendCode(e.target.value)}
+                    placeholder="输入落雪绑定的好友代码或 QQ"
+                    className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
+                  />
+                )}
+                
+                <button 
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  className={`${syncSource === 'df' ? 'bg-cyan-500 hover:bg-cyan-400 text-zinc-900' : 'bg-indigo-500 hover:bg-indigo-400 text-white'} px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shrink-0 active:scale-95`}
+                >
+                  {isSyncing ? <FaSpinner className="animate-spin" /> : <><FaSyncAlt /> 同步</>}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -392,7 +443,7 @@ const MaimaiProfile = () => {
         ) : (
           <>
             {/* ========================================== */}
-            {/* 牌子完成度可视化面板 (图像版重构) */}
+            {/* 牌子完成度可视化面板 */}
             {/* ========================================== */}
             <div className="mb-14 border-b border-white/[0.05] pb-10">
               <div className="flex flex-col gap-4 mb-6">
@@ -422,7 +473,11 @@ const MaimaiProfile = () => {
                 {plateProgress ? plateProgress.map((plate, idx) => {
                   const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
                   const isCompleted = plate.total > 0 && plate.count === plate.total;
-                  
+                  // 针对霸者的定制图片路径处理
+                  const imgSrc = plate.customImg 
+                                ? `/assets/${plate.customImg}.png` 
+                                : `/assets/${targetGroup.imgPrefix}_${plate.imgSuffix}.png`;
+
                   return (
                     <div 
                       key={idx} 
@@ -432,10 +487,9 @@ const MaimaiProfile = () => {
                       }}
                       className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:bg-[#1a1a24] hover:border-cyan-500/30 transition-all cursor-pointer group"
                     >
-                      {/* 沉浸式名牌图片展示区 */}
                       <div className="relative w-full aspect-[3/1] bg-[#0c0c11] rounded-xl flex items-center justify-center overflow-hidden border border-white/[0.02]">
                         <img 
-                          src={`/assets/${targetGroup.imgPrefix}_${plate.imgSuffix}.png`}
+                          src={imgSrc}
                           alt={plate.name}
                           className={`w-full h-full object-contain p-2 transition-all duration-500 ${isCompleted ? 'opacity-100 scale-105 drop-shadow-[0_0_12px_rgba(255,255,255,0.25)]' : 'opacity-20 grayscale brightness-50'}`}
                           onError={(e) => { 
@@ -443,7 +497,6 @@ const MaimaiProfile = () => {
                             e.target.nextSibling.style.opacity = '1';
                           }}
                         />
-                        {/* 图片缺失容错：优雅纯文本回退 */}
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 transition-opacity">
                           <span className={`font-black text-xl tracking-widest ${isCompleted ? plate.color : 'text-zinc-600'}`}>
                             {plate.name}
@@ -586,7 +639,7 @@ const MaimaiProfile = () => {
                               <span className="text-[11px] font-bold text-zinc-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                                 {score.achievement.toFixed(4)}%
                               </span>
-                              {getFcBadge(score.fcStatus)}
+                              {getFcBadge(score)}
                             </div>
                           </div>
                         </div>
@@ -806,7 +859,7 @@ const MaimaiProfile = () => {
                               {score && isCompleted && (
                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-4 flex justify-between items-end">
                                   <span className="text-[10px] font-bold text-white font-mono">{score.achievement.toFixed(2)}%</span>
-                                  {getFcBadge(score.fcStatus) || getFsBadge(score.fsStatus)}
+                                  {getFcBadge(score) || getFsBadge(score)}
                                 </div>
                               )}
                             </div>
