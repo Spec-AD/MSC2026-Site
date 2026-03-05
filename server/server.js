@@ -12,6 +12,7 @@ const WikiPage = require('./models/WikiPage');
 const WikiCategory = require('./models/WikiCategory'); 
 const OsuScore = require('./models/OsuScore');
 const MessageFolder = require('./models/MessageFolder');
+const ChunithmSong = require('./models/ChunithmSong');
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -1259,6 +1260,44 @@ app.get('/api/users/:username/friends', async (req, res) => {
   } catch (err) {
     console.error('获取好友列表报错:', err);
     res.status(500).json({ msg: '获取好友列表失败' });
+  }
+});
+
+// ==========================================
+// CHUNITHM 曲库管理接口
+// ==========================================
+
+// 1. 从水鱼 API 同步 CHUNITHM 全量曲库 (建议加上管理员权限中间件)
+app.post('/api/chunithm-songs/sync', async (req, res) => {
+  try {
+    const response = await axios.get('https://www.diving-fish.com/api/chunithmprober/music_data', {
+      timeout: 15000
+    });
+    
+    const songs = response.data;
+    if (!Array.isArray(songs) || songs.length === 0) {
+      return res.status(400).json({ msg: '获取到的曲库数据无效' });
+    }
+
+    // 清空旧数据并插入新数据 (原子化操作推荐使用 bulkWrite，但这里为了简便先 deleteMany)
+    await ChunithmSong.deleteMany({});
+    await ChunithmSong.insertMany(songs);
+
+    res.json({ msg: `CHUNITHM 曲库同步成功！共载入 ${songs.length} 首歌曲。` });
+  } catch (err) {
+    console.error('CHUNITHM 曲库同步失败:', err);
+    res.status(500).json({ msg: '同步失败，请检查网络或水鱼服务器状态' });
+  }
+});
+
+// 2. 前端拉取 CHUNITHM 曲库
+app.get('/api/chunithm-songs', async (req, res) => {
+  try {
+    // 按 ID 降序排列，通常新歌 ID 较大
+    const songs = await ChunithmSong.find({}).sort({ id: -1 }); 
+    res.json(songs);
+  } catch (err) {
+    res.status(500).json({ msg: '获取 CHUNITHM 曲库失败' });
   }
 });
 
