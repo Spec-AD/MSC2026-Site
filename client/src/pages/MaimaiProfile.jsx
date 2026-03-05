@@ -7,7 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, FaLock, FaTimes } from 'react-icons/fa';
 
 // ==========================================
-// 牌子世代配置引擎 (完美适配图片前缀与雪代修正)
+// 牌子世代配置引擎
 // ==========================================
 const PLATE_VERSIONS = [
   { id: '舞', plates: [{ name: '舞', img: 'maimai' }], label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'MiLK PLUS', 'maimai MiLK PLUS', 'maimai FiNALE'] },
@@ -21,7 +21,7 @@ const PLATE_VERSIONS = [
   { id: '紫', plates: [{ name: '紫', img: 'murasaki' }], label: '紫 (MURASAKi)', versions: ['maimai MURASAKi'] },
   { id: '堇', plates: [{ name: '堇', img: 'murasaki_plus' }], label: '堇 (MURASAKi+)', versions: ['maimai MURASAKi PLUS'] },
   { id: '白', plates: [{ name: '白', img: 'milk' }], label: '白 (MiLK)', versions: ['maimai MiLK'] },
-  { id: '雪', plates: [{ name: '雪', img: 'milk_plus' }], label: '雪 (MiLK+)', versions: ['MiLK PLUS', 'maimai MiLK PLUS'] }, // 修复: MiLK PLUS
+  { id: '雪', plates: [{ name: '雪', img: 'milk_plus' }], label: '雪 (MiLK+)', versions: ['MiLK PLUS', 'maimai MiLK PLUS'] }, 
   { id: '辉', plates: [{ name: '辉', img: 'finale' }], label: '辉 (FiNALE)', versions: ['maimai FiNALE'] },
   { id: '熊华', plates: [{ name: '熊', img: 'dx' }, { name: '华', img: 'dx_plus' }], label: '熊华 (DX & DX+)', versions: ['maimai でらっくす', 'maimai でらっくす PLUS'] },
   { id: '爽煌', plates: [{ name: '爽', img: 'splash' }, { name: '煌', img: 'splash_plus' }], label: '爽煌 (Splash & Splash+)', versions: ['maimai でらっくす Splash', 'maimai でらっくす Splash PLUS'] },
@@ -30,6 +30,8 @@ const PLATE_VERSIONS = [
   { id: '宴双', plates: [{ name: '双', img: 'buddies' }, { name: '宴', img: 'buddies_plus' }], label: '宴双 (BUDDiES & BUDDiES+)', versions: ['maimai でらっくす BUDDiES', 'maimai でらっくす BUDDiES PLUS'] },
   { id: '镜彩', plates: [{ name: '镜', img: 'prism' }, { name: '彩', img: 'prism_plus' }], label: '镜彩 (PRiSM & PRiSM+)', versions: ['maimai でらっくす PRiSM', 'maimai でらっくす PRiSM PLUS'] },
 ];
+
+const LEVEL_LIST = ['1', '2', '3', '4', '5', '6', '7', '7+', '8', '8+', '9', '9+', '10', '10+', '11', '11+', '12', '12+', '13', '13+', '14', '14+', '15'];
 
 const DIFF_NAMES = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'Re:MASTER'];
 const DIFF_COLORS = [
@@ -40,7 +42,6 @@ const DIFF_COLORS = [
   'text-zinc-100 bg-zinc-400/10 border-zinc-400/20'
 ];
 
-// 高强度字段兼容：防 undefined 崩溃读取器
 const getFc = (s) => (s?.fcStatus || s?.fc || '').toLowerCase();
 const getFs = (s) => (s?.fsStatus || s?.fs || '').toLowerCase();
 
@@ -57,7 +58,6 @@ const MaimaiProfile = () => {
   
   const [newSongIds, setNewSongIds] = useState(new Set());
   
-  // --- 同步模块状态 ---
   const [syncSource, setSyncSource] = useState('df');
   const [importToken, setImportToken] = useState('');
   const [lxFriendCode, setLxFriendCode] = useState('');
@@ -66,14 +66,16 @@ const MaimaiProfile = () => {
   const [b50Filter, setB50Filter] = useState('DEFAULT');
   const [selectedPfScore, setSelectedPfScore] = useState(null);
   
-  // --- 牌子系统状态 ---
+  // 牌子系统状态
   const [selectedPlateVersion, setSelectedPlateVersion] = useState('舞');
   const [selectedPlateDetail, setSelectedPlateDetail] = useState(null); 
   const [detailDiff, setDetailDiff] = useState(3); 
 
+  // 🔥 等级进度系统状态
+  const [selectedLevelDetail, setSelectedLevelDetail] = useState(null);
+
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
 
-  // 🔥 核心修复1：在后台静默预加载所有名牌图片，写入浏览器强缓存
   useEffect(() => {
     const preloadImages = () => {
       const types = ['general', 'fc', 'ap', 'fdx'];
@@ -174,7 +176,7 @@ const MaimaiProfile = () => {
     const fs = getFs(score);
 
     if (plateType === '霸者') return ach >= 80;
-    if (plateType === '将') return ach >= 100; // 规避浮点数精度
+    if (plateType === '将') return ach >= 100;
     if (plateType === '极') return ['fc', 'fcp', 'ap', 'app'].includes(fc);
     if (plateType === '神') return ['ap', 'app'].includes(fc);
     if (plateType === '舞舞') return ['fsd', 'fsdp'].includes(fs); 
@@ -182,7 +184,7 @@ const MaimaiProfile = () => {
   };
 
   // ==========================================
-  // 牌子进度计算与图片映射
+  // 牌子进度计算引擎
   // ==========================================
   const plateProgress = useMemo(() => {
     if (!musicData || musicData.length === 0 || !profile?.allScores) return null;
@@ -191,9 +193,7 @@ const MaimaiProfile = () => {
     if (!targetGroup) return null;
 
     const validSongs = musicData.filter(s =>
-      s.type !== 'UTAGE' &&
-      s.basic_info.genre !== '宴会場' &&
-      s.basic_info.genre !== '宴会场' &&
+      s.type !== 'UTAGE' && s.basic_info.genre !== '宴会場' && s.basic_info.genre !== '宴会场' &&
       targetGroup.versions.includes(s.basic_info.from)
     );
 
@@ -221,11 +221,9 @@ const MaimaiProfile = () => {
     });
 
     const result = [];
-    
     targetGroup.plates.forEach(p => {
       const pName = p.name;
       const pImg = p.img;
-      
       if (pName === '舞') {
         result.push({ type: '霸者', customImg: 'clear_general', name: '霸者', count: clearCount, total: totalCharts, color: 'text-zinc-300', bar: 'bg-zinc-300' });
         result.push({ type: '将', imgPrefix: pImg, imgSuffix: 'general', name: `${pName}将`, count: jiangCount, total: totalCharts, color: 'text-emerald-400', bar: 'bg-emerald-400' });
@@ -244,6 +242,60 @@ const MaimaiProfile = () => {
 
     return result;
   }, [musicData, profile, selectedPlateVersion, userScoreMap]);
+
+  // ==========================================
+  // 🔥 等级进度计算引擎
+  // ==========================================
+  const levelProgress = useMemo(() => {
+    if (!musicData || musicData.length === 0 || !userScoreMap) return null;
+
+    const data = LEVEL_LIST.map(lvl => ({
+        level: lvl, total: 0, clear: 0, sss: 0, sssp: 0, fc: 0, fcp: 0, ap: 0, app: 0
+    }));
+    const levelMap = {};
+    data.forEach(d => levelMap[d.level] = d);
+
+    musicData.forEach(song => {
+        if (song.type === 'UTAGE' || song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场') return;
+        
+        song.level.forEach((lvlStr, idx) => {
+            if (levelMap[lvlStr]) {
+                levelMap[lvlStr].total++;
+                const score = userScoreMap.get(`${song.id}_${idx}`) || userScoreMap.get(`${Number(song.id)}_${idx}`);
+                if (score) {
+                    const ach = score.achievement || score.achievementRate || 0;
+                    const fc = getFc(score);
+                    
+                    if (ach >= 80) levelMap[lvlStr].clear++;
+                    if (ach >= 100.0) levelMap[lvlStr].sss++;
+                    if (ach >= 100.5) levelMap[lvlStr].sssp++;
+                    
+                    if (['fc', 'fcp', 'ap', 'app'].includes(fc)) levelMap[lvlStr].fc++;
+                    if (['fcp', 'ap', 'app'].includes(fc)) levelMap[lvlStr].fcp++;
+                    if (['ap', 'app'].includes(fc)) levelMap[lvlStr].ap++;
+                    if (fc === 'app') levelMap[lvlStr].app++;
+                }
+            }
+        });
+    });
+
+    return data.filter(d => d.total > 0);
+  }, [musicData, userScoreMap]);
+
+  // 用于模态窗的指定等级曲目解析
+  const chartsInSelectedLevel = useMemo(() => {
+    if (!selectedLevelDetail || !musicData) return [];
+    const charts = [];
+    musicData.forEach(song => {
+        if (song.type === 'UTAGE' || song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场') return;
+        song.level.forEach((lvlStr, idx) => {
+            if (lvlStr === selectedLevelDetail) {
+                charts.push({ song, diffIndex: idx, ds: song.ds[idx] || 0 });
+            }
+        });
+    });
+    return charts.sort((a, b) => b.ds - a.ds || Number(b.song.id) - Number(a.song.id));
+  }, [selectedLevelDetail, musicData]);
 
   const b50Data = useMemo(() => {
     if (!profile || !profile.allScores) return { b35: [], r15: [], rating: 0 };
@@ -376,19 +428,6 @@ const MaimaiProfile = () => {
     </div>
   );
 
-  const B50_FILTERS = [
-    { value: 'DEFAULT', label: '默认 B50' }, { value: 'IDEAL', label: '理想 B50' },
-    { value: 'AP50', label: 'AP 50' }, { value: 'FC50', label: 'FC 50' },
-    { value: 'STAR_1', label: '一星 B50' }, { value: 'STAR_2', label: '二星 B50' },
-    { value: 'STAR_3', label: '三星 B50' }, { value: 'STAR_4', label: '四星 B50' },
-    { value: 'STAR_5', label: '五星 B50' }, { value: 'STAR_5_5', label: '五星半 B50' },
-    { value: 'STAR_6', label: '六星 B50' }, { value: 'GREEN', label: '绿谱 B50' },
-    { value: 'YELLOW', label: '黄谱 B50' }, { value: 'RED', label: '红谱 B50' },
-    { value: 'PURPLE', label: '紫谱 B50' }, { value: 'WHITE', label: '白谱 B50' },
-    { value: 'LOCK50', label: '锁 50' }, { value: 'CUN50', label: '寸 50' },
-    { value: 'YUE50', label: '越 50' }
-  ];
-
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans selection:bg-cyan-500/30 relative pb-24 overflow-x-hidden">
       
@@ -477,7 +516,7 @@ const MaimaiProfile = () => {
             {/* ========================================== */}
             {/* 牌子完成度可视化面板 */}
             {/* ========================================== */}
-            <div className="mb-14 border-b border-white/[0.05] pb-10">
+            <div className="mb-10 border-b border-white/[0.05] pb-10">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex items-center gap-3">
                   <div className="w-1 h-6 bg-amber-400 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.6)]"></div>
@@ -501,7 +540,6 @@ const MaimaiProfile = () => {
                 </div>
               </div>
 
-              {/* 优雅网格：兼容合并代的 8 牌子矩阵 */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {plateProgress ? plateProgress.map((plate, idx) => {
                   const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
@@ -522,7 +560,7 @@ const MaimaiProfile = () => {
                     >
                       <div className="relative w-full aspect-[3/1] bg-[#0c0c11] rounded-xl flex items-center justify-center overflow-hidden border border-white/[0.02]">
                         <img 
-                          key={imgSrc} // 🔥 核心修复2：强制重绘DOM，解决回退状态卡死
+                          key={imgSrc} 
                           src={imgSrc}
                           alt={plate.name}
                           className={`w-full h-full object-contain p-2 transition-all duration-500 ${isCompleted ? 'opacity-100 scale-105 drop-shadow-[0_0_12px_rgba(255,255,255,0.25)]' : 'opacity-20 grayscale brightness-50'}`}
@@ -576,6 +614,79 @@ const MaimaiProfile = () => {
                     <FaSpinner className="animate-spin text-xl" /> 正在拉取云端曲库数据...
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* ========================================== */}
+            {/* 🔥 等级完成度面板 (全新加入) */}
+            {/* ========================================== */}
+            <div className="mb-14 border-b border-white/[0.05] pb-10">
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-1 h-6 bg-pink-400 rounded-full shadow-[0_0_8px_rgba(244,114,182,0.6)]"></div>
+                  <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">等级进度追踪</h2>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                {levelProgress && levelProgress.map((lvl) => {
+                    const isAllAPP = lvl.app === lvl.total;
+                    const isAllAP = lvl.ap === lvl.total;
+                    const isAllFCp = lvl.fcp === lvl.total;
+                    const isAllFC = lvl.fc === lvl.total;
+                    const isAllSSSp = lvl.sssp === lvl.total;
+                    const isAllSSS = lvl.sss === lvl.total;
+
+                    let baseClass = 'border-white/[0.05] bg-[#15151e] hover:bg-[#1a1a24]';
+                    let glowClass = '';
+
+                    // 极致光效叠加逻辑
+                    if (isAllAPP) {
+                        baseClass = 'border-transparent bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-cyan-500/20';
+                        glowClass = 'ring-2 ring-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)]';
+                    } else {
+                        if (isAllAP) baseClass = 'border-white/[0.05] bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-pink-500/20 hover:brightness-110';
+                        else if (isAllFCp) baseClass = 'border-white/[0.05] bg-emerald-500/20 hover:bg-emerald-500/30';
+                        else if (isAllFC) baseClass = 'border-white/[0.05] bg-emerald-500/10 hover:bg-emerald-500/20';
+
+                        if (isAllSSSp) glowClass = 'border-amber-500 ring-1 ring-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]';
+                        else if (isAllSSS) glowClass = 'border-amber-300/60 ring-1 ring-amber-300/50 shadow-[0_0_8px_rgba(252,211,77,0.2)]';
+                    }
+
+                    return (
+                        <div
+                          key={lvl.level}
+                          onClick={() => setSelectedLevelDetail(lvl.level)}
+                          className={`relative rounded-xl p-3 border transition-all cursor-pointer group flex flex-col gap-1.5 ${baseClass} ${glowClass}`}
+                        >
+                            {isAllAPP && <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 animate-pulse pointer-events-none rounded-xl"></div>}
+                            
+                            <div className="flex justify-between items-baseline relative z-10">
+                                <span className="text-xl font-bold text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                    {lvl.level}
+                                </span>
+                                <span className="text-[11px] font-bold text-zinc-500 group-hover:text-zinc-300 transition-colors" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                    {lvl.clear} / {lvl.total}
+                                </span>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] font-semibold tracking-wide relative z-10">
+                                <span className={lvl.sss === lvl.total ? 'text-amber-400' : 'text-zinc-500'}>SSS:{lvl.sss}</span>
+                                <span className={lvl.fc === lvl.total ? 'text-emerald-400' : 'text-zinc-500'}>FC:{lvl.fc}</span>
+                                {lvl.ap > 0 && <span className={lvl.ap === lvl.total ? 'text-cyan-400' : 'text-zinc-500'}>AP:{lvl.ap}</span>}
+                            </div>
+                            
+                            <div className="h-1 w-full bg-[#0c0c11] rounded-full mt-auto overflow-hidden border border-white/[0.02] relative z-10">
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${lvl.total > 0 ? (lvl.clear / lvl.total) * 100 : 0}%` }}
+                                    transition={{ duration: 1, ease: "easeOut" }}
+                                    className="h-full bg-pink-400"
+                                />
+                            </div>
+                        </div>
+                    )
+                })}
               </div>
             </div>
 
@@ -792,9 +903,7 @@ const MaimaiProfile = () => {
           )}
         </AnimatePresence>
 
-        {/* ========================================== */}
         {/* 牌子详情曲目墙模态窗 */}
-        {/* ========================================== */}
         <AnimatePresence>
           {selectedPlateDetail && (() => {
             const validSongs = musicData.filter(s =>
@@ -910,6 +1019,105 @@ const MaimaiProfile = () => {
                                 <span className={`w-2 h-2 rounded-full ${diffConf.color.split(' ')[0].replace('text-', 'bg-')}`}></span>
                                 <span className="text-[10px] font-bold text-zinc-500 font-mono">
                                   DS: {song.ds[detailDiff]?.toFixed(1) || '0.0'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            );
+          })()}
+        </AnimatePresence>
+
+        {/* 🔥 等级详情曲目墙模态窗 */}
+        <AnimatePresence>
+          {selectedLevelDetail && (() => {
+            return (
+              <div 
+                className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-8"
+                onClick={() => setSelectedLevelDetail(null)}
+              >
+                <motion.div 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="absolute inset-0 bg-[#0c0c11]/90 backdrop-blur-md"
+                />
+                
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl relative z-10 overflow-hidden"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="p-6 md:p-8 border-b border-white/[0.05] shrink-0 bg-[#15151e] flex flex-col gap-6 relative z-20">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-1.5 h-8 bg-pink-400 rounded-full shadow-[0_0_8px_rgba(244,114,182,0.6)]"></div>
+                        <div>
+                          <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">
+                            等级 Lv.{selectedLevelDetail} 完成情况
+                          </h2>
+                          <p className="text-xs text-zinc-500 font-medium mt-1">该等级下包含的所有谱面</p>
+                        </div>
+                      </div>
+                      <button onClick={() => setSelectedLevelDetail(null)} className="text-zinc-500 hover:text-white transition-colors bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-full active:scale-90">
+                        <FaTimes />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 bg-[#0c0c11]">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-4">
+                      {chartsInSelectedLevel.map(({ song, diffIndex, ds }, idx) => {
+                        const score = userScoreMap.get(`${song.id}_${diffIndex}`) || userScoreMap.get(`${Number(song.id)}_${diffIndex}`);
+                        const isCompleted = score && (score.achievement || score.achievementRate) >= 80;
+                        const diffConf = { name: DIFF_NAMES[diffIndex], color: DIFF_COLORS[diffIndex] };
+
+                        return (
+                          <div key={`${song.id}_${diffIndex}_${idx}`} className="flex flex-col gap-2 group">
+                            <div className={`relative aspect-square rounded-xl overflow-hidden border ${isCompleted ? 'border-pink-400/50 shadow-[0_0_15px_rgba(244,114,182,0.15)]' : 'border-white/[0.05] opacity-40 grayscale-[60%]'} transition-all`}>
+                              <img 
+                                src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`} 
+                                alt="cover" 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                onError={(e) => { e.target.src = '/assets/bg.png'; }}
+                              />
+
+                              {/* 难度角标 (如红谱、紫谱) */}
+                              <div className="absolute top-1.5 left-1.5 flex gap-1 z-10 shadow-sm">
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border ${diffConf.color}`}>
+                                  {diffConf.name}
+                                </span>
+                              </div>
+
+                              {!isCompleted && (
+                                <div className="absolute inset-0 bg-[#0c0c11]/60 flex items-center justify-center pointer-events-none">
+                                  <div className="bg-black/80 px-2 py-1 rounded text-[9px] font-bold text-zinc-400 uppercase tracking-widest border border-white/10">
+                                    Not Cleared
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {score && isCompleted && (
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-4 flex justify-between items-end">
+                                  <span className="text-[10px] font-bold text-white font-mono">{(score.achievement || score.achievementRate).toFixed(2)}%</span>
+                                  {getFcBadge(score) || getFsBadge(score)}
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex flex-col px-1">
+                              <span className={`text-[11px] font-bold truncate ${isCompleted ? 'text-zinc-200' : 'text-zinc-500'}`}>
+                                {song.title}
+                              </span>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className={`w-2 h-2 rounded-full ${diffConf.color.split(' ')[0].replace('text-', 'bg-')}`}></span>
+                                <span className="text-[10px] font-bold text-zinc-500 font-mono">
+                                  DS: {ds?.toFixed(1) || '0.0'}
                                 </span>
                               </div>
                             </div>
