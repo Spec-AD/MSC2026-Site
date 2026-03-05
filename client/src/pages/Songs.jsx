@@ -39,7 +39,7 @@ export default function Songs() {
   const [isNewOnly, setIsNewOnly] = useState(false);
   const [selectedDiffs, setSelectedDiffs] = useState([]); 
   const [dsMin, setDsMin] = useState("1.0");
-  const [dsMax, setDsMax] = useState("15.4");
+  const [dsMax, setDsMax] = useState("15.7");
   const [bpmMin, setBpmMin] = useState("0");
   const [bpmMax, setBpmMax] = useState("400");
   const [selectedCategories, setSelectedCategories] = useState([]);
@@ -148,9 +148,9 @@ export default function Songs() {
     let min = parseFloat(dsMin);
     let max = parseFloat(dsMax);
     if (isNaN(min)) min = 1.0;
-    if (isNaN(max)) max = 15.4;
-    min = Math.max(0.0, Math.min(min, 15.4));
-    max = Math.max(0.0, Math.min(max, 15.4));
+    if (isNaN(max)) max = 15.7;
+    min = Math.max(0.0, Math.min(min, 15.7));
+    max = Math.max(0.0, Math.min(max, 15.7));
     if (min > max) {
       if (type === 'min') min = max;
       else max = min;
@@ -179,7 +179,7 @@ export default function Songs() {
   // ==========================================
   const filteredSongs = useMemo(() => {
     const numDsMin = parseFloat(dsMin) || 0.0;
-    const numDsMax = parseFloat(dsMax) || 15.4;
+    const numDsMax = parseFloat(dsMax) || 15.7;
     const numBpmMin = parseInt(bpmMin) || 0;
     const numBpmMax = parseInt(bpmMax) || 400;
 
@@ -216,7 +216,7 @@ export default function Songs() {
     setIsNewOnly(false);
     setSelectedDiffs([]);
     setDsMin("1.0"); 
-    setDsMax("15.4");
+    setDsMax("15.7");
     setBpmMin("0");
     setBpmMax("400");
     setSelectedCategories([]);
@@ -376,19 +376,19 @@ export default function Songs() {
                       <label className="text-xs font-bold text-zinc-500 flex justify-between uppercase tracking-widest">
                         <span>Constant Range</span>
                         <span style={{ fontFamily: "'Quicksand', sans-serif" }} className={activeGame === 'chunithm' ? 'text-yellow-400' : 'text-cyan-400'}>
-                          {(parseFloat(dsMin)||0.0).toFixed(1)} - {(parseFloat(dsMax)||15.4).toFixed(1)}
+                          {(parseFloat(dsMin)||0.0).toFixed(1)} - {(parseFloat(dsMax)||15.7).toFixed(1)}
                         </span>
                       </label>
                       <div className="flex items-center gap-2">
                         <input 
-                          type="number" step="0.1" min="0.0" max="15.4"
+                          type="number" step="0.1" min="0.0" max="15.7"
                           value={dsMin} onChange={e => setDsMin(e.target.value)} onBlur={() => handleDsBlur('min')}
                           className={`w-full bg-[#0c0c11] border border-white/[0.05] rounded-xl p-2 text-center text-sm text-zinc-200 outline-none transition-colors ${activeGame === 'chunithm' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} 
                           style={{ fontFamily: "'Quicksand', sans-serif" }}
                         />
                         <span className="text-zinc-600">-</span>
                         <input 
-                          type="number" step="0.1" min="0.0" max="15.4"
+                          type="number" step="0.1" min="0.0" max="15.7"
                           value={dsMax} onChange={e => setDsMax(e.target.value)} onBlur={() => handleDsBlur('max')}
                           className={`w-full bg-[#0c0c11] border border-white/[0.05] rounded-xl p-2 text-center text-sm text-zinc-200 outline-none transition-colors ${activeGame === 'chunithm' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} 
                           style={{ fontFamily: "'Quicksand', sans-serif" }}
@@ -486,7 +486,7 @@ export default function Songs() {
                         let dsTagClass = currentDiffConfig[maxDiffIndex].tagClass; 
                         
                         const numDsMin = parseFloat(dsMin) || 0.0;
-                        const numDsMax = parseFloat(dsMax) || 15.4;
+                        const numDsMax = parseFloat(dsMax) || 15.7;
                         const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: maxDiffIndex + 1 }, (_, i) => i);
                         
                         // 动态获取当前最高或匹配难度的定数
