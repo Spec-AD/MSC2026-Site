@@ -859,6 +859,107 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '错误' }); }
 });
 
+// ==========================================
+// 同步落雪 (LXNS) 查分器成绩 (Developer API)
+// ==========================================
+app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
+  try {
+    const { friendCode } = req.body;
+    if (!friendCode) return res.status(400).json({ msg: '请提供落雪好友代码或 QQ' });
+
+    const devToken = process.env.LXNS_DEV_TOKEN;
+    if (!devToken) return res.status(500).json({ msg: '服务器未配置落雪开发者 Token' });
+
+    // 1. 调用落雪 Developer API 获取玩家 best50 成绩
+    const response = await axios.get(`https://maimai.lxns.net/api/v0/maimai/player/${friendCode}/bests`, {
+      headers: { 'Authorization': `Bearer ${devToken}` },
+      timeout: 20000 
+    });
+
+    // 落雪标准及 DX 成绩数组
+    const standardRecords = response.data.data.standard || [];
+    const dxRecords = response.data.data.dx || [];
+    const allRecords = [...standardRecords, ...dxRecords];
+    
+    // 获取本地全量曲库用于比对
+    const allSongsArray = await Song.find({}, 'id title ds charts basic_info type').lean();
+
+    const processedScores = [];
+    for (const rec of allRecords) {
+      // 2. 落雪 ID 映射水鱼 ID (落雪 DX/SD 同 ID，水鱼 DX 为 ID + 10000)
+      const lxId = Number(rec.id);
+      const lxType = (rec.type || 'SD').toUpperCase();
+      const lxLevelIndex = rec.level_index;
+
+      const song = allSongsArray.find(s => 
+        (Number(s.id) === lxId || Number(s.id) === lxId + 10000) && 
+        s.type === lxType
+      );
+
+      if (!song) continue; // 本地曲库未找到则跳过
+
+      // 3. 数据解析与宴会场拦截
+      let pf = 0, dxRatio = 0, constant = 0;
+      const isNew = song.basic_info?.is_new || false;
+      const isUtage = /^\[.+?\]/.test(rec.song_name) || /^\[.+?\]/.test(song.title) || song.type === 'UTAGE' || song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场';
+
+      if (song.charts && song.charts[lxLevelIndex]) {
+        const chartInfo = song.charts[lxLevelIndex];
+        const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
+        const maxDxScore = totalNotes * 3;
+        
+        // 拦截宴会场定数
+        constant = isUtage ? 0 : (song.ds[lxLevelIndex] || 0);
+        dxRatio = maxDxScore > 0 ? (rec.dx_score / maxDxScore) : 0;
+        if (maxDxScore > 0) pf = calculatePF(constant, rec.achievements, rec.dx_score, maxDxScore);
+      }
+
+      processedScores.push({
+        userId: req.user.id, 
+        nickname: 'LxPlayer', 
+        imageUrl: `https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`, 
+        achievementRate: rec.achievements || 0, 
+        songId: song.id, // 存入映射后的水鱼标准 ID
+        songName: song.title, 
+        achievement: rec.achievements || 0, 
+        fcStatus: rec.fc || '', 
+        fsStatus: rec.fs || '',
+        dxScore: rec.dx_score || 0, 
+        rating: Math.floor(rec.dx_rating || 0), // 根据落雪文档，需向下取整
+        level: lxLevelIndex, // 存入数字索引，供前端反推
+        constant: isNaN(constant) || !isFinite(constant) ? 0 : constant, 
+        finishTime: new Date(rec.play_time || Date.now()),
+        pf: isNaN(pf) || !isFinite(pf) ? 0 : pf, 
+        dxRatio: isNaN(dxRatio) || !isFinite(dxRatio) ? 0 : dxRatio, 
+        isNew: isNew
+      });
+    }
+
+    // 4. 重算 Rating 与数据入库
+    const oldTop35 = processedScores.filter(r => !r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 35);
+    const newTop15 = processedScores.filter(r => r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 15);
+    const calculatedRating = [...oldTop35, ...newTop15].reduce((sum, rec) => sum + (rec.rating || 0), 0);
+
+    await Score.deleteMany({ userId: req.user.id });
+    await Score.insertMany(processedScores);
+
+    const topRecordsByPf = [...processedScores].sort((a, b) => b.pf - a.pf).slice(0, 50);
+    const totalPf = topRecordsByPf.reduce((sum, score) => sum + score.pf, 0);
+    
+    // 更新用户数据，把落雪 FriendCode 存到原本 proberUsername 字段，方便后续一键同步
+    await User.findByIdAndUpdate(req.user.id, { 
+      proberUsername: friendCode.trim(), 
+      totalPf: Number(totalPf.toFixed(2)), 
+      rating: calculatedRating 
+    });
+
+    res.json({ msg: `落雪数据同步成功！`, rating: calculatedRating, totalPf: Number(totalPf.toFixed(2)) });
+  } catch (err) { 
+    console.error('落雪同步报错:', err);
+    res.status(500).json({ msg: '落雪同步失败，请检查好友代码是否正确或 API 额度' }); 
+  }
+});
+
 app.get('/api/wiki/categories', async (req, res) => {
   try { res.json(await WikiCategory.find().sort({ createdAt: 1 })); } catch (err) { res.status(500).json({ msg: '获取维基分类失败' }); }
 });
