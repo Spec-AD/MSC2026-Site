@@ -24,6 +24,8 @@ const MaimaiProfile = () => {
   // 同步状态
   const [importToken, setImportToken] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncSource, setSyncSource] = useState('df');
+  const [lxFriendCode, setLxFriendCode] = useState('');
 
   // 筛选与弹窗状态
   const [b50Filter, setB50Filter] = useState('DEFAULT');
@@ -43,6 +45,7 @@ const MaimaiProfile = () => {
 
         setProfile(profileRes.data);
         setImportToken(profileRes.data.importToken || '');
+        setLxFriendCode(profileRes.data.proberUsername || '');
 
         // 提取所有新曲的 ID，建立跨表索引
         const newIds = new Set();
@@ -63,24 +66,23 @@ const MaimaiProfile = () => {
     initData();
   }, [username]);
 
-  const handleSync = async () => {
-    if (!importToken.trim()) {
-      addToast('请提供有效的 Import-Token！', 'error'); 
-      return; 
-    }
+const handleSync = async () => {
+    if (syncSource === 'df' && !importToken.trim()) return addToast('请提供水鱼 Import-Token', 'error'); 
+    if (syncSource === 'lx' && !lxFriendCode.trim()) return addToast('请提供落雪好友代码/QQ', 'error'); 
     
     setIsSyncing(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('/api/users/sync-maimai', { importToken }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      addToast(`同步成功！当前 Rating: ${res.data.rating}`, 'success');
-      // 仅刷新档案，不刷新曲库
+      const endpoint = syncSource === 'df' ? '/api/users/sync-maimai' : '/api/users/sync-luoxue';
+      const payload = syncSource === 'df' ? { importToken } : { friendCode: lxFriendCode };
+      
+      const res = await axios.post(endpoint, payload, { headers: { Authorization: `Bearer ${token}` } });
+      
+      addToast(res.data.msg || `同步成功！当前 Rating: ${res.data.rating}`, 'success');
       const profileRes = await axios.get(`/api/users/${username}?t=${Date.now()}`);
       setProfile(profileRes.data);
     } catch (err) {
-      addToast(err.response?.data?.msg || '同步失败，请检查 Token', 'error');
+      addToast(err.response?.data?.msg || '同步失败，请检查输入或网络', 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -266,46 +268,77 @@ const MaimaiProfile = () => {
 
       <div className="max-w-7xl mx-auto px-6 pt-24 relative z-10">
         
+        {/* {/* ========================================== */}
+        {/* 头部导航与双源同步区 */}
         {/* ========================================== */}
-        {/* 头部导航与同步区 */}
-        {/* ========================================== */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10">
           <div className="flex flex-col gap-4">
             <button 
               onClick={() => navigate(`/profile/${profile.username}`)}
               className="flex items-center gap-2 text-zinc-500 hover:text-zinc-200 transition-colors font-bold text-sm w-fit active:scale-95"
             >
-              <FaArrowLeft /> 返回个人资料
+              <FaArrowLeft /> 返回个人主页
             </button>
             <div className="flex items-center gap-3">
               <div className="w-1 h-8 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
               <div>
                 <h1 className="text-3xl font-bold text-zinc-100 tracking-tight flex items-center gap-3">
-                  <FaGamepad className="text-cyan-400 text-2xl" /> Maimai DX 数据档案
+                  <FaGamepad className="text-cyan-400 text-2xl" /> Maimai DX 数据
                 </h1>
                 <span className="text-sm font-medium text-zinc-500 mt-1 block">Player: {profile.username}</span>
               </div>
             </div>
           </div>
 
-          {/* 同步框 (仅自己可见) */}
+          {/* 智能双源同步控制台 (仅自己可见) */}
           {isOwnProfile && (
-            <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md p-2 rounded-2xl border border-white/[0.05] shadow-sm w-full md:w-auto">
-              <input 
-                type="password" 
-                value={importToken}
-                onChange={(e) => setImportToken(e.target.value)}
-                placeholder="粘贴 Import-token 更新数据"
-                className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
-              />
-              <button 
-                onClick={handleSync}
-                disabled={isSyncing}
-                className="bg-cyan-500 hover:bg-cyan-400 text-zinc-900 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center gap-2 shrink-0 active:scale-95"
-              >
-                {isSyncing ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
-                同步云端
-              </button>
+            <div className="flex flex-col gap-3 w-full lg:w-auto">
+              
+              {/* 来源切换器 */}
+              <div className="flex items-center gap-2 bg-[#15151e]/80 p-1 rounded-xl border border-white/[0.05] w-fit">
+                <button 
+                  onClick={() => setSyncSource('df')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${syncSource === 'df' ? 'bg-cyan-500/20 text-cyan-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  水鱼查分器
+                </button>
+                <button 
+                  onClick={() => setSyncSource('lx')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${syncSource === 'lx' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  落雪查分器
+                </button>
+              </div>
+
+              {/* 动态输入交互框 */}
+              <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md p-2 rounded-2xl border border-white/[0.05] shadow-sm w-full">
+                {syncSource === 'df' ? (
+                  <input 
+                    type="password" 
+                    value={importToken}
+                    onChange={(e) => setImportToken(e.target.value)}
+                    placeholder="粘贴水鱼 Import-token..."
+                    className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
+                  />
+                ) : (
+                  <input 
+                    type="text" 
+                    value={lxFriendCode}
+                    onChange={(e) => setLxFriendCode(e.target.value)}
+                    placeholder="输入落雪绑定的好友代码或 QQ"
+                    className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
+                  />
+                )}
+                
+                <button 
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  className={`${syncSource === 'df' ? 'bg-cyan-500 hover:bg-cyan-400 text-zinc-900' : 'bg-indigo-500 hover:bg-indigo-400 text-white'} px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center gap-2 shrink-0 active:scale-95`}
+                >
+                  {isSyncing ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
+                  更新数据
+                </button>
+              </div>
             </div>
           )}
         </div>
