@@ -5,20 +5,38 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
+// ==========================================
+// 牌子世代配置引擎 (完美适配国服合并规则与旧代)
+// ==========================================
 const PLATE_VERSIONS = [
   { id: '舞', label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'maimai MiLK PLUS', 'maimai FiNALE'] },
-  { id: '熊', label: '熊 (DX)', versions: ['maimai でらっくす'] },
-  { id: '华', label: '华 (DX+)', versions: ['maimai でらっくす PLUS'] },
-  { id: '爽', label: '爽 (Splash)', versions: ['maimai でらっくす Splash'] },
-  { id: '煌', label: '煌 (Splash+)', versions: ['maimai でらっくす Splash PLUS'] },
-  { id: '宙', label: '宙 (UNiVERSE)', versions: ['maimai でらっくす UNiVERSE'] },
-  { id: '星', label: '星 (UNiVERSE+)', versions: ['maimai でらっくす UNiVERSE PLUS'] },
-  { id: '祭', label: '祭 (FESTiVAL)', versions: ['maimai でらっくす FESTiVAL'] },
-  { id: '祝', label: '祝 (FESTiVAL+)', versions: ['maimai でらっくす FESTiVAL PLUS'] },
-  { id: '双', label: '双 (BUDDiES)', versions: ['maimai でらっくす BUDDiES'] },
-  { id: '宴', label: '宴 (BUDDiES+)', versions: ['maimai でらっくす BUDDiES PLUS'] },
-  { id: '镜', label: '镜 (PRiSM)', versions: ['maimai でらっくす PRiSM'] },
-  { id: '彩', label: '彩 (PRiSM+)', versions: ['maimai でらっくす PRiSM PLUS'] },
+  { id: '真', label: '真 (PLUS)', versions: ['maimai PLUS'] },
+  { id: '超', label: '超 (GreeN)', versions: ['maimai GreeN'] },
+  { id: '檄', label: '檄 (GreeN+)', versions: ['maimai GreeN PLUS'] },
+  { id: '橙', label: '橙 (ORANGE)', versions: ['maimai ORANGE'] },
+  { id: '晓', label: '晓 (ORANGE+)', versions: ['maimai ORANGE PLUS'] },
+  { id: '桃', label: '桃 (PiNK)', versions: ['maimai PiNK'] },
+  { id: '樱', label: '樱 (PiNK+)', versions: ['maimai PiNK PLUS'] },
+  { id: '紫', label: '紫 (MURASAKi)', versions: ['maimai MURASAKi'] },
+  { id: '堇', label: '堇 (MURASAKi+)', versions: ['maimai MURASAKi PLUS'] },
+  { id: '白', label: '白 (MiLK)', versions: ['maimai MiLK'] },
+  { id: '雪', label: '雪 (MiLK+)', versions: ['maimai MiLK PLUS'] },
+  { id: '辉', label: '辉 (FiNALE)', versions: ['maimai FiNALE'] },
+  { id: '熊华', label: '熊华 (DX & DX+)', versions: ['maimai でらっくす', 'maimai でらっくす PLUS'] },
+  { id: '爽煌', label: '爽煌 (Splash & Splash+)', versions: ['maimai でらっくす Splash', 'maimai でらっくす Splash PLUS'] },
+  { id: '星宙', label: '星宙 (UNiVERSE & UNiVERSE+)', versions: ['maimai でらっくす UNiVERSE', 'maimai でらっくす UNiVERSE PLUS'] },
+  { id: '祭祝', label: '祭祝 (FESTiVAL & FESTiVAL+)', versions: ['maimai でらっくす FESTiVAL', 'maimai でらっくす FESTiVAL PLUS'] },
+  { id: '宴双', label: '宴双 (BUDDiES & BUDDiES+)', versions: ['maimai でらっくす BUDDiES', 'maimai でらっくす BUDDiES PLUS'] },
+  { id: '镜彩', label: '镜彩 (PRiSM & PRiSM+)', versions: ['maimai でらっくす PRiSM', 'maimai でらっくす PRiSM PLUS'] },
+];
+
+const DIFF_NAMES = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'Re:MASTER'];
+const DIFF_COLORS = [
+  'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  'text-rose-400 bg-rose-500/10 border-rose-500/20',
+  'text-purple-400 bg-purple-500/10 border-purple-500/20',
+  'text-zinc-100 bg-zinc-400/10 border-zinc-400/20'
 ];
 
 const MaimaiProfile = () => {
@@ -28,7 +46,7 @@ const MaimaiProfile = () => {
   const { addToast } = useToast();
 
   const [profile, setProfile] = useState(null);
-  const [musicData, setMusicData] = useState([]); // 新增：全局曲库数据用于计算牌子
+  const [musicData, setMusicData] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -39,8 +57,10 @@ const MaimaiProfile = () => {
   const [b50Filter, setB50Filter] = useState('DEFAULT');
   const [selectedPfScore, setSelectedPfScore] = useState(null);
   
-  // 新增：牌子选择状态
+  // --- 牌子系统状态 ---
   const [selectedPlateVersion, setSelectedPlateVersion] = useState('舞');
+  const [selectedPlateDetail, setSelectedPlateDetail] = useState(null); // { versionGroup, plateType }
+  const [detailDiff, setDetailDiff] = useState(3); // 默认 MASTER
 
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
 
@@ -74,16 +94,11 @@ const MaimaiProfile = () => {
   }, [username]);
 
   const handleSync = async () => {
-    if (!importToken.trim()) {
-      addToast('请提供有效的 Import-Token！', 'error'); 
-      return; 
-    }
+    if (!importToken.trim()) return addToast('请提供有效的 Import-Token！', 'error'); 
     setIsSyncing(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('/api/users/sync-maimai', { importToken }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.post('/api/users/sync-maimai', { importToken }, { headers: { Authorization: `Bearer ${token}` } });
       addToast(`同步成功！当前 Rating: ${res.data.rating}`, 'success');
       const profileRes = await axios.get(`/api/users/${username}?t=${Date.now()}`);
       setProfile(profileRes.data);
@@ -94,21 +109,10 @@ const MaimaiProfile = () => {
     }
   };
 
-  // ==========================================
-  // 难度与等级智能推导引擎
-  // ==========================================
   const getDiffConfig = (score) => {
     let idx = 3; 
     if (typeof score.level === 'number') idx = score.level;
-
-    const config = [
-      { name: 'BASIC', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-      { name: 'ADVANCED', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-      { name: 'EXPERT', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
-      { name: 'MASTER', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
-      { name: 'Re:MASTER', color: 'text-zinc-100 bg-zinc-400/10 border-zinc-400/20' } 
-    ];
-    return config[idx] || config[3];
+    return { name: DIFF_NAMES[idx], color: DIFF_COLORS[idx] };
   };
 
   const getLevelString = (score) => {
@@ -118,8 +122,31 @@ const MaimaiProfile = () => {
     return `${base}${frac >= 7 ? '+' : ''}`;
   };
 
+  // 全局 HashMap：O(1) 性能查找用户成绩
+  const userScoreMap = useMemo(() => {
+    const map = new Map();
+    if (profile?.allScores) {
+      profile.allScores.forEach(s => {
+        map.set(`${s.songId}_${s.level}`, s);
+        map.set(`${Number(s.songId)}_${s.level}`, s);
+      });
+    }
+    return map;
+  }, [profile]);
+
+  // 牌子达标检测器
+  const checkPlateCondition = (score, plateType) => {
+    if (!score) return false;
+    if (plateType === '霸者') return score.achievement >= 80;
+    if (plateType === '将') return score.achievement >= 100.0000;
+    if (plateType === '极') return ['fc', 'fcp', 'ap', 'app'].includes((score.fcStatus || '').toLowerCase());
+    if (plateType === '神') return ['ap', 'app'].includes((score.fcStatus || '').toLowerCase());
+    if (plateType === '舞舞') return ['fsd', 'fsdp'].includes((score.fsStatus || '').toLowerCase());
+    return false;
+  };
+
   // ==========================================
-  // 牌子进度智能计算引擎 (核心逻辑)
+  // 牌子进度智能计算引擎 (宏观统计)
   // ==========================================
   const plateProgress = useMemo(() => {
     if (!musicData || musicData.length === 0 || !profile?.allScores) return null;
@@ -127,7 +154,6 @@ const MaimaiProfile = () => {
     const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
     if (!targetGroup) return null;
 
-    // 过滤出该版本下的合法歌曲 (排除宴会场)
     const validSongs = musicData.filter(s =>
       s.type !== 'UTAGE' &&
       s.basic_info.genre !== '宴会場' &&
@@ -135,28 +161,16 @@ const MaimaiProfile = () => {
       targetGroup.versions.includes(s.basic_info.from)
     );
 
-    // 构建用户成绩哈希表，提升比对性能 O(1)
-    const userScoreMap = new Map();
-    profile.allScores.forEach(s => {
-      userScoreMap.set(`${s.songId}_${s.level}`, s);
-    });
-
     let totalCharts = 0, clearCount = 0, jiangCount = 0, jiCount = 0, shenCount = 0, maiCount = 0;
     const isMaiSeries = selectedPlateVersion === '舞';
 
     validSongs.forEach(song => {
-      // 判定所需难度: "舞"系列需要全难度 (若有白谱则算入)，DX世代仅需绿到紫
-      let levelsToCheck = [];
-      if (isMaiSeries) {
-        levelsToCheck = song.level.length === 5 ? [0, 1, 2, 3, 4] : [0, 1, 2, 3];
-      } else {
-        levelsToCheck = [0, 1, 2, 3];
-      }
-
+      // 舞将/舞极等要求包含白谱，DX世代仅要求绿到紫
+      let levelsToCheck = isMaiSeries ? (song.level.length === 5 ? [0, 1, 2, 3, 4] : [0, 1, 2, 3]) : [0, 1, 2, 3];
       totalCharts += levelsToCheck.length;
 
       levelsToCheck.forEach(lvl => {
-        const score = userScoreMap.get(`${song.id}_${lvl}`) || userScoreMap.get(`${Number(song.id)}_${lvl}`);
+        const score = userScoreMap.get(`${song.id}_${lvl}`);
         if (!score) return;
 
         if (score.achievement >= 80) clearCount++; 
@@ -167,22 +181,24 @@ const MaimaiProfile = () => {
         if (['ap', 'app'].includes(fc)) shenCount++;
 
         const fs = (score.fsStatus || '').toLowerCase();
-        if (['fsd', 'fsdp'].includes(fs)) maiCount++; // FDX 及以上
+        if (['fsd', 'fsdp'].includes(fs)) maiCount++;
       });
     });
 
     const prefix = targetGroup.id;
     const result = [];
     if (isMaiSeries) {
-      result.push({ name: '霸者', count: clearCount, total: totalCharts, color: 'text-zinc-300', bar: 'bg-zinc-300' });
+      result.push({ type: '霸者', name: '霸者', count: clearCount, total: totalCharts, color: 'text-zinc-300', bar: 'bg-zinc-300' });
     }
-    result.push({ name: `${prefix}将`, count: jiangCount, total: totalCharts, color: 'text-emerald-400', bar: 'bg-emerald-400' });
-    result.push({ name: `${prefix}极`, count: jiCount, total: totalCharts, color: 'text-amber-400', bar: 'bg-amber-400' });
-    result.push({ name: `${prefix}神`, count: shenCount, total: totalCharts, color: 'text-cyan-400', bar: 'bg-cyan-400' });
-    result.push({ name: `${prefix}舞舞`, count: maiCount, total: totalCharts, color: 'text-pink-400', bar: 'bg-pink-400' });
+    if (prefix !== '真') { // 真代没有真将
+      result.push({ type: '将', name: `${prefix}将`, count: jiangCount, total: totalCharts, color: 'text-emerald-400', bar: 'bg-emerald-400' });
+    }
+    result.push({ type: '极', name: `${prefix}极`, count: jiCount, total: totalCharts, color: 'text-amber-400', bar: 'bg-amber-400' });
+    result.push({ type: '神', name: `${prefix}神`, count: shenCount, total: totalCharts, color: 'text-cyan-400', bar: 'bg-cyan-400' });
+    result.push({ type: '舞舞', name: isMaiSeries ? '舞舞舞' : `${prefix}舞舞`, count: maiCount, total: totalCharts, color: 'text-pink-400', bar: 'bg-pink-400' });
 
     return result;
-  }, [musicData, profile, selectedPlateVersion]);
+  }, [musicData, profile, selectedPlateVersion, userScoreMap]);
 
   // ==========================================
   // B50 超级过滤与计算引擎
@@ -250,6 +266,12 @@ const MaimaiProfile = () => {
     return null;
   };
 
+  const getFsBadge = (fs) => {
+    const s = (fs || '').toLowerCase();
+    if (['fsd', 'fsdp'].includes(s)) return <span className="bg-cyan-400 text-cyan-950 px-1.5 rounded-sm text-[10px] font-black">FDX</span>;
+    return null;
+  };
+
   const renderScoreCard = (score, index, prefix) => {
     const diff = getDiffConfig(score);
     const realLevel = getLevelString(score);
@@ -271,6 +293,7 @@ const MaimaiProfile = () => {
             {diff.name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{realLevel}</span>
           </span>
           {getFcBadge(score.fcStatus)}
+          {getFsBadge(score.fsStatus)}
         </div>
         {score.isIdeal && <span className="absolute top-2 right-8 bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded text-[9px] font-bold z-10">IDEAL</span>}
         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-bold text-zinc-300 z-10" style={{ fontFamily: "'Quicksand', sans-serif" }}>
@@ -385,7 +408,7 @@ const MaimaiProfile = () => {
                   <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">牌子完成度</h2>
                 </div>
                 
-                {/* 版本选择器 (Pill 滚动条) */}
+                {/* 世代选择器 (Pill 滚动条) */}
                 <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2">
                   {PLATE_VERSIONS.map(v => (
                     <button
@@ -403,11 +426,21 @@ const MaimaiProfile = () => {
                 </div>
               </div>
 
-              {/* 牌子数据卡片网格 */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {plateProgress ? plateProgress.map((plate, idx) => (
-                  <div key={idx} className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-5 flex flex-col gap-3 shadow-sm hover:bg-[#1a1a24] transition-colors">
-                    <div className="text-zinc-300 font-bold text-sm tracking-widest">{plate.name}</div>
+                  <div 
+                    key={idx} 
+                    onClick={() => {
+                      const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
+                      setSelectedPlateDetail({ versionGroup: targetGroup, plateType: plate.type, plateName: plate.name });
+                      setDetailDiff(3); // 默认打开 MASTER 难度
+                    }}
+                    className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-5 flex flex-col gap-3 shadow-sm hover:bg-[#1a1a24] hover:border-cyan-500/30 transition-all cursor-pointer group"
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="text-zinc-300 font-bold text-sm tracking-widest">{plate.name}</div>
+                      <div className="text-xs text-zinc-600 group-hover:text-cyan-400 transition-colors">↗</div>
+                    </div>
                     
                     <div className="flex items-baseline gap-2">
                       <span className={`text-3xl font-bold tracking-tight ${plate.color}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
@@ -651,6 +684,154 @@ const MaimaiProfile = () => {
               </motion.div>
             </div>
           )}
+        </AnimatePresence>
+
+        {/* ========================================== */}
+        {/* 牌子详情曲目墙模态窗 (新增核心) */}
+        {/* ========================================== */}
+        <AnimatePresence>
+          {selectedPlateDetail && (() => {
+            // 筛选当前版块下的全部合法曲目
+            const validSongs = musicData.filter(s =>
+              s.type !== 'UTAGE' && s.basic_info.genre !== '宴会場' && s.basic_info.genre !== '宴会场' &&
+              selectedPlateDetail.versionGroup.versions.includes(s.basic_info.from)
+            );
+
+            // 动态计算该世代支持的最大难度（舞系列支持 0~4，其他支持 0~3）
+            const maxDiff = selectedPlateDetail.versionGroup.id === '舞' ? 4 : 3;
+            const availableDiffs = Array.from({ length: maxDiff + 1 }, (_, i) => i);
+            
+            // 筛选存在当前选中难度 (detailDiff) 的曲目
+            const songsInDiff = validSongs.filter(s => s.level.length > detailDiff);
+            const completedSongs = songsInDiff.filter(s => {
+              const sc = userScoreMap.get(`${s.id}_${detailDiff}`) || userScoreMap.get(`${Number(s.id)}_${detailDiff}`);
+              return checkPlateCondition(sc, selectedPlateDetail.plateType);
+            });
+
+            return (
+              <div 
+                className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-8"
+                onClick={() => setSelectedPlateDetail(null)}
+              >
+                <motion.div 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="absolute inset-0 bg-[#0c0c11]/90 backdrop-blur-md"
+                />
+                
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] w-full max-w-6xl max-h-full flex flex-col shadow-2xl relative z-10 overflow-hidden"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Modal Header */}
+                  <div className="p-6 md:p-8 border-b border-white/[0.05] shrink-0 bg-[#15151e] flex flex-col gap-6 relative z-20">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-1.5 h-8 bg-amber-400 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.6)]"></div>
+                        <div>
+                          <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">
+                            {selectedPlateDetail.versionGroup.label} - {selectedPlateDetail.plateName}
+                          </h2>
+                          <p className="text-xs text-zinc-500 font-medium mt-1">点击难度分类查看具体曲目完成情况</p>
+                        </div>
+                      </div>
+                      <button onClick={() => setSelectedPlateDetail(null)} className="text-zinc-500 hover:text-white transition-colors bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-full active:scale-90">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                      </button>
+                    </div>
+
+                    {/* 难度选项卡 */}
+                    <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
+                      {availableDiffs.map(diff => {
+                        const sInThisDiff = validSongs.filter(s => s.level.length > diff);
+                        const compInThisDiff = sInThisDiff.filter(s => {
+                          const sc = userScoreMap.get(`${s.id}_${diff}`) || userScoreMap.get(`${Number(s.id)}_${diff}`);
+                          return checkPlateCondition(sc, selectedPlateDetail.plateType);
+                        });
+                        const isAllCleared = compInThisDiff.length === sInThisDiff.length && sInThisDiff.length > 0;
+                        const conf = { name: DIFF_NAMES[diff], color: DIFF_COLORS[diff] };
+
+                        return (
+                          <button
+                            key={diff}
+                            onClick={() => setDetailDiff(diff)}
+                            className={`px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${
+                              detailDiff === diff
+                                ? `${conf.color} ring-1 ring-white/10`
+                                : 'bg-[#0c0c11] border-white/[0.05] text-zinc-500 hover:bg-[#1a1a24] hover:text-zinc-300'
+                            }`}
+                          >
+                            <span>{conf.name}</span>
+                            <span className={`text-[11px] font-mono px-1.5 py-0.5 rounded bg-black/20 ${isAllCleared ? 'text-emerald-400' : 'text-current'}`}>
+                              {compInThisDiff.length}/{sInThisDiff.length}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 曲目封面墙 */}
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 bg-[#0c0c11]">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                      {songsInDiff.map(song => {
+                        const score = userScoreMap.get(`${song.id}_${detailDiff}`) || userScoreMap.get(`${Number(song.id)}_${detailDiff}`);
+                        const isCompleted = checkPlateCondition(score, selectedPlateDetail.plateType);
+                        const diffConf = { color: DIFF_COLORS[detailDiff] };
+
+                        return (
+                          <div key={song.id} className="flex flex-col gap-2 group">
+                            <div className={`relative aspect-square rounded-xl overflow-hidden border ${isCompleted ? 'border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.15)]' : 'border-white/[0.05] opacity-40 grayscale-[60%]'} transition-all`}>
+                              <img 
+                                src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`} 
+                                alt="cover" 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                onError={(e) => { e.target.src = '/assets/bg.png'; }}
+                              />
+                              {!isCompleted && (
+                                <div className="absolute inset-0 bg-[#0c0c11]/60 flex items-center justify-center pointer-events-none">
+                                  <div className="bg-black/80 px-2 py-1 rounded text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
+                                    Not Cleared
+                                  </div>
+                                </div>
+                              )}
+                              {isCompleted && (
+                                <div className="absolute top-1.5 right-1.5 bg-emerald-500 text-white rounded-full p-0.5 shadow-md">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                                </div>
+                              )}
+                              
+                              {/* 叠加显示已有成绩信息 */}
+                              {score && isCompleted && (
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-4 flex justify-between items-end">
+                                  <span className="text-[10px] font-bold text-white font-mono">{score.achievement.toFixed(2)}%</span>
+                                  {getFcBadge(score.fcStatus) || getFsBadge(score.fsStatus)}
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex flex-col px-1">
+                              <span className={`text-[11px] font-bold truncate ${isCompleted ? 'text-zinc-200' : 'text-zinc-500'}`}>
+                                {song.title}
+                              </span>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className={`w-2 h-2 rounded-full ${diffConf.color.split(' ')[0].replace('text-', 'bg-')}`}></span>
+                                <span className="text-[10px] font-bold text-zinc-500 font-mono">
+                                  DS: {song.ds[detailDiff]?.toFixed(1) || '0.0'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            );
+          })()}
         </AnimatePresence>
 
       </div>
