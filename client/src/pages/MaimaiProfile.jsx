@@ -7,28 +7,29 @@ import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, FaLock, FaTimes } from 'react-icons/fa';
 
 // ==========================================
-// 牌子世代配置引擎 (完美适配图片前缀与雪代修正)
+// 牌子世代配置引擎 (支持合并代的独立多牌子渲染)
 // ==========================================
 const PLATE_VERSIONS = [
-  { id: '舞', imgPrefix: 'maimai', label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'MiLK PLUS', 'maimai MiLK PLUS', 'maimai FiNALE'] },
-  { id: '真', imgPrefix: 'plus', label: '真 (PLUS)', versions: ['maimai PLUS'] },
-  { id: '超', imgPrefix: 'green', label: '超 (GreeN)', versions: ['maimai GreeN'] },
-  { id: '檄', imgPrefix: 'green_plus', label: '檄 (GreeN+)', versions: ['maimai GreeN PLUS'] },
-  { id: '橙', imgPrefix: 'orange', label: '橙 (ORANGE)', versions: ['maimai ORANGE'] },
-  { id: '晓', imgPrefix: 'orange_plus', label: '晓 (ORANGE+)', versions: ['maimai ORANGE PLUS'] },
-  { id: '桃', imgPrefix: 'pink', label: '桃 (PiNK)', versions: ['maimai PiNK'] },
-  { id: '樱', imgPrefix: 'pink_plus', label: '樱 (PiNK+)', versions: ['maimai PiNK PLUS'] },
-  { id: '紫', imgPrefix: 'murasaki', label: '紫 (MURASAKi)', versions: ['maimai MURASAKi'] },
-  { id: '堇', imgPrefix: 'murasaki_plus', label: '堇 (MURASAKi+)', versions: ['maimai MURASAKi PLUS'] },
-  { id: '白', imgPrefix: 'milk', label: '白 (MiLK)', versions: ['maimai MiLK'] },
-  { id: '雪', imgPrefix: 'milk_plus', label: '雪 (MiLK+)', versions: ['MiLK PLUS', 'maimai MiLK PLUS'] },
-  { id: '辉', imgPrefix: 'finale', label: '辉 (FiNALE)', versions: ['maimai FiNALE'] },
-  { id: '熊华', imgPrefix: 'dx', label: '熊华 (DX & DX+)', versions: ['maimai でらっくす', 'maimai でらっくす PLUS'] },
-  { id: '爽煌', imgPrefix: 'splash', label: '爽煌 (Splash & Splash+)', versions: ['maimai でらっくす Splash', 'maimai でらっくす Splash PLUS'] },
-  { id: '星宙', imgPrefix: 'universe', label: '星宙 (UNiVERSE & UNiVERSE+)', versions: ['maimai でらっくす UNiVERSE', 'maimai でらっくす UNiVERSE PLUS'] },
-  { id: '祭祝', imgPrefix: 'festival', label: '祭祝 (FESTiVAL & FESTiVAL+)', versions: ['maimai でらっくす FESTiVAL', 'maimai でらっくす FESTiVAL PLUS'] },
-  { id: '宴双', imgPrefix: 'buddies', label: '宴双 (BUDDiES & BUDDiES+)', versions: ['maimai でらっくす BUDDiES', 'maimai でらっくす BUDDiES PLUS'] },
-  { id: '镜彩', imgPrefix: 'prism', label: '镜彩 (PRiSM & PRiSM+)', versions: ['maimai でらっくす PRiSM', 'maimai でらっくす PRiSM PLUS'] },
+  { id: '舞', plates: [{ name: '舞', img: 'maimai' }], label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'MiLK PLUS', 'maimai MiLK PLUS', 'maimai FiNALE'] },
+  { id: '真', plates: [{ name: '真', img: 'plus' }], label: '真 (PLUS)', versions: ['maimai PLUS'] },
+  { id: '超', plates: [{ name: '超', img: 'green' }], label: '超 (GreeN)', versions: ['maimai GreeN'] },
+  { id: '檄', plates: [{ name: '檄', img: 'green_plus' }], label: '檄 (GreeN+)', versions: ['maimai GreeN PLUS'] },
+  { id: '橙', plates: [{ name: '橙', img: 'orange' }], label: '橙 (ORANGE)', versions: ['maimai ORANGE'] },
+  { id: '晓', plates: [{ name: '晓', img: 'orange_plus' }], label: '晓 (ORANGE+)', versions: ['maimai ORANGE PLUS'] },
+  { id: '桃', plates: [{ name: '桃', img: 'pink' }], label: '桃 (PiNK)', versions: ['maimai PiNK'] },
+  { id: '樱', plates: [{ name: '樱', img: 'pink_plus' }], label: '樱 (PiNK+)', versions: ['maimai PiNK PLUS'] },
+  { id: '紫', plates: [{ name: '紫', img: 'murasaki' }], label: '紫 (MURASAKi)', versions: ['maimai MURASAKi'] },
+  { id: '堇', plates: [{ name: '堇', img: 'murasaki_plus' }], label: '堇 (MURASAKi+)', versions: ['maimai MURASAKi PLUS'] },
+  { id: '白', plates: [{ name: '白', img: 'milk' }], label: '白 (MiLK)', versions: ['maimai MiLK'] },
+  { id: '雪', plates: [{ name: '雪', img: 'milk_plus' }], label: '雪 (MiLK+)', versions: ['MiLK PLUS', 'maimai MiLK PLUS'] },
+  { id: '辉', plates: [{ name: '辉', img: 'finale' }], label: '辉 (FiNALE)', versions: ['maimai FiNALE'] },
+  // 合并代支持数组注入多套牌子
+  { id: '熊华', plates: [{ name: '熊', img: 'dx' }, { name: '华', img: 'dx_plus' }], label: '熊华 (DX & DX+)', versions: ['maimai でらっくす', 'maimai でらっくす PLUS'] },
+  { id: '爽煌', plates: [{ name: '爽', img: 'splash' }, { name: '煌', img: 'splash_plus' }], label: '爽煌 (Splash & Splash+)', versions: ['maimai でらっくす Splash', 'maimai でらっくす Splash PLUS'] },
+  { id: '星宙', plates: [{ name: '宙', img: 'universe' }, { name: '星', img: 'universe_plus' }], label: '星宙 (UNiVERSE & UNiVERSE+)', versions: ['maimai でらっくす UNiVERSE', 'maimai でらっくす UNiVERSE PLUS'] },
+  { id: '祭祝', plates: [{ name: '祭', img: 'festival' }, { name: '祝', img: 'festival_plus' }], label: '祭祝 (FESTiVAL & FESTiVAL+)', versions: ['maimai でらっくす FESTiVAL', 'maimai でらっくす FESTiVAL PLUS'] },
+  { id: '宴双', plates: [{ name: '双', img: 'buddies' }, { name: '宴', img: 'buddies_plus' }], label: '宴双 (BUDDiES & BUDDiES+)', versions: ['maimai でらっくす BUDDiES', 'maimai でらっくす BUDDiES PLUS'] },
+  { id: '镜彩', plates: [{ name: '镜', img: 'prism' }, { name: '彩', img: 'prism_plus' }], label: '镜彩 (PRiSM & PRiSM+)', versions: ['maimai でらっくす PRiSM', 'maimai でらっくす PRiSM PLUS'] },
 ];
 
 const DIFF_NAMES = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'Re:MASTER'];
@@ -40,7 +41,6 @@ const DIFF_COLORS = [
   'text-zinc-100 bg-zinc-400/10 border-zinc-400/20'
 ];
 
-// 高强度字段兼容：防 undefined 崩溃读取器
 const getFc = (s) => (s?.fcStatus || s?.fc || '').toLowerCase();
 const getFs = (s) => (s?.fsStatus || s?.fs || '').toLowerCase();
 
@@ -84,7 +84,7 @@ const MaimaiProfile = () => {
 
         setProfile(profileRes.data);
         setImportToken(profileRes.data.importToken || '');
-        setLxFriendCode(profileRes.data.proberUsername || ''); // 落雪好友码回填
+        setLxFriendCode(profileRes.data.proberUsername || ''); 
         setMusicData(musicRes.data || []);
 
         const newIds = new Set();
@@ -156,15 +156,15 @@ const MaimaiProfile = () => {
     const fs = getFs(score);
 
     if (plateType === '霸者') return ach >= 80;
-    if (plateType === '将') return ach >= 100; // 规避浮点数精度 100.0000 问题
+    if (plateType === '将') return ach >= 100;
     if (plateType === '极') return ['fc', 'fcp', 'ap', 'app'].includes(fc);
     if (plateType === '神') return ['ap', 'app'].includes(fc);
-    if (plateType === '舞舞') return ['fsd', 'fsdp'].includes(fs); // 包含 FDX 判定
+    if (plateType === '舞舞') return ['fsd', 'fsdp'].includes(fs); 
     return false;
   };
 
   // ==========================================
-  // 牌子进度计算与图片映射
+  // 牌子进度计算与合并代多发引擎
   // ==========================================
   const plateProgress = useMemo(() => {
     if (!musicData || musicData.length === 0 || !profile?.allScores) return null;
@@ -202,18 +202,28 @@ const MaimaiProfile = () => {
       });
     });
 
-    const prefix = targetGroup.id;
     const result = [];
-    if (isMaiSeries) {
-      // 霸者独占图片逻辑 customImg
-      result.push({ type: '霸者', customImg: 'clear_general', name: '霸者', count: clearCount, total: totalCharts, color: 'text-zinc-300', bar: 'bg-zinc-300' });
-    }
-    if (prefix !== '真') {
-      result.push({ type: '将', imgSuffix: 'general', name: `${prefix}将`, count: jiangCount, total: totalCharts, color: 'text-emerald-400', bar: 'bg-emerald-400' });
-    }
-    result.push({ type: '极', imgSuffix: 'fc', name: `${prefix}极`, count: jiCount, total: totalCharts, color: 'text-amber-400', bar: 'bg-amber-400' });
-    result.push({ type: '神', imgSuffix: 'ap', name: `${prefix}神`, count: shenCount, total: totalCharts, color: 'text-cyan-400', bar: 'bg-cyan-400' });
-    result.push({ type: '舞舞', imgSuffix: 'fdx', name: isMaiSeries ? '舞舞舞' : `${prefix}舞舞`, count: maiCount, total: totalCharts, color: 'text-pink-400', bar: 'bg-pink-400' });
+    
+    // 支持一个世代组下渲染多套独立牌子 (例如熊华展开为熊和华)
+    targetGroup.plates.forEach(p => {
+      const pName = p.name;
+      const pImg = p.img;
+      
+      if (pName === '舞') {
+        result.push({ type: '霸者', customImg: 'clear_general', name: '霸者', count: clearCount, total: totalCharts, color: 'text-zinc-300', bar: 'bg-zinc-300' });
+        result.push({ type: '将', imgPrefix: pImg, imgSuffix: 'general', name: `${pName}将`, count: jiangCount, total: totalCharts, color: 'text-emerald-400', bar: 'bg-emerald-400' });
+        result.push({ type: '极', imgPrefix: pImg, imgSuffix: 'fc', name: `${pName}极`, count: jiCount, total: totalCharts, color: 'text-amber-400', bar: 'bg-amber-400' });
+        result.push({ type: '神', imgPrefix: pImg, imgSuffix: 'ap', name: `${pName}神`, count: shenCount, total: totalCharts, color: 'text-cyan-400', bar: 'bg-cyan-400' });
+        result.push({ type: '舞舞', imgPrefix: pImg, imgSuffix: 'fdx', name: '舞舞舞', count: maiCount, total: totalCharts, color: 'text-pink-400', bar: 'bg-pink-400' });
+      } else {
+        if (pName !== '真') {
+          result.push({ type: '将', imgPrefix: pImg, imgSuffix: 'general', name: `${pName}将`, count: jiangCount, total: totalCharts, color: 'text-emerald-400', bar: 'bg-emerald-400' });
+        }
+        result.push({ type: '极', imgPrefix: pImg, imgSuffix: 'fc', name: `${pName}极`, count: jiCount, total: totalCharts, color: 'text-amber-400', bar: 'bg-amber-400' });
+        result.push({ type: '神', imgPrefix: pImg, imgSuffix: 'ap', name: `${pName}神`, count: shenCount, total: totalCharts, color: 'text-cyan-400', bar: 'bg-cyan-400' });
+        result.push({ type: '舞舞', imgPrefix: pImg, imgSuffix: 'fdx', name: `${pName}舞舞`, count: maiCount, total: totalCharts, color: 'text-pink-400', bar: 'bg-pink-400' });
+      }
+    });
 
     return result;
   }, [musicData, profile, selectedPlateVersion, userScoreMap]);
@@ -428,7 +438,7 @@ const MaimaiProfile = () => {
                   disabled={isSyncing}
                   className={`${syncSource === 'df' ? 'bg-cyan-500 hover:bg-cyan-400 text-zinc-900' : 'bg-indigo-500 hover:bg-indigo-400 text-white'} px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shrink-0 active:scale-95`}
                 >
-                  {isSyncing ? <FaSpinner className="animate-spin" /> : <><FaSyncAlt /> 同步</>}
+                  {isSyncing ? <FaSpinner className="animate-spin" /> : <><FaSyncAlt /> 同步云端</>}
                 </button>
               </div>
             </div>
@@ -469,14 +479,15 @@ const MaimaiProfile = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {/* 优雅网格：兼容合并代的 8 牌子矩阵 */}
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {plateProgress ? plateProgress.map((plate, idx) => {
                   const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
                   const isCompleted = plate.total > 0 && plate.count === plate.total;
-                  // 针对霸者的定制图片路径处理
+                  
                   const imgSrc = plate.customImg 
                                 ? `/assets/${plate.customImg}.png` 
-                                : `/assets/${targetGroup.imgPrefix}_${plate.imgSuffix}.png`;
+                                : `/assets/${plate.imgPrefix}_${plate.imgSuffix}.png`;
 
                   return (
                     <div 
