@@ -9,11 +9,10 @@ const messageSchema = new mongoose.Schema({
   content: { type: String, required: true },
   isRead: { type: Boolean, default: false },
   isStarred: { type: Boolean, default: false },
-  folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'MessageFolder', default: null },
+  folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'MessageFolder', default: null }
   
   // 专门用来存额外数据，比如好友请求发送者的 ID，方便后续点“同意”时调接口
   actionData: { type: Object } 
 }, { timestamps: true });
-
 
 module.exports = mongoose.model('Message', messageSchema);

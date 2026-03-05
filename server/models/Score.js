@@ -15,7 +15,8 @@ const scoreSchema = new mongoose.Schema({
     achievement: { type: Number },    // 达成率 (如 100.5000)
     dxScore: { type: Number },        // DX 分数
     rating: { type: Number },         // 单曲底分(ra)
-    fc: { type: String, default: '' },
+    fcStatus: { type: String, default: '' },
+    fsStatus: { type: String, default: '' },
 
     // 🔥 PF 战力专属系统字段
     pf: { type: Number, default: 0 },         // Performance 战力
