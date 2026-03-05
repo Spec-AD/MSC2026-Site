@@ -8,10 +8,9 @@ const Admin = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  // 模块 1-4 状态 (保持不变)
+  // 模块 1-4 状态
   const [formData, setFormData] = useState({ title: '', type: 'NEWS', content: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [broadcastData, setBroadcastData] = useState({ title: '', content: '' });
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [directMessageData, setDirectMessageData] = useState({ targetUid: '', title: '', content: '' });
@@ -19,22 +18,19 @@ const Admin = () => {
   const [qualifierData, setQualifierData] = useState({ targetUid: '', songName: '', level: '3', achievement: '', dxScore: '' });
   const [isSubmittingScore, setIsSubmittingScore] = useState(false);
 
-  // 🌟 模块 6：WIKI 管理状态 (v2 动态多级目录版)
-  const [categories, setCategories] = useState([]); // 存储从后端拉取的所有类别
-  
-  // 新建类别的表单状态
+  // 🌟 同步模块状态 (双轨)
+  const [isSyncing, setIsSyncing] = useState(false); // Maimai 同步状态
+  const [isSyncingChuni, setIsSyncingChuni] = useState(false); // 中二 同步状态
+
+  // 🌟 模块 6：WIKI 管理状态
+  const [categories, setCategories] = useState([]); 
   const [categoryFormData, setCategoryFormData] = useState({ name: '', slug: '', description: '', parentId: '', icon: 'FaFolder', color: 'text-cyan-400' });
   const [isSubmittingCategory, setIsSubmittingCategory] = useState(false);
-
-  // 发布文章的表单状态 (注意 category 变成了 categoryId)
   const [wikiFormData, setWikiFormData] = useState({ title: '', slug: '', categoryId: '', content: '' });
   const [isSubmittingWiki, setIsSubmittingWiki] = useState(false);
-  
-  // 审核大厅状态
   const [pendingWikis, setPendingWikis] = useState([]);
   const [isLoadingPending, setIsLoadingPending] = useState(false);
 
-  // --- 初始化获取数据 ---
   useEffect(() => {
     if (user && ['ADM', 'TO'].includes(user.role)) {
       fetchPendingWikis();
@@ -59,7 +55,6 @@ const Admin = () => {
     try {
       const res = await axios.get('/api/wiki/categories');
       setCategories(res.data);
-      // 如果有类别，默认选中第一个
       if (res.data.length > 0 && !wikiFormData.categoryId) {
         setWikiFormData(prev => ({ ...prev, categoryId: res.data[0]._id }));
       }
@@ -68,7 +63,6 @@ const Admin = () => {
     }
   };
 
-  // 🛡️ 前端拦截
   if (!user || !['ADM', 'TO'].includes(user.role)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-white">
@@ -79,14 +73,17 @@ const Admin = () => {
     );
   }
 
-  // --- 原有处理函数 (保留) ---
   const handleSubmit = async (e) => { e.preventDefault(); setIsSubmitting(true); try { const token = localStorage.getItem('token'); await axios.post('/api/announcements', formData, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ 发布成功！全站已同步。'); setFormData({ title: '', type: 'NEWS', content: '' }); navigate('/'); } catch (err) { alert('❌ ' + (err.response?.data?.msg || '发布失败')); } finally { setIsSubmitting(false); } };
   const handleBroadcast = async () => { if (!broadcastData.title || !broadcastData.content) return alert('标题和内容不能为空！'); if (!window.confirm(`⚠️ 警告：确定要向全站所有注册玩家发送这封系统邮件吗？\n此操作不可撤回！`)) return; setIsBroadcasting(true); try { const token = localStorage.getItem('token'); const res = await axios.post('/api/admin/broadcast-message', broadcastData, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ ' + res.data.message); setBroadcastData({ title: '', content: '' }); } catch (err) { alert('❌ ' + (err.response?.data?.message || '广播失败')); } finally { setIsBroadcasting(false); } };
   const handleSendDirect = async () => { if (!directMessageData.targetUid || !directMessageData.title || !directMessageData.content) return alert('请填写完整信息！'); setIsSendingDirect(true); try { const token = localStorage.getItem('token'); const res = await axios.post('/api/admin/send-message', directMessageData, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ ' + res.data.message); setDirectMessageData({ targetUid: '', title: '', content: '' }); } catch (err) { alert('❌ ' + (err.response?.data?.message || '发送失败')); } finally { setIsSendingDirect(false); } };
   const handleQualifierSubmit = async (e) => { e.preventDefault(); setIsSubmittingScore(true); try { const token = localStorage.getItem('token'); const res = await axios.post('/api/admin/qualifier-score', qualifierData, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ ' + res.data.msg); setQualifierData({ targetUid: qualifierData.targetUid, songName: '', level: '3', achievement: '', dxScore: '' }); } catch (err) { alert('❌ ' + (err.response?.data?.msg || '录入失败')); } finally { setIsSubmittingScore(false); } };
-  const handleSyncSongs = async () => { if (!window.confirm('确定要全量同步水鱼曲库吗？这可能需要几秒钟的时间。')) return; setIsSyncing(true); try { const token = localStorage.getItem('token'); const res = await axios.post('/api/admin/sync-songs', {}, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ ' + res.data.msg); } catch (err) { alert('❌ ' + (err.response?.data?.msg || '同步失败')); } finally { setIsSyncing(false); } };
+  
+  // 🔥 Maimai 同步
+  const handleSyncSongs = async () => { if (!window.confirm('确定要全量同步 Maimai 水鱼曲库吗？这可能需要几秒钟的时间。')) return; setIsSyncing(true); try { const token = localStorage.getItem('token'); const res = await axios.post('/api/admin/sync-songs', {}, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ ' + res.data.msg); } catch (err) { alert('❌ ' + (err.response?.data?.msg || '同步失败')); } finally { setIsSyncing(false); } };
+  
+  // 🔥 CHUNITHM 同步
+  const handleSyncChuniSongs = async () => { if (!window.confirm('确定要全量同步 CHUNITHM 曲库吗？这可能需要几秒钟的时间。')) return; setIsSyncingChuni(true); try { const token = localStorage.getItem('token'); const res = await axios.post('/api/chunithm-songs/sync', {}, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ ' + res.data.msg); } catch (err) { alert('❌ ' + (err.response?.data?.msg || '同步失败')); } finally { setIsSyncingChuni(false); } };
 
-  // 🌟 提交新类别
   const handleCategorySubmit = async (e) => {
     e.preventDefault();
     setIsSubmittingCategory(true);
@@ -95,7 +92,7 @@ const Admin = () => {
       const res = await axios.post('/api/admin/wiki/category', categoryFormData, { headers: { Authorization: `Bearer ${token}` } });
       alert('✅ ' + res.data.msg);
       setCategoryFormData({ name: '', slug: '', description: '', parentId: '', icon: 'FaFolder', color: 'text-cyan-400' });
-      fetchCategories(); // 刷新类别列表
+      fetchCategories(); 
     } catch (err) {
       alert('❌ ' + (err.response?.data?.msg || '创建类别失败，Slug可能已存在'));
     } finally {
@@ -103,7 +100,6 @@ const Admin = () => {
     }
   };
 
-  // 🌟 提交新文章 (动态关联 categoryId)
   const handleWikiSubmit = async (e) => {
     e.preventDefault();
     if (!wikiFormData.categoryId) return alert('请先创建一个类别！');
@@ -120,7 +116,6 @@ const Admin = () => {
     }
   };
 
-  // 🌟 处理 Wiki 审核
   const handleReviewWiki = async (id, action) => {
     let rejectReason = '';
     if (action === 'REJECT') {
@@ -149,7 +144,7 @@ const Admin = () => {
       </div>
 
       {/* ========================================================= */}
-      {/* 🌟 模块 6：WIKI 知识库管理 (v2 多级分类引擎) */}
+      {/* WIKI 知识库管理 */}
       {/* ========================================================= */}
       <div className="bg-black/40 backdrop-blur-xl border border-cyan-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(34,211,238,0.1)] mb-12">
         <h2 className="text-2xl md:text-3xl font-black italic tracking-tight text-cyan-400 mb-6 border-b border-cyan-500/20 pb-4 flex items-center gap-3">
@@ -158,10 +153,7 @@ const Admin = () => {
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
           
-          {/* 左侧区域：类别引擎 & 发布词条 */}
           <div className="lg:col-span-7 space-y-12">
-            
-            {/* 1. 类别引擎 (Category Builder) */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
               <h3 className="text-gray-300 font-bold tracking-widest uppercase text-sm mb-6 flex items-center gap-2">
@@ -174,7 +166,6 @@ const Admin = () => {
                 </div>
                 
                 <div className="flex flex-col md:flex-row gap-4">
-                  {/* 父级类别下拉框 */}
                   <select value={categoryFormData.parentId} onChange={(e) => setCategoryFormData({...categoryFormData, parentId: e.target.value})} className="w-full md:w-2/3 bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors text-sm font-bold">
                     <option value="">(无父级) 作为顶级分类创建</option>
                     {categories.map(cat => (
@@ -191,7 +182,6 @@ const Admin = () => {
               </form>
             </div>
 
-            {/* 2. 词条发布终端 */}
             <div>
               <h3 className="text-gray-300 font-bold tracking-widest uppercase text-sm mb-6 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-cyan-400"></span> 编写与发布 (Admin Direct Post)
@@ -208,7 +198,6 @@ const Admin = () => {
                     className="w-full md:w-1/2 bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors font-mono text-sm"
                     placeholder="URL标识 (如: ppf-algo)"
                   />
-                  {/* 🌟 动态类别下拉框 */}
                   <select 
                     required value={wikiFormData.categoryId} onChange={(e) => setWikiFormData({...wikiFormData, categoryId: e.target.value})}
                     className="w-full md:w-1/2 bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors font-bold text-sm"
@@ -239,7 +228,6 @@ const Admin = () => {
             </div>
           </div>
 
-          {/* 右侧区域：审核大厅 */}
           <div className="lg:col-span-5 flex flex-col">
             <h3 className="text-gray-300 font-bold tracking-widest uppercase text-sm mb-6 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-yellow-400"></span> 审核大厅 (Pending Review)
@@ -294,11 +282,8 @@ const Admin = () => {
       </div>
 
       {/* ========================================================= */}
-      {/* 其余模块 (赛事录入、发布公告、全服广播、定向邮件、曲库同步) */}
-      {/* 保持原样排列 */}
+      {/* 赛事录入 */}
       {/* ========================================================= */}
-      
-      {/* 模块 5：预选赛成绩录入 */}
       <div className="bg-black/40 backdrop-blur-xl border border-orange-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(249,115,22,0.1)] mb-12">
         <h2 className="text-2xl md:text-3xl font-black italic tracking-tight text-orange-400 mb-6 border-b border-orange-500/20 pb-4 flex items-center gap-3">
           <FaTrophy className="text-yellow-400" /> TOURNAMENT ENTRY / 预选赛录入
@@ -338,6 +323,9 @@ const Admin = () => {
         </form>
       </div>
 
+      {/* ========================================================= */}
+      {/* 广播与定向邮件 */}
+      {/* ========================================================= */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
         <div className="bg-black/40 backdrop-blur-xl border border-red-500/30 rounded-3xl p-6 md:p-8 shadow-xl">
           <h2 className="text-xl md:text-2xl font-black italic tracking-tight text-white mb-6 flex items-center gap-3">
@@ -390,18 +378,36 @@ const Admin = () => {
         </div>
       </div>
 
+      {/* ========================================================= */}
+      {/* 🔥 核心数据同步引擎 (双轨) */}
+      {/* ========================================================= */}
       <div className="bg-black/40 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(59,130,246,0.1)]">
         <h2 className="text-2xl font-black italic tracking-tight text-blue-500 mb-4 flex items-center gap-3">
           <FaSyncAlt className="text-blue-400" /> SYSTEM SYNC / 核心数据同步
         </h2>
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="text-gray-400 text-sm leading-relaxed max-w-lg">
-            将从水鱼查分器同步最新的曲目列表、定数 (DS) 以及等级信息。
-            <span className="text-red-400 ml-1">执行此操作需要消耗大量服务器资源，仅在游戏大版本更新或新曲实装时执行。</span>
-          </div>
-          <button onClick={handleSyncSongs} disabled={isSyncing} className="px-8 py-4 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/50 text-blue-400 font-bold tracking-widest rounded-xl transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
+        
+        <div className="text-gray-400 text-sm leading-relaxed max-w-2xl mb-6">
+          将从上游接口抓取并覆盖最新的曲目列表、定数 (DS) 以及分类信息。
+          <span className="text-red-400 ml-1">执行此操作需要消耗一定的服务器网络资源，建议仅在游戏大版本更新或新曲实装时触发。</span>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-4">
+          <button 
+            onClick={handleSyncSongs} 
+            disabled={isSyncing} 
+            className="flex-1 py-4 bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/50 text-cyan-400 font-bold tracking-widest rounded-xl transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap disabled:opacity-50"
+          >
             {isSyncing ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
-            {isSyncing ? 'DOWNLOADING...' : '开始同步全量曲库'}
+            {isSyncing ? 'DOWNLOADING...' : '同步 舞萌DX 曲库'}
+          </button>
+          
+          <button 
+            onClick={handleSyncChuniSongs} 
+            disabled={isSyncingChuni} 
+            className="flex-1 py-4 bg-yellow-600/20 hover:bg-yellow-600/40 border border-yellow-500/50 text-yellow-400 font-bold tracking-widest rounded-xl transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap disabled:opacity-50"
+          >
+            {isSyncingChuni ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
+            {isSyncingChuni ? 'DOWNLOADING...' : '同步 CHUNITHM 曲库'}
           </button>
         </div>
       </div>
