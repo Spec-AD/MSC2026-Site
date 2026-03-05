@@ -4,9 +4,22 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { 
-  FaArrowLeft, FaSyncAlt, FaSpinner, FaChartLine, FaTrophy, FaTimes, FaGamepad, FaLock
-} from 'react-icons/fa';
+
+const PLATE_VERSIONS = [
+  { id: '舞', label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'maimai MiLK PLUS', 'maimai FiNALE'] },
+  { id: '熊', label: '熊 (DX)', versions: ['maimai でらっくす'] },
+  { id: '华', label: '华 (DX+)', versions: ['maimai でらっくす PLUS'] },
+  { id: '爽', label: '爽 (Splash)', versions: ['maimai でらっくす Splash'] },
+  { id: '煌', label: '煌 (Splash+)', versions: ['maimai でらっくす Splash PLUS'] },
+  { id: '宙', label: '宙 (UNiVERSE)', versions: ['maimai でらっくす UNiVERSE'] },
+  { id: '星', label: '星 (UNiVERSE+)', versions: ['maimai でらっくす UNiVERSE PLUS'] },
+  { id: '祭', label: '祭 (FESTiVAL)', versions: ['maimai でらっくす FESTiVAL'] },
+  { id: '祝', label: '祝 (FESTiVAL+)', versions: ['maimai でらっくす FESTiVAL PLUS'] },
+  { id: '双', label: '双 (BUDDiES)', versions: ['maimai でらっくす BUDDiES'] },
+  { id: '宴', label: '宴 (BUDDiES+)', versions: ['maimai でらっくす BUDDiES PLUS'] },
+  { id: '镜', label: '镜 (PRiSM)', versions: ['maimai でらっくす PRiSM'] },
+  { id: '彩', label: '彩 (PRiSM+)', versions: ['maimai でらっくす PRiSM PLUS'] },
+];
 
 const MaimaiProfile = () => {
   const { username } = useParams();
@@ -15,21 +28,19 @@ const MaimaiProfile = () => {
   const { addToast } = useToast();
 
   const [profile, setProfile] = useState(null);
+  const [musicData, setMusicData] = useState([]); // 新增：全局曲库数据用于计算牌子
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // 新曲 ID 集合 (用于精准判断 R15)
   const [newSongIds, setNewSongIds] = useState(new Set());
-
-  // 同步状态
   const [importToken, setImportToken] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncSource, setSyncSource] = useState('df');
-  const [lxFriendCode, setLxFriendCode] = useState('');
 
-  // 筛选与弹窗状态
   const [b50Filter, setB50Filter] = useState('DEFAULT');
   const [selectedPfScore, setSelectedPfScore] = useState(null);
+  
+  // 新增：牌子选择状态
+  const [selectedPlateVersion, setSelectedPlateVersion] = useState('舞');
 
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
 
@@ -37,7 +48,6 @@ const MaimaiProfile = () => {
     const initData = async () => {
       setLoading(true);
       try {
-        // 并行拉取：玩家档案 + 全局曲库数据 (用于判定新曲)
         const [profileRes, musicRes] = await Promise.all([
           axios.get(`/api/users/${username}?t=${Date.now()}`),
           axios.get('/proxy/diving-fish/music_data').catch(() => ({ data: [] }))
@@ -45,15 +55,12 @@ const MaimaiProfile = () => {
 
         setProfile(profileRes.data);
         setImportToken(profileRes.data.importToken || '');
-        setLxFriendCode(profileRes.data.proberUsername || '');
+        setMusicData(musicRes.data || []);
 
-        // 提取所有新曲的 ID，建立跨表索引
         const newIds = new Set();
         if (musicRes.data && Array.isArray(musicRes.data)) {
           musicRes.data.forEach(song => {
-            if (song.basic_info?.is_new) {
-              newIds.add(String(song.id));
-            }
+            if (song.basic_info?.is_new) newIds.add(String(song.id));
           });
         }
         setNewSongIds(newIds);
@@ -66,23 +73,22 @@ const MaimaiProfile = () => {
     initData();
   }, [username]);
 
-const handleSync = async () => {
-    if (syncSource === 'df' && !importToken.trim()) return addToast('请提供水鱼 Import-Token', 'error'); 
-    if (syncSource === 'lx' && !lxFriendCode.trim()) return addToast('请提供落雪好友代码/QQ', 'error'); 
-    
+  const handleSync = async () => {
+    if (!importToken.trim()) {
+      addToast('请提供有效的 Import-Token！', 'error'); 
+      return; 
+    }
     setIsSyncing(true);
     try {
       const token = localStorage.getItem('token');
-      const endpoint = syncSource === 'df' ? '/api/users/sync-maimai' : '/api/users/sync-luoxue';
-      const payload = syncSource === 'df' ? { importToken } : { friendCode: lxFriendCode };
-      
-      const res = await axios.post(endpoint, payload, { headers: { Authorization: `Bearer ${token}` } });
-      
-      addToast(res.data.msg || `同步成功！当前 Rating: ${res.data.rating}`, 'success');
+      const res = await axios.post('/api/users/sync-maimai', { importToken }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      addToast(`同步成功！当前 Rating: ${res.data.rating}`, 'success');
       const profileRes = await axios.get(`/api/users/${username}?t=${Date.now()}`);
       setProfile(profileRes.data);
     } catch (err) {
-      addToast(err.response?.data?.msg || '同步失败，请检查输入或网络', 'error');
+      addToast(err.response?.data?.msg || '同步失败，请检查 Token', 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -92,8 +98,7 @@ const handleSync = async () => {
   // 难度与等级智能推导引擎
   // ==========================================
   const getDiffConfig = (score) => {
-    let idx = 3; // 默认 MASTER
-    // 数据库存的 level 字段实际上是难度索引: 0=绿, 1=黄, 2=红, 3=紫, 4=白
+    let idx = 3; 
     if (typeof score.level === 'number') idx = score.level;
 
     const config = [
@@ -101,18 +106,83 @@ const handleSync = async () => {
       { name: 'ADVANCED', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
       { name: 'EXPERT', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
       { name: 'MASTER', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
-      { name: 'Re:MASTER', color: 'text-zinc-100 bg-zinc-400/10 border-zinc-400/20' } // 白谱正确解析
+      { name: 'Re:MASTER', color: 'text-zinc-100 bg-zinc-400/10 border-zinc-400/20' } 
     ];
     return config[idx] || config[3];
   };
 
   const getLevelString = (score) => {
-    // 提取定数 (Constant)，倒推评级 (如 12.7 -> 12+)
     if (!score.constant || score.constant === 0) return '';
     const base = Math.floor(score.constant);
     const frac = Math.round((score.constant - base) * 10);
-    return `${base}${frac >= 6 ? '+' : ''}`;
+    return `${base}${frac >= 7 ? '+' : ''}`;
   };
+
+  // ==========================================
+  // 牌子进度智能计算引擎 (核心逻辑)
+  // ==========================================
+  const plateProgress = useMemo(() => {
+    if (!musicData || musicData.length === 0 || !profile?.allScores) return null;
+
+    const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
+    if (!targetGroup) return null;
+
+    // 过滤出该版本下的合法歌曲 (排除宴会场)
+    const validSongs = musicData.filter(s =>
+      s.type !== 'UTAGE' &&
+      s.basic_info.genre !== '宴会場' &&
+      s.basic_info.genre !== '宴会场' &&
+      targetGroup.versions.includes(s.basic_info.from)
+    );
+
+    // 构建用户成绩哈希表，提升比对性能 O(1)
+    const userScoreMap = new Map();
+    profile.allScores.forEach(s => {
+      userScoreMap.set(`${s.songId}_${s.level}`, s);
+    });
+
+    let totalCharts = 0, clearCount = 0, jiangCount = 0, jiCount = 0, shenCount = 0, maiCount = 0;
+    const isMaiSeries = selectedPlateVersion === '舞';
+
+    validSongs.forEach(song => {
+      // 判定所需难度: "舞"系列需要全难度 (若有白谱则算入)，DX世代仅需绿到紫
+      let levelsToCheck = [];
+      if (isMaiSeries) {
+        levelsToCheck = song.level.length === 5 ? [0, 1, 2, 3, 4] : [0, 1, 2, 3];
+      } else {
+        levelsToCheck = [0, 1, 2, 3];
+      }
+
+      totalCharts += levelsToCheck.length;
+
+      levelsToCheck.forEach(lvl => {
+        const score = userScoreMap.get(`${song.id}_${lvl}`) || userScoreMap.get(`${Number(song.id)}_${lvl}`);
+        if (!score) return;
+
+        if (score.achievement >= 80) clearCount++; 
+        if (score.achievement >= 100.0000) jiangCount++;
+
+        const fc = (score.fcStatus || '').toLowerCase();
+        if (['fc', 'fcp', 'ap', 'app'].includes(fc)) jiCount++;
+        if (['ap', 'app'].includes(fc)) shenCount++;
+
+        const fs = (score.fsStatus || '').toLowerCase();
+        if (['fsd', 'fsdp'].includes(fs)) maiCount++; // FDX 及以上
+      });
+    });
+
+    const prefix = targetGroup.id;
+    const result = [];
+    if (isMaiSeries) {
+      result.push({ name: '霸者', count: clearCount, total: totalCharts, color: 'text-zinc-300', bar: 'bg-zinc-300' });
+    }
+    result.push({ name: `${prefix}将`, count: jiangCount, total: totalCharts, color: 'text-emerald-400', bar: 'bg-emerald-400' });
+    result.push({ name: `${prefix}极`, count: jiCount, total: totalCharts, color: 'text-amber-400', bar: 'bg-amber-400' });
+    result.push({ name: `${prefix}神`, count: shenCount, total: totalCharts, color: 'text-cyan-400', bar: 'bg-cyan-400' });
+    result.push({ name: `${prefix}舞舞`, count: maiCount, total: totalCharts, color: 'text-pink-400', bar: 'bg-pink-400' });
+
+    return result;
+  }, [musicData, profile, selectedPlateVersion]);
 
   // ==========================================
   // B50 超级过滤与计算引擎
@@ -139,7 +209,6 @@ const handleSync = async () => {
       return { ...score, achievement: newAch, fcStatus: newFc, rating: newRating, isIdeal: true };
     };
 
-    // 应用 19 种过滤规则
     if (b50Filter === 'IDEAL') scores = scores.map(getIdealScore);
     else if (b50Filter === 'AP50') scores = scores.filter(s => ['ap', 'app'].includes((s.fcStatus||'').toLowerCase()));
     else if (b50Filter === 'FC50') scores = scores.filter(s => ['fc', 'fcp', 'ap', 'app'].includes((s.fcStatus||'').toLowerCase()));
@@ -159,16 +228,11 @@ const handleSync = async () => {
     else if (b50Filter === 'CUN50') scores = scores.filter(s => s.achievement >= 99.8000 && s.achievement <= 99.9999);
     else if (b50Filter === 'YUE50') scores = scores.filter(s => s.achievement < 97.0000);
 
-    // 排序逻辑：Rating优先，达成率其次
     scores.sort((a, b) => b.rating - a.rating || b.achievement - a.achievement);
     
-    // 跨表判定：通过 newSongIds Set 来判断是否为新曲
     const isNewRecord = (s) => newSongIds.has(String(s.songId));
-
-    // 切分 B35 与 R15
     const oldScores = scores.filter(s => !isNewRecord(s)).slice(0, 35);
     const newScores = scores.filter(s => isNewRecord(s)).slice(0, 15);
-    
     const totalRating = [...oldScores, ...newScores].reduce((sum, s) => sum + (s.rating || 0), 0);
 
     return { b35: oldScores, r15: newScores, rating: totalRating };
@@ -202,7 +266,6 @@ const handleSync = async () => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/40 to-transparent pointer-events-none" />
 
-        {/* Top Badges */}
         <div className="absolute top-2 left-2 flex gap-1 z-10">
           <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex items-center gap-1 ${diff.color}`}>
             {diff.name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{realLevel}</span>
@@ -214,7 +277,6 @@ const handleSync = async () => {
           #{index + 1}
         </div>
 
-        {/* Bottom Info */}
         <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end z-10">
           <div className="text-[13px] font-bold text-zinc-100 truncate mb-1 leading-tight">{score.songName}</div>
           <div className="flex items-end justify-between">
@@ -232,13 +294,13 @@ const handleSync = async () => {
 
   if (loading) return (
     <div className="w-full min-h-screen bg-[#0c0c11] flex items-center justify-center">
-      <FaSpinner className="animate-spin text-4xl text-cyan-500/50" />
+      <div className="animate-spin w-10 h-10 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full"></div>
     </div>
   );
 
   if (error || !profile) return (
     <div className="w-full min-h-screen bg-[#0c0c11] flex flex-col items-center justify-center text-zinc-200">
-      <FaLock className="text-5xl text-zinc-700 mb-4" />
+      <div className="text-5xl text-zinc-800 mb-4 opacity-30">📭</div>
       <h2 className="text-xl font-bold">无法访问该档案</h2>
       <button onClick={() => navigate(-1)} className="mt-6 px-6 py-2.5 bg-zinc-200 text-zinc-900 rounded-xl font-bold active:scale-95 transition-all">返回</button>
     </div>
@@ -260,7 +322,6 @@ const handleSync = async () => {
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans selection:bg-cyan-500/30 relative pb-24 overflow-x-hidden">
       
-      {/* 环境光 */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-cyan-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-indigo-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
@@ -268,98 +329,127 @@ const handleSync = async () => {
 
       <div className="max-w-7xl mx-auto px-6 pt-24 relative z-10">
         
-        {/* {/* ========================================== */}
-        {/* 头部导航与双源同步区 */}
-        {/* ========================================== */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
           <div className="flex flex-col gap-4">
             <button 
               onClick={() => navigate(`/profile/${profile.username}`)}
               className="flex items-center gap-2 text-zinc-500 hover:text-zinc-200 transition-colors font-bold text-sm w-fit active:scale-95"
             >
-              <FaArrowLeft /> 返回个人主页
+              返回个人主页
             </button>
             <div className="flex items-center gap-3">
               <div className="w-1 h-8 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
               <div>
-                <h1 className="text-3xl font-bold text-zinc-100 tracking-tight flex items-center gap-3">
-                  <FaGamepad className="text-cyan-400 text-2xl" /> Maimai DX 数据
+                <h1 className="text-3xl font-bold text-zinc-100 tracking-tight">
+                  Maimai DX 数据档案
                 </h1>
                 <span className="text-sm font-medium text-zinc-500 mt-1 block">Player: {profile.username}</span>
               </div>
             </div>
           </div>
 
-          {/* 智能双源同步控制台 (仅自己可见) */}
           {isOwnProfile && (
-            <div className="flex flex-col gap-3 w-full lg:w-auto">
-              
-              {/* 来源切换器 */}
-              <div className="flex items-center gap-2 bg-[#15151e]/80 p-1 rounded-xl border border-white/[0.05] w-fit">
-                <button 
-                  onClick={() => setSyncSource('df')}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${syncSource === 'df' ? 'bg-cyan-500/20 text-cyan-400' : 'text-zinc-500 hover:text-zinc-300'}`}
-                >
-                  水鱼查分器
-                </button>
-                <button 
-                  onClick={() => setSyncSource('lx')}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${syncSource === 'lx' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-500 hover:text-zinc-300'}`}
-                >
-                  落雪查分器
-                </button>
-              </div>
-
-              {/* 动态输入交互框 */}
-              <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md p-2 rounded-2xl border border-white/[0.05] shadow-sm w-full">
-                {syncSource === 'df' ? (
-                  <input 
-                    type="password" 
-                    value={importToken}
-                    onChange={(e) => setImportToken(e.target.value)}
-                    placeholder="粘贴水鱼 Import-token..."
-                    className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
-                  />
-                ) : (
-                  <input 
-                    type="text" 
-                    value={lxFriendCode}
-                    onChange={(e) => setLxFriendCode(e.target.value)}
-                    placeholder="输入落雪绑定的好友代码或 QQ"
-                    className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
-                  />
-                )}
-                
-                <button 
-                  onClick={handleSync}
-                  disabled={isSyncing}
-                  className={`${syncSource === 'df' ? 'bg-cyan-500 hover:bg-cyan-400 text-zinc-900' : 'bg-indigo-500 hover:bg-indigo-400 text-white'} px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center gap-2 shrink-0 active:scale-95`}
-                >
-                  {isSyncing ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
-                  更新数据
-                </button>
-              </div>
+            <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md p-2 rounded-2xl border border-white/[0.05] shadow-sm w-full md:w-auto">
+              <input 
+                type="password" 
+                value={importToken}
+                onChange={(e) => setImportToken(e.target.value)}
+                placeholder="粘贴 Import-token 更新数据"
+                className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
+              />
+              <button 
+                onClick={handleSync}
+                disabled={isSyncing}
+                className="bg-cyan-500 hover:bg-cyan-400 text-zinc-900 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shrink-0 active:scale-95"
+              >
+                {isSyncing ? '同步中...' : '同步云端'}
+              </button>
             </div>
           )}
         </div>
 
-        {/* 隐私锁判断 */}
         {!isOwnProfile && !profile.isB50Visible ? (
           <div className="py-32 flex flex-col items-center justify-center bg-[#15151e]/40 border border-white/[0.05] rounded-[3rem] mt-10">
-            <FaLock className="text-5xl text-zinc-800 mb-4 opacity-30" />
+            <div className="text-5xl text-zinc-800 mb-4 opacity-30">🔒</div>
             <p className="text-zinc-500 font-medium tracking-wide">该玩家的数据档案已设为私密</p>
           </div>
         ) : (
           <>
             {/* ========================================== */}
-            {/* B50 成绩模块 (完美切分 B35 与 R15) */}
+            {/* 牌子完成度可视化面板 */}
+            {/* ========================================== */}
+            <div className="mb-14 border-b border-white/[0.05] pb-10">
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-1 h-6 bg-amber-400 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.6)]"></div>
+                  <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">牌子完成度</h2>
+                </div>
+                
+                {/* 版本选择器 (Pill 滚动条) */}
+                <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2">
+                  {PLATE_VERSIONS.map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => setSelectedPlateVersion(v.id)}
+                      className={`px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
+                        selectedPlateVersion === v.id
+                          ? 'bg-zinc-200 text-zinc-900 shadow-sm'
+                          : 'bg-[#15151e] border border-white/[0.05] text-zinc-400 hover:text-zinc-200 hover:bg-[#1a1a24]'
+                      }`}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 牌子数据卡片网格 */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {plateProgress ? plateProgress.map((plate, idx) => (
+                  <div key={idx} className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-5 flex flex-col gap-3 shadow-sm hover:bg-[#1a1a24] transition-colors">
+                    <div className="text-zinc-300 font-bold text-sm tracking-widest">{plate.name}</div>
+                    
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-3xl font-bold tracking-tight ${plate.color}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                        {plate.count}
+                      </span>
+                      <span className="text-xs font-bold text-zinc-600" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                        / {plate.total}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1 mt-auto">
+                      <div className="h-1.5 w-full bg-[#0c0c11] border border-white/[0.02] rounded-full overflow-hidden shadow-inner">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${plate.total > 0 ? (plate.count / plate.total) * 100 : 0}%` }}
+                          transition={{ duration: 1, ease: "easeOut" }}
+                          className={`h-full ${plate.bar}`} 
+                        />
+                      </div>
+                      <div className="text-[10px] font-bold text-zinc-500 text-right tracking-widest" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                        {plate.total > 0 ? ((plate.count / plate.total) * 100).toFixed(1) : 0}%
+                      </div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="col-span-full py-8 text-zinc-500 text-sm font-medium flex items-center gap-3">
+                    <div className="animate-spin w-4 h-4 border-2 border-zinc-500/20 border-t-zinc-500 rounded-full"></div> 正在拉取云端曲库数据...
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ========================================== */}
+            {/* B50 成绩模块 */}
             {/* ========================================== */}
             <div className="mb-16">
               <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-white/[0.05] pb-4 mb-6 gap-4">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <h2 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
-                    <FaChartLine className="text-cyan-400" /> Best 50 
-                  </h2>
+                  <div className="flex items-center gap-3">
+                    <div className="w-1 h-6 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
+                    <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Best 50</h2>
+                  </div>
                   <select
                     value={b50Filter}
                     onChange={(e) => setB50Filter(e.target.value)}
@@ -380,7 +470,6 @@ const handleSync = async () => {
                 <div className="py-16 text-center text-zinc-600 font-medium bg-[#15151e]/40 rounded-2xl border border-white/5">未找到匹配的成绩</div>
               ) : (
                 <>
-                  {/* B35 历史最佳区域 */}
                   {b50Data.b35.length > 0 && (
                     <div className="mb-10">
                       <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -392,7 +481,6 @@ const handleSync = async () => {
                     </div>
                   )}
 
-                  {/* R15 新曲最佳区域 */}
                   {b50Data.r15.length > 0 && (
                     <div>
                       <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -411,8 +499,8 @@ const handleSync = async () => {
             {/* PF 100 成绩列表模块 */}
             {/* ========================================== */}
             <div>
-              <div className="flex items-center gap-2 mb-6 border-b border-white/[0.05] pb-4">
-                <FaTrophy className="text-cyan-400 text-xl" />
+              <div className="flex items-center gap-3 mb-6 border-b border-white/[0.05] pb-4">
+                <div className="w-1 h-6 bg-indigo-400 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.5)]"></div>
                 <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Performance Top 100</h2>
               </div>
 
@@ -470,9 +558,7 @@ const handleSync = async () => {
           </>
         )}
 
-        {/* ========================================== */}
         {/* PF 详情模态窗 */}
-        {/* ========================================== */}
         <AnimatePresence>
           {selectedPfScore && (
             <div 
@@ -490,13 +576,6 @@ const handleSync = async () => {
                 className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-8 w-full max-w-sm flex flex-col items-center shadow-2xl relative z-10"
                 onClick={e => e.stopPropagation()}
               >
-                <button 
-                  onClick={() => setSelectedPfScore(null)}
-                  className="absolute top-5 right-5 text-zinc-500 hover:text-white transition-colors p-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-full active:scale-90"
-                >
-                  <FaTimes />
-                </button>
-
                 <div className="text-center mb-8 px-4 w-full mt-2">
                   <h3 className="text-lg font-bold text-zinc-100 mb-2 line-clamp-2 leading-snug">
                     {selectedPfScore.songName}
@@ -531,7 +610,6 @@ const handleSync = async () => {
 
                   return (
                     <>
-                      {/* 环形进度条 */}
                       <div className="relative w-44 h-44 flex items-center justify-center mb-8">
                         <svg className="transform -rotate-90 w-full h-full drop-shadow-lg">
                           <circle cx="88" cy="88" r="65" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-[#0c0c11]" />
@@ -545,7 +623,6 @@ const handleSync = async () => {
                         </div>
                       </div>
 
-                      {/* 数据面板 */}
                       <div className="w-full bg-[#0c0c11] border border-white/[0.05] rounded-2xl p-5 space-y-3.5 text-sm font-bold shadow-inner">
                          <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
                            <span className="text-zinc-500">达成率</span>
