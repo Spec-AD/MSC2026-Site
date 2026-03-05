@@ -185,7 +185,7 @@ const Inbox = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-1 h-6 bg-indigo-400 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.5)]"></div>
-              <h1 className="text-3xl font-bold text-zinc-100 tracking-tight">通讯终端</h1>
+              <h1 className="text-3xl font-bold text-zinc-100 tracking-tight">邮件</h1>
             </div>
             
             <button 
@@ -426,5 +426,6 @@ const Inbox = () => {
     </div>
   );
 };
+
 
 export default Inbox;
