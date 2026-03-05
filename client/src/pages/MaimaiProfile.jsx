@@ -288,12 +288,17 @@ const MaimaiProfile = () => {
 
     scores.sort((a, b) => b.rating - a.rating || b.achievement - a.achievement);
     
-    const isNewRecord = (s) => newSongIds.has(String(s.songId));
-    const oldScores = scores.filter(s => !isNewRecord(s)).slice(0, 35);
-    const newScores = scores.filter(s => isNewRecord(s)).slice(0, 15);
-    const totalRating = [...oldScores, ...newScores].reduce((sum, s) => sum + (s.rating || 0), 0);
-
-    return { b35: oldScores, r15: newScores, rating: totalRating };
+    if (b50Filter === 'DEFAULT' || b50Filter === 'IDEAL') {
+      const isNewRecord = (s) => newSongIds.has(String(s.songId));
+      const oldScores = scores.filter(s => !isNewRecord(s)).slice(0, 35);
+      const newScores = scores.filter(s => isNewRecord(s)).slice(0, 15);
+      const totalRating = [...oldScores, ...newScores].reduce((sum, s) => sum + (s.rating || 0), 0);
+      return { b35: oldScores, r15: newScores, rating: totalRating };
+    } else {
+      const top50 = scores.slice(0, 50);
+      const totalRating = top50.reduce((sum, s) => sum + (s.rating || 0), 0);
+      return { b35: top50, r15: [], rating: totalRating };
+    }
   }, [profile, b50Filter, newSongIds]);
 
   const pf100Data = useMemo(() => {
@@ -607,7 +612,7 @@ const MaimaiProfile = () => {
                   {b50Data.b35.length > 0 && (
                     <div className="mb-10">
                       <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> Standard Tracks (B35)
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> {b50Filter === 'DEFAULT' || b50Filter === 'IDEAL' ? 'Standard Tracks (B35)' : 'Top 50 Tracks'}
                       </h3>
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {b50Data.b35.map((score, index) => renderScoreCard(score, index, 'b35'))}
