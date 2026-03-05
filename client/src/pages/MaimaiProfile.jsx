@@ -9,7 +9,7 @@ import { useToast } from '../context/ToastContext';
 // 牌子世代配置引擎 (完美适配国服合并规则与旧代)
 // ==========================================
 const PLATE_VERSIONS = [
-  { id: '舞', label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'maimai MiLK PLUS', 'maimai FiNALE'] },
+  { id: '舞', label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'MiLK PLUS', 'maimai FiNALE'] },
   { id: '真', label: '真 (PLUS)', versions: ['maimai PLUS'] },
   { id: '超', label: '超 (GreeN)', versions: ['maimai GreeN'] },
   { id: '檄', label: '檄 (GreeN+)', versions: ['maimai GreeN PLUS'] },
@@ -841,3 +841,4 @@ const MaimaiProfile = () => {
 
 
 export default MaimaiProfile;
+
