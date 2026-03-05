@@ -6,6 +6,19 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, FaLock, FaTimes } from 'react-icons/fa';
 
+const B50_FILTERS = [
+  { value: 'DEFAULT', label: '默认 B50' }, { value: 'IDEAL', label: '理想 B50' },
+  { value: 'AP50', label: 'AP 50' }, { value: 'FC50', label: 'FC 50' },
+  { value: 'STAR_1', label: '一星 B50' }, { value: 'STAR_2', label: '二星 B50' },
+  { value: 'STAR_3', label: '三星 B50' }, { value: 'STAR_4', label: '四星 B50' },
+  { value: 'STAR_5', label: '五星 B50' }, { value: 'STAR_5_5', label: '五星半 B50' },
+  { value: 'STAR_6', label: '六星 B50' }, { value: 'GREEN', label: '绿谱 B50' },
+  { value: 'YELLOW', label: '黄谱 B50' }, { value: 'RED', label: '红谱 B50' },
+  { value: 'PURPLE', label: '紫谱 B50' }, { value: 'WHITE', label: '白谱 B50' },
+  { value: 'LOCK50', label: '锁 50' }, { value: 'CUN50', label: '寸 50' },
+  { value: 'YUE50', label: '越 50' }
+];
+
 // ==========================================
 // 牌子世代配置引擎
 // ==========================================
