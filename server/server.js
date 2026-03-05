@@ -522,6 +522,19 @@ app.get('/api/messages/unread-count', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ message: '获取未读数失败' }); }
 });
 
+// 一键清理已读邮件（跳过星标邮件）
+app.delete('/api/messages/bulk-delete-read', authMiddleware, async (req, res) => {
+  try {
+    await Message.deleteMany({ 
+      receiver: req.user.id, 
+      isRead: true, 
+      isStarred: { $ne: true } // 🔥 核心逻辑：星标邮件即使已读也不会被删除
+    });
+    res.json({ msg: '清理成功' });
+  } catch (err) { res.status(500).json({ msg: '批量清理失败' }); }
+});
+
+
 app.put('/api/messages/:id/read', authMiddleware, async (req, res) => {
   try {
     const message = await Message.findOneAndUpdate(
@@ -566,17 +579,6 @@ app.delete('/api/messages/:id', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '删除失败' }); }
 });
 
-// 一键清理已读邮件（跳过星标邮件）
-app.delete('/api/messages/bulk-delete-read', authMiddleware, async (req, res) => {
-  try {
-    await Message.deleteMany({ 
-      receiver: req.user.id, 
-      isRead: true, 
-      isStarred: { $ne: true } // 🔥 核心逻辑：星标邮件即使已读也不会被删除
-    });
-    res.json({ msg: '清理成功' });
-  } catch (err) { res.status(500).json({ msg: '批量清理失败' }); }
-});
 
 // ==========================================
 // 分类夹 (Folders) 管理 API
