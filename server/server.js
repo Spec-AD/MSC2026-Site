@@ -11,6 +11,7 @@ const QualifierScore = require('./models/QualifierScore');
 const WikiPage = require('./models/WikiPage');
 const WikiCategory = require('./models/WikiCategory'); 
 const OsuScore = require('./models/OsuScore');
+const MessageFolder = require('./models/MessageFolder');
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -521,12 +522,105 @@ app.get('/api/messages/unread-count', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ message: '获取未读数失败' }); }
 });
 
-app.patch('/api/messages/:id/read', authMiddleware, async (req, res) => {
+app.put('/api/messages/:id/read', authMiddleware, async (req, res) => {
   try {
-    const message = await Message.findById(req.params.id);
-    if (!message || message.receiver.toString() !== req.user.id) return res.status(403).json({ message: '无权操作' });
-    message.isRead = true; await message.save(); res.json(message);
+    const message = await Message.findOneAndUpdate(
+      { _id: req.params.id, receiver: req.user.id },
+      { isRead: true },
+      { new: true }
+    );
+    res.json(message);
   } catch (err) { res.status(500).json({ message: '操作失败' }); }
+});
+
+app.put('/api/messages/:id/star', authMiddleware, async (req, res) => {
+  try {
+    const { isStarred } = req.body;
+    const msg = await Message.findOneAndUpdate(
+      { _id: req.params.id, receiver: req.user.id },
+      { isStarred: isStarred },
+      { new: true }
+    );
+    res.json(msg);
+  } catch (err) { res.status(500).json({ msg: '标星失败' }); }
+});
+
+// 移动邮件到分类夹
+app.put('/api/messages/:id/move', authMiddleware, async (req, res) => {
+  try {
+    const { folderId } = req.body;
+    const msg = await Message.findOneAndUpdate(
+      { _id: req.params.id, receiver: req.user.id },
+      { folderId: folderId || null },
+      { new: true }
+    );
+    res.json(msg);
+  } catch (err) { res.status(500).json({ msg: '移动失败' }); }
+});
+
+// 删除单封邮件
+app.delete('/api/messages/:id', authMiddleware, async (req, res) => {
+  try {
+    await Message.findOneAndDelete({ _id: req.params.id, receiver: req.user.id });
+    res.json({ msg: '已删除' });
+  } catch (err) { res.status(500).json({ msg: '删除失败' }); }
+});
+
+// 一键清理已读邮件（跳过星标邮件）
+app.delete('/api/messages/bulk-delete-read', authMiddleware, async (req, res) => {
+  try {
+    await Message.deleteMany({ 
+      receiver: req.user.id, 
+      isRead: true, 
+      isStarred: { $ne: true } // 🔥 核心逻辑：星标邮件即使已读也不会被删除
+    });
+    res.json({ msg: '清理成功' });
+  } catch (err) { res.status(500).json({ msg: '批量清理失败' }); }
+});
+
+// ==========================================
+// 分类夹 (Folders) 管理 API
+// ==========================================
+
+// 获取用户的分类夹
+app.get('/api/messages/folders', authMiddleware, async (req, res) => {
+  try {
+    const folders = await MessageFolder.find({ userId: req.user.id }).sort({ createdAt: 1 });
+    res.json(folders);
+  } catch (err) { res.status(500).json({ msg: '获取分类夹失败' }); }
+});
+
+// 创建分类夹
+app.post('/api/messages/folders', authMiddleware, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ msg: '名称不能为空' });
+    
+    // 限制最多 20 个
+    const count = await MessageFolder.countDocuments({ userId: req.user.id });
+    if (count >= 20) return res.status(400).json({ msg: '最多只能创建 20 个分类夹' });
+
+    const newFolder = new MessageFolder({ name, userId: req.user.id });
+    await newFolder.save();
+    res.json(newFolder);
+  } catch (err) { res.status(500).json({ msg: '创建分类夹失败' }); }
+});
+
+// 删除分类夹
+app.delete('/api/messages/folders/:id', authMiddleware, async (req, res) => {
+  try {
+    const folderId = req.params.id;
+    // 1. 删除分类夹本体
+    await MessageFolder.findOneAndDelete({ _id: folderId, userId: req.user.id });
+    
+    // 2. 将该分类夹下的所有邮件移出（folderId 设为 null，回到全部邮件）
+    await Message.updateMany(
+      { folderId: folderId, receiver: req.user.id },
+      { $set: { folderId: null } }
+    );
+    
+    res.json({ msg: '分类夹已删除' });
+  } catch (err) { res.status(500).json({ msg: '删除分类夹失败' }); }
 });
 
 app.post('/api/admin/send-message', authMiddleware, async (req, res) => {
@@ -552,7 +646,7 @@ app.post('/api/admin/broadcast-message', authMiddleware, async (req, res) => {
     if (!title || !content) return res.status(400).json({ message: '不能为空' });
 
     const allUsers = await User.find({}, '_id');
-    const messages = allUsers.map(u => ({ receiver: u._id, sender: admin._id, type: 'SYSTEM', title: `📢 ${title}`, content: content }));
+    const messages = allUsers.map(u => ({ receiver: u._id, sender: admin._id, type: 'SYSTEM', title: `${title}`, content: content }));
     await Message.insertMany(messages);
     res.json({ message: `广播成功！` });
   } catch (err) { res.status(500).json({ message: '广播失败' }); }
@@ -572,14 +666,14 @@ app.post('/api/admin/qualifier-score', authMiddleware, async (req, res) => {
     if (existingScore) {
       existingScore.level = Number(level); existingScore.achievement = Number(achievement); existingScore.dxScore = Number(dxScore || 0);
       existingScore.entryBy = adminUser.username; existingScore.entryTime = Date.now(); await existingScore.save();
-      await Message.create({ receiver: targetUser._id, sender: adminUser._id, type: 'SYSTEM', title: '🔄 您的预选赛成绩已更新', content: `[${songName}] 更新成功` });
+      await Message.create({ receiver: targetUser._id, sender: adminUser._id, type: 'SYSTEM', title: '您的预选赛成绩已更新', content: `[${songName}] 更新成功` });
       return res.json({ msg: `成绩更新成功！` });
     } else {
       const newQScore = new QualifierScore({ userId: targetUser._id, songName, level: Number(level), achievement: Number(achievement), dxScore: Number(dxScore || 0), entryBy: adminUser.username });
       await newQScore.save();
       const scoreCount = await QualifierScore.countDocuments({ userId: targetUser._id });
       if (scoreCount === 3) {
-        await Message.create({ receiver: targetUser._id, sender: adminUser._id, type: 'SYSTEM', title: '🎉 预选赛成绩已全部录入！', content: `录入成功` });
+        await Message.create({ receiver: targetUser._id, sender: adminUser._id, type: 'SYSTEM', title: '预选赛成绩已全部录入！', content: `录入成功` });
         return res.json({ msg: `第 3 首歌录入成功！` });
       }
       return res.json({ msg: `录入成功！` });
@@ -864,44 +958,6 @@ app.post('/api/wiki/read-reward', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '奖励发放失败' }); }
 });
 
-// ==========================================
-// 🏆 核心：单图最佳排行榜 (全站最高成绩 Top 100) 
-// ==========================================
-app.get('/api/leaderboard/single-best', async (req, res) => {
-  try {
-    const leaderboard = await Score.aggregate([
-      { $sort: { pf: -1 } },
-      { $limit: 100 },
-      {
-        $lookup: {
-          from: 'users',
-          let: { uId: '$userId' },
-          pipeline: [
-            { $match: { $expr: { $eq: ['$_id', { $convert: { input: '$$uId', to: 'objectId', onError: '$$uId', onNull: '$$uId' } }] } } }
-          ],
-          as: 'userInfo'
-        }
-      },
-      { $unwind: '$userInfo' },
-      {
-        $project: {
-          _id: 0, 
-          scoreId: '$_id', 
-          userId: '$userId',
-          username: '$userInfo.username', 
-          avatarUrl: '$userInfo.avatarUrl', 
-          uid: '$userInfo.uid', 
-          sponsorTier: '$userInfo.sponsorTier',
-          songName: 1, songId: 1, pf: 1, level: 1, constant: 1, achievement: 1, dxScore: 1, fcStatus: 1, difficulty: 1
-        }
-      }
-    ]);
-    res.json(leaderboard);
-  } catch (err) {
-    console.error('单图最佳排行榜获取失败:', err);
-    res.status(500).json({ msg: '获取排行榜失败' });
-  }
-});
 
 app.get('/api/leaderboard/:type', async (req, res) => {
   try {
