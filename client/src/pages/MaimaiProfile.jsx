@@ -7,7 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, FaLock, FaTimes } from 'react-icons/fa';
 
 // ==========================================
-// 牌子世代配置引擎 (支持合并代的独立多牌子渲染)
+// 牌子世代配置引擎 (完美适配图片前缀与雪代修正)
 // ==========================================
 const PLATE_VERSIONS = [
   { id: '舞', plates: [{ name: '舞', img: 'maimai' }], label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'MiLK PLUS', 'maimai MiLK PLUS', 'maimai FiNALE'] },
@@ -21,9 +21,8 @@ const PLATE_VERSIONS = [
   { id: '紫', plates: [{ name: '紫', img: 'murasaki' }], label: '紫 (MURASAKi)', versions: ['maimai MURASAKi'] },
   { id: '堇', plates: [{ name: '堇', img: 'murasaki_plus' }], label: '堇 (MURASAKi+)', versions: ['maimai MURASAKi PLUS'] },
   { id: '白', plates: [{ name: '白', img: 'milk' }], label: '白 (MiLK)', versions: ['maimai MiLK'] },
-  { id: '雪', plates: [{ name: '雪', img: 'milk_plus' }], label: '雪 (MiLK+)', versions: ['MiLK PLUS', 'maimai MiLK PLUS'] },
+  { id: '雪', plates: [{ name: '雪', img: 'milk_plus' }], label: '雪 (MiLK+)', versions: ['MiLK PLUS', 'maimai MiLK PLUS'] }, // 修复: MiLK PLUS
   { id: '辉', plates: [{ name: '辉', img: 'finale' }], label: '辉 (FiNALE)', versions: ['maimai FiNALE'] },
-  // 合并代支持数组注入多套牌子
   { id: '熊华', plates: [{ name: '熊', img: 'dx' }, { name: '华', img: 'dx_plus' }], label: '熊华 (DX & DX+)', versions: ['maimai でらっくす', 'maimai でらっくす PLUS'] },
   { id: '爽煌', plates: [{ name: '爽', img: 'splash' }, { name: '煌', img: 'splash_plus' }], label: '爽煌 (Splash & Splash+)', versions: ['maimai でらっくす Splash', 'maimai でらっくす Splash PLUS'] },
   { id: '星宙', plates: [{ name: '宙', img: 'universe' }, { name: '星', img: 'universe_plus' }], label: '星宙 (UNiVERSE & UNiVERSE+)', versions: ['maimai でらっくす UNiVERSE', 'maimai でらっくす UNiVERSE PLUS'] },
@@ -41,6 +40,7 @@ const DIFF_COLORS = [
   'text-zinc-100 bg-zinc-400/10 border-zinc-400/20'
 ];
 
+// 高强度字段兼容：防 undefined 崩溃读取器
 const getFc = (s) => (s?.fcStatus || s?.fc || '').toLowerCase();
 const getFs = (s) => (s?.fsStatus || s?.fs || '').toLowerCase();
 
@@ -72,6 +72,24 @@ const MaimaiProfile = () => {
   const [detailDiff, setDetailDiff] = useState(3); 
 
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
+
+  // 🔥 核心修复1：在后台静默预加载所有名牌图片，写入浏览器强缓存
+  useEffect(() => {
+    const preloadImages = () => {
+      const types = ['general', 'fc', 'ap', 'fdx'];
+      PLATE_VERSIONS.forEach(group => {
+        group.plates?.forEach(p => {
+          types.forEach(t => {
+            const img = new Image();
+            img.src = `/assets/${p.img}_${t}.png`;
+          });
+        });
+      });
+      const clearImg = new Image();
+      clearImg.src = '/assets/clear_general.png';
+    };
+    preloadImages();
+  }, []);
 
   useEffect(() => {
     const initData = async () => {
@@ -156,7 +174,7 @@ const MaimaiProfile = () => {
     const fs = getFs(score);
 
     if (plateType === '霸者') return ach >= 80;
-    if (plateType === '将') return ach >= 100;
+    if (plateType === '将') return ach >= 100; // 规避浮点数精度
     if (plateType === '极') return ['fc', 'fcp', 'ap', 'app'].includes(fc);
     if (plateType === '神') return ['ap', 'app'].includes(fc);
     if (plateType === '舞舞') return ['fsd', 'fsdp'].includes(fs); 
@@ -164,7 +182,7 @@ const MaimaiProfile = () => {
   };
 
   // ==========================================
-  // 牌子进度计算与合并代多发引擎
+  // 牌子进度计算与图片映射
   // ==========================================
   const plateProgress = useMemo(() => {
     if (!musicData || musicData.length === 0 || !profile?.allScores) return null;
@@ -204,7 +222,6 @@ const MaimaiProfile = () => {
 
     const result = [];
     
-    // 支持一个世代组下渲染多套独立牌子 (例如熊华展开为熊和华)
     targetGroup.plates.forEach(p => {
       const pName = p.name;
       const pImg = p.img;
@@ -500,12 +517,17 @@ const MaimaiProfile = () => {
                     >
                       <div className="relative w-full aspect-[3/1] bg-[#0c0c11] rounded-xl flex items-center justify-center overflow-hidden border border-white/[0.02]">
                         <img 
+                          key={imgSrc} // 🔥 核心修复2：强制重绘DOM，解决回退状态卡死
                           src={imgSrc}
                           alt={plate.name}
                           className={`w-full h-full object-contain p-2 transition-all duration-500 ${isCompleted ? 'opacity-100 scale-105 drop-shadow-[0_0_12px_rgba(255,255,255,0.25)]' : 'opacity-20 grayscale brightness-50'}`}
+                          onLoad={(e) => {
+                            e.target.style.display = 'block'; 
+                            if (e.target.nextSibling) e.target.nextSibling.style.opacity = '0';
+                          }}
                           onError={(e) => { 
                             e.target.style.display = 'none'; 
-                            e.target.nextSibling.style.opacity = '1';
+                            if (e.target.nextSibling) e.target.nextSibling.style.opacity = '1';
                           }}
                         />
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 transition-opacity">
