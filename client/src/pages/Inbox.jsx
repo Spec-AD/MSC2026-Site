@@ -20,20 +20,13 @@ const Inbox = () => {
   const [customFolders, setCustomFolders] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // 视图与选中状态
-  const [activeFolderId, setActiveFolderId] = useState('ALL'); // ALL, SYSTEM, FRIEND, STARRED, 或自定义 ID
+  const [activeFolderId, setActiveFolderId] = useState('ALL'); 
   const [selectedMessage, setSelectedMessage] = useState(null);
   
-  // 文件夹创建模态窗
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-
-  // 移动邮件状态
   const [movingMessageId, setMovingMessageId] = useState(null);
 
-  // ==========================================
-  // 1. 初始化数据 (请确保后端已有对应接口)
-  // ==========================================
   useEffect(() => {
     fetchInboxData();
   }, []);
@@ -42,7 +35,6 @@ const Inbox = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      // 并行请求：邮件列表与自定义文件夹列表
       const [msgRes, folderRes] = await Promise.all([
         axios.get('/api/messages', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/messages/folders', { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }))
@@ -52,39 +44,24 @@ const Inbox = () => {
       setCustomFolders(folderRes.data || []);
     } catch (err) {
       console.error('获取收件箱失败', err);
-      // 占位测试数据 (如果后端接口还没写好，可以用这个看看效果)
-      if (process.env.NODE_ENV === 'development') {
-        setMessages([
-          { _id: '1', title: '欢迎来到 PUREBEAT', content: '感谢注册...', type: 'system', isRead: false, isStarred: true, createdAt: new Date().toISOString() },
-          { _id: '2', title: '好友申请: Player2', content: '请求添加好友', type: 'friend_request', isRead: true, isStarred: false, createdAt: new Date(Date.now() - 86400000).toISOString() },
-        ]);
-      } else {
-        addToast('拉取收件箱数据失败', 'error');
-      }
+      addToast('拉取收件箱数据失败', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // ==========================================
-  // 2. 核心操作逻辑
-  // ==========================================
-  
-  // 标星/取消标星
   const toggleStar = async (e, msgId, currentStarStatus) => {
     e.stopPropagation();
-    // 乐观更新
     setMessages(prev => prev.map(m => m._id === msgId ? { ...m, isStarred: !currentStarStatus } : m));
     try {
       const token = localStorage.getItem('token');
       await axios.put(`/api/messages/${msgId}/star`, { isStarred: !currentStarStatus }, { headers: { Authorization: `Bearer ${token}` } });
     } catch (err) {
-      setMessages(prev => prev.map(m => m._id === msgId ? { ...m, isStarred: currentStarStatus } : m)); // 回退
+      setMessages(prev => prev.map(m => m._id === msgId ? { ...m, isStarred: currentStarStatus } : m));
       addToast('操作失败', 'error');
     }
   };
 
-  // 标为已读
   const markAsRead = async (msg) => {
     if (msg.isRead) return;
     setMessages(prev => prev.map(m => m._id === msg._id ? { ...m, isRead: true } : m));
@@ -96,7 +73,6 @@ const Inbox = () => {
     }
   };
 
-  // 删除单封邮件
   const deleteMessage = async (e, msgId) => {
     e.stopPropagation();
     setMessages(prev => prev.filter(m => m._id !== msgId));
@@ -107,11 +83,10 @@ const Inbox = () => {
       addToast('已删除', 'success');
     } catch (err) {
       addToast('删除失败', 'error');
-      fetchInboxData(); // 失败则重新拉取
+      fetchInboxData(); 
     }
   };
 
-  // 一键删除已读 (保护星标)
   const bulkDeleteRead = async () => {
     const messagesToDelete = messages.filter(m => m.isRead && !m.isStarred);
     if (messagesToDelete.length === 0) {
@@ -119,7 +94,6 @@ const Inbox = () => {
       return;
     }
     
-    // 乐观更新
     setMessages(prev => prev.filter(m => !m.isRead || m.isStarred));
     try {
       const token = localStorage.getItem('token');
@@ -131,7 +105,6 @@ const Inbox = () => {
     }
   };
 
-  // 移动邮件至文件夹
   const moveMessage = async (msgId, folderId) => {
     setMessages(prev => prev.map(m => m._id === msgId ? { ...m, folderId: folderId } : m));
     setMovingMessageId(null);
@@ -145,9 +118,6 @@ const Inbox = () => {
     }
   };
 
-  // ==========================================
-  // 3. 文件夹管理逻辑
-  // ==========================================
   const createFolder = async () => {
     if (!newFolderName.trim()) return;
     if (customFolders.length >= 20) {
@@ -182,17 +152,14 @@ const Inbox = () => {
     }
   };
 
-  // ==========================================
-  // 4. 视图过滤引擎
-  // ==========================================
   const filteredMessages = useMemo(() => {
     return messages.filter(msg => {
       switch (activeFolderId) {
         case 'ALL': return true;
-        case 'SYSTEM': return msg.type === 'system' || msg.type === 'notification';
-        case 'FRIEND': return msg.type === 'friend_request';
+        case 'SYSTEM': return msg.type === 'system' || msg.type === 'notification' || msg.type === 'SYSTEM';
+        case 'FRIEND': return msg.type === 'friend_request' || msg.type === 'FRIEND_REQUEST';
         case 'STARRED': return msg.isStarred === true;
-        default: return msg.folderId === activeFolderId; // 匹配自定义文件夹 ID
+        default: return msg.folderId === activeFolderId; 
       }
     });
   }, [messages, activeFolderId]);
@@ -201,7 +168,6 @@ const Inbox = () => {
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans selection:bg-indigo-500/30 relative pb-24 overflow-x-hidden">
       
-      {/* 环境光 */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-purple-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
@@ -209,7 +175,6 @@ const Inbox = () => {
 
       <div className="max-w-7xl mx-auto px-6 pt-24 relative z-10">
         
-        {/* --- 头部 --- */}
         <div className="mb-8">
           <button 
             onClick={() => navigate(-1)}
@@ -233,13 +198,10 @@ const Inbox = () => {
           </div>
         </div>
 
-        {/* --- 核心网格布局：3列侧边栏 + 9列列表 --- */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* 左侧边栏：分类夹系统 */}
           <div className="lg:col-span-3 flex flex-col gap-6">
             
-            {/* 内置分类 */}
             <div className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-4 shadow-sm flex flex-col gap-1">
               <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-3 mb-2">Smart Views</div>
               
@@ -261,7 +223,6 @@ const Inbox = () => {
               </button>
             </div>
 
-            {/* 自定义分类夹 */}
             <div className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-4 shadow-sm flex flex-col gap-1">
               <div className="flex items-center justify-between px-3 mb-2">
                 <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">My Folders</span>
@@ -299,7 +260,6 @@ const Inbox = () => {
 
           </div>
 
-          {/* 右侧主面板：邮件列表与详情 */}
           <div className="lg:col-span-9 bg-[#15151e] border border-white/[0.05] rounded-[2rem] overflow-hidden shadow-sm flex flex-col min-h-[600px]">
             
             {loading ? (
@@ -308,7 +268,6 @@ const Inbox = () => {
               </div>
             ) : selectedMessage ? (
               
-              /* 邮件详情视图 */
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col h-full bg-[#0c0c11]">
                 <div className="flex items-center justify-between p-6 border-b border-white/[0.05] bg-[#15151e]">
                   <div className="flex items-center gap-4">
@@ -330,11 +289,24 @@ const Inbox = () => {
                 <div className="p-8 flex-1 overflow-y-auto custom-scrollbar">
                   <div className="flex items-center justify-between mb-8 pb-6 border-b border-white/[0.05]">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-xl font-bold border border-indigo-500/30">
-                        {selectedMessage.type === 'system' ? 'SYS' : selectedMessage.sender?.charAt(0)?.toUpperCase() || 'P'}
-                      </div>
+                      {/* 🔥 修复点 1：安全解析 sender 头像 */}
+                      {selectedMessage.type === 'SYSTEM' || selectedMessage.type === 'system' ? (
+                        <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-xl font-bold border border-indigo-500/30">SYS</div>
+                      ) : (
+                        <img 
+                          src={selectedMessage.sender?.avatarUrl || '/assets/logos.png'} 
+                          alt="avatar" 
+                          className="w-12 h-12 rounded-full object-cover border border-white/[0.05] bg-[#0c0c11]"
+                        />
+                      )}
+                      
                       <div>
-                        <div className="font-bold text-zinc-200">{selectedMessage.sender || 'System'}</div>
+                        {/* 🔥 修复点 2：安全解析 sender 用户名 */}
+                        <div className="font-bold text-zinc-200">
+                          {selectedMessage.type === 'SYSTEM' || selectedMessage.type === 'system' 
+                            ? '系统管理员' 
+                            : (selectedMessage.sender?.username || 'System')}
+                        </div>
                         <div className="text-xs text-zinc-500 mt-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                           {new Date(selectedMessage.createdAt).toLocaleString()}
                         </div>
@@ -350,7 +322,6 @@ const Inbox = () => {
 
             ) : (
               
-              /* 邮件列表视图 */
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-full">
                 <div className="p-6 border-b border-white/[0.05] bg-[#1a1a24] flex items-center justify-between">
                   <span className="font-bold text-zinc-300">
@@ -372,7 +343,6 @@ const Inbox = () => {
                         onClick={() => { setSelectedMessage(msg); markAsRead(msg); }}
                         className={`group flex items-center gap-4 p-4 border-b border-white/[0.02] cursor-pointer transition-colors ${msg.isRead ? 'bg-transparent hover:bg-white/[0.02]' : 'bg-indigo-900/10 hover:bg-indigo-900/20'}`}
                       >
-                        {/* 左侧标记区 */}
                         <div className="flex items-center gap-3 shrink-0 pl-2">
                            <div className={`w-2 h-2 rounded-full ${msg.isRead ? 'bg-transparent' : 'bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.8)]'}`}></div>
                            <button onClick={(e) => toggleStar(e, msg._id, msg.isStarred)} className="text-lg p-1">
@@ -380,11 +350,11 @@ const Inbox = () => {
                            </button>
                         </div>
 
-                        {/* 核心信息 */}
                         <div className="flex flex-col min-w-0 flex-1">
                           <div className="flex items-center justify-between mb-1 gap-4">
+                            {/* 🔥 修复点 3：安全解析列表中的 sender 用户名 */}
                             <span className={`font-bold truncate ${msg.isRead ? 'text-zinc-400' : 'text-zinc-100'}`}>
-                              {msg.sender || 'System'}
+                              {msg.type === 'SYSTEM' || msg.type === 'system' ? 'System' : (msg.sender?.username || 'System')}
                             </span>
                             <span className="text-[10px] font-bold text-zinc-600 shrink-0" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                               {new Date(msg.createdAt).toLocaleDateString()}
@@ -395,10 +365,8 @@ const Inbox = () => {
                               {msg.title}
                             </span>
                             
-                            {/* 悬浮操作栏 */}
                             <div className="hidden sm:flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                               
-                              {/* 移动文件夹菜单 */}
                               {customFolders.length > 0 && (
                                 <div className="relative" onClick={e => e.stopPropagation()}>
                                   <button onClick={() => setMovingMessageId(movingMessageId === msg._id ? null : msg._id)} className="p-2 bg-[#1a1a24] hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors" title="移动至...">
@@ -434,7 +402,6 @@ const Inbox = () => {
         </div>
       </div>
 
-      {/* 创建文件夹模态窗 */}
       <AnimatePresence>
         {isCreatingFolder && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
