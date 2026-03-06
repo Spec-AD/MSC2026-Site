@@ -861,33 +861,37 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
 });
 
 // ==========================================
-// 同步落雪 (LXNS) - OAuth 2.0 授权流
+// 同步落雪 (LXNS) - OAuth 2.0 授权流 (透传报错版)
 // ==========================================
 app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
   try {
     const { code, redirectUri } = req.body;
     if (!code) return res.status(400).json({ msg: '缺少授权码 (Code)' });
 
-    // 1. 使用 Authorization Code 换取玩家的 Access Token
-    // 注：此处的 URL 请以落雪官方 OAuth 文档为准，一般为 /oauth/token
+    if (!process.env.LXNS_CLIENT_ID || !process.env.LXNS_CLIENT_SECRET) {
+        throw new Error('后端 .env 环境变量未加载 Client ID 或 Secret，请检查并重启后端服务！');
+    }
+
+    // 1. 请求落雪 API 获取 Token
     const tokenResponse = await axios.post('https://maimai.lxns.net/api/v0/oauth/token', {
       grant_type: 'authorization_code',
       client_id: process.env.LXNS_CLIENT_ID,
       client_secret: process.env.LXNS_CLIENT_SECRET,
       code: code,
-      redirect_uri: redirectUri // 必须与前端发起时保持完全一致
+      redirect_uri: redirectUri
+    }, {
+      headers: { 'Content-Type': 'application/json' }
     });
 
-    const userAccessToken = tokenResponse.data.access_token;
-    if (!userAccessToken) throw new Error('未能获取到 Access Token');
+    const userAccessToken = tokenResponse.data.access_token || tokenResponse.data.data?.access_token;
+    if (!userAccessToken) throw new Error('未能从落雪获取到 Access Token');
 
-    // 2. 使用玩家的 Token 调用 User 专属全量成绩接口
+    // 2. 调用 User 专属全量成绩接口
     const scoreResponse = await axios.get('https://maimai.lxns.net/api/v0/user/maimai/player/scores', {
       headers: { 'Authorization': `Bearer ${userAccessToken}` },
       timeout: 30000 
     });
 
-    // 兼容落雪的返回体格式
     const dataObj = scoreResponse.data?.data || scoreResponse.data || {};
     const allRecords = dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
 
@@ -895,7 +899,7 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
        return res.status(400).json({ msg: '落雪返回的成绩为空，请确认该账号有游玩记录' });
     }
 
-    // 3. 数据解析与入库 (复用我们之前完善的解析引擎)
+    // 3. 数据解析与入库
     const allSongsArray = await Song.find({}, 'id title ds charts basic_info type').lean();
     const processedScores = [];
 
@@ -947,7 +951,6 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
       });
     }
 
-    // 重算 Rating 与数据入库
     const oldTop35 = processedScores.filter(r => !r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 35);
     const newTop15 = processedScores.filter(r => r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 15);
     const calculatedRating = [...oldTop35, ...newTop15].reduce((sum, rec) => sum + (rec.rating || 0), 0);
@@ -963,10 +966,13 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
       rating: calculatedRating 
     });
 
-    res.json({ msg: `落雪数据同步成功！共载入 ${processedScores.length} 条记录。`, rating: calculatedRating });
+    res.json({ msg: `落雪全量数据同步成功！共载入 ${processedScores.length} 条记录。`, rating: calculatedRating });
   } catch (err) { 
-    console.error('落雪 OAuth 同步报错:', err.response?.data || err.message);
-    res.status(500).json({ msg: err.response?.data?.message || '落雪 OAuth 授权同步失败，请重试' }); 
+    console.error('落雪 OAuth 同步报错日志:', err.response?.data || err.message);
+    
+    // 🔥 将真实的报错信息提取并传给前端
+    const detail = err.response?.data?.message || err.response?.data?.msg || err.message || '未知错误';
+    res.status(500).json({ msg: `落雪拒绝了请求: ${detail}` }); 
   }
 });
 
