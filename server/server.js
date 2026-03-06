@@ -979,7 +979,7 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
       rating: calculatedRating 
     });
 
-    res.json({ msg: `落雪全量同步成功！完美载入 ${processedScores.length} 条记录。`, rating: calculatedRating });
+    res.json({ msg: `落雪全量同步成功！已获取 ${processedScores.length} 条记录`, rating: calculatedRating });
   } catch (err) { 
     console.error('落雪 OAuth 同步报错日志:', err.response?.data || err.message);
     const detail = err.response?.data?.message || err.response?.data?.msg || err.message || '未知错误';
@@ -1318,4 +1318,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📅 Current Server Time: ${new Date().toLocaleString()}`);
+
 });
