@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, FaLock, FaTimes } from 'react-icons/fa';
+
 
 const B50_FILTERS = [
   { value: 'DEFAULT', label: '默认 B50' }, { value: 'IDEAL', label: '理想 B50' },
@@ -91,13 +92,15 @@ const MaimaiProfile = () => {
 
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
 
+  const oauthCalled = useRef(false);
   // 🔥 核心新增：监听 URL 中的 OAuth 回跳 code
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     
-    if (code && isOwnProfile) {
+    if (code && isOwnProfile && !oauthCalled.current) {
       // 清理地址栏，防止刷新重复触发
+      oauthCalled.current = true;
       window.history.replaceState({}, document.title, window.location.pathname);
       executeLuoxueOAuthSync(code);
     }
