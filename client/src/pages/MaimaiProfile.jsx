@@ -58,6 +58,9 @@ const DIFF_COLORS = [
 const getFc = (s) => (s?.fcStatus || s?.fc || '').toLowerCase();
 const getFs = (s) => (s?.fsStatus || s?.fs || '').toLowerCase();
 
+// 落雪 OAuth 应用 Client ID
+const LXNS_CLIENT_ID = "eef52117-75ed-4283-b861-245375750e62";
+
 const MaimaiProfile = () => {
   const { username } = useParams();
   const { user: currentUser } = useAuth();
@@ -73,7 +76,6 @@ const MaimaiProfile = () => {
   
   const [syncSource, setSyncSource] = useState('df');
   const [importToken, setImportToken] = useState('');
-  const [lxFriendCode, setLxFriendCode] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [b50Filter, setB50Filter] = useState('DEFAULT');
@@ -84,10 +86,22 @@ const MaimaiProfile = () => {
   const [selectedPlateDetail, setSelectedPlateDetail] = useState(null); 
   const [detailDiff, setDetailDiff] = useState(3); 
 
-  // 🔥 等级进度系统状态
+  // 等级进度系统状态
   const [selectedLevelDetail, setSelectedLevelDetail] = useState(null);
 
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
+
+  // 🔥 核心新增：监听 URL 中的 OAuth 回跳 code
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    
+    if (code && isOwnProfile) {
+      // 清理地址栏，防止刷新重复触发
+      window.history.replaceState({}, document.title, window.location.pathname);
+      executeLuoxueOAuthSync(code);
+    }
+  }, [isOwnProfile, username]);
 
   useEffect(() => {
     const preloadImages = () => {
@@ -117,7 +131,6 @@ const MaimaiProfile = () => {
 
         setProfile(profileRes.data);
         setImportToken(profileRes.data.importToken || '');
-        setLxFriendCode(profileRes.data.proberUsername || ''); 
         setMusicData(musicRes.data || []);
 
         const newIds = new Set();
@@ -136,17 +149,14 @@ const MaimaiProfile = () => {
     initData();
   }, [username]);
 
+  // 执行水鱼同步
   const handleSync = async () => {
     if (syncSource === 'df' && !importToken.trim()) return addToast('请提供水鱼 Import-Token', 'error'); 
-    if (syncSource === 'lx' && !lxFriendCode.trim()) return addToast('请提供落雪好友代码/QQ', 'error'); 
     
     setIsSyncing(true);
     try {
       const token = localStorage.getItem('token');
-      const endpoint = syncSource === 'df' ? '/api/users/sync-maimai' : '/api/users/sync-luoxue';
-      const payload = syncSource === 'df' ? { importToken } : { friendCode: lxFriendCode };
-      
-      const res = await axios.post(endpoint, payload, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.post('/api/users/sync-maimai', { importToken }, { headers: { Authorization: `Bearer ${token}` } });
       
       addToast(res.data.msg || `同步成功！当前 Rating: ${res.data.rating}`, 'success');
       const profileRes = await axios.get(`/api/users/${username}?t=${Date.now()}`);
@@ -156,6 +166,36 @@ const MaimaiProfile = () => {
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  // 🔥 执行落雪 OAuth 同步
+  const executeLuoxueOAuthSync = async (code) => {
+    setIsSyncing(true);
+    setSyncSource('lx'); 
+    try {
+      const token = localStorage.getItem('token');
+      const currentRedirectUri = `${window.location.origin}/profile/${username}`;
+      
+      const res = await axios.post('/api/users/sync-luoxue-oauth', 
+        { code, redirectUri: currentRedirectUri }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      addToast(res.data.msg || '落雪数据同步成功！', 'success');
+      const profileRes = await axios.get(`/api/users/${username}?t=${Date.now()}`);
+      setProfile(profileRes.data);
+    } catch (err) {
+      addToast(err.response?.data?.msg || '授权同步失败，可能是授权码已过期', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // 🔥 触发跳转至落雪授权页面
+  const handleLuoxueOAuthLogin = () => {
+    const redirectUri = encodeURIComponent(`${window.location.origin}/profile/${username}`);
+    const authUrl = `https://maimai.lxns.net/oauth/authorize?client_id=${LXNS_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code`;
+    window.location.href = authUrl;
   };
 
   const getDiffConfig = (score) => {
@@ -257,7 +297,7 @@ const MaimaiProfile = () => {
   }, [musicData, profile, selectedPlateVersion, userScoreMap]);
 
   // ==========================================
-  // 🔥 等级进度计算引擎
+  // 等级进度计算引擎
   // ==========================================
   const levelProgress = useMemo(() => {
     if (!musicData || musicData.length === 0 || !userScoreMap) return null;
@@ -295,7 +335,6 @@ const MaimaiProfile = () => {
     return data.filter(d => d.total > 0);
   }, [musicData, userScoreMap]);
 
-  // 用于模态窗的指定等级曲目解析
   const chartsInSelectedLevel = useMemo(() => {
     if (!selectedLevelDetail || !musicData) return [];
     const charts = [];
@@ -490,30 +529,31 @@ const MaimaiProfile = () => {
 
               <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md p-2 rounded-2xl border border-white/[0.05] shadow-sm w-full md:w-auto">
                 {syncSource === 'df' ? (
-                  <input 
-                    type="password" 
-                    value={importToken}
-                    onChange={(e) => setImportToken(e.target.value)}
-                    placeholder="粘贴水鱼 Import-token..."
-                    className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
-                  />
+                  <>
+                    <input 
+                      type="password" 
+                      value={importToken}
+                      onChange={(e) => setImportToken(e.target.value)}
+                      placeholder="粘贴水鱼 Import-token..."
+                      className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
+                    />
+                    <button 
+                      onClick={handleSync}
+                      disabled={isSyncing}
+                      className="bg-cyan-500 hover:bg-cyan-400 text-zinc-900 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shrink-0 active:scale-95"
+                    >
+                      {isSyncing ? <FaSpinner className="animate-spin" /> : <><FaSyncAlt /> 同步云端</>}
+                    </button>
+                  </>
                 ) : (
-                  <input 
-                    type="text" 
-                    value={lxFriendCode}
-                    onChange={(e) => setLxFriendCode(e.target.value)}
-                    placeholder="输入落雪绑定的好友代码或 QQ"
-                    className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
-                  />
+                  <button 
+                    onClick={handleLuoxueOAuthLogin}
+                    disabled={isSyncing}
+                    className="w-full md:w-[364px] bg-indigo-500 hover:bg-indigo-400 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
+                  >
+                    {isSyncing ? <FaSpinner className="animate-spin" /> : '🔗 使用落雪账号授权并拉取数据'}
+                  </button>
                 )}
-                
-                <button 
-                  onClick={handleSync}
-                  disabled={isSyncing}
-                  className={`${syncSource === 'df' ? 'bg-cyan-500 hover:bg-cyan-400 text-zinc-900' : 'bg-indigo-500 hover:bg-indigo-400 text-white'} px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shrink-0 active:scale-95`}
-                >
-                  {isSyncing ? <FaSpinner className="animate-spin" /> : <><FaSyncAlt /> 同步云端</>}
-                </button>
               </div>
             </div>
           )}
@@ -1018,7 +1058,7 @@ const MaimaiProfile = () => {
                               
                               {score && isCompleted && (
                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-4 flex justify-between items-end">
-                                  <span className="text-[10px] font-bold text-white font-mono">{score.achievement.toFixed(2)}%</span>
+                                  <span className="text-[10px] font-bold text-white font-mono">{(score.achievement || score.achievementRate).toFixed(2)}%</span>
                                   {getFcBadge(score) || getFsBadge(score)}
                                 </div>
                               )}
