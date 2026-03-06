@@ -861,7 +861,7 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
 });
 
 // ==========================================
-// 同步落雪 (LXNS) - OAuth 2.0 授权流 (透传报错版)
+// 同步落雪 (LXNS) - OAuth 2.0 授权流 (终极兼容版)
 // ==========================================
 app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
   try {
@@ -869,24 +869,22 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
     if (!code) return res.status(400).json({ msg: '缺少授权码 (Code)' });
 
     if (!process.env.LXNS_CLIENT_ID || !process.env.LXNS_CLIENT_SECRET) {
-        throw new Error('后端 .env 环境变量未加载 Client ID 或 Secret，请检查并重启后端服务！');
+        throw new Error('后端 .env 未加载 Client ID 或 Secret');
     }
 
-    // 1. 请求落雪 API 获取 Token
+    // 1. 获取 Token
     const tokenResponse = await axios.post('https://maimai.lxns.net/api/v0/oauth/token', {
       grant_type: 'authorization_code',
       client_id: process.env.LXNS_CLIENT_ID,
       client_secret: process.env.LXNS_CLIENT_SECRET,
       code: code,
       redirect_uri: redirectUri
-    }, {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    }, { headers: { 'Content-Type': 'application/json' } });
 
     const userAccessToken = tokenResponse.data.access_token || tokenResponse.data.data?.access_token;
     if (!userAccessToken) throw new Error('未能从落雪获取到 Access Token');
 
-    // 2. 调用 User 专属全量成绩接口
+    // 2. 调用玩家全量成绩接口
     const scoreResponse = await axios.get('https://maimai.lxns.net/api/v0/user/maimai/player/scores', {
       headers: { 'Authorization': `Bearer ${userAccessToken}` },
       timeout: 30000 
@@ -896,21 +894,35 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
     const allRecords = dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
 
     if (allRecords.length === 0) {
-       return res.status(400).json({ msg: '落雪返回的成绩为空，请确认该账号有游玩记录' });
+       return res.status(400).json({ msg: '落雪返回的成绩为空，请确认账号有记录' });
     }
 
-    // 3. 数据解析与入库
+    // 3. 究极数据匹配与入库
     const allSongsArray = await Song.find({}, 'id title ds charts basic_info type').lean();
     const processedScores = [];
 
     for (const rec of allRecords) {
-      const lxId = Number(rec.song_id || rec.id);
-      const lxType = (rec.type || 'SD').toUpperCase();
-      const lxLevelIndex = rec.level_index;
+      // 提取并强力翻译落雪的 Type
+      const rawType = String(rec.type || '').trim().toUpperCase();
+      let lxType = 'SD'; 
+      if (rawType === 'DX' || rawType === '1') lxType = 'DX';
+      if (rawType === 'STANDARD' || rawType === '0' || rawType === 'SD') lxType = 'SD';
 
-      const song = allSongsArray.find(s => 
-        (Number(s.id) === lxId || Number(s.id) === lxId + 10000) && s.type === lxType
-      );
+      // 提取 Lxns ID 和 Level
+      const lxId = Number(rec.song_id || rec.music_id || rec.id);
+      const lxLevelIndex = Number(rec.level_index !== undefined ? rec.level_index : rec.level);
+
+      // 🔥 核心修补：水鱼数据双向容错匹配
+      const song = allSongsArray.find(s => {
+        const sId = Number(s.id);
+        // 致命原因：水鱼数据库中，早期的旧曲可能压根没有存 type 字段！如果为空则默认视为 SD。
+        const sType = String(s.type || 'SD').trim().toUpperCase();
+        
+        const isIdMatch = (sId === lxId || sId === lxId + 10000 || sId === lxId - 10000);
+        const isTypeMatch = (sType === lxType);
+        
+        return isIdMatch && isTypeMatch;
+      });
 
       if (!song) continue;
 
@@ -951,6 +963,7 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
       });
     }
 
+    // 重新计算 Rating
     const oldTop35 = processedScores.filter(r => !r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 35);
     const newTop15 = processedScores.filter(r => r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 15);
     const calculatedRating = [...oldTop35, ...newTop15].reduce((sum, rec) => sum + (rec.rating || 0), 0);
@@ -966,11 +979,9 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
       rating: calculatedRating 
     });
 
-    res.json({ msg: `落雪全量数据同步成功！共载入 ${processedScores.length} 条记录。`, rating: calculatedRating });
+    res.json({ msg: `落雪全量同步成功！完美载入 ${processedScores.length} 条记录。`, rating: calculatedRating });
   } catch (err) { 
     console.error('落雪 OAuth 同步报错日志:', err.response?.data || err.message);
-    
-    // 🔥 将真实的报错信息提取并传给前端
     const detail = err.response?.data?.message || err.response?.data?.msg || err.message || '未知错误';
     res.status(500).json({ msg: `落雪拒绝了请求: ${detail}` }); 
   }
