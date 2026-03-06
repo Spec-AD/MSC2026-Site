@@ -861,7 +861,7 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
 });
 
 // ==========================================
-// 同步落雪 (LXNS) 查分器成绩 (Developer API)
+// 同步落雪 (LXNS) 查分器全量成绩 (Developer API)
 // ==========================================
 app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
   try {
@@ -871,29 +871,27 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
     const devToken = process.env.LXNS_DEV_TOKEN;
     if (!devToken) return res.status(500).json({ msg: '服务器未配置落雪开发者 Token' });
 
-    // 1. 调用落雪 Developer API (⚠️ 核心修复：移除 Bearer 前缀，严格按照落雪规范)
-    const response = await axios.get(`https://maimai.lxns.net/api/v0/maimai/player/${friendCode}/bests`, {
+    // 🔥 核心修复 1：使用 /scores 接口拉取玩家的【全量成绩】，不再使用阉割版的 /bests
+    const response = await axios.get(`https://maimai.lxns.net/api/v0/maimai/player/${friendCode}/scores`, {
       headers: { 'Authorization': devToken.trim() },
-      timeout: 20000 
+      timeout: 30000 // 全量数据较大，适当增加超时时间
     });
 
-    // 容错解析：防止落雪返回的数据结构不是预期的 data.standard
-    const dataObj = response.data?.data || {};
-    const standardRecords = dataObj.standard || [];
-    const dxRecords = dataObj.dx || [];
-    const allRecords = [...standardRecords, ...dxRecords];
-    
+    // 🔥 核心修复 2：精准解构全量 JSON 中的 records 数组
+    const dataObj = response.data?.data || response.data || {};
+    const allRecords = dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
+
     if (allRecords.length === 0) {
        return res.status(400).json({ msg: '落雪返回的成绩为空，请确认该账号有游玩记录' });
     }
 
-    // 获取本地全量曲库用于比对
+    // 获取本地全量水鱼曲库用于比对
     const allSongsArray = await Song.find({}, 'id title ds charts basic_info type').lean();
 
     const processedScores = [];
     for (const rec of allRecords) {
-      // 2. 落雪 ID 映射水鱼 ID (落雪 DX/SD 同 ID，水鱼 DX 为 ID + 10000)
-      const lxId = Number(rec.id);
+      // 从你的 JSON 样例可以看出，落雪已经完美兼容了水鱼 DX 谱面 ID + 10000 的规则
+      const lxId = Number(rec.song_id || rec.id);
       const lxType = (rec.type || 'SD').toUpperCase();
       const lxLevelIndex = rec.level_index;
 
@@ -904,19 +902,21 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
 
       if (!song) continue;
 
-      // 3. 数据解析与宴会场拦截
       let pf = 0, dxRatio = 0, constant = 0;
       const isNew = song.basic_info?.is_new || false;
-      const isUtage = /^\[.+?\]/.test(rec.song_name) || /^\[.+?\]/.test(song.title) || song.type === 'UTAGE' || song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场';
+      const isUtage = /^\[.+?\]/.test(rec.song_name || rec.title) || /^\[.+?\]/.test(song.title) || song.type === 'UTAGE' || song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场';
 
       if (song.charts && song.charts[lxLevelIndex]) {
         const chartInfo = song.charts[lxLevelIndex];
-        const totalNotes = chartInfo.notes.reduce((a, b) => a + b, 0);
+        const totalNotes = chartInfo.notes ? chartInfo.notes.reduce((a, b) => a + b, 0) : 0;
         const maxDxScore = totalNotes * 3;
         
         constant = isUtage ? 0 : (song.ds[lxLevelIndex] || 0);
-        dxRatio = maxDxScore > 0 ? (rec.dx_score / maxDxScore) : 0;
-        if (maxDxScore > 0) pf = calculatePF(constant, rec.achievements, rec.dx_score, maxDxScore);
+        // 兼容全量记录里的字段写法 (dx_score)
+        const currentDxScore = rec.dxScore || rec.dx_score || 0; 
+        
+        dxRatio = maxDxScore > 0 ? (currentDxScore / maxDxScore) : 0;
+        if (maxDxScore > 0) pf = calculatePF(constant, rec.achievements, currentDxScore, maxDxScore);
       }
 
       processedScores.push({
@@ -928,19 +928,19 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
         songName: song.title, 
         achievement: rec.achievements || 0, 
         fcStatus: rec.fc || '', 
-        fsStatus: rec.fs || '',
-        dxScore: rec.dx_score || 0, 
-        rating: Math.floor(rec.dx_rating || 0), 
+        fsStatus: rec.fs || '', // 确保 FDX (Sync) 状态正常入库
+        dxScore: rec.dxScore || rec.dx_score || 0, 
+        rating: Math.floor(rec.dx_rating || rec.ra || 0), 
         level: lxLevelIndex, 
         constant: isNaN(constant) || !isFinite(constant) ? 0 : constant, 
-        finishTime: new Date(rec.play_time || Date.now()),
+        finishTime: new Date(rec.play_time || rec.upload_time || Date.now()),
         pf: isNaN(pf) || !isFinite(pf) ? 0 : pf, 
         dxRatio: isNaN(dxRatio) || !isFinite(dxRatio) ? 0 : dxRatio, 
         isNew: isNew
       });
     }
 
-    // 4. 重算 Rating 与数据入库
+    // 在本地重新计算真实的 Best 50 底分
     const oldTop35 = processedScores.filter(r => !r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 35);
     const newTop15 = processedScores.filter(r => r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 15);
     const calculatedRating = [...oldTop35, ...newTop15].reduce((sum, rec) => sum + (rec.rating || 0), 0);
@@ -957,20 +957,19 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
       rating: calculatedRating 
     });
 
-    res.json({ msg: `落雪数据同步成功！`, rating: calculatedRating, totalPf: Number(totalPf.toFixed(2)) });
+    res.json({ msg: `落雪数据同步成功！共载入 ${processedScores.length} 条记录。`, rating: calculatedRating, totalPf: Number(totalPf.toFixed(2)) });
   } catch (err) { 
     console.error('落雪同步报错详细日志:', err.response?.data || err.message);
     
-    // ⚠️ 核心修复：透传具体的落雪报错信息
     if (err.response?.status === 403) {
       return res.status(403).json({ msg: '被落雪拒绝：请确保你的落雪账号已开启“允许第三方获取数据”权限！' });
     } else if (err.response?.status === 404) {
-      return res.status(404).json({ msg: '在落雪查分器中未找到该好友码对应的玩家' });
+      return res.status(404).json({ msg: '在落雪查分器中未找到该好友码或无权限' });
     } else if (err.response?.status === 401) {
       return res.status(401).json({ msg: '落雪开发者 Token 无效，请联系管理员检查后端配置' });
     }
     
-    res.status(500).json({ msg: err.response?.data?.message || '落雪同步失败，请稍后重试' }); 
+    res.status(500).json({ msg: err.response?.data?.message || '落雪全量同步失败，请稍后重试' }); 
   }
 });
 
