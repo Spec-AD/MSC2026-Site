@@ -168,13 +168,14 @@ const MaimaiProfile = () => {
     }
   };
 
-  // 🔥 执行落雪 OAuth 同步
+// 🔥 执行落雪 OAuth 同步
   const executeLuoxueOAuthSync = async (code) => {
     setIsSyncing(true);
     setSyncSource('lx'); 
     try {
       const token = localStorage.getItem('token');
-      const currentRedirectUri = `${window.location.origin}/profile/${username}`;
+      
+      const currentRedirectUri = `${window.location.origin}/profile`;
       
       const res = await axios.post('/api/users/sync-luoxue-oauth', 
         { code, redirectUri: currentRedirectUri }, 
@@ -191,10 +192,13 @@ const MaimaiProfile = () => {
     }
   };
 
-  // 🔥 触发跳转至落雪授权页面
+// 🔥 触发跳转至落雪授权页面
   const handleLuoxueOAuthLogin = () => {
-    const redirectUri = encodeURIComponent(`${window.location.origin}/profile/${username}`);
-    const authUrl = `https://maimai.lxns.net/oauth/authorize?client_id=${LXNS_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code`;
+    // ⚠️ 重定向地址必须与落雪后台填写的【完全一致】，不能带动态的 username
+    const redirectUri = encodeURIComponent(`${window.location.origin}/profile`);
+    const scopes = "read_user_profile+write_player+read_player+read_user_token";
+    const authUrl = `https://maimai.lxns.net/oauth/authorize?response_type=code&client_id=${LXNS_CLIENT_ID}&redirect_uri=${redirectUri}&scope=${scopes}&state=${username}`;
+    
     window.location.href = authUrl;
   };
 
