@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { 
@@ -14,6 +14,7 @@ const Profile = () => {
   const { username: routeUsername } = useParams();
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation(); // 🔥 新增：用于获取 URL 参数
   const { addToast } = useToast();
   
   const [profile, setProfile] = useState(null);
@@ -34,6 +35,18 @@ const Profile = () => {
   const isOwnProfile = profile && currentUser && (
     profile.username.toLowerCase() === currentUser.username.toLowerCase()
   );
+
+  // 🔥 新增：落雪 OAuth 回跳拦截器
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const code = params.get('code');
+    const state = params.get('state'); // 这里面装的就是 username
+
+    // 如果发现 URL 里有落雪发来的 code 和 state，立刻携带着 code 重定向到 maimai 数据页
+    if (code && state) {
+      navigate(`/profile/${state}/maimai?code=${code}`, { replace: true });
+    }
+  }, [location, navigate]);
 
   useEffect(() => {
     fetchProfile();
