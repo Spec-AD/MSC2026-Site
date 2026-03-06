@@ -861,43 +861,51 @@ app.post('/api/users/sync-maimai', authMiddleware, async (req, res) => {
 });
 
 // ==========================================
-// 同步落雪 (LXNS) 查分器全量成绩 (Developer API)
+// 同步落雪 (LXNS) - OAuth 2.0 授权流
 // ==========================================
-app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
+app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
   try {
-    const { friendCode } = req.body;
-    if (!friendCode) return res.status(400).json({ msg: '请提供落雪好友代码或 QQ' });
+    const { code, redirectUri } = req.body;
+    if (!code) return res.status(400).json({ msg: '缺少授权码 (Code)' });
 
-    const devToken = process.env.LXNS_DEV_TOKEN;
-    if (!devToken) return res.status(500).json({ msg: '服务器未配置落雪开发者 Token' });
-
-    // 🔥 核心修复 1：使用 /scores 接口拉取玩家的【全量成绩】，不再使用阉割版的 /bests
-    const response = await axios.get(`https://maimai.lxns.net/api/v0/maimai/player/${friendCode}/scores`, {
-      headers: { 'Authorization': devToken.trim() },
-      timeout: 30000 // 全量数据较大，适当增加超时时间
+    // 1. 使用 Authorization Code 换取玩家的 Access Token
+    // 注：此处的 URL 请以落雪官方 OAuth 文档为准，一般为 /oauth/token
+    const tokenResponse = await axios.post('https://maimai.lxns.net/api/v0/oauth/token', {
+      grant_type: 'authorization_code',
+      client_id: process.env.LXNS_CLIENT_ID,
+      client_secret: process.env.LXNS_CLIENT_SECRET,
+      code: code,
+      redirect_uri: redirectUri // 必须与前端发起时保持完全一致
     });
 
-    // 🔥 核心修复 2：精准解构全量 JSON 中的 records 数组
-    const dataObj = response.data?.data || response.data || {};
+    const userAccessToken = tokenResponse.data.access_token;
+    if (!userAccessToken) throw new Error('未能获取到 Access Token');
+
+    // 2. 使用玩家的 Token 调用 User 专属全量成绩接口
+    const scoreResponse = await axios.get('https://maimai.lxns.net/api/v0/user/maimai/player/scores', {
+      headers: { 'Authorization': `Bearer ${userAccessToken}` },
+      timeout: 30000 
+    });
+
+    // 兼容落雪的返回体格式
+    const dataObj = scoreResponse.data?.data || scoreResponse.data || {};
     const allRecords = dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
 
     if (allRecords.length === 0) {
        return res.status(400).json({ msg: '落雪返回的成绩为空，请确认该账号有游玩记录' });
     }
 
-    // 获取本地全量水鱼曲库用于比对
+    // 3. 数据解析与入库 (复用我们之前完善的解析引擎)
     const allSongsArray = await Song.find({}, 'id title ds charts basic_info type').lean();
-
     const processedScores = [];
+
     for (const rec of allRecords) {
-      // 从你的 JSON 样例可以看出，落雪已经完美兼容了水鱼 DX 谱面 ID + 10000 的规则
       const lxId = Number(rec.song_id || rec.id);
       const lxType = (rec.type || 'SD').toUpperCase();
       const lxLevelIndex = rec.level_index;
 
       const song = allSongsArray.find(s => 
-        (Number(s.id) === lxId || Number(s.id) === lxId + 10000) && 
-        s.type === lxType
+        (Number(s.id) === lxId || Number(s.id) === lxId + 10000) && s.type === lxType
       );
 
       if (!song) continue;
@@ -912,7 +920,6 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
         const maxDxScore = totalNotes * 3;
         
         constant = isUtage ? 0 : (song.ds[lxLevelIndex] || 0);
-        // 兼容全量记录里的字段写法 (dx_score)
         const currentDxScore = rec.dxScore || rec.dx_score || 0; 
         
         dxRatio = maxDxScore > 0 ? (currentDxScore / maxDxScore) : 0;
@@ -921,14 +928,14 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
 
       processedScores.push({
         userId: req.user.id, 
-        nickname: 'LxPlayer', 
+        nickname: 'LxOAuthPlayer', 
         imageUrl: `https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`, 
         achievementRate: rec.achievements || 0, 
         songId: song.id, 
         songName: song.title, 
         achievement: rec.achievements || 0, 
         fcStatus: rec.fc || '', 
-        fsStatus: rec.fs || '', // 确保 FDX (Sync) 状态正常入库
+        fsStatus: rec.fs || '',
         dxScore: rec.dxScore || rec.dx_score || 0, 
         rating: Math.floor(rec.dx_rating || rec.ra || 0), 
         level: lxLevelIndex, 
@@ -940,7 +947,7 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
       });
     }
 
-    // 在本地重新计算真实的 Best 50 底分
+    // 重算 Rating 与数据入库
     const oldTop35 = processedScores.filter(r => !r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 35);
     const newTop15 = processedScores.filter(r => r.isNew).sort((a, b) => b.rating - a.rating).slice(0, 15);
     const calculatedRating = [...oldTop35, ...newTop15].reduce((sum, rec) => sum + (rec.rating || 0), 0);
@@ -952,24 +959,14 @@ app.post('/api/users/sync-luoxue', authMiddleware, async (req, res) => {
     const totalPf = topRecordsByPf.reduce((sum, score) => sum + score.pf, 0);
     
     await User.findByIdAndUpdate(req.user.id, { 
-      proberUsername: friendCode.trim(), 
       totalPf: Number(totalPf.toFixed(2)), 
       rating: calculatedRating 
     });
 
-    res.json({ msg: `落雪数据同步成功！共载入 ${processedScores.length} 条记录。`, rating: calculatedRating, totalPf: Number(totalPf.toFixed(2)) });
+    res.json({ msg: `落雪数据同步成功！共载入 ${processedScores.length} 条记录。`, rating: calculatedRating });
   } catch (err) { 
-    console.error('落雪同步报错详细日志:', err.response?.data || err.message);
-    
-    if (err.response?.status === 403) {
-      return res.status(403).json({ msg: '被落雪拒绝：请确保你的落雪账号已开启“允许第三方获取数据”权限！' });
-    } else if (err.response?.status === 404) {
-      return res.status(404).json({ msg: '在落雪查分器中未找到该好友码或无权限' });
-    } else if (err.response?.status === 401) {
-      return res.status(401).json({ msg: '落雪开发者 Token 无效，请联系管理员检查后端配置' });
-    }
-    
-    res.status(500).json({ msg: err.response?.data?.message || '落雪全量同步失败，请稍后重试' }); 
+    console.error('落雪 OAuth 同步报错:', err.response?.data || err.message);
+    res.status(500).json({ msg: err.response?.data?.message || '落雪 OAuth 授权同步失败，请重试' }); 
   }
 });
 
