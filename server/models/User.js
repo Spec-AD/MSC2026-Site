@@ -4,6 +4,11 @@ const UserSchema = new mongoose.Schema({
     // --- 账户基本信息 ---
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
+    location: { type: String, default: '' },
+    occupation: { type: String, default: '' },
+    website: { type: String, default: '' },
+    twitter: { type: String, default: '' },
+    birthday: { type: String, default: '' },
     proberUsername: { type: String, default: '' },
     sponsorTier: { type: Number, default: 0 }, // 0: 普通用户, 1: 赞助一档, 2: 赞助二档
     friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // 已添加的好友
@@ -25,6 +30,17 @@ const UserSchema = new mongoose.Schema({
     osuGlobalRank: { type: Number, default: 0 }, 
     osuCountryRank: { type: Number, default: 0 },
     osuMode: { type: String, default: 'osu' },
+    email: { 
+    type: String, 
+    sparse: true, // sparse 允许此字段为空，但只要有值就必须唯一
+    unique: true 
+  },
+  deletionStatus: { 
+    type: String, 
+    enum: ['ACTIVE', 'PENDING', 'DELETED'], 
+    default: 'ACTIVE' 
+  },
+  deletionRequestDate: { type: Date },
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
     isB50Visible: { type: Boolean, default: false },
@@ -73,6 +89,11 @@ const UserSchema = new mongoose.Schema({
         enum: ['user', 'ADM', 'TO', 'DS'], // 限制只能填这四个值
         default: 'user' // 默认注册的都是普通玩家
     },
+    
+    deviceLogs: [{ 
+    deviceId: String, 
+    lastLogin: Date 
+  }],
 
     // 3. 头像与背景 (暂时存 URL 字符串)
     avatarUrl: { type: String, default: '/assets/logos.png' }, // 默认头像
