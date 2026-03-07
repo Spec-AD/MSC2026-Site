@@ -8,7 +8,7 @@ import { useToast } from '../context/ToastContext';
 import { 
   FaCalendarCheck, FaSpinner, FaCommentDots, FaHeart, 
   FaChevronRight, FaTimes, FaUserCircle, FaBell, FaMedal,
-  FaDiscord, FaPoll, FaUserFriends
+  FaDiscord, FaPoll, FaUserFriends, FaHistory
 } from 'react-icons/fa'; 
 
 const Home = () => {
@@ -49,7 +49,7 @@ const Home = () => {
     fetchAnnouncements();
   }, []);
 
-  // 🔥 v1.4.0 新增：独立拉取每日推荐曲目逻辑
+  // 🔥 v1.4.0 新增：独立拉取每日推荐曲目逻辑 (脱离游戏限制)
   useEffect(() => {
     const fetchDailySong = async () => {
       setIsDailyLoading(true);
@@ -448,7 +448,7 @@ const Home = () => {
                 </div>
 
                 <div className="flex flex-col gap-2 mb-4">
-                  <div className="flex items-center gap-1.5 bg-[#0c0c11] p-1 rounded-xl border border-white/[0.02] w-fit">
+                  <div className="flex items-center gap-1.5 bg-[#0c0c11] p-1 rounded-xl border border-white/[0.02] w-fit flex-wrap">
                     <button 
                       onClick={() => setActiveGame('maimai')} 
                       className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'maimai' ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-600 hover:text-zinc-400'}`}
@@ -533,16 +533,20 @@ const Home = () => {
           </motion.div>
 
           {/* ========================================== */}
-          {/* 🔥 v1.4.0 落地：跨界每日推荐曲目卡片 */}
+          {/* 🔥 v1.4.0 落地：跨界每日推荐曲目卡片 (支持点击查看历史) */}
           {/* ========================================== */}
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
+          <motion.div 
+            initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} 
+            onClick={() => navigate('/daily-history')}
+            className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-all cursor-pointer active:scale-95"
+          >
             <div className="flex items-center justify-between mb-5 relative z-10">
               <div className="flex items-center gap-2.5">
                 <div className="w-1 h-4 bg-indigo-500 rounded-full shadow-[0_0_6px_rgba(99,102,241,0.5)]"></div>
                 <h3 className="text-sm font-bold text-zinc-100 tracking-wide">今日推荐曲目</h3>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border text-indigo-400 border-indigo-500/20">
-                DAILY
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border text-indigo-400 border-indigo-500/20 flex items-center gap-1 group-hover:bg-indigo-500/10 transition-colors">
+                <FaHistory className="opacity-70" /> 往期回顾
               </span>
             </div>
 
@@ -550,7 +554,7 @@ const Home = () => {
               <div className="flex items-center justify-center py-4">
                 <FaSpinner className="animate-spin text-2xl text-indigo-500/50" />
               </div>
-            ) : dailySong ? (
+            ) : dailySong && dailySong.title ? (
               <div className="flex items-center gap-4 relative z-10">
                 {/* 1. 曲绘缩略图 */}
                 <img 
