@@ -43,8 +43,12 @@ const Profile = () => {
     const code = params.get('code');
     const state = params.get('state');
 
-    if (code && state) {
-      navigate(`/profile/${state}/maimai?code=${code}`, { replace: true });
+   if (code && state) {
+      // 解析 state (格式如: Wolong_maimai 或 Wolong_chunithm)
+      const [stateUsername, stateGame] = state.split('_');
+      const targetGame = stateGame || 'maimai'; // 默认回退到舞萌
+      
+      navigate(`/profile/${stateUsername}/${targetGame}?code=${code}`, { replace: true });
     }
   }, [location, navigate]);
 
