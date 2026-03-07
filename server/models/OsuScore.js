@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const OsuScoreSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  mode: { type: String, required: true },
   beatmapId: { type: Number },
   title: { type: String },         // 曲名
   version: { type: String },       // 难度名 (如 Extra)

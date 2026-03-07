@@ -26,7 +26,8 @@ const UserSchema = new mongoose.Schema({
     osuId: { type: Number, default: null },           // osu! 官方的用户 ID
     osuUsername: { type: String, default: '' },       // osu! 玩家名
     osuAvatarUrl: { type: String, default: '' },      // osu! 头像链接
-    osuPp: { type: Number, default: 0 },         
+    osuPp: { type: Number, default: 0 },
+    osuDetails: { type: Object, default: {} }, // 存储四模式详细数据 (pp, rank 等)         
     osuGlobalRank: { type: Number, default: 0 }, 
     osuCountryRank: { type: Number, default: 0 },
     osuMode: { type: String, default: 'osu' },
