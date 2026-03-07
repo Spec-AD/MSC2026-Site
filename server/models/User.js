@@ -30,6 +30,9 @@ const UserSchema = new mongoose.Schema({
     osuGlobalRank: { type: Number, default: 0 }, 
     osuCountryRank: { type: Number, default: 0 },
     osuMode: { type: String, default: 'osu' },
+    // CHUNITHM 数据总览
+    chuniRating: { type: Number, default: 0 },
+    chuniPlayCount: { type: Number, default: 0 },
     email: { 
     type: String, 
     sparse: true, // sparse 允许此字段为空，但只要有值就必须唯一
