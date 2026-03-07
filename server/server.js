@@ -1419,18 +1419,51 @@ app.post('/api/wiki/read-reward', authMiddleware, async (req, res) => {
 app.get('/api/leaderboard/:type', async (req, res) => {
   try {
     const type = req.params.type;
+    const { game, mode } = req.query; // 接收前端传来的多游戏参数
+    
     let sortQuery = {};
+    let filterQuery = {};
+
     switch(type) {
       case 'level': sortQuery = { xp: -1, createdAt: 1 }; break;
       case 'wiki': sortQuery = { wikiApprovedCount: -1, createdAt: 1 }; break;
       case 'feedback': sortQuery = { feedbackApprovedCount: -1, createdAt: 1 }; break;
       case 'checkin': sortQuery = { checkInCount: -1, createdAt: 1 }; break;
+      case 'chunithm': // 完美截获中二请求
+        sortQuery = { chuniRating: -1, createdAt: 1 }; 
+        filterQuery = { chuniRating: { $gt: 0 } }; // 只展示有打过中二的玩家
+        break;
       case 'pf':
-      default: sortQuery = { totalPf: -1, createdAt: 1 }; break;
+      default: 
+        if (game === 'osu') {
+          sortQuery = { osuPp: -1, createdAt: 1 };
+          filterQuery = { osuPp: { $gt: 0 }, osuMode: mode || 'standard' };
+        } else {
+          // 默认 Maimai DX
+          sortQuery = { totalPf: -1, createdAt: 1 };
+          filterQuery = { totalPf: { $gt: 0 } };
+        }
+        break;
     }
-    const users = await User.find().sort(sortQuery).select('username uid avatarUrl totalPf rating role isRegistered isB50Visible xp level wikiApprovedCount feedbackApprovedCount checkInCount').limit(100);
-    res.json(users);
-  } catch (err) { res.status(500).json({ msg: '获取排行榜失败' }); }
+
+    const users = await User.find(filterQuery)
+      .sort(sortQuery)
+      // 🔥 核心修复：必须在 select 中暴露所有的字段，包括中二和osu的数据！
+      .select('username uid avatarUrl totalPf rating role isRegistered isB50Visible xp level wikiApprovedCount feedbackApprovedCount checkInCount chuniRating isChuniB50Visible osuPp osuMode')
+      .limit(100)
+      .lean();
+      
+    // 兼容前端 osu 的字段读取习惯
+    const formattedUsers = users.map(u => ({
+       ...u,
+       pp: u.osuPp 
+    }));
+
+    res.json(formattedUsers);
+  } catch (err) { 
+    console.error('排行榜拉取失败:', err);
+    res.status(500).json({ msg: '获取排行榜失败' }); 
+  }
 });
 
 app.post('/api/users/check-in', authMiddleware, async (req, res) => {
@@ -1556,25 +1589,48 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
 });
 
 // --- [1.2.5新增] 获取用户好友列表（用于主页好友按钮） ---
-app.get('/api/users/:username/friends', async (req, res) => {
-  try {
-    const user = await User.findOne({ username: req.params.username })
-      .populate({
-        path: 'friends',
-        select: 'username uid avatarUrl bannerUrl totalPf rating isB50Visible pfRank role',
-        options: { lean: true }
-      });
+app.get('/api/users/:username', async (req, res) => {
+    try {
+        const user = await User.findOne({ username: req.params.username })
+            .select('-password -contactValue -contactType')
+	    .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible');
+        
+        if (!user) return res.status(404).json({ msg: '用户不存在' });
 
-    if (!user) return res.status(404).json({ msg: '用户不存在' });
+        // 计算 Maimai PF 排名
+        let pfRank = '-';
+        if (user.totalPf && user.totalPf > 0) {
+            pfRank = await User.countDocuments({ totalPf: { $gt: user.totalPf } }) + 1;
+        }
 
-    // 可以在这里根据需要进行二次处理，例如重新计算实时排名
-    const friendsList = user.friends || [];
-    
-    res.json(friendsList);
-  } catch (err) {
-    console.error('获取好友列表报错:', err);
-    res.status(500).json({ msg: '获取好友列表失败' });
-  }
+        // 🔥 新增：计算 CHUNITHM Rating 排名
+        let chuniRank = '-';
+        if (user.chuniRating && user.chuniRating > 0) {
+            chuniRank = await User.countDocuments({ chuniRating: { $gt: user.chuniRating } }) + 1;
+        }
+
+	      const allScores = await Score.find({ userId: user._id }).lean();
+        const topScores = await Score.find({ userId: user._id }).sort({ rating: -1, achievement: -1 }).limit(50);
+        const topPfScores = await Score.find({ userId: user._id }).sort({ pf: -1 }).limit(50);
+        const qualifierScores = await QualifierScore.find({ userId: user._id }).sort({ entryTime: -1 });
+        const osuScores = await OsuScore.find({ userId: user._id }).sort({ pp: -1 }).lean();
+
+        res.json({
+            ...user.toObject(),
+	          allScores: allScores || [],
+            topScores: topScores || [],       
+            pfRank: pfRank,               
+            chuniRank: chuniRank, // 🔥 将中二排名传给前端 Home 看板
+            topPfScores: topPfScores || [],  
+            qualifierScores: qualifierScores || [], 
+            osuScores: osuScores || [],             
+            friendsCount: user.friends ? user.friends.length : 0,
+            friends: user.friends 
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: '服务器错误' });
+    }
 });
 
 // ==========================================
@@ -1784,32 +1840,6 @@ app.post('/api/users/settings/request-deletion', authMiddleware, async (req, res
   } catch (err) {
     res.status(500).json({ msg: '申请提交失败' });
   }
-});
-
-// ==========================================
-// CHUNITHM 排行榜与单曲数据 API
-// ==========================================
-
-// 1. 获取 CHUNITHM 综合实力排行榜
-app.get('/api/leaderboard/chunithm', async (req, res) => {
-  try {
-    const topPlayers = await User.find({ chuniRating: { $gt: 0 } })
-      .sort({ chuniRating: -1 })
-      .limit(100) // 取前 100 名
-      .select('username avatarUrl chuniRating isChuniB50Visible');
-    res.json(topPlayers);
-  } catch (err) { res.status(500).json({ msg: '获取中二排行榜失败' }); }
-});
-
-// 2. 获取单曲的玩家成绩排行榜
-app.get('/api/chunithm-songs/:songId/leaderboard', async (req, res) => {
-  try {
-    const scores = await ChunithmScore.find({ songId: req.params.songId, score: { $gt: 0 } })
-      .populate('userId', 'username avatarUrl') // 关联查询出玩家名字和头像
-      .sort({ score: -1, finishTime: 1 }) // 分数相同则按时间早的排前面
-      .limit(50);
-    res.json(scores);
-  } catch (err) { res.status(500).json({ msg: '获取单曲排行失败' }); }
 });
 
 const PORT = process.env.PORT || 5000;
