@@ -7,6 +7,7 @@ import {
   FaUser, FaShieldAlt, FaLock, FaSave, FaSpinner, 
   FaSignOutAlt, FaExclamationTriangle, FaUsers, FaEnvelope, FaArrowRight, FaTimes
 } from 'react-icons/fa';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Settings() {
   const { user, logout } = useAuth();
