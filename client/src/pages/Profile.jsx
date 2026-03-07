@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { 
   FaCamera, FaUserEdit, FaSpinner, FaSave, FaTimes, 
-  FaUserFriends, FaLock, FaUnlock, FaMedal, FaChevronRight, FaGamepad, FaCrown
+  FaUserFriends, FaLock, FaUnlock, FaMedal, FaChevronRight, FaGamepad, FaCrown,
+  FaMapMarkerAlt, FaBriefcase, FaLink, FaTwitter, FaBirthdayCake, FaCog
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import bbcode from 'bbcode-to-react';
@@ -14,7 +15,7 @@ const Profile = () => {
   const { username: routeUsername } = useParams();
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation(); // 🔥 新增：用于获取 URL 参数
+  const location = useLocation();
   const { addToast } = useToast();
   
   const [profile, setProfile] = useState(null);
@@ -24,7 +25,7 @@ const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
-  const [editData, setEditData] = useState({ bio: '', avatarUrl: '', bannerUrl: '', isB50Visible: false });
+  const [editData, setEditData] = useState({ bio: '', avatarUrl: '', bannerUrl: '' });
   const [newAvatarFile, setNewAvatarFile] = useState(null);
   const [newBannerFile, setNewBannerFile] = useState(null);
 
@@ -36,13 +37,12 @@ const Profile = () => {
     profile.username.toLowerCase() === currentUser.username.toLowerCase()
   );
 
-  // 🔥 新增：落雪 OAuth 回跳拦截器
+  // 落雪 OAuth 回跳拦截器
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const code = params.get('code');
-    const state = params.get('state'); // 这里面装的就是 username
+    const state = params.get('state');
 
-    // 如果发现 URL 里有落雪发来的 code 和 state，立刻携带着 code 重定向到 maimai 数据页
     if (code && state) {
       navigate(`/profile/${state}/maimai?code=${code}`, { replace: true });
     }
@@ -66,8 +66,7 @@ const Profile = () => {
       setEditData({
         bio: res.data.bio || '',
         avatarUrl: res.data.avatarUrl || '/assets/logos.png',
-        bannerUrl: res.data.bannerUrl || '/assets/bg.png',
-        isB50Visible: res.data.isB50Visible || false 
+        bannerUrl: res.data.bannerUrl || '/assets/bg.png'
       });
     } catch (err) {
       setError(err.response?.data?.msg || '用户不存在');
@@ -151,15 +150,14 @@ const Profile = () => {
       await axios.put('/api/users/profile', {
         bio: editData.bio,
         avatarUrl: finalAvatarUrl,
-        bannerUrl: finalBannerUrl,
-        isB50Visible: editData.isB50Visible 
+        bannerUrl: finalBannerUrl
       });
       
       await fetchProfile();
       setNewAvatarFile(null);
       setNewBannerFile(null);
       setIsEditing(false);
-      addToast('资料更新成功！', 'success');
+      addToast('个人简介与外观更新成功！', 'success');
     } catch (err) {
       addToast(err.response?.data?.msg || '保存失败，请检查网络或图片尺寸', 'error');
     } finally {
@@ -171,8 +169,7 @@ const Profile = () => {
     setEditData({
       bio: profile.bio || '',
       avatarUrl: profile.avatarUrl || '/assets/logos.png',
-      bannerUrl: profile.bannerUrl || '/assets/bg.png',
-      isB50Visible: profile.isB50Visible || false
+      bannerUrl: profile.bannerUrl || '/assets/bg.png'
     });
     setNewAvatarFile(null);
     setNewBannerFile(null);
@@ -220,15 +217,12 @@ const Profile = () => {
       <input type="file" ref={avatarInputRef} className="hidden" accept=".jpg,.jpeg,.png,.gif" onChange={(e) => handleFileChange(e, 'avatar')} />
       <input type="file" ref={bannerInputRef} className="hidden" accept=".jpg,.jpeg,.png,.gif" onChange={(e) => handleFileChange(e, 'banner')} />
 
-      {/* --- 全局环境散光 --- */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-cyan-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-purple-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
       </div>
 
-      {/* ==================================================== */}
       {/* 1. 沉浸式 Banner 巨幕 */}
-      {/* ==================================================== */}
       <div className="relative h-[30vh] md:h-[40vh] w-full overflow-hidden bg-[#0a0a0c] group z-0 border-b border-white/[0.05]">
         <img 
           src={isEditing ? editData.bannerUrl : (profile.bannerUrl || '/assets/bg.png')} 
@@ -248,15 +242,12 @@ const Profile = () => {
         )}
       </div>
 
-      {/* ==================================================== */}
-      {/* 2. 身份铭牌区 (Identity Header) */}
-      {/* ==================================================== */}
+      {/* 2. 身份铭牌区 */}
       <div className="max-w-5xl mx-auto px-6 -mt-20 md:-mt-24 relative z-20">
         
         <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6 md:gap-8 bg-[#15151e]/60 backdrop-blur-xl border border-white/[0.05] p-6 md:p-8 rounded-[2rem] shadow-xl">
           
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 text-center md:text-left w-full md:w-auto">
-            {/* 头像 - 正圆形 + 扫光效果 */}
             <div className="relative group shrink-0 -mt-16 md:-mt-20">
               <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-[6px] border-[#15151e] bg-[#0c0c11] shadow-2xl relative">
                 <img 
@@ -264,7 +255,6 @@ const Profile = () => {
                   alt="Avatar" 
                   className="w-full h-full object-cover relative z-0" 
                 />
-                {/* 隐藏的扫光层 */}
                 <div className="absolute inset-0 z-10 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1.5s_infinite]"></div>
                 
                 {isOwnProfile && isEditing && (
@@ -279,7 +269,6 @@ const Profile = () => {
               </div>
             </div>
 
-            {/* 玩家基础信息与荣誉前置 */}
             <div className="flex flex-col gap-2 md:gap-1.5 pt-1">
               <div className="flex items-center justify-center md:justify-start gap-3 flex-wrap">
                 <h1 className={`text-3xl md:text-4xl font-bold tracking-tight ${userRole.color}`}>
@@ -296,46 +285,66 @@ const Profile = () => {
               </div>
               
               <div className="flex items-center justify-center md:justify-start gap-4">
-                <span 
-                  className="text-sm font-bold text-zinc-400 uppercase tracking-widest"
-                  style={{ fontFamily: "'Quicksand', sans-serif" }}
-                >
+                <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                   UID: {profile.uid || 'N/A'}
                 </span>
               </div>
 
-              {/* 荣誉图片陈列区 (无需标题，直接排布) */}
+              {/* 🔥 新增：个人资料展示区 (图标 + 内容) */}
+              <div className="flex flex-wrap justify-center md:justify-start gap-x-5 gap-y-2 mt-2 text-xs font-medium text-zinc-400">
+                {profile.location && (
+                  <div className="flex items-center gap-1.5" title="位置"><FaMapMarkerAlt className="text-zinc-500" /> {profile.location}</div>
+                )}
+                {profile.occupation && (
+                  <div className="flex items-center gap-1.5" title="职业"><FaBriefcase className="text-zinc-500" /> {profile.occupation}</div>
+                )}
+                {profile.birthday && (
+                  <div className="flex items-center gap-1.5" title="生日"><FaBirthdayCake className="text-zinc-500" /> {profile.birthday}</div>
+                )}
+                {profile.website && (
+                  <a href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer" title="个人网站" className="flex items-center gap-1.5 hover:text-cyan-400 transition-colors">
+                    <FaLink className="text-zinc-500" /> {profile.website.replace(/^https?:\/\//, '')}
+                  </a>
+                )}
+                {profile.twitter && (
+                  <a href={`https://x.com/${profile.twitter.replace('@', '')}`} target="_blank" rel="noopener noreferrer" title="X (Twitter)" className="flex items-center gap-1.5 hover:text-zinc-200 transition-colors">
+                    <FaTwitter className="text-zinc-500" /> {profile.twitter.replace('@', '')}
+                  </a>
+                )}
+              </div>
+
               {profile.honors && profile.honors.length > 0 && (
-                <div className="flex flex-wrap justify-center md:justify-start gap-2.5 mt-3">
+                <div className="flex flex-wrap justify-center md:justify-start gap-2.5 mt-2">
                   {profile.honors.map((imgUrl, index) => (
-                    <img 
-                      key={index} 
-                      src={imgUrl} 
-                      alt="Honor" 
-                      className="h-7 md:h-8 rounded object-cover shadow-sm border border-white/10" 
-                    />
+                    <img key={index} src={imgUrl} alt="Honor" className="h-7 md:h-8 rounded object-cover shadow-sm border border-white/10" />
                   ))}
                 </div>
               )}
             </div>
           </div>
 
-          {/* 右侧：操作中心 & 好友逻辑按钮 */}
+          {/* 右侧：操作中心 */}
           <div className="flex items-center justify-center gap-3 w-full md:w-auto shrink-0 border-t md:border-t-0 border-white/[0.05] pt-6 md:pt-2">
             {isOwnProfile ? (
               !isEditing ? (
                 <>
                   <button 
                     onClick={() => navigate('/friends')}
-                    className="px-5 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 rounded-xl font-bold flex items-center gap-2 text-sm shadow-sm active:scale-95 transition-all"
+                    className="px-4 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 rounded-xl font-bold flex items-center gap-2 text-sm shadow-sm active:scale-95 transition-all"
                   >
                     <FaUserFriends /> <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{profile.friendsCount || profile.friends?.length || 0}</span>
                   </button>
                   <button 
                     onClick={() => setIsEditing(true)} 
-                    className="px-5 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 rounded-xl font-bold transition-all flex items-center gap-2 text-sm shadow-sm active:scale-95"
+                    className="px-4 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 rounded-xl font-bold transition-all flex items-center gap-2 text-sm shadow-sm active:scale-95"
                   >
-                    <FaUserEdit /> 编辑个人资料
+                    <FaUserEdit /> 编辑外观
+                  </button>
+                  <button 
+                    onClick={() => navigate('/settings')} 
+                    className="px-4 py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-900 rounded-xl font-bold transition-all flex items-center gap-2 text-sm shadow-sm active:scale-95"
+                  >
+                    <FaCog /> 设置
                   </button>
                 </>
               ) : (
@@ -390,15 +399,10 @@ const Profile = () => {
               })()
             )}
           </div>
-
         </div>
 
-        {/* ==================================================== */}
-        {/* 3. 核心内容区 (自我介绍 & 成长段位网格) */}
-        {/* ==================================================== */}
+        {/* 3. 核心内容区 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-          
-          {/* 左侧大块：自我介绍 (占 2 列) */}
           <div className="lg:col-span-2 bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-10 shadow-sm flex flex-col">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-1 h-5 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
@@ -407,32 +411,12 @@ const Profile = () => {
 
             <div className="flex-1 min-w-0">
               {isEditing ? (
-                <>
-                  <textarea 
-                    value={editData.bio}
-                    onChange={(e) => setEditData({...editData, bio: e.target.value})}
-                    placeholder="在这里记录你的游戏格言、简介或近况..."
-                    className="w-full h-32 bg-[#0c0c11] border border-white/[0.05] rounded-xl p-4 text-zinc-200 outline-none focus:border-cyan-500/50 transition-colors text-sm resize-none whitespace-pre-wrap leading-relaxed"
-                  />
-                  <div className="flex items-center justify-between bg-[#0c0c11] border border-white/[0.05] rounded-xl p-4 mt-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold text-zinc-200 flex items-center gap-2">
-                        {editData.isB50Visible ? <FaUnlock className="text-cyan-400" /> : <FaLock className="text-zinc-500" />} 
-                        数据隐私设置
-                      </span>
-                      <span className="text-xs text-zinc-500 mt-1">公开展示我的数据档案与成绩</span>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input 
-                        type="checkbox" 
-                        className="sr-only peer"
-                        checked={editData.isB50Visible}
-                        onChange={(e) => setEditData({...editData, isB50Visible: e.target.checked})}
-                      />
-                      <div className="w-11 h-6 bg-[#222228] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
-                    </label>
-                  </div>
-                </>
+                <textarea 
+                  value={editData.bio}
+                  onChange={(e) => setEditData({...editData, bio: e.target.value})}
+                  placeholder="在这里记录你的游戏格言、简介或近况..."
+                  className="w-full h-40 bg-[#0c0c11] border border-white/[0.05] rounded-xl p-4 text-zinc-200 outline-none focus:border-cyan-500/50 transition-colors text-sm resize-none whitespace-pre-wrap leading-relaxed"
+                />
               ) : (
                 <div className="text-[15px] leading-loose text-zinc-300 bbcode-content break-words whitespace-pre-wrap">
                   {renderSafeBBCode(profile.bio) || <span className="text-zinc-600 font-medium">这个人沉迷打歌，什么都没留下。</span>}
@@ -441,10 +425,7 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* 右侧小块：经验徽章 & 段位系统 (占 1 列) */}
           <div className="flex flex-col gap-6">
-            
-            {/* 饱满的经验徽章卡片 */}
             <div className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 shadow-sm flex flex-col items-center">
               <div className="flex justify-between w-full mb-4 px-2">
                 <span className="text-zinc-400 font-bold text-xs uppercase tracking-widest">Community Level</span>
@@ -452,16 +433,12 @@ const Profile = () => {
                   Lv.{profile.level || 1}
                 </span>
               </div>
-              
-              {/* 徽章中心预留位 */}
               <div className="w-28 h-28 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center mb-8 relative group shadow-inner">
                 <FaCrown className="text-4xl text-zinc-700 opacity-30 group-hover:scale-110 transition-transform duration-500" /> 
                 <span className="absolute -bottom-3 bg-cyan-500/20 text-cyan-400 text-[9px] font-bold px-2 py-0.5 rounded border border-cyan-500/30 tracking-widest">
                    BADGE WIP
                 </span>
               </div>
-
-              {/* 进度条与数值 */}
               <div className="w-full px-2">
                 <div className="flex justify-between text-xs text-zinc-500 font-bold mb-2 uppercase" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                    <span className="text-zinc-300">{(profile.xp || 0) % 300} XP</span>
@@ -478,7 +455,6 @@ const Profile = () => {
               </div>
             </div>
 
-            {/* 段位系统占位卡 */}
             <div className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 shadow-sm flex flex-col items-center relative overflow-hidden group flex-1 justify-center min-h-[160px]">
               <div className="absolute top-4 right-5 text-[10px] font-bold text-zinc-600 uppercase tracking-widest border border-white/[0.05] px-2 py-0.5 rounded">WIP</div>
               <div className="w-16 h-16 mb-4">
@@ -489,13 +465,10 @@ const Profile = () => {
               <h4 className="text-base font-bold text-zinc-400">段位系统筹备中</h4>
               <p className="text-[11px] text-zinc-600 font-medium mt-1">专属竞技排位即将揭晓</p>
             </div>
-
           </div>
         </div>
 
-        {/* ==================================================== */}
-        {/* 4. 游戏数据档案库 (Gaming Profiles Hub) */}
-        {/* ==================================================== */}
+        {/* 4. 游戏数据档案库 */}
         <div className="mt-12">
           <div className="flex items-center gap-3 mb-6 px-2">
             <div className="w-1 h-5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
@@ -503,59 +476,35 @@ const Profile = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Maimai DX 入口 */}
-            <div 
-              onClick={() => navigate(`/profile/${profile.username}/maimai`)}
-              className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-cyan-500/30"
-            >
-              <div className="absolute -right-10 -bottom-10 opacity-5 text-9xl text-cyan-400 transform -rotate-12 group-hover:scale-110 transition-transform duration-500">
-                <FaGamepad />
-              </div>
+            <div onClick={() => navigate(`/profile/${profile.username}/maimai`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-cyan-500/30">
+              <div className="absolute -right-10 -bottom-10 opacity-5 text-9xl text-cyan-400 transform -rotate-12 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
               <div className="relative z-10 flex flex-col h-full">
                 <h3 className="text-xl font-bold text-cyan-400 mb-1">Maimai DX</h3>
                 <p className="text-xs text-zinc-500 font-medium mb-8">查看 Best 50 成绩单与曲目完成度</p>
-                
                 <div className="mt-auto flex items-center justify-between">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Total PF</span>
-                    <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                      {profile.totalPf ? profile.totalPf.toFixed(1) : '--'}
-                    </span>
+                    <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{profile.totalPf ? profile.totalPf.toFixed(1) : '--'}</span>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-cyan-500 group-hover:text-white transition-colors">
-                    <FaChevronRight className="text-sm" />
-                  </div>
+                  <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-cyan-500 group-hover:text-white transition-colors"><FaChevronRight className="text-sm" /></div>
                 </div>
               </div>
             </div>
 
-            {/* osu! 入口 */}
-            <div 
-              onClick={() => navigate(`/profile/${profile.username}/osu`)}
-              className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-pink-500/30"
-            >
-              <div className="absolute -right-6 -bottom-6 opacity-5 text-9xl text-pink-400 group-hover:scale-110 transition-transform duration-500">
-                <FaGamepad />
-              </div>
+            <div onClick={() => navigate(`/profile/${profile.username}/osu`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-pink-500/30">
+              <div className="absolute -right-6 -bottom-6 opacity-5 text-9xl text-pink-400 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
               <div className="relative z-10 flex flex-col h-full">
                 <h3 className="text-xl font-bold text-pink-400 mb-1">osu!</h3>
                 <p className="text-xs text-zinc-500 font-medium mb-8">查看全球排名与 Best Performance 记录</p>
-                
                 <div className="mt-auto flex items-center justify-between">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Performance (PP)</span>
-                    <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                      {profile.osuPp ? Math.round(profile.osuPp) : '--'}
-                    </span>
+                    <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{profile.osuPp ? Math.round(profile.osuPp) : '--'}</span>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-pink-500 group-hover:text-white transition-colors">
-                    <FaChevronRight className="text-sm" />
-                  </div>
+                  <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-pink-500 group-hover:text-white transition-colors"><FaChevronRight className="text-sm" /></div>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
 
