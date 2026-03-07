@@ -49,8 +49,8 @@ const DailyHistory = () => {
               <FaCompactDisc className="animate-[spin_4s_linear_infinite]" />
             </div>
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-zinc-100 tracking-tight mb-2">往期推荐歌单</h1>
-              <p className="text-sm text-zinc-500 font-medium">回顾站长精心挑选的每一首好歌，沉淀社区的共同记忆。</p>
+              <h1 className="text-3xl md:text-4xl font-bold text-zinc-100 tracking-tight mb-2">往期推荐</h1>
+              <p className="text-sm text-zinc-500 font-medium">回顾每一首歌曲，沉淀社区的共同记忆。</p>
             </div>
           </div>
         </div>
@@ -115,5 +115,6 @@ const DailyHistory = () => {
     </div>
   );
 };
+
 
 export default DailyHistory;
