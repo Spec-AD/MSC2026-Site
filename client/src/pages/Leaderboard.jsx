@@ -123,14 +123,13 @@ const Leaderboard = () => {
             </>
           );
         } else if (activeGame === 'chunithm') {
-          const isVisible = player.isChuniB50Visible;
           return (
             <>
               <div 
-                className={`text-xl tracking-tight pb-0.5 ${isVisible ? getChuniRatingColor(player.chuniRating) : 'text-zinc-600 font-bold'}`}
+                className={`text-xl tracking-tight pb-0.5 ${getChuniRatingColor(player.chuniRating) : 'text-zinc-600 font-bold'}`}
                 style={{ fontFamily: "'Quicksand', sans-serif" }}
               >
-                {isVisible ? (player.chuniRating ? player.chuniRating.toFixed(2) : '0.00') : 'HIDDEN'}
+                {player.chuniRating ? player.chuniRating.toFixed(2) : '0.00'}
               </div>
               <span 
                 className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5"
