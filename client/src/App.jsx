@@ -10,6 +10,7 @@ import MaimaiProfile from './pages/MaimaiProfile';
 import Settings from './pages/Settings';
 import ChunithmProfile from './pages/ChunithmProfile';
 import OsuProfile from './pages/OsuProfile';
+import DailyHistory from './pages/DailyHistory';
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -59,6 +60,7 @@ function App() {
             <Route path="/profile/:username/maimai" element={<MaimaiProfile />} />
             <Route path="/profile/:username/chunithm" element={<ChunithmProfile />} />
             <Route path="/profile/:username/osu" element={<OsuProfile />} />
+            <Route path="/daily-history" element={<DailyHistory />} />
             {/* 曲目图鉴页路由 */}
             <Route path="songs" element={<Songs />} />
             
