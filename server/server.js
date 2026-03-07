@@ -13,6 +13,8 @@ const WikiCategory = require('./models/WikiCategory');
 const OsuScore = require('./models/OsuScore');
 const MessageFolder = require('./models/MessageFolder');
 const ChunithmSong = require('./models/ChunithmSong');
+const nodemailer = require('nodemailer');
+const Otp = require('./models/Otp');
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -30,6 +32,20 @@ const storage = new CloudinaryStorage({
     transformation: [{ width: 1000, crop: 'limit' }] 
   }
 });
+
+// ==========================================
+// 邮件发送器初始化 (Nodemailer Transporter)
+// ==========================================
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  secure: true, // true 对应 465 端口
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
+
 
 const upload = multer({ storage: storage });
 
@@ -107,6 +123,97 @@ const optionalAuth = (req, res, next) => {
 // ==========================================
 // API 路由逻辑
 // ==========================================
+// ==========================================
+// API: 1. 发送 6 位数邮箱验证码
+// ==========================================
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const { email, type } = req.body;
+    if (!email || !type) return res.status(400).json({ msg: '参数不完整' });
+
+    // 格式粗筛
+    if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ msg: '邮箱格式不正确' });
+
+    // 如果是“绑定邮箱”操作，提前检查是否已被其他账号占用
+    if (type === 'BIND') {
+      const existingUser = await User.findOne({ email });
+      if (existingUser) return res.status(400).json({ msg: '该邮箱已被其他账号绑定！' });
+    }
+
+    // 生成 6 位随机数字
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 将验证码存入数据库 (使用 upsert: 如果该邮箱之前有验证码还没过期，直接覆盖刷新)
+    await Otp.findOneAndUpdate(
+      { email, type },
+      { otp: otpCode, createdAt: Date.now() },
+      { upsert: true, new: true }
+    );
+
+    // 构建精美的 HTML 邮件模板
+    const mailOptions = {
+      from: `"PureBeat 社区" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: '【PureBeat】您的账号安全验证码',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #06b6d4;">PureBeat Security</h2>
+          <p>您好，</p>
+          <p>您正在执行 <strong>${type === 'BIND' ? '绑定邮箱' : '系统验证'}</strong> 操作。您的 6 位动态验证码为：</p>
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #111827;">${otpCode}</span>
+          </div>
+          <p style="color: #ef4444; font-size: 14px;">⚠️ 该验证码将在 <strong>10 分钟</strong> 后失效。打死也不要告诉别人！</p>
+          <p style="font-size: 12px; color: #6b7280; border-top: 1px solid #eee; padding-top: 15px; mt-5">
+            如果这不是您本人的操作，请忽略此邮件。
+          </p>
+        </div>
+      `
+    };
+
+    // 发送邮件
+    await transporter.sendMail(mailOptions);
+    res.json({ msg: '验证码已发送至您的邮箱，请注意查收' });
+
+  } catch (err) {
+    console.error('发送邮件失败:', err);
+    res.status(500).json({ msg: '邮件发送失败，请检查服务器配置' });
+  }
+});
+
+// ==========================================
+// API: 2. 校验验证码并绑定邮箱
+// ==========================================
+app.post('/api/users/settings/bind-email', authMiddleware, async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ msg: '请提供邮箱和验证码' });
+
+    // 1. 去数据库核对验证码
+    const otpRecord = await Otp.findOne({ email, otp, type: 'BIND' });
+    if (!otpRecord) {
+      return res.status(400).json({ msg: '验证码错误或已失效 (有效期10分钟)' });
+    }
+
+    // 2. 二次确认邮箱是否被占用 (防止并发极小概率的漏洞)
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ msg: '手慢了，该邮箱已被别人绑定' });
+    }
+
+    // 3. 将邮箱写入当前用户的档案中
+    await User.findByIdAndUpdate(req.user.id, { email });
+
+    // 4. 验证成功后，立即销毁这条验证码 (防止重复使用)
+    await Otp.findByIdAndDelete(otpRecord._id);
+
+    res.json({ msg: '邮箱绑定成功！' });
+
+  } catch (err) {
+    console.error('绑定邮箱报错:', err);
+    res.status(500).json({ msg: '系统错误，绑定失败' });
+  }
+});
 
 // --- A. 认证模块 ---
 app.post('/api/auth/register', async (req, res) => {
