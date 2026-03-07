@@ -220,7 +220,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('-password')
-          .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role');
+          .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role');
         if (!user) return res.status(404).json({ msg: '用户未找到' });
 	      const today = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
         if (user.lastLoginDate !== today) {
@@ -271,7 +271,7 @@ app.get('/api/users/search', async (req, res) => {
 app.get('/api/users/:username/friends', optionalAuth, async (req, res) => {
   try {
     const user = await User.findOne({ username: { $regex: new RegExp(`^${req.params.username}$`, 'i') } })
-      .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
+      .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
       .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
 
     if (!user) return res.status(404).json({ msg: '该用户不存在' });
@@ -297,7 +297,7 @@ app.get('/api/users/:username', async (req, res) => {
     try {
         const user = await User.findOne({ username: { $regex: new RegExp(`^${req.params.username}$`, 'i') } })
             .select('-password -contactValue -contactType')
-	          .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role');
+	          .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role');
         
         if (!user) return res.status(404).json({ msg: '用户不存在' });
 
@@ -1177,7 +1177,7 @@ app.post('/api/users/settings/request-deletion', authMiddleware, async (req, res
 app.get('/api/users/friends', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
-      .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
+      .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
       .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
       
     if (!user) return res.status(404).json({ msg: '用户未找到' });
@@ -1197,7 +1197,7 @@ app.get('/api/users/friends', authMiddleware, async (req, res) => {
 app.get('/api/users/friends/list', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
-      .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
+      .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
       .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
       
     res.json({ friends: user.friends || [], friendRequests: user.friendRequests || [] });
@@ -1210,7 +1210,7 @@ app.get('/api/users/friends/list', authMiddleware, async (req, res) => {
 app.get('/api/users/:username/friends', optionalAuth, async (req, res) => {
   try {
     const user = await User.findOne({ username: { $regex: new RegExp(`^${req.params.username}$`, 'i') } })
-      .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
+      .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
       .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
 
     if (!user) return res.status(404).json({ msg: '该用户不存在' });
@@ -1234,7 +1234,7 @@ app.get('/api/users/:username', async (req, res) => {
     try {
         const user = await User.findOne({ username: { $regex: new RegExp(`^${req.params.username}$`, 'i') } })
             .select('-password -contactValue -contactType')
-	          .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role');
+	          .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role');
         
         if (!user) return res.status(404).json({ msg: '用户不存在' });
 
