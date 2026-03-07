@@ -23,7 +23,9 @@ const Friends = () => {
       try {
         setLoading(true);
         const res = await axios.get(`/api/users/${user.username}/friends`);
-        setFriends(res.data);
+        // 🔥 核心修复：后端返回的是包含 friends 和 friendRequests 的对象
+        // 所以我们必须提取出 res.data.friends 这个数组！
+        setFriends(res.data.friends || []);
       } catch (err) {
         console.error('获取好友列表失败', err);
       } finally {
@@ -33,7 +35,7 @@ const Friends = () => {
     fetchFriends();
   }, [user]);
 
-  // 2. 搜索过滤逻辑
+  // 2. 搜索过滤逻辑 (现在 friends 绝对是个数组了，不再会报错)
   const filteredFriends = friends.filter(f => 
     f.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (f.uid && String(f.uid).includes(searchQuery))
@@ -77,7 +79,7 @@ const Friends = () => {
           </div>
         </div>
 
-        {/* 好友卡片网格 - 使用宽屏横向布局 */}
+        {/* 好友卡片网格 */}
         {loading ? (
           <div className="flex justify-center py-32">
             <FaSpinner className="animate-spin text-3xl text-indigo-500/50" />
@@ -88,14 +90,13 @@ const Friends = () => {
               {filteredFriends.length > 0 ? (
                 filteredFriends.map((friend, index) => (
                   <motion.div
-                    key={friend._id}
+                    key={friend._id || index}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
                     onClick={() => navigate(`/profile/${friend.username}`)}
                     className="group relative aspect-[2.5/1] md:aspect-[3.5/1] bg-[#15151e] border border-white/[0.05] rounded-[1.5rem] md:rounded-[2rem] overflow-hidden cursor-pointer shadow-sm hover:shadow-xl hover:border-indigo-500/30 transition-all duration-500"
                   >
-                    {/* 背景 Banner 层 - 宽屏适配方案 */}
                     <div className="absolute inset-0 z-0">
                       {friend.bannerUrl ? (
                         <img 
@@ -105,24 +106,19 @@ const Friends = () => {
                           onError={(e) => { e.target.style.display = 'none'; }}
                         />
                       ) : (
-                        /* 未设置 Banner 时的渐变色代替方案 */
                         <div className="w-full h-full bg-gradient-to-r from-indigo-950/40 to-transparent"></div>
                       )}
-                      {/* 渐变遮罩融合背景色 */}
                       <div className="absolute inset-0 bg-gradient-to-r from-[#0c0c11] via-[#0c0c11]/40 to-transparent"></div>
                     </div>
 
-                    {/* 卡片内容区 - 横向排版 */}
                     <div className="absolute inset-0 z-10 p-6 md:p-10 flex items-center">
                       <div className="flex items-center gap-6 md:gap-8 w-full">
-                        {/* 头像 */}
                         <img 
                           src={friend.avatarUrl || '/assets/logos.png'} 
                           alt="Avatar" 
                           className="w-16 h-16 md:w-24 md:h-24 rounded-full object-cover border-2 border-white/5 shadow-2xl bg-[#0c0c11] shrink-0"
                         />
                         
-                        {/* 核心信息区 */}
                         <div className="flex flex-col min-w-0 flex-1">
                           <div className="flex items-center gap-3 mb-1">
                             <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight truncate">
@@ -136,7 +132,6 @@ const Friends = () => {
                           </div>
                           
                           <div className="flex items-center gap-4 mt-2">
-                             {/* UID - Quicksand 字体 */}
                             <span 
                               className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest"
                               style={{ fontFamily: "'Quicksand', sans-serif" }}
@@ -144,7 +139,6 @@ const Friends = () => {
                               UID: {friend.uid || 'N/A'}
                             </span>
                             
-                            {/* 等级展示 - 唯一的数值指标 */}
                             <span 
                               className="text-xs md:text-sm text-cyan-400 font-bold px-3 py-1 bg-cyan-400/5 border border-cyan-400/10 rounded-lg"
                               style={{ fontFamily: "'Quicksand', sans-serif" }}
@@ -154,7 +148,6 @@ const Friends = () => {
                           </div>
                         </div>
 
-                        {/* 引导箭头 */}
                         <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-1">
                            <FaChevronRight className="text-zinc-500 text-lg" />
                         </div>
