@@ -110,17 +110,17 @@ const Home = () => {
     return 'text-blue-400';
   };
 
-  // 🔥 核心更新：根据筛选器计算看板显示的数值 (加入 CHUNITHM 逻辑)
+  // 🔥 核心更新：动态分配 rankLabel 文本
   const getDisplayData = () => {
     if (activeGame === 'maimai') {
       return {
         scoreLabel: '综合战力 (PF)',
         scoreValue: userStats?.totalPf ? userStats.totalPf.toFixed(2) : '0.00',
         scoreColor: userStats?.totalPf ? 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400' : 'text-zinc-400',
+        rankLabel: '全站排位',
         rankValue: userStats?.pfRank !== '-' && userStats?.pfRank ? `#${userStats.pfRank}` : '-'
       };
     } else if (activeGame === 'chunithm') {
-      // 🌟 CHUNITHM 专属颜色评级系统
       let color = 'text-zinc-400';
       const rating = userStats?.chuniRating || 0;
       if (rating >= 17.00) color = 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300 font-black drop-shadow-[0_0_8px_rgba(192,132,252,0.6)]';
@@ -132,10 +132,10 @@ const Home = () => {
         scoreLabel: 'Rating',
         scoreValue: rating ? rating.toFixed(2) : '0.00',
         scoreColor: color,
+        rankLabel: '全站排位',
         rankValue: userStats?.chuniRank && userStats?.chuniRank !== '-' ? `#${userStats.chuniRank}` : '-'
       };
     } else {
-      // osu! 模式
       const modeMatch = userStats?.osuMode?.toLowerCase() === osuMode.toLowerCase();
       const pp = userStats?.osuDetails?.[osuMode]?.pp || (modeMatch ? userStats?.osuPp : null);
       const rank = userStats?.osuDetails?.[osuMode]?.rank || (modeMatch ? userStats?.osuGlobalRank : null);
@@ -144,6 +144,7 @@ const Home = () => {
         scoreLabel: 'Performance (PP)',
         scoreValue: pp ? Math.round(pp) : '--',
         scoreColor: pp ? 'text-pink-400' : 'text-zinc-500',
+        rankLabel: '全球排名', // 🔥 osu! 模式专享文本
         rankValue: rank ? `#${rank}` : '-'
       };
     }
@@ -158,7 +159,6 @@ const Home = () => {
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans selection:bg-indigo-500/30 relative pb-20 overflow-x-hidden">
       
-      {/* 环境光与顶部个人 Banner 融合区 */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-cyan-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
         <div className="absolute top-[10%] right-[-10%] w-[50vw] h-[50vw] bg-purple-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
@@ -426,9 +426,8 @@ const Home = () => {
                   </div>
                 </div>
 
-                {/* 🔥 三游切换器：加入 CHUNITHM */}
                 <div className="flex flex-col gap-2 mb-4">
-                  <div className="flex items-center gap-1.5 bg-[#0c0c11] p-1 rounded-xl border border-white/[0.02] w-fit flex-wrap">
+                  <div className="flex items-center gap-1.5 bg-[#0c0c11] p-1 rounded-xl border border-white/[0.02] w-fit">
                     <button 
                       onClick={() => setActiveGame('maimai')} 
                       className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'maimai' ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-600 hover:text-zinc-400'}`}
@@ -449,7 +448,6 @@ const Home = () => {
                     </button>
                   </div>
                   
-                  {/* osu! 模式子菜单 */}
                   <AnimatePresence>
                     {activeGame === 'osu' && (
                       <motion.div 
@@ -474,14 +472,15 @@ const Home = () => {
                   <div className="bg-[#0c0c11] rounded-xl p-3 border border-white/[0.02] flex flex-col justify-center items-center text-center">
                     <span className="text-[10px] text-zinc-500 font-bold mb-1">{displayData.scoreLabel}</span>
                     <span 
-                      className={`text-lg tracking-tight ${displayData.scoreColor}`}
+                      className={`text-lg font-bold tracking-tight ${displayData.scoreColor}`}
                       style={{ fontFamily: "'Quicksand', sans-serif" }}
                     >
                       {displayData.scoreValue}
                     </span>
                   </div>
                   <div className="bg-[#0c0c11] rounded-xl p-3 border border-white/[0.02] flex flex-col justify-center items-center text-center">
-                    <span className="text-[10px] text-zinc-500 font-bold mb-1">全站排位</span>
+                    {/* 🔥 使用动态的 rankLabel (全站排位 / 全球排名) */}
+                    <span className="text-[10px] text-zinc-500 font-bold mb-1">{displayData.rankLabel}</span>
                     <span 
                       className={`text-lg font-bold tracking-tight ${getRankColor(displayData.rankValue.replace('#',''))}`}
                       style={{ fontFamily: "'Quicksand', sans-serif" }}
