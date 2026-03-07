@@ -150,7 +150,8 @@ app.post('/api/auth/send-otp', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // 构建精美的 HTML 邮件模板
+    const actionText = type === 'BIND' ? '绑定邮箱' : type === 'UNBIND' ? '解绑邮箱' : '系统验证';
+    
     const mailOptions = {
       from: `"PureBeat 社区" <${process.env.SMTP_USER}>`,
       to: email,
@@ -159,18 +160,17 @@ app.post('/api/auth/send-otp', async (req, res) => {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
           <h2 style="color: #06b6d4;">PureBeat Security</h2>
           <p>您好，</p>
-          <p>您正在执行 <strong>${type === 'BIND' ? '绑定邮箱' : '系统验证'}</strong> 操作。您的 6 位动态验证码为：</p>
+          <p>您正在进行 <strong>${actionText}</strong> 操作。您的验证码为：</p>
           <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
             <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #111827;">${otpCode}</span>
           </div>
-          <p style="color: #ef4444; font-size: 14px;">⚠️ 该验证码将在 <strong>10 分钟</strong> 后失效。打死也不要告诉别人！</p>
-          <p style="font-size: 12px; color: #6b7280; border-top: 1px solid #eee; padding-top: 15px; mt-5">
+          <p style="color: #ef4444; font-size: 14px;">注意：该验证码的有效期为 <strong>10 分钟</strong>。</p>
+          <p style="font-size: 12px; color: #6b7280; border-top: 1px solid #eee; padding-top: 15px; margin-top: 20px;">
             如果这不是您本人的操作，请忽略此邮件。
           </p>
         </div>
       `
     };
-
     // 发送邮件
     await transporter.sendMail(mailOptions);
     res.json({ msg: '验证码已发送至您的邮箱，请注意查收' });
@@ -214,6 +214,45 @@ app.post('/api/users/settings/bind-email', authMiddleware, async (req, res) => {
     res.status(500).json({ msg: '系统错误，绑定失败' });
   }
 });
+
+// ==========================================
+// API: 3. 换绑邮箱 (需要双重验证)
+// ==========================================
+app.post('/api/users/settings/change-email', authMiddleware, async (req, res) => {
+  try {
+    const { newEmail, oldOtp, newOtp } = req.body;
+    const user = await User.findById(req.user.id);
+    
+    if (!user.email) return res.status(400).json({ msg: '当前账号未绑定邮箱' });
+    if (!newEmail || !oldOtp || !newOtp) return res.status(400).json({ msg: '请提供完整信息' });
+
+    // 1. 校验旧邮箱验证码
+    const oldOtpRecord = await Otp.findOne({ email: user.email, otp: oldOtp, type: 'UNBIND' });
+    if (!oldOtpRecord) return res.status(400).json({ msg: '旧邮箱验证码错误或已失效' });
+
+    // 2. 校验新邮箱验证码
+    const newOtpRecord = await Otp.findOne({ email: newEmail, otp: newOtp, type: 'BIND' });
+    if (!newOtpRecord) return res.status(400).json({ msg: '新邮箱验证码错误或已失效' });
+
+    // 3. 检查新邮箱是否已被占用
+    const existingUser = await User.findOne({ email: newEmail });
+    if (existingUser) return res.status(400).json({ msg: '新邮箱已被其他账号绑定' });
+
+    // 4. 更新邮箱
+    user.email = newEmail;
+    await user.save();
+
+    // 5. 销毁使用过的验证码
+    await Otp.findByIdAndDelete(oldOtpRecord._id);
+    await Otp.findByIdAndDelete(newOtpRecord._id);
+
+    res.json({ msg: '邮箱换绑成功！' });
+  } catch (err) {
+    console.error('换绑邮箱报错:', err);
+    res.status(500).json({ msg: '系统错误，换绑失败' });
+  }
+});
+
 
 // --- A. 认证模块 ---
 app.post('/api/auth/register', async (req, res) => {
