@@ -1471,24 +1471,72 @@ app.post('/api/users/sync-osu', authMiddleware, async (req, res) => {
     const user = await User.findById(req.user.id || req.user._id);
     if (!user.osuId) return res.status(400).json({ msg: '请先绑定 osu! 账号' });
 
-    const syncMode = req.body.mode || 'osu'; 
-    const tokenRes = await axios.post('https://osu.ppy.sh/oauth/token', { client_id: Number(process.env.OSU_CLIENT_ID), client_secret: process.env.OSU_CLIENT_SECRET.trim(), grant_type: 'client_credentials', scope: 'public' });
+    // 前端传入的模式名映射到 osu! API 的标准命名
+    const modeMap = { 'standard': 'osu', 'taiko': 'taiko', 'catch': 'fruits', 'mania': 'mania' };
+    const frontendMode = req.body.mode || 'standard';
+    const syncMode = modeMap[frontendMode] || 'osu'; 
+
+    // 获取授权 Token
+    const tokenRes = await axios.post('https://osu.ppy.sh/oauth/token', { 
+      client_id: Number(process.env.OSU_CLIENT_ID), 
+      client_secret: process.env.OSU_CLIENT_SECRET.trim(), 
+      grant_type: 'client_credentials', 
+      scope: 'public' 
+    });
     const token = tokenRes.data.access_token;
 
-    const osuUserRes = await axios.get(`https://osu.ppy.sh/api/v2/users/${user.osuId}/${syncMode}`, { headers: { Authorization: `Bearer ${token}` } });
+    // 拉取用户该模式下的状态数据
+    const osuUserRes = await axios.get(`https://osu.ppy.sh/api/v2/users/${user.osuId}/${syncMode}`, { 
+      headers: { Authorization: `Bearer ${token}` } 
+    });
     const osuStats = osuUserRes.data.statistics;
 
-    user.osuPp = osuStats.pp; user.osuGlobalRank = osuStats.global_rank || 0; user.osuCountryRank = osuStats.country_rank || 0; user.osuMode = syncMode; 
+    // 🔥 写入四模式独立详情数据字典中
+    if (!user.osuDetails) user.osuDetails = {};
+    user.osuDetails[frontendMode] = {
+      pp: osuStats.pp || 0,
+      rank: osuStats.global_rank || 0,
+      countryRank: osuStats.country_rank || 0,
+      accuracy: osuStats.hit_accuracy || 0,
+      playCount: osuStats.play_count || 0
+    };
+    user.markModified('osuDetails'); // 必须标记 Object 类型的改变
+
+    // 默认兜底覆盖，供旧系统或主看板首选展示
+    user.osuPp = osuStats.pp; 
+    user.osuGlobalRank = osuStats.global_rank || 0; 
+    user.osuCountryRank = osuStats.country_rank || 0; 
+    user.osuMode = frontendMode; 
     await user.save();
 
-    const bpRes = await axios.get(`https://osu.ppy.sh/api/v2/users/${user.osuId}/scores/best?mode=${syncMode}&limit=100`, { headers: { Authorization: `Bearer ${token}` } });
-    await OsuScore.deleteMany({ userId: user._id });
+    // 拉取 BP 100 成绩
+    const bpRes = await axios.get(`https://osu.ppy.sh/api/v2/users/${user.osuId}/scores/best?mode=${syncMode}&limit=100`, { 
+      headers: { Authorization: `Bearer ${token}` } 
+    });
     
-    const bpDocs = bpRes.data.map(s => ({ userId: user._id, beatmapId: s.beatmap.id, title: s.beatmapset.title, version: s.beatmap.version, accuracy: s.accuracy * 100, mods: s.mods.map(m => m.acronym || m), pp: s.pp, grade: s.rank, coverUrl: s.beatmapset.covers.list, playedAt: s.created_at }));
+    // 🔥 核心修正：仅删除当前正在同步的这个模式的旧成绩，保留其他三个模式！
+    await OsuScore.deleteMany({ userId: user._id, mode: syncMode });
+    
+    const bpDocs = bpRes.data.map(s => ({ 
+      userId: user._id, 
+      mode: syncMode, // 烙印上模式属性
+      beatmapId: s.beatmap.id, 
+      title: s.beatmapset.title, 
+      version: s.beatmap.version, 
+      accuracy: s.accuracy * 100, 
+      mods: s.mods.map(m => m.acronym || m), 
+      pp: s.pp, 
+      grade: s.rank, 
+      coverUrl: s.beatmapset.covers.list, 
+      playedAt: s.created_at 
+    }));
     await OsuScore.insertMany(bpDocs);
 
-    res.json({ msg: `同步成功！` });
-  } catch (err) { res.status(500).json({ msg: '数据拉取失败' }); }
+    res.json({ msg: `${frontendMode} 模式同步成功！更新了 ${bpDocs.length} 条记录。` });
+  } catch (err) { 
+    console.error('OSU同步报错', err.response?.data || err.message);
+    res.status(500).json({ msg: '数据拉取失败，请检查网络或 API 配置' }); 
+  }
 });
 
 // ==========================================
