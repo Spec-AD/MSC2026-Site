@@ -12,9 +12,12 @@ const WikiPage = require('./models/WikiPage');
 const WikiCategory = require('./models/WikiCategory'); 
 const OsuScore = require('./models/OsuScore');
 const MessageFolder = require('./models/MessageFolder');
+const ChunithmScore = require('./models/ChunithmScore');
 const ChunithmSong = require('./models/ChunithmSong');
 const nodemailer = require('nodemailer');
 const Otp = require('./models/Otp');
+
+
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -1163,6 +1166,94 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
     res.json({ msg: `落雪全量同步成功！完美载入 ${processedScores.length} 条记录。`, rating: calculatedRating });
   } catch (err) { 
     console.error('落雪 OAuth 同步报错日志:', err.response?.data || err.message);
+    const detail = err.response?.data?.message || err.response?.data?.msg || err.message || '未知错误';
+    res.status(500).json({ msg: `落雪拒绝了请求: ${detail}` }); 
+  }
+});
+
+// ==========================================
+// 同步落雪 (LXNS) - CHUNITHM OAuth 2.0 授权流
+// ==========================================
+app.post('/api/users/sync-chunithm-oauth', authMiddleware, async (req, res) => {
+  try {
+    const { code, redirectUri } = req.body;
+    if (!code) return res.status(400).json({ msg: '缺少授权码 (Code)' });
+
+    if (!process.env.LXNS_CLIENT_ID || !process.env.LXNS_CLIENT_SECRET) {
+        throw new Error('后端 .env 未加载 Client ID 或 Secret');
+    }
+
+    // 1. 获取 Token (与舞萌完全共用落雪的认证底座)
+    const tokenResponse = await axios.post('https://maimai.lxns.net/api/v0/oauth/token', {
+      grant_type: 'authorization_code',
+      client_id: process.env.LXNS_CLIENT_ID,
+      client_secret: process.env.LXNS_CLIENT_SECRET,
+      code: code,
+      redirect_uri: redirectUri
+    }, { headers: { 'Content-Type': 'application/json' } });
+
+    const userAccessToken = tokenResponse.data.access_token || tokenResponse.data.data?.access_token;
+    if (!userAccessToken) throw new Error('未能从落雪获取到 Access Token');
+
+    // 2. 🌟 调用 CHUNITHM 专属的玩家全量成绩接口
+    const scoreResponse = await axios.get('https://maimai.lxns.net/api/v0/user/chunithm/player/scores', {
+      headers: { 'Authorization': `Bearer ${userAccessToken}` },
+      timeout: 30000 
+    });
+
+    const dataObj = scoreResponse.data?.data || scoreResponse.data || {};
+    const allRecords = dataObj.records || (Array.isArray(dataObj) ? dataObj : []);
+
+    if (allRecords.length === 0) {
+       return res.status(400).json({ msg: '落雪返回的中二成绩为空，请确认该账号有游玩记录' });
+    }
+
+    // 3. 跨源数据缝合与入库
+    const allSongsArray = await ChunithmSong.find({}, 'id title ds basic_info').lean();
+    const processedScores = [];
+
+    for (const rec of allRecords) {
+      const lxId = Number(rec.song_id || rec.id);
+      const lxLevelIndex = Number(rec.level_index);
+
+      // 中二的 ID 匹配相对简单，一般不存在舞萌那种 type 分歧，直接查 ID
+      const song = allSongsArray.find(s => Number(s.id) === lxId);
+      if (!song) continue;
+
+      let constant = 0;
+      if (song.ds && song.ds[lxLevelIndex]) {
+        constant = song.ds[lxLevelIndex];
+      }
+      
+      // 光谱 (WE) 谱面通常定数为 0，且不计入 Rating
+      const isWE = lxLevelIndex === 5; 
+
+      processedScores.push({
+        userId: req.user.id,
+        songId: song.id,
+        songName: song.title || song.basic_info?.title,
+        // 中二的封面图一般不补零到 5 位，而是直接用水鱼的规范，如有不兼容后续可微调
+        imageUrl: `https://www.diving-fish.com/covers/${song.id}.png`, 
+        level: lxLevelIndex,
+        constant: isWE ? 0 : constant,
+        score: rec.score || 0,
+        rating: isWE ? 0 : (rec.rating || 0), // 落雪通常会直接提供单曲 rating
+        rank: rec.rank || '',
+        clearStatus: rec.clear || '',
+        fcStatus: rec.full_combo || rec.fc || '',
+        isNew: song.basic_info?.from === 'LUMINOUS PLUS' || false, // 可根据当前最新版本名动态调整
+        finishTime: new Date(rec.play_time || rec.upload_time || Date.now())
+      });
+    }
+
+    // 中二的底分计算逻辑 (Best 30 + Recent 10) 比较复杂。
+    // 这里我们先进行全量数据覆盖入库。通常落雪 API 的玩家概览里会带总 Rating，前端可以直接用。
+    await ChunithmScore.deleteMany({ userId: req.user.id });
+    await ChunithmScore.insertMany(processedScores);
+
+    res.json({ msg: `CHUNITHM 全量同步成功！载入 ${processedScores.length} 条记录。` });
+  } catch (err) { 
+    console.error('CHUNITHM OAuth 同步报错日志:', err.response?.data || err.message);
     const detail = err.response?.data?.message || err.response?.data?.msg || err.message || '未知错误';
     res.status(500).json({ msg: `落雪拒绝了请求: ${detail}` }); 
   }
