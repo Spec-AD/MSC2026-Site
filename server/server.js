@@ -522,40 +522,6 @@ app.get('/api/users/search', async (req, res) => {
   }
 });
 
-app.get('/api/users/:username', async (req, res) => {
-    try {
-        const user = await User.findOne({ username: req.params.username })
-            .select('-password -contactValue -contactType')
-	    .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible');
-        
-        if (!user) return res.status(404).json({ msg: '用户不存在' });
-
-        let pfRank = '-';
-        if (user.totalPf && user.totalPf > 0) {
-            pfRank = await User.countDocuments({ totalPf: { $gt: user.totalPf } }) + 1;
-        }
-	const allScores = await Score.find({ userId: user._id }).lean();
-        const topScores = await Score.find({ userId: user._id }).sort({ rating: -1, achievement: -1 }).limit(50);
-        const topPfScores = await Score.find({ userId: user._id }).sort({ pf: -1 }).limit(50);
-        const qualifierScores = await QualifierScore.find({ userId: user._id }).sort({ entryTime: -1 });
-        const osuScores = await OsuScore.find({ userId: user._id }).sort({ pp: -1 }).lean();
-
-        res.json({
-            ...user.toObject(),
-	          allScores: allScores || [],
-            topScores: topScores || [],       
-            pfRank: pfRank,               
-            topPfScores: topPfScores || [],  
-            qualifierScores: qualifierScores || [], 
-            osuScores: osuScores || [],             
-            friendsCount: user.friends ? user.friends.length : 0,
-            friends: user.friends 
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ msg: '服务器错误' });
-    }
-});
 
 app.put('/api/users/profile', authMiddleware, async (req, res) => {
     try {
@@ -1526,17 +1492,23 @@ app.post('/api/users/sync-osu', authMiddleware, async (req, res) => {
 });
 
 // ==========================================
-// 🎵 [v1.2.3] 单曲排行榜 (全局 / 好友)
+// 🎵 [智能双模] 单曲排行榜 (全局 / 好友)
 // ==========================================
 app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
   try {
-    const { level, scope } = req.query;
+    const { level, scope, game } = req.query;
     const songId = req.params.songId;
 
-  let query = { 
+    let query = { 
       songId: { $in: [String(songId), Number(songId)] }, 
       level: Number(level) 
     };   
+    
+    // 如果是中二，确保排除分数为0的占位数据
+    if (game === 'chunithm') {
+        query.score = { $gt: 0 };
+    }
+
     if (scope === 'friends') {
       if (!req.user) return res.status(401).json({ msg: '请先登录以查看好友排行榜' });
       const currentUser = await User.findById(req.user.id);
@@ -1549,9 +1521,13 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
       query.userId = { $in: [...friendIds, currentUser._id] };
     }
 
-    const leaderboard = await Score.aggregate([
+    // 🌟 核心引擎：根据请求的游戏参数，智能切换数据库模型和排序规则
+    const Model = game === 'chunithm' ? ChunithmScore : Score;
+    const sortCriteria = game === 'chunithm' ? { score: -1, finishTime: 1 } : { achievement: -1, dxScore: -1 };
+
+    const leaderboard = await Model.aggregate([
       { $match: query },
-      { $sort: { achievement: -1, dxScore: -1 } }, 
+      { $sort: sortCriteria }, 
       { $limit: 100 },
       {
         $lookup: {
@@ -1571,6 +1547,7 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
           dxScore: 1,
           pf: 1,
           rating: 1,
+          score: 1, // 返回中二特有分数
           fcStatus: { $ifNull: ['$fc', '$fcStatus'] }, 
           fsStatus: { $ifNull: ['$fs', '$fsStatus'] },
           username: '$userInfo.username',
