@@ -37,19 +37,16 @@ export default function ChunithmProfile() {
   
   const [newSongIds, setNewSongIds] = useState(new Set());
   
-  // 新增：双源同步状态
   const [syncSource, setSyncSource] = useState('df'); // 'df' 为水鱼, 'lx' 为落雪
   const [importToken, setImportToken] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   
+  // 用于追踪当前被点击的等级面板
   const [selectedLevelDetail, setSelectedLevelDetail] = useState(null);
 
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
   const oauthCalled = useRef(false);
 
-  // ==========================================
-  // 数据初始化与 OAuth 拦截
-  // ==========================================
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -65,7 +62,6 @@ export default function ChunithmProfile() {
     const initData = async () => {
       setLoading(true);
       try {
-        // 并发拉取：用户档案、中二玩家成绩、中二本地全量曲库
         const [profileRes, scoresRes, musicRes] = await Promise.all([
           axios.get(`/api/users/${username}?t=${Date.now()}`),
           axios.get(`/api/users/${username}/chunithm-scores`).catch(() => ({ data: [] })), 
@@ -93,15 +89,12 @@ export default function ChunithmProfile() {
     initData();
   }, [username]);
 
-  // ==========================================
-  // 执行落雪 OAuth 同步
-  // ==========================================
   const executeLuoxueOAuthSync = async (code) => {
     setIsSyncing(true);
     setSyncSource('lx');
     try {
       const token = localStorage.getItem('token');
-      const currentRedirectUri = `${window.location.origin}/profile`; // 必须对应落雪后台配置
+      const currentRedirectUri = `${window.location.origin}/profile`;
       
       const res = await axios.post('/api/users/sync-chunithm-oauth', 
         { code, redirectUri: currentRedirectUri }, 
@@ -109,7 +102,6 @@ export default function ChunithmProfile() {
       );
       
       addToast(res.data.msg || 'CHUNITHM 数据同步成功！', 'success');
-      // 刷新数据
       const scoresRes = await axios.get(`/api/users/${username}/chunithm-scores`);
       setChuniScores(scoresRes.data);
     } catch (err) {
@@ -122,14 +114,10 @@ export default function ChunithmProfile() {
   const handleLuoxueOAuthLogin = () => {
     const redirectUri = encodeURIComponent(`${window.location.origin}/profile`);
     const scopes = "read_user_profile+write_player+read_player+read_user_token";
-    // ⚠️ 重点：传入 state 为 username_chunithm，让 Profile 拦截器知道要跳回中二页面
     const authUrl = `https://maimai.lxns.net/oauth/authorize?response_type=code&client_id=${LXNS_CLIENT_ID}&redirect_uri=${redirectUri}&scope=${scopes}&state=${username}_chunithm`;
     window.location.href = authUrl;
   };
 
-  // ==========================================
-  // 执行水鱼 (Diving-fish) API 同步
-  // ==========================================
   const handleSync = async () => {
     if (syncSource === 'df' && !importToken.trim()) return addToast('请提供水鱼 Import-Token', 'error'); 
     
@@ -148,16 +136,12 @@ export default function ChunithmProfile() {
     }
   };
 
-  // ==========================================
-  // 核心工具函数
-  // ==========================================
   const getDiffConfig = (levelIndex) => {
     let idx = 3; 
     if (typeof levelIndex === 'number' && levelIndex >= 0 && levelIndex <= 5) idx = levelIndex;
     return { name: DIFF_NAMES[idx], color: DIFF_COLORS[idx] };
   };
 
-  // 严格遵守：7 级以上带 + 逻辑
   const getLevelString = (constant) => {
     if (!constant || constant === 0) return '';
     const base = Math.floor(constant);
@@ -174,9 +158,6 @@ export default function ChunithmProfile() {
     return map;
   }, [chuniScores]);
 
-  // ==========================================
-  // 等级进度计算引擎 (适配 CHUNITHM)
-  // ==========================================
   const levelProgress = useMemo(() => {
     if (!musicData || musicData.length === 0 || !userScoreMap) return null;
 
@@ -189,7 +170,7 @@ export default function ChunithmProfile() {
     musicData.forEach(song => {
       if (!song.ds) return;
       song.ds.forEach((constant, idx) => {
-        if (constant === undefined || constant === null || idx === 5) return; // 剔除 WE 谱面不计入等级统计
+        if (constant === undefined || constant === null || idx === 5) return; 
         
         const lvlStr = getLevelString(constant);
         if (levelMap[lvlStr]) {
@@ -199,7 +180,7 @@ export default function ChunithmProfile() {
             const s = score.score;
             const fc = (score.fcStatus || '').toLowerCase();
             
-            levelMap[lvlStr].clear++; // 有成绩就算 clear
+            levelMap[lvlStr].clear++; 
             if (s >= 975000) levelMap[lvlStr].s++;
             if (s >= 1000000) levelMap[lvlStr].ss++;
             if (s >= 1007500) levelMap[lvlStr].sss++;
@@ -214,25 +195,50 @@ export default function ChunithmProfile() {
     return data.filter(d => d.total > 0);
   }, [musicData, userScoreMap]);
 
-  // ==========================================
-  // 🌟 B50 计算引擎 (B30 + R20)
-  // ==========================================
+  // 🔥 新增：生成特定等级下所有谱面详细信息的引擎 (供 Modal 渲染)
+  const detailedLevelSongs = useMemo(() => {
+    if (!selectedLevelDetail || !musicData || musicData.length === 0) return [];
+    const list = [];
+    musicData.forEach(song => {
+      if (!song.ds) return;
+      song.ds.forEach((constant, idx) => {
+        if (idx === 5 || constant === undefined || constant === null) return;
+        if (getLevelString(constant) === selectedLevelDetail) {
+          const score = userScoreMap.get(`${song.id}_${idx}`);
+          list.push({
+            song,
+            levelIndex: idx,
+            constant,
+            scoreRecord: score || null
+          });
+        }
+      });
+    });
+    
+    // 排序：先排已游玩(分高者前)，再排未游玩(定数高者前)
+    list.sort((a, b) => {
+      const aPlayed = a.scoreRecord ? 1 : 0;
+      const bPlayed = b.scoreRecord ? 1 : 0;
+      if (aPlayed !== bPlayed) return bPlayed - aPlayed; // 已游玩的在前面
+      if (a.constant !== b.constant) return b.constant - a.constant; // 定数高的在前面
+      if (aPlayed && bPlayed) return b.scoreRecord.score - a.scoreRecord.score; // 分数高的在前面
+      return (a.song.id || 0) - (b.song.id || 0);
+    });
+    
+    return list;
+  }, [selectedLevelDetail, musicData, userScoreMap]);
+
   const b50Data = useMemo(() => {
     if (!chuniScores || chuniScores.length === 0) return { b30: [], r20: [], rating: 0 };
     
-    // 规则 1：剔除 WE (World's End) 谱面
     const validScores = chuniScores.filter(s => s.level !== 5 && s.rating > 0);
-    
-    // 按单曲 Rating 降序
     validScores.sort((a, b) => b.rating - a.rating || b.score - a.score);
     
     const isNewRecord = (s) => newSongIds.has(String(s.songId)) || s.isNew;
     
-    // 规则 2：拆分 B30 (旧曲) 和 R20 (新曲)
     const b30 = validScores.filter(s => !isNewRecord(s)).slice(0, 30);
     const r20 = validScores.filter(s => isNewRecord(s)).slice(0, 20);
     
-    // 计算综合 Rating (通常取平均值，保留两位小数)
     const sumB30 = b30.reduce((sum, s) => sum + s.rating, 0);
     const sumR20 = r20.reduce((sum, s) => sum + s.rating, 0);
     const totalCount = b30.length + r20.length;
@@ -268,8 +274,9 @@ export default function ChunithmProfile() {
         key={`${prefix}-${index}`} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * 0.01 }}
         className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/[0.05] bg-[#0a0a0c] group shadow-sm"
       >
+        {/* 🔥 核心修改点：封面链接已更换为 lxns 的中二资源库 */}
         <img 
-          src={`https://www.diving-fish.com/covers/${String(score.songId).padStart(5, '0')}.png`} alt="cover"
+          src={`https://assets2.lxns.net/chunithm/jacket/${score.songId}.png`} alt="cover"
           className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 group-hover:scale-105 transition-all duration-700"
           onError={(e) => { e.target.src = '/assets/bg.png'; }}
         />
@@ -321,7 +328,7 @@ export default function ChunithmProfile() {
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans selection:bg-yellow-500/30 relative pb-24 overflow-x-hidden">
       
-      {/* 动态环境光 (中二主题黄) */}
+      {/* 动态环境光 */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-yellow-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-amber-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
@@ -345,7 +352,6 @@ export default function ChunithmProfile() {
             </div>
           </div>
 
-          {/* 🔥 智能双源同步控制台 */}
           {isOwnProfile && (
             <div className="flex flex-col gap-3 w-full md:w-auto">
               <div className="flex items-center gap-2 bg-[#15151e]/80 p-1 rounded-xl border border-white/[0.05] w-fit">
@@ -402,9 +408,6 @@ export default function ChunithmProfile() {
           </div>
         ) : (
           <>
-            {/* ========================================== */}
-            {/* 等级完成度面板 */}
-            {/* ========================================== */}
             <div className="mb-14 border-b border-white/[0.05] pb-10">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex items-center gap-3">
@@ -432,7 +435,11 @@ export default function ChunithmProfile() {
                     }
 
                     return (
-                        <div key={lvl.level} className={`relative rounded-xl p-3 border transition-all flex flex-col gap-1.5 ${baseClass} ${glowClass}`}>
+                        <div 
+                            key={lvl.level} 
+                            onClick={() => setSelectedLevelDetail(lvl.level)}
+                            className={`relative rounded-xl p-3 border transition-all flex flex-col gap-1.5 cursor-pointer hover:-translate-y-1 hover:shadow-xl active:scale-95 ${baseClass} ${glowClass}`}
+                        >
                             <div className="flex justify-between items-baseline relative z-10">
                                 <span className="text-xl font-bold text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                                     {lvl.level}
@@ -461,9 +468,6 @@ export default function ChunithmProfile() {
               </div>
             </div>
 
-            {/* ========================================== */}
-            {/* B50 成绩模块 (B30 + R20) */}
-            {/* ========================================== */}
             <div className="mb-16">
               <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-white/[0.05] pb-4 mb-6 gap-4">
                 <div className="flex items-center gap-3">
@@ -506,9 +510,83 @@ export default function ChunithmProfile() {
                 </>
               )}
             </div>
-
           </>
         )}
+
+        {/* ========================================== */}
+        {/* 🔥 等级详情弹窗 Modal (支持可交互过滤浏览) */}
+        {/* ========================================== */}
+        <AnimatePresence>
+          {selectedLevelDetail && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 pt-20">
+              <motion.div 
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
+                className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+                onClick={() => setSelectedLevelDetail(null)} 
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+                className="relative w-full max-w-6xl max-h-[85vh] bg-[#15151e] border border-white/10 rounded-[2rem] shadow-2xl flex flex-col overflow-hidden"
+              >
+                {/* 弹窗 Header */}
+                <div className="flex items-center justify-between p-6 border-b border-white/5 bg-[#1a1a24] shrink-0">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center border border-amber-500/30">
+                      <span className="text-xl font-bold text-amber-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>{selectedLevelDetail}</span>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-zinc-100 tracking-tight">等级完成度详情</h3>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        包含所有定数评级为 {selectedLevelDetail} 的谱面
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedLevelDetail(null)} className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+                    <FaTimes />
+                  </button>
+                </div>
+
+                {/* 弹窗曲目 List */}
+                <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {detailedLevelSongs.map((item) => {
+                      const diff = getDiffConfig(item.levelIndex);
+                      const isPlayed = !!item.scoreRecord;
+                      return (
+                        <div key={`${item.song.id}_${item.levelIndex}`} className={`relative p-4 rounded-xl border flex gap-4 transition-all ${isPlayed ? 'bg-[#0c0c11] border-white/5' : 'bg-[#0c0c11]/50 border-white/[0.02] opacity-60 grayscale-[0.5]'}`}>
+                          <img 
+                            src={`https://assets2.lxns.net/chunithm/jacket/${item.song.id}.png`} 
+                            alt="cover" 
+                            className="w-16 h-16 rounded-lg object-cover border border-white/10" 
+                            onError={(e) => { e.target.src = '/assets/bg.png'; }} 
+                          />
+                          <div className="flex-1 min-w-0 flex flex-col justify-center">
+                            <div className="text-[13px] font-bold text-zinc-100 truncate mb-1.5" title={item.song.title || item.song.basic_info?.title}>
+                                {item.song.title || item.song.basic_info?.title}
+                            </div>
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex items-center gap-1 ${diff.color}`}>
+                                {diff.name} <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{item.constant.toFixed(1)}</span>
+                              </span>
+                              {isPlayed && getFcBadge(item.scoreRecord.fcStatus)}
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                              <span className={`text-lg font-bold leading-none tracking-tight ${isPlayed ? 'text-zinc-200' : 'text-zinc-600'}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                {isPlayed ? item.scoreRecord.score.toLocaleString() : '未游玩'}
+                              </span>
+                              {isPlayed && <span className="text-xs">{getRankBadge(item.scoreRecord.score)}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
       </div>
     </div>
   );
