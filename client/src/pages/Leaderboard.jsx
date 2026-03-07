@@ -123,10 +123,11 @@ const Leaderboard = () => {
             </>
           );
         } else if (activeGame === 'chunithm') {
+          // 🔥 移除 isChuniB50Visible 限制，始终公开展示 Rating 和彩色流明特效
           return (
             <>
               <div 
-                className={`text-xl tracking-tight pb-0.5 ${getChuniRatingColor(player.chuniRating) : 'text-zinc-600 font-bold'}`}
+                className={`text-xl tracking-tight pb-0.5 ${getChuniRatingColor(player.chuniRating)}`}
                 style={{ fontFamily: "'Quicksand', sans-serif" }}
               >
                 {player.chuniRating ? player.chuniRating.toFixed(2) : '0.00'}
@@ -139,7 +140,7 @@ const Leaderboard = () => {
               </span>
             </>
           );
-        } else {
+        } else {          
           return (
             <>
               <div 
