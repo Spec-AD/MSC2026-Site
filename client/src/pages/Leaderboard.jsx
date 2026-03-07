@@ -34,10 +34,15 @@ const Leaderboard = () => {
       try {
         let endpoint = `/api/leaderboard/${activeTab}`;
         
+        // 智能路由选择：匹配我们在 server.js 中新加的专有接口
         if (activeTab === 'pf') {
-          endpoint += `?game=${activeGame}`;
-          if (activeGame === 'osu') {
-            endpoint += `&mode=${osuMode}`;
+          if (activeGame === 'chunithm') {
+            endpoint = `/api/leaderboard/chunithm`;
+          } else {
+            endpoint += `?game=${activeGame}`;
+            if (activeGame === 'osu') {
+              endpoint += `&mode=${osuMode}`;
+            }
           }
         }
           
@@ -53,6 +58,7 @@ const Leaderboard = () => {
     fetchLeaderboard();
   }, [activeTab, activeGame, osuMode]);
 
+  // 🌟 Maimai DX 色彩系统
   const getRatingColor = (rating) => {
     const r = Number(rating) || 0;
     if (r >= 16500) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-amber-400 to-cyan-400 font-bold'; 
@@ -71,6 +77,15 @@ const Leaderboard = () => {
     if (p >= 20000) return 'text-purple-400 font-semibold'; 
     if (p >= 15000) return 'text-blue-400 font-semibold'; 
     return 'text-orange-400 font-medium'; 
+  };
+
+  // 🔥 CHUNITHM 专属色彩系统 (17.00+ 彩色神仙流明特效)
+  const getChuniRatingColor = (rating) => {
+    const r = Number(rating) || 0;
+    if (r >= 17.00) return 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300 font-black drop-shadow-[0_0_8px_rgba(192,132,252,0.6)]';
+    if (r >= 16.00) return 'text-rose-400 font-bold';
+    if (r >= 15.00) return 'text-purple-400 font-bold';
+    return 'text-yellow-400 font-bold';
   };
 
   const renderRankBadge = (index) => {
@@ -104,6 +119,24 @@ const Leaderboard = () => {
                 style={{ fontFamily: "'Quicksand', sans-serif" }}
               >
                 PP
+              </span>
+            </>
+          );
+        } else if (activeGame === 'chunithm') {
+          const isVisible = player.isChuniB50Visible;
+          return (
+            <>
+              <div 
+                className={`text-xl tracking-tight pb-0.5 ${isVisible ? getChuniRatingColor(player.chuniRating) : 'text-zinc-600 font-bold'}`}
+                style={{ fontFamily: "'Quicksand', sans-serif" }}
+              >
+                {isVisible ? (player.chuniRating ? player.chuniRating.toFixed(2) : '0.00') : 'HIDDEN'}
+              </div>
+              <span 
+                className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5"
+                style={{ fontFamily: "'Quicksand', sans-serif" }}
+              >
+                RATING
               </span>
             </>
           );
@@ -212,7 +245,7 @@ const Leaderboard = () => {
           </p>
         </div>
 
-        {/* 一级导航：现代药丸 (Pill Tabs) */}
+        {/* 一级导航 */}
         <div className="mb-6 w-full overflow-x-auto custom-scrollbar pb-2">
           <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md p-1.5 rounded-2xl border border-white/[0.05] w-max">
             {TABS.map((tab) => {
@@ -235,20 +268,26 @@ const Leaderboard = () => {
           </div>
         </div>
 
-        {/* 二级 & 三级联动筛选器 (仅当选在“综合实力”时出现) */}
+        {/* 二级 & 三级联动筛选器 */}
         <AnimatePresence>
           {activeTab === 'pf' && (
             <motion.div 
               initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
               className="mb-8 flex flex-col sm:flex-row items-start sm:items-center gap-3 overflow-hidden"
             >
-              {/* 二级：游戏选择 */}
+              {/* 二级：游戏选择 (加入 CHUNITHM) */}
               <div className="flex items-center gap-1.5 bg-[#15151e]/60 backdrop-blur-md p-1.5 rounded-xl border border-white/[0.05]">
                 <button 
                   onClick={() => setActiveGame('maimai')} 
                   className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all active:scale-95 ${activeGame === 'maimai' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
                 >
                   舞萌 DX
+                </button>
+                <button 
+                  onClick={() => setActiveGame('chunithm')} 
+                  className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all active:scale-95 ${activeGame === 'chunithm' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
+                >
+                  CHUNITHM
                 </button>
                 <button 
                   onClick={() => setActiveGame('osu')} 
@@ -310,12 +349,14 @@ const Leaderboard = () => {
               {(() => {
                 let currentRank = 1;
                 return players.map((player, index) => {
+                  // 计算并列名次
                   if (index > 0) {
                     const prevPlayer = players[index - 1];
                     let currentVal, prevVal;
                     switch (activeTab) {
                       case 'pf': 
                         if (activeGame === 'osu') { currentVal = player.pp || player.totalPf; prevVal = prevPlayer.pp || prevPlayer.totalPf; }
+                        else if (activeGame === 'chunithm') { currentVal = player.chuniRating; prevVal = prevPlayer.chuniRating; }
                         else { currentVal = player.totalPf; prevVal = prevPlayer.totalPf; }
                         break;
                       case 'level': currentVal = player.xp; prevVal = prevPlayer.xp; break;
@@ -373,7 +414,7 @@ const Leaderboard = () => {
                       </div>
                     </div>
 
-                    {/* 原生评分列 (仅 Maimai 显示) */}
+                    {/* 原生评分列 (仅 Maimai 显示在中间，中二显示在右侧数值列) */}
                     {activeTab === 'pf' && activeGame === 'maimai' && (
                       <div className="hidden md:flex w-32 justify-center shrink-0 border-l border-white/[0.05]">
                         <span 

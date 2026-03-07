@@ -110,7 +110,7 @@ const Home = () => {
     return 'text-blue-400';
   };
 
-  // 根据筛选器计算看板显示的数值
+  // 🔥 核心更新：根据筛选器计算看板显示的数值 (加入 CHUNITHM 逻辑)
   const getDisplayData = () => {
     if (activeGame === 'maimai') {
       return {
@@ -119,8 +119,23 @@ const Home = () => {
         scoreColor: userStats?.totalPf ? 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400' : 'text-zinc-400',
         rankValue: userStats?.pfRank !== '-' && userStats?.pfRank ? `#${userStats.pfRank}` : '-'
       };
+    } else if (activeGame === 'chunithm') {
+      // 🌟 CHUNITHM 专属颜色评级系统
+      let color = 'text-zinc-400';
+      const rating = userStats?.chuniRating || 0;
+      if (rating >= 17.00) color = 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300 font-black drop-shadow-[0_0_8px_rgba(192,132,252,0.6)]';
+      else if (rating >= 16.00) color = 'text-rose-400 font-bold';
+      else if (rating >= 15.00) color = 'text-purple-400 font-bold';
+      else if (rating > 0) color = 'text-yellow-400 font-bold';
+
+      return {
+        scoreLabel: 'Rating',
+        scoreValue: rating ? rating.toFixed(2) : '0.00',
+        scoreColor: color,
+        rankValue: userStats?.chuniRank && userStats?.chuniRank !== '-' ? `#${userStats.chuniRank}` : '-'
+      };
     } else {
-      // Osu 模式：尝试读取对应的模式数据，否则占位
+      // osu! 模式
       const modeMatch = userStats?.osuMode?.toLowerCase() === osuMode.toLowerCase();
       const pp = userStats?.osuDetails?.[osuMode]?.pp || (modeMatch ? userStats?.osuPp : null);
       const rank = userStats?.osuDetails?.[osuMode]?.rank || (modeMatch ? userStats?.osuGlobalRank : null);
@@ -163,9 +178,6 @@ const Home = () => {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0c0c11]/80 to-[#0c0c11]"></div>
       </div>
 
-      {/* ==================================================== */}
-      {/* 顶部 Header：Logo、Quicksand 时钟、控制台 */}
-      {/* ==================================================== */}
       <header className="w-full max-w-7xl mx-auto px-6 py-8 flex justify-between items-center z-50 relative">
         <div className="flex items-center shrink-0">
           <img src="/assets/logos.png" alt="PUREBEAT Logo" className="h-8 md:h-10 object-contain drop-shadow-lg" />
@@ -190,7 +202,6 @@ const Home = () => {
           </div>
         </div>
 
-        {/* 顶部功能图标矩阵 */}
         <div className="flex items-center gap-2 md:gap-3">
           
           {user && (
@@ -260,15 +271,10 @@ const Home = () => {
         </div>
       </header>
 
-      {/* ==================================================== */}
-      {/* 核心 Bento 网格布局 (Dashboard) */}
-      {/* ==================================================== */}
       <main className="w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 z-10 relative">
         
-        {/* === 左侧主要内容区 (占 8 列) === */}
         <div className="lg:col-span-8 flex flex-col gap-8">
           
-          {/* 1. 赛事引流 Banner */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <Link to="/tournaments" className="block group">
               <div className="relative w-full aspect-[21/9] md:aspect-[21/7] rounded-3xl overflow-hidden border border-white/[0.05] bg-[#0a0a0c] shadow-sm transition-all duration-500 hover:border-indigo-500/30 hover:shadow-[0_8px_30px_rgba(99,102,241,0.1)]">
@@ -291,7 +297,6 @@ const Home = () => {
             </Link>
           </motion.div>
 
-          {/* 2. 社区新闻流 */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
             <div className="flex items-center gap-3 mb-6 px-1">
               <div className="w-1 h-5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
@@ -302,7 +307,6 @@ const Home = () => {
 
             <div className="flex flex-col gap-6">
               
-              {/* 层级 1: 完整图文展示 (最多3条) */}
               {fullPreviewNews.map((news) => {
                 const d = new Date(news.createdAt);
                 return (
@@ -344,7 +348,6 @@ const Home = () => {
                 );
               })}
 
-              {/* 层级 2: 紧凑标题列表 */}
               {compactNews.length > 0 && (
                 <div className="flex flex-col gap-2 mt-2">
                   {compactNews.map((news) => {
@@ -373,7 +376,6 @@ const Home = () => {
                 </div>
               )}
 
-              {/* 展开更多按钮 */}
               {hasMoreNews && (
                 <button 
                   onClick={() => setShowAllNews(true)}
@@ -393,10 +395,8 @@ const Home = () => {
           </motion.div>
         </div>
 
-        {/* === 右侧边栏 (占 4 列) === */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           
-          {/* 1. 个人信息面板 */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
@@ -426,14 +426,20 @@ const Home = () => {
                   </div>
                 </div>
 
-                {/* 多游戏系统切换器 */}
+                {/* 🔥 三游切换器：加入 CHUNITHM */}
                 <div className="flex flex-col gap-2 mb-4">
-                  <div className="flex items-center gap-1.5 bg-[#0c0c11] p-1 rounded-xl border border-white/[0.02] w-fit">
+                  <div className="flex items-center gap-1.5 bg-[#0c0c11] p-1 rounded-xl border border-white/[0.02] w-fit flex-wrap">
                     <button 
                       onClick={() => setActiveGame('maimai')} 
                       className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'maimai' ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-600 hover:text-zinc-400'}`}
                     >
                       Maimai DX
+                    </button>
+                    <button 
+                      onClick={() => setActiveGame('chunithm')} 
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'chunithm' ? 'bg-yellow-500/10 text-yellow-400' : 'text-zinc-600 hover:text-zinc-400'}`}
+                    >
+                      CHUNITHM
                     </button>
                     <button 
                       onClick={() => setActiveGame('osu')} 
@@ -464,12 +470,11 @@ const Home = () => {
                   </AnimatePresence>
                 </div>
 
-                {/* 动态数据网格 */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-[#0c0c11] rounded-xl p-3 border border-white/[0.02] flex flex-col justify-center items-center text-center">
                     <span className="text-[10px] text-zinc-500 font-bold mb-1">{displayData.scoreLabel}</span>
                     <span 
-                      className={`text-lg font-bold tracking-tight ${displayData.scoreColor}`}
+                      className={`text-lg tracking-tight ${displayData.scoreColor}`}
                       style={{ fontFamily: "'Quicksand', sans-serif" }}
                     >
                       {displayData.scoreValue}
@@ -486,7 +491,6 @@ const Home = () => {
                   </div>
                 </div>
 
-                {/* 快捷操作按钮组 */}
                 <div className="flex items-center gap-2 mt-4">
                   <Link to={`/profile/${user.username}`} className="flex-1 py-2.5 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] rounded-xl text-center text-xs font-semibold text-zinc-300 transition-colors active:scale-95">
                     进入个人空间
@@ -509,7 +513,6 @@ const Home = () => {
             )}
           </motion.div>
 
-          {/* 2. 今日推荐曲目 */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
             <div className="flex items-center justify-between mb-5 relative z-10">
               <div className="flex items-center gap-2.5">
@@ -529,7 +532,6 @@ const Home = () => {
             </div>
           </motion.div>
 
-          {/* 3. 今日挑战 */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
             <div className="flex items-center justify-between mb-5 relative z-10">
               <div className="flex items-center gap-2.5">
@@ -547,7 +549,6 @@ const Home = () => {
             </div>
           </motion.div>
 
-          {/* 4. 段位与排行榜占位 (WIP) */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
             <div className="flex items-center justify-between mb-5 relative z-10">
               <div className="flex items-center gap-2.5">
@@ -572,7 +573,6 @@ const Home = () => {
         </div>
       </main>
 
-      {/* 新闻阅读模态框 */}
       <AnimatePresence>
         {selectedNews && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">

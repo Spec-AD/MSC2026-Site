@@ -6,9 +6,6 @@ import SongDrawer from '../components/SongDrawer';
 import { useToast } from '../context/ToastContext';
 
 export default function Songs() {
-  // ==========================================
-  // 游戏系统生态配置
-  // ==========================================
   const GAMES = [
     { id: 'maimai', label: '舞萌 DX' },
     { id: 'chunithm', label: 'CHUNITHM' },
@@ -19,9 +16,6 @@ export default function Songs() {
   
   const [activeGame, setActiveGame] = useState('maimai');
 
-  // ==========================================
-  // 双轨数据池状态管理
-  // ==========================================
   const [maimaiSongs, setMaimaiSongs] = useState([]);
   const [chunithmSongs, setChunithmSongs] = useState([]);
   const [isMaimaiLoading, setIsMaimaiLoading] = useState(true);
@@ -32,10 +26,8 @@ export default function Songs() {
   const [selectedSong, setSelectedSong] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   
-  // UI 状态
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  // 核心筛选状态
   const [isNewOnly, setIsNewOnly] = useState(false);
   const [selectedDiffs, setSelectedDiffs] = useState([]); 
   const [dsMin, setDsMin] = useState("1.0");
@@ -45,11 +37,6 @@ export default function Songs() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedVersions, setSelectedVersions] = useState([]);
 
-  // ==========================================
-  // 动态曲库拉取引擎
-  // ==========================================
-  
-  // 1. 初始化拉取 Maimai DX
   useEffect(() => {
     const fetchMaimai = async () => {
       try {
@@ -74,13 +61,11 @@ export default function Songs() {
     fetchMaimai();
   }, []);
 
-  // 2. 按需拉取 CHUNITHM
   useEffect(() => {
     if (activeGame === 'chunithm' && chunithmSongs.length === 0) {
       const fetchChunithm = async () => {
         try {
           setIsChuniLoading(true);
-          // 优先尝试你后端建立的接口，如果失败则直接通过水鱼官方接口获取
           let response = await fetch('/api/chunithm-songs').catch(() => null);
           if (!response || !response.ok) {
             response = await fetch('https://www.diving-fish.com/api/chunithmprober/music_data');
@@ -100,13 +85,9 @@ export default function Songs() {
     }
   }, [activeGame, chunithmSongs.length]);
 
-  // 动态指针：指向当前激活的游戏数据
   const currentSongs = activeGame === 'maimai' ? maimaiSongs : chunithmSongs;
   const isLoading = activeGame === 'maimai' ? isMaimaiLoading : isChuniLoading;
 
-  // ==========================================
-  // 难度色彩映射引擎 (双版本独立配置)
-  // ==========================================
   const MAIMAI_DIFF_CONFIG = [
     { label: 'BASIC', color: 'text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10', activeBg: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40', tagClass: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
     { label: 'ADVANCED', color: 'text-amber-400 border-amber-500/20 hover:bg-amber-500/10', activeBg: 'bg-amber-500/20 text-amber-400 border-amber-500/40', tagClass: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
@@ -174,9 +155,6 @@ export default function Songs() {
     setBpmMax(max.toString());
   };
 
-  // ==========================================
-  // 超级过滤引擎 (兼容中二数据结构)
-  // ==========================================
   const filteredSongs = useMemo(() => {
     const numDsMin = parseFloat(dsMin) || 0.0;
     const numDsMax = parseFloat(dsMax) || 15.7;
@@ -192,7 +170,6 @@ export default function Songs() {
         if (!titleMatch && !artistMatch && !idMatch) return false;
       }
       
-      // 中二暂无 is_new 字段，仅处理 Maimai
       if (activeGame === 'maimai' && isNewOnly && !song.basic_info?.is_new) return false;
       
       if (selectedCategories.length > 0 && !selectedCategories.includes(song.basic_info?.genre)) return false;
@@ -248,9 +225,6 @@ export default function Songs() {
 
       <div className="max-w-7xl w-full mx-auto px-4 md:px-8 pt-8 md:pt-12 pb-6 flex flex-col flex-1 overflow-hidden z-10">
         
-        {/* ========================================================= */}
-        {/* 头部区：发光竖线标题 + 游戏切换器 */}
-        {/* ========================================================= */}
         <div className="mb-6 flex flex-col gap-4 shrink-0">
           <div className="flex items-center gap-3">
             <div className={`w-1 h-6 rounded-full transition-colors duration-500 ${activeGame === 'chunithm' ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]' : 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]'}`}></div>
@@ -275,7 +249,7 @@ export default function Songs() {
                   key={game.id}
                   onClick={() => {
                     setActiveGame(game.id);
-                    resetFilters(); // 切换游戏时重置筛选器
+                    resetFilters(); 
                   }}
                   style={{ fontFamily: "'Quicksand', sans-serif" }}
                   className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
@@ -291,9 +265,6 @@ export default function Songs() {
           </div>
         </div>
 
-        {/* ========================================================= */}
-        {/* 动态内容区 */}
-        {/* ========================================================= */}
         <AnimatePresence mode="wait">
           {['maimai', 'chunithm'].includes(activeGame) ? (
             <motion.div 
@@ -302,7 +273,6 @@ export default function Songs() {
               transition={{ duration: 0.2 }}
               className="flex flex-col flex-1 overflow-hidden"
             >
-              {/* 搜索与工具栏 */}
               <div className="mb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
                 <div className="relative flex-1 w-full md:w-auto md:max-w-md">
                   <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm" />
@@ -322,10 +292,8 @@ export default function Songs() {
                 </button>
               </div>
 
-              {/* 列表主体区域 */}
               <div className="flex flex-col md:flex-row flex-1 gap-5 overflow-hidden">
                 
-                {/* 筛选控制台 */}
                 {isFilterOpen && (
                   <div className="w-full md:w-80 shrink-0 max-h-[40vh] md:max-h-none bg-[#15151e]/80 backdrop-blur-md rounded-2xl border border-white/[0.05] shadow-xl overflow-y-auto p-5 custom-scrollbar flex flex-col gap-6">
                     
@@ -339,7 +307,6 @@ export default function Songs() {
                       </button>
                     </div>
 
-                    {/* 仅看新曲 (仅限舞萌) */}
                     {activeGame === 'maimai' && (
                       <label className="flex items-center justify-between cursor-pointer group">
                         <span className="text-sm font-bold text-zinc-300 group-hover:text-white transition-colors">仅看新曲 (New Only)</span>
@@ -351,7 +318,6 @@ export default function Songs() {
                       </label>
                     )}
 
-                    {/* 难度分离 (兼容 ULTIMA/WE) */}
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Difficulty</label>
                       <div className="flex flex-wrap gap-2">
@@ -371,7 +337,6 @@ export default function Songs() {
                       </div>
                     </div>
 
-                    {/* 定数范围 */}
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-zinc-500 flex justify-between uppercase tracking-widest">
                         <span>Constant Range</span>
@@ -396,7 +361,6 @@ export default function Songs() {
                       </div>
                     </div>
 
-                    {/* BPM 范围 */}
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-zinc-500 flex justify-between uppercase tracking-widest">
                         <span>BPM Range</span>
@@ -421,7 +385,6 @@ export default function Songs() {
                       </div>
                     </div>
 
-                    {/* 分类多选 */}
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Categories</label>
                       <div className="flex flex-wrap gap-1.5">
@@ -440,7 +403,6 @@ export default function Songs() {
                       </div>
                     </div>
 
-                    {/* 版本多选 */}
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Versions</label>
                       <div className="flex flex-wrap gap-1.5">
@@ -462,7 +424,6 @@ export default function Songs() {
                   </div>
                 )}
 
-                {/* 虚拟列表 */}
                 <div className="flex-1 bg-[#15151e]/80 backdrop-blur-md rounded-2xl border border-white/[0.05] overflow-hidden shadow-sm flex flex-col relative">
                   {isLoading ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c0c11]/50 backdrop-blur-sm z-10">
@@ -489,7 +450,6 @@ export default function Songs() {
                         const numDsMax = parseFloat(dsMax) || 15.7;
                         const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: maxDiffIndex + 1 }, (_, i) => i);
                         
-                        // 动态获取当前最高或匹配难度的定数
                         for (let i = maxDiffIndex; i >= 0; i--) {
                           const constant = song.ds ? song.ds[i] : undefined;
                           if (constant !== undefined && constant !== null && diffsToCheck.includes(i) && constant >= numDsMin && constant <= numDsMax) {
@@ -499,11 +459,9 @@ export default function Songs() {
                           }
                         }
 
-                        // 识别特殊谱面
                         const isUtageVisual = isMaimai && displayDs === 0;
                         const isWE = !isMaimai && song.ds && song.ds[5] > 0;
 
-                        // 标识卡片
                         const gameTagColor = isMaimai 
                           ? (song.type === 'DX' ? 'text-blue-400 border-blue-500/20 bg-blue-500/10' : song.type === 'UTAGE' ? 'text-pink-400 border-pink-500/20 bg-pink-500/10' : 'text-orange-400 border-orange-500/20 bg-orange-500/10')
                           : (isWE ? 'text-cyan-300 border-cyan-500/20 bg-cyan-500/10' : 'text-yellow-400 border-yellow-500/20 bg-yellow-500/10');
@@ -558,9 +516,6 @@ export default function Songs() {
               </div>
             </motion.div>
           ) : (
-            /* ========================================================= */
-            /* 其他游戏 WIP 占位面板 */
-            /* ========================================================= */
             <motion.div 
               key="wip"
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
@@ -590,7 +545,7 @@ export default function Songs() {
         isOpen={isDrawerOpen} 
         onClose={() => setIsDrawerOpen(false)} 
         song={selectedSong} 
-        activeGame={activeGame} // 传给抽屉组件以适配展示
+        activeGame={activeGame} 
       />
     </div>
   );
