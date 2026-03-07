@@ -50,7 +50,7 @@ const DailyHistory = () => {
             </div>
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-zinc-100 tracking-tight mb-2">往期推荐</h1>
-              <p className="text-sm text-zinc-500 font-medium">回顾每一首歌曲，沉淀社区的共同记忆。</p>
+              <p className="text-sm text-zinc-500 font-medium">回顾每一首歌，沉淀社区的共同记忆。</p>
             </div>
           </div>
         </div>
@@ -66,7 +66,8 @@ const DailyHistory = () => {
             <p className="text-zinc-500 font-medium tracking-wide">时光机里空空如也，还没有历史记录哦</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          /* 🔥 修改为纯单列排列 (flex-col)，保证水平空间最大化 */
+          <div className="flex flex-col gap-4">
             <AnimatePresence>
               {history.map((song, index) => (
                 <motion.div 
@@ -83,7 +84,7 @@ const DailyHistory = () => {
                   />
                   
                   {/* 信息 */}
-                  <div className="flex flex-col flex-1 min-w-0 justify-center">
+                  <div className="flex flex-col flex-1 min-w-0 justify-center py-1">
                     <span 
                       className="text-xs text-indigo-400 font-bold mb-1.5 tracking-widest uppercase flex items-center gap-2"
                       style={{ fontFamily: "'Quicksand', sans-serif" }}
@@ -91,10 +92,11 @@ const DailyHistory = () => {
                       <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
                       {song.dateKey}
                     </span>
-                    <span className="text-lg font-bold text-zinc-100 truncate group-hover:text-indigo-300 transition-colors mb-0.5">
+                    {/* 🔥 移除了 truncate 属性，允许超长曲名自然换行 */}
+                    <span className="text-lg font-bold text-zinc-100 group-hover:text-indigo-300 transition-colors mb-1 leading-snug">
                       {song.title}
                     </span>
-                    <span className="text-sm text-zinc-500 truncate">
+                    <span className="text-sm text-zinc-500 leading-snug">
                       {song.artist}
                     </span>
                   </div>
@@ -115,6 +117,5 @@ const DailyHistory = () => {
     </div>
   );
 };
-
 
 export default DailyHistory;
