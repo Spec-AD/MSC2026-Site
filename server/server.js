@@ -112,11 +112,41 @@ const optionalAuth = (req, res, next) => {
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const existingUser = await User.findOne({ username });
-        if (existingUser) return res.status(400).json({ msg: '该用户名已被占用' });
 
+        if (!username || !password) {
+            return res.status(400).json({ msg: '请填写所有字段' });
+        }
+
+        // 🌟 1. 优化注册查重：大小写不敏感的精确匹配
+        // 例如数据库里有 "Wolong"，别人注册 "wolong" 或 "WOLONG" 都会被拦截
+        const existingUser = await User.findOne({ 
+            username: { $regex: new RegExp(`^${username}$`, 'i') } 
+        });
+
+        if (existingUser) {
+            // 🌟 2. 检查是否是被注销的账号（180天保护期机制）
+            if (existingUser.deletionStatus === 'DELETED') {
+                const requestDate = existingUser.deletionRequestDate || new Date();
+                const daysSinceDeletion = (new Date() - requestDate) / (1000 * 60 * 60 * 24);
+                
+                if (daysSinceDeletion < 180) {
+                    return res.status(400).json({ 
+                        msg: `该用户名处于注销保护期内，还需 ${Math.ceil(180 - daysSinceDeletion)} 天方可被重新注册` 
+                    });
+                } else {
+                    // 超过 180 天，彻底删除旧占位记录，释放该用户名允许新用户注册
+                    await User.findByIdAndDelete(existingUser._id);
+                }
+            } else {
+                // 正常活跃状态 (ACTIVE) 或 正在申请注销犹豫期 (PENDING) 的同名账号
+                return res.status(400).json({ msg: '该用户名已被占用（系统对大小写不敏感，请更换其他名称）' });
+            }
+        }
+
+        // --- 3. 原有的密码加密、UID生成和保存逻辑 ---
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
+        
         let randomUid;
         let uidExists = true;
         while (uidExists) {
@@ -125,14 +155,19 @@ app.post('/api/auth/register', async (req, res) => {
             if (!checkUid) uidExists = false;
         }
 
-        const newUser = new User({ username, password: hashedPassword, uid: randomUid });
+        const newUser = new User({ 
+            username, 
+            password: hashedPassword, 
+            uid: randomUid 
+        });
         const savedUser = await newUser.save();
+        
         const token = jwt.sign({ id: savedUser._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
         res.json({ token, user: { id: savedUser._id, username: savedUser.username, isRegistered: false } });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ msg: '服务器错误' });
+        console.error('注册接口报错:', err);
+        res.status(500).json({ msg: '服务器错误，请稍后重试' });
     }
 });
 
@@ -979,7 +1014,7 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
       rating: calculatedRating 
     });
 
-    res.json({ msg: `落雪全量同步成功！已获取 ${processedScores.length} 条记录`, rating: calculatedRating });
+    res.json({ msg: `落雪全量同步成功！完美载入 ${processedScores.length} 条记录。`, rating: calculatedRating });
   } catch (err) { 
     console.error('落雪 OAuth 同步报错日志:', err.response?.data || err.message);
     const detail = err.response?.data?.message || err.response?.data?.msg || err.message || '未知错误';
@@ -1314,9 +1349,62 @@ app.get('/api/chunithm-songs', async (req, res) => {
   }
 });
 
+// ==========================================
+// 用户设置中心 API (Settings)
+// ==========================================
+
+// 1. 拉取当前用户的所有设置项
+app.get('/api/users/settings/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('location occupation website twitter birthday isB50Visible email');
+    if (!user) return res.status(404).json({ msg: '用户不存在' });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ msg: '获取设置失败' });
+  }
+});
+
+// 2. 储存个人资料更新
+app.put('/api/users/settings/profile', authMiddleware, async (req, res) => {
+  try {
+    const { location, occupation, website, twitter, birthday } = req.body;
+    await User.findByIdAndUpdate(req.user.id, { 
+      location, occupation, website, twitter, birthday 
+    });
+    res.json({ msg: '资料更新成功' });
+  } catch (err) {
+    res.status(500).json({ msg: '资料更新失败' });
+  }
+});
+
+// 3. 储存隐私设置更新
+app.put('/api/users/settings/privacy', authMiddleware, async (req, res) => {
+  try {
+    const { isB50Visible } = req.body;
+    await User.findByIdAndUpdate(req.user.id, { isB50Visible });
+    res.json({ msg: '隐私设置更新成功' });
+  } catch (err) {
+    res.status(500).json({ msg: '隐私设置更新失败' });
+  }
+});
+
+// 4. 危险操作：申请注销账号
+app.post('/api/users/settings/request-deletion', authMiddleware, async (req, res) => {
+  try {
+    // 将状态改为 PENDING（犹豫期），并记录申请时间
+    await User.findByIdAndUpdate(req.user.id, { 
+      deletionStatus: 'PENDING',
+      deletionRequestDate: new Date()
+    });
+    // [TODO] 这里后续可以接入 Nodemailer 给站长发邮件通知
+    res.json({ msg: '注销申请已提交，账号进入犹豫期' });
+  } catch (err) {
+    res.status(500).json({ msg: '申请提交失败' });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📅 Current Server Time: ${new Date().toLocaleString()}`);
-
 });
