@@ -1595,6 +1595,40 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
     res.status(500).json({ msg: '获取单曲排行榜失败' });
   }
 });
+// ==========================================
+// 获取好友与申请列表 API (必须放在 /api/users/:username 之前！)
+// ==========================================
+app.get('/api/users/friends', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id)
+      .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
+      .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
+      
+    if (!user) return res.status(404).json({ msg: '用户未找到' });
+    
+    // 返回填充完整的好友数据和申请列表
+    res.json({ 
+      friends: user.friends || [], 
+      friendRequests: user.friendRequests || [] 
+    });
+  } catch (err) {
+    console.error('获取好友列表失败:', err);
+    res.status(500).json({ msg: '获取好友列表失败' });
+  }
+});
+
+// 如果你的前端请求的是 /api/users/friends/list，顺便也兼容一下
+app.get('/api/users/friends/list', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id)
+      .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
+      .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
+      
+    res.json({ friends: user.friends || [], friendRequests: user.friendRequests || [] });
+  } catch (err) {
+    res.status(500).json({ msg: '获取好友列表失败' });
+  }
+});
 
 // --- [1.2.5新增] 获取用户好友列表（用于主页好友按钮） ---
 app.get('/api/users/:username', async (req, res) => {
