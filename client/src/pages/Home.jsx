@@ -30,6 +30,12 @@ const Home = () => {
   const [activeGame, setActiveGame] = useState('maimai'); 
   const [osuMode, setOsuMode] = useState('standard');
 
+  // ==========================================
+  // 🌟 v1.4.0 新增：每日推荐曲目状态
+  // ==========================================
+  const [dailySong, setDailySong] = useState(null);
+  const [isDailyLoading, setIsDailyLoading] = useState(true);
+
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
@@ -41,6 +47,22 @@ const Home = () => {
       }
     };
     fetchAnnouncements();
+  }, []);
+
+  // 🔥 v1.4.0 新增：独立拉取每日推荐曲目逻辑
+  useEffect(() => {
+    const fetchDailySong = async () => {
+      setIsDailyLoading(true);
+      try {
+        const res = await axios.get('/api/daily-song');
+        setDailySong(res.data);
+      } catch (err) {
+        console.error('拉取每日推荐曲目失败', err);
+      } finally {
+        setIsDailyLoading(false);
+      }
+    };
+    fetchDailySong();
   }, []);
 
   useEffect(() => {
@@ -110,7 +132,6 @@ const Home = () => {
     return 'text-blue-400';
   };
 
-  // 🔥 核心更新：动态分配 rankLabel 文本
   const getDisplayData = () => {
     if (activeGame === 'maimai') {
       return {
@@ -144,7 +165,7 @@ const Home = () => {
         scoreLabel: 'Performance (PP)',
         scoreValue: pp ? Math.round(pp) : '--',
         scoreColor: pp ? 'text-pink-400' : 'text-zinc-500',
-        rankLabel: '全球排名', // 🔥 osu! 模式专享文本
+        rankLabel: '全球排名', 
         rankValue: rank ? `#${rank}` : '-'
       };
     }
@@ -479,7 +500,6 @@ const Home = () => {
                     </span>
                   </div>
                   <div className="bg-[#0c0c11] rounded-xl p-3 border border-white/[0.02] flex flex-col justify-center items-center text-center">
-                    {/* 🔥 使用动态的 rankLabel (全站排位 / 全球排名) */}
                     <span className="text-[10px] text-zinc-500 font-bold mb-1">{displayData.rankLabel}</span>
                     <span 
                       className={`text-lg font-bold tracking-tight ${getRankColor(displayData.rankValue.replace('#',''))}`}
@@ -512,23 +532,59 @@ const Home = () => {
             )}
           </motion.div>
 
+          {/* ========================================== */}
+          {/* 🔥 v1.4.0 落地：跨界每日推荐曲目卡片 */}
+          {/* ========================================== */}
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
             <div className="flex items-center justify-between mb-5 relative z-10">
               <div className="flex items-center gap-2.5">
-                <div className="w-1 h-4 bg-cyan-400 rounded-full shadow-[0_0_6px_rgba(34,211,238,0.5)]"></div>
+                <div className="w-1 h-4 bg-indigo-500 rounded-full shadow-[0_0_6px_rgba(99,102,241,0.5)]"></div>
                 <h3 className="text-sm font-bold text-zinc-100 tracking-wide">今日推荐曲目</h3>
               </div>
-              <span className="text-[10px] font-mono text-zinc-500 border border-white/[0.05] px-2 py-0.5 rounded-md">WIP</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border text-indigo-400 border-indigo-500/20">
+                DAILY
+              </span>
             </div>
-            <div className="flex items-center gap-4 relative z-10">
-              <div className="w-16 h-16 rounded-xl bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center shrink-0">
-                <span className="text-xl text-zinc-600 font-bold opacity-30">?</span>
+
+            {isDailyLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <FaSpinner className="animate-spin text-2xl text-indigo-500/50" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-base font-bold text-zinc-400">系统调度中</span>
-                <span className="text-xs text-zinc-500 mt-1">敬请期待后续版本更新...</span>
+            ) : dailySong ? (
+              <div className="flex items-center gap-4 relative z-10">
+                {/* 1. 曲绘缩略图 */}
+                <img 
+                  src={dailySong.coverUrl} 
+                  alt="Daily Recommend Cover" 
+                  className="w-16 h-16 rounded-xl object-cover border border-white/10 shrink-0 shadow-md group-hover:scale-105 transition-transform duration-500"
+                  onError={(e) => { e.target.src = '/assets/bg.png'; }}
+                />
+                <div className="flex flex-col min-w-0 flex-1 justify-center">
+                  {/* 2. 歌名 */}
+                  <span className="text-base font-bold truncate group-hover:text-indigo-400 text-zinc-100 transition-colors" title={dailySong.title}>
+                    {dailySong.title}
+                  </span>
+                  {/* 3. 曲师 */}
+                  <span className="text-xs text-zinc-400 truncate mt-0.5">
+                    {dailySong.artist}
+                  </span>
+                  {/* 4. 出处分类 */}
+                  <span className="text-[10px] text-zinc-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md w-fit mt-1.5 truncate max-w-full">
+                    {dailySong.source}
+                  </span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-4 relative z-10 opacity-50">
+                <div className="w-16 h-16 rounded-xl bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center shrink-0">
+                  <span className="text-xl text-zinc-600 font-bold opacity-30">?</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-base font-bold text-zinc-400">站长正在挑选...</span>
+                  <span className="text-xs text-zinc-500 mt-1">请稍后再来看看吧</span>
+                </div>
+              </div>
+            )}
           </motion.div>
 
           <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
