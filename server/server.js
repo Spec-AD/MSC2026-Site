@@ -359,7 +359,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('-password')
-	.populate('friends', 'username uid avatarUrl totalPf rating isB50Visible');
+	.populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role');
         if (!user) return res.status(404).json({ msg: '用户未找到' });
 	const today = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
         if (user.lastLoginDate !== today) {
@@ -1540,19 +1540,18 @@ app.post('/api/users/sync-osu', authMiddleware, async (req, res) => {
   }
 });
 
-// ==========================================
-// 🎵 [智能双模] 单曲排行榜 (全局 / 好友)
-// ==========================================
 app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
   try {
     const { level, scope, game } = req.query;
     const songId = req.params.songId;
 
-    let query = { 
-      songId: { $in: [String(songId), Number(songId)] }, 
-      level: Number(level) 
-    };   
+    let query = { songId: { $in: [String(songId), Number(songId)] } };   
     
+    // 安全注入 level，防止 NaN 导致 MongoDB 返回空
+    if (level !== undefined && !isNaN(Number(level))) {
+        query.level = Number(level);
+    }
+
     if (game === 'chunithm') {
         query.score = { $gt: 0 };
     }
@@ -1562,7 +1561,7 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
       const currentUser = await User.findById(req.user.id);
       
       if (!currentUser || (currentUser.sponsorTier || 0) < 1) {
-        return res.status(403).json({ msg: '好友排行榜特权需要 赞助者 Tier 1 或以上' });
+        return res.status(403).json({ msg: '好友特权需要 赞助者 Tier 1 或以上' });
       }
       
       const friendIds = currentUser.friends || [];
@@ -1572,11 +1571,11 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
     const Model = game === 'chunithm' ? ChunithmScore : Score;
     const sortCriteria = game === 'chunithm' ? { score: -1, finishTime: 1 } : { achievement: -1, dxScore: -1 };
 
-    // 🔥 核心修复：放弃不稳定的 aggregate，改用稳如泰山的 find + populate
+    // 弃用 aggregate，使用原生 find().populate()，彻底解决 ObjectId 类型匹配错位问题
     const scores = await Model.find(query)
       .sort(sortCriteria)
       .limit(100)
-      .populate('userId', 'username avatarUrl uid sponsorTier role')
+      .populate('userId', 'username avatarUrl uid sponsorTier role nickname')
       .lean();
 
     const formattedScores = scores.map(s => ({
@@ -1602,7 +1601,7 @@ app.get('/api/users/:username', async (req, res) => {
     try {
         const user = await User.findOne({ username: req.params.username })
             .select('-password -contactValue -contactType')
-	    .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible');
+	    .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role');
         
         if (!user) return res.status(404).json({ msg: '用户不存在' });
 
