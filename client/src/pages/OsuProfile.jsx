@@ -32,7 +32,6 @@ export default function OsuProfile() {
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
 
   useEffect(() => {
-    // 处理 OAuth 回跳自动绑定 (仅当路由有 code 且是本人主页时)
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     
@@ -49,7 +48,6 @@ export default function OsuProfile() {
       const res = await axios.get(`/api/users/${username}?t=${Date.now()}`);
       setProfile(res.data);
       setAllOsuScores(res.data.osuScores || []);
-      // 智能回显用户主玩的模式
       if (res.data.osuMode && MODES.some(m => m.id === res.data.osuMode)) {
         setActiveMode(res.data.osuMode);
       }
@@ -101,11 +99,10 @@ export default function OsuProfile() {
     return profile.osuDetails[activeMode];
   }, [profile, activeMode]);
 
-  // osu! 评级色彩渲染引擎
   const renderGrade = (grade) => {
     const g = (grade || '').toUpperCase();
-    if (g === 'XH' || g === 'SH') return <span className="text-zinc-200 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] font-black italic">{g.replace('H', '')}</span>; // Silver SS/S
-    if (g === 'X' || g === 'S') return <span className="text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)] font-black italic">{g === 'X' ? 'SS' : 'S'}</span>; // Gold SS/S
+    if (g === 'XH' || g === 'SH') return <span className="text-zinc-200 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] font-black italic">{g.replace('H', '')}</span>; 
+    if (g === 'X' || g === 'S') return <span className="text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)] font-black italic">{g === 'X' ? 'SS' : 'S'}</span>; 
     if (g === 'A') return <span className="text-emerald-400 font-black italic">A</span>;
     if (g === 'B') return <span className="text-blue-400 font-black italic">B</span>;
     if (g === 'C') return <span className="text-purple-400 font-black italic">C</span>;
@@ -147,7 +144,6 @@ export default function OsuProfile() {
             </div>
           </div>
 
-          {/* 四模式切换器与同步按钮 */}
           <div className="flex flex-col gap-3 w-full md:w-auto">
             <div className="flex items-center gap-1.5 bg-[#15151e]/80 p-1.5 rounded-xl border border-white/[0.05] w-fit">
               {MODES.map(mode => (
@@ -174,7 +170,6 @@ export default function OsuProfile() {
           </div>
         </div>
 
-        {/* 核心数据展示区 */}
         {!profile.osuId ? (
           <div className="py-24 flex flex-col items-center justify-center bg-[#15151e]/40 border border-white/[0.05] rounded-[3rem] mt-10">
             <img src="/assets/logos.png" alt="osu Logo" className="w-20 h-20 opacity-30 mb-6 grayscale" />
@@ -182,7 +177,6 @@ export default function OsuProfile() {
           </div>
         ) : (
           <>
-            {/* 顶层统计面板 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
               <div className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-5 flex flex-col justify-center shadow-sm">
                 <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 flex items-center gap-1.5"><FaGlobe /> 全球排名</span>
@@ -210,7 +204,6 @@ export default function OsuProfile() {
               </div>
             </div>
 
-            {/* Best Performance 列表 */}
             <div className="mb-16">
               <div className="flex items-center gap-3 border-b border-white/[0.05] pb-4 mb-6">
                 <div className="w-1 h-6 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]"></div>
@@ -229,23 +222,22 @@ export default function OsuProfile() {
                       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.01 > 0.5 ? 0 : index * 0.01 }}
                       className="relative flex items-center bg-[#15151e] border border-white/[0.05] hover:border-pink-500/30 rounded-2xl p-3 overflow-hidden group transition-colors shadow-sm"
                     >
-                      {/* 背景图裁切铺底 */}
-                      <div className="absolute inset-0 opacity-20 mix-blend-luminosity z-0 pointer-events-none">
-                        <img src={score.coverUrl} alt="bg" className="w-full h-full object-cover" onError={(e) => e.target.style.display='none'} />
-                        <div className="absolute inset-0 bg-gradient-to-r from-[#15151e] via-[#15151e]/80 to-transparent"></div>
-                      </div>
-
-                      {/* 排名标识 */}
                       <div className="w-10 shrink-0 text-center font-bold text-lg text-zinc-600 font-mono z-10">
                         #{index + 1}
                       </div>
 
-                      {/* 评级徽章 */}
-                      <div className="w-12 shrink-0 text-center text-2xl z-10 flex items-center justify-center mr-2">
+                      {/* 🔥 封面原图缩略图显示 */}
+                      <img 
+                        src={score.coverUrl} 
+                        alt="cover" 
+                        className="w-16 h-11 object-cover rounded-md border border-white/5 shrink-0 mr-3 shadow-sm group-hover:scale-105 transition-transform" 
+                        onError={(e) => e.target.style.display='none'} 
+                      />
+
+                      <div className="w-10 shrink-0 text-center text-2xl z-10 flex items-center justify-center mr-2">
                         {renderGrade(score.grade)}
                       </div>
 
-                      {/* 曲目信息区 */}
                       <div className="flex flex-col flex-1 min-w-0 pr-4 z-10">
                         <div className="text-[15px] font-bold text-zinc-100 truncate group-hover:text-pink-300 transition-colors">
                           {score.title}
@@ -262,7 +254,6 @@ export default function OsuProfile() {
                         </div>
                       </div>
 
-                      {/* PP 与 Acc 数据区 */}
                       <div className="flex flex-col items-end shrink-0 pl-4 border-l border-white/[0.05] z-10">
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-bold text-pink-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
