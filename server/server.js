@@ -1170,8 +1170,43 @@ app.post('/api/users/settings/request-deletion', authMiddleware, async (req, res
 });
 
 // ==========================================
-// 🌟 核心：获取好友与申请列表
+// 🌟 核心修复：多维好友列表查询引擎 (彻底解决 404 与 filter 报错)
 // ==========================================
+
+// 1. 获取当前登录者的好友列表 (解决 Friends.jsx 访问 /api/users/friends 的 404 崩溃问题)
+app.get('/api/users/friends', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id)
+      .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
+      .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
+      
+    if (!user) return res.status(404).json({ msg: '用户未找到' });
+    
+    // 必须确保返回的是数组，防止前端 .filter() 报错崩溃
+    res.json({ 
+      friends: user.friends || [], 
+      friendRequests: user.friendRequests || [] 
+    });
+  } catch (err) {
+    console.error('获取好友列表失败:', err);
+    res.status(500).json({ msg: '获取好友列表失败' });
+  }
+});
+
+// 2. 兼容带 list 后缀的潜在请求
+app.get('/api/users/friends/list', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id)
+      .populate('friends', 'username uid avatarUrl totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
+      .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
+      
+    res.json({ friends: user.friends || [], friendRequests: user.friendRequests || [] });
+  } catch (err) {
+    res.status(500).json({ msg: '获取好友列表失败' });
+  }
+});
+
+// 3. 获取指定玩家的好友列表 (兼容在他人主页查看)
 app.get('/api/users/:username/friends', optionalAuth, async (req, res) => {
   try {
     const user = await User.findOne({ username: { $regex: new RegExp(`^${req.params.username}$`, 'i') } })
