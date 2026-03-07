@@ -20,7 +20,7 @@ export default function Settings() {
 
   // 状态组
   const [profileData, setProfileData] = useState({ location: '', occupation: '', website: '', twitter: '', birthday: '' });
-  const [privacyData, setPrivacyData] = useState({ isB50Visible: false });
+  const [privacyData, setPrivacyData] = useState({ isB50Visible: false, isChuniB50Visible: false });
   const [securityData, setSecurityData] = useState({ email: '', boundAccounts: [] });
   
   // ==========================================
@@ -64,7 +64,10 @@ export default function Settings() {
         location: data.location || '', occupation: data.occupation || '',
         website: data.website || '', twitter: data.twitter || '', birthday: data.birthday || ''
       });
-      setPrivacyData({ isB50Visible: data.isB50Visible || false });
+      setPrivacyData({ 
+        isB50Visible: data.isB50Visible || false,
+        isChuniB50Visible: data.isChuniB50Visible || false // 载入中二隐私状态
+      });
       setSecurityData({ email: data.email || '', boundAccounts: data.boundAccounts || [] });
     } catch (err) {
       addToast('拉取设置失败', 'error');
@@ -229,18 +232,33 @@ export default function Settings() {
             <div className="animate-fade-in flex flex-col gap-6">
               <h3 className="text-xl font-bold text-white border-b border-white/5 pb-4 mb-2">数据展示权限</h3>
               
-              <div className="flex items-center justify-between bg-[#0c0c11] border border-white/[0.05] rounded-xl p-5">
-                <div className="flex flex-col">
-                  <span className="text-base font-bold text-zinc-200">公开游戏成绩数据</span>
-                  <span className="text-xs text-zinc-500 mt-1 max-w-sm leading-relaxed">允许其他用户在你的主页查看你的 Maimai DX 牌子进度、B50 及具体乐曲成绩。</span>
+              <div className="flex flex-col gap-4">
+                {/* 舞萌 DX 隐私开关 */}
+                <div className="flex items-center justify-between bg-[#0c0c11] border border-white/[0.05] rounded-xl p-5">
+                  <div className="flex flex-col">
+                    <span className="text-base font-bold text-cyan-400">公开 Maimai DX 成绩数据</span>
+                    <span className="text-xs text-zinc-500 mt-1 max-w-sm leading-relaxed">允许其他用户查看你的舞萌 Best 50 及乐曲成绩。</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input type="checkbox" className="sr-only peer" checked={privacyData.isB50Visible} onChange={(e) => setPrivacyData({...privacyData, isB50Visible: e.target.checked})} />
+                    <div className="w-11 h-6 bg-[#222228] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                  <input type="checkbox" className="sr-only peer" checked={privacyData.isB50Visible} onChange={(e) => setPrivacyData({isB50Visible: e.target.checked})} />
-                  <div className="w-11 h-6 bg-[#222228] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
-                </label>
+
+                {/* CHUNITHM 隐私开关 */}
+                <div className="flex items-center justify-between bg-[#0c0c11] border border-white/[0.05] rounded-xl p-5">
+                  <div className="flex flex-col">
+                    <span className="text-base font-bold text-yellow-400">公开 CHUNITHM 成绩数据</span>
+                    <span className="text-xs text-zinc-500 mt-1 max-w-sm leading-relaxed">允许其他用户查看你的中二 B30+R20 及乐曲成绩。</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input type="checkbox" className="sr-only peer" checked={privacyData.isChuniB50Visible} onChange={(e) => setPrivacyData({...privacyData, isChuniB50Visible: e.target.checked})} />
+                    <div className="w-11 h-6 bg-[#222228] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                  </label>
+                </div>
               </div>
 
-              <button onClick={handleSavePrivacy} disabled={saving} className="w-fit px-8 py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-900 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
+              <button onClick={handleSavePrivacy} disabled={saving} className="mt-2 w-fit px-8 py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-900 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
                 {saving ? <FaSpinner className="animate-spin" /> : <FaSave />} 储存更改
               </button>
             </div>

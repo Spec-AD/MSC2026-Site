@@ -401,7 +401,7 @@ export default function ChunithmProfile() {
           )}
         </div>
 
-        {!isOwnProfile && !profile.isB50Visible ? (
+        {!isOwnProfile && !profile.isChuniB50Visible ? (
           <div className="py-32 flex flex-col items-center justify-center bg-[#15151e]/40 border border-white/[0.05] rounded-[3rem] mt-10">
             <FaLock className="text-5xl text-zinc-800 mb-4 opacity-50" />
             <p className="text-zinc-500 font-medium tracking-wide">该玩家的数据档案已设为私密</p>
