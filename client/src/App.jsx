@@ -55,7 +55,7 @@ function App() {
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/friends" element={<Friends />} />
             <Route path="/profile/:username/maimai" element={<MaimaiProfile />} />
-            
+            <Route path="/profile/:username/chunithm" element={<ChunithmProfile />} />
             {/* 曲目图鉴页路由 */}
             <Route path="songs" element={<Songs />} />
             
