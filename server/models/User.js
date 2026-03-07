@@ -34,13 +34,13 @@ const UserSchema = new mongoose.Schema({
     type: String, 
     sparse: true, // sparse 允许此字段为空，但只要有值就必须唯一
     unique: true 
-  },
-  deletionStatus: { 
+    },
+    deletionStatus: { 
     type: String, 
     enum: ['ACTIVE', 'PENDING', 'DELETED'], 
     default: 'ACTIVE' 
-  },
-  deletionRequestDate: { type: Date },
+    },
+    deletionRequestDate: { type: Date },
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
     isB50Visible: { type: Boolean, default: false },
@@ -93,7 +93,7 @@ const UserSchema = new mongoose.Schema({
     deviceLogs: [{ 
     deviceId: String, 
     lastLogin: Date 
-  }],
+    }],
 
     // 3. 头像与背景 (暂时存 URL 字符串)
     avatarUrl: { type: String, default: '/assets/logos.png' }, // 默认头像
