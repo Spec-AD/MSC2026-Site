@@ -17,7 +17,20 @@ const ChunithmSong = require('./models/ChunithmSong');
 const nodemailer = require('nodemailer');
 const Otp = require('./models/Otp');
 
-
+// ==========================================
+// CHUNITHM 单曲 Rating 算分引擎
+// ==========================================
+const calculateChuniRating = (score, constant) => {
+  if (score >= 1009000) return constant + 2.15;
+  if (score >= 1007500) return constant + 2.0 + (score - 1007500) * 0.15 / 1500;
+  if (score >= 1005000) return constant + 1.5 + (score - 1005000) * 0.5 / 2500;
+  if (score >= 1000000) return constant + 1.0 + (score - 1000000) * 0.5 / 5000;
+  if (score >= 975000) return constant + 0.0 + (score - 975000) * 1.0 / 25000;
+  if (score >= 925000) return constant - 3.0 + (score - 925000) * 3.0 / 50000;
+  if (score >= 900000) return constant - 5.0 + (score - 900000) * 2.0 / 25000;
+  if (score >= 800000) return (constant - 5.0) / 2 + (score - 800000) * ((constant - 5.0) / 2) / 100000;
+  return 0;
+};
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -1251,6 +1264,22 @@ app.post('/api/users/sync-chunithm-oauth', authMiddleware, async (req, res) => {
     await ChunithmScore.deleteMany({ userId: req.user.id });
     await ChunithmScore.insertMany(processedScores);
 
+    // 🔥 增加落雪的 B30 + R20 算分与覆盖
+    const validScores = processedScores.filter(s => s.level !== 5 && s.rating > 0);
+    validScores.sort((a, b) => b.rating - a.rating || b.score - a.score);
+    
+    const b30 = validScores.filter(s => !s.isNew).slice(0, 30);
+    const r20 = validScores.filter(s => s.isNew).slice(0, 20);
+    
+    const sumB30 = b30.reduce((sum, s) => sum + s.rating, 0);
+    const sumR20 = r20.reduce((sum, s) => sum + s.rating, 0);
+    const totalCount = b30.length + r20.length;
+    const avgRating = totalCount > 0 ? Number(((sumB30 + sumR20) / totalCount).toFixed(2)) : 0;
+
+    await User.findByIdAndUpdate(req.user.id, {
+       chuniRating: avgRating
+    });
+
     res.json({ msg: `CHUNITHM 全量同步成功！载入 ${processedScores.length} 条记录。` });
   } catch (err) { 
     console.error('CHUNITHM OAuth 同步报错日志:', err.response?.data || err.message);
@@ -1545,6 +1574,123 @@ app.get('/api/users/:username/friends', async (req, res) => {
   } catch (err) {
     console.error('获取好友列表报错:', err);
     res.status(500).json({ msg: '获取好友列表失败' });
+  }
+});
+
+// ==========================================
+// CHUNITHM 数据获取与水鱼同步 API
+// ==========================================
+
+// 1. 前端获取某个玩家的全量中二成绩
+app.get('/api/users/:username/chunithm-scores', async (req, res) => {
+  try {
+    const user = await User.findOne({ username: { $regex: new RegExp(`^${req.params.username}$`, 'i') } });
+    if (!user) return res.status(404).json({ msg: '用户不存在' });
+
+    const scores = await ChunithmScore.find({ userId: user._id });
+    res.json(scores);
+  } catch (err) {
+    res.status(500).json({ msg: '获取中二成绩失败' });
+  }
+});
+
+// 2. 🌟 水鱼查分器 (Diving-fish) 中二同步流
+app.post('/api/users/sync-chunithm', authMiddleware, async (req, res) => {
+  try {
+    const { importToken } = req.body;
+    if (!importToken) return res.status(400).json({ msg: '缺少 Import-Token' });
+
+    // 请求水鱼中二查分器接口
+    const response = await axios.get('https://www.diving-fish.com/api/chunithmprober/player/records', {
+      headers: { 'Developer-Token': importToken.trim() },
+      timeout: 15000
+    });
+
+    // 智能解析水鱼的返回格式
+    let rawRecords = [];
+    if (Array.isArray(response.data)) {
+       rawRecords = response.data;
+    } else if (response.data.records) {
+       const best = response.data.records.best || [];
+       const r20 = response.data.records.r20 || [];
+       // 合并去重
+       const map = new Map();
+       [...best, ...r20].forEach(r => map.set(`${r.cid || r.music_id}`, r));
+       rawRecords = Array.from(map.values());
+    }
+
+    if (rawRecords.length === 0) {
+       return res.status(400).json({ msg: '水鱼返回成绩为空，请确保已在水鱼更新中二数据' });
+    }
+
+    const allSongsArray = await ChunithmSong.find({}, 'id title ds basic_info cids').lean();
+    const processedScores = [];
+
+    for (const rec of rawRecords) {
+       let song = null;
+       let levelIndex = 0;
+
+       // 水鱼中二特有的 cid (谱面唯一标识) 匹配机制，容错 music_id
+       if (rec.cid) {
+          song = allSongsArray.find(s => s.cids && s.cids.includes(rec.cid));
+          if (song) levelIndex = song.cids.indexOf(rec.cid);
+       } else if (rec.music_id || rec.id) {
+          const lxId = Number(rec.music_id || rec.id);
+          song = allSongsArray.find(s => Number(s.id) === lxId);
+          levelIndex = Number(rec.level_index !== undefined ? rec.level_index : rec.level);
+       }
+
+       if (!song) continue;
+
+       let constant = 0;
+       if (song.ds && song.ds[levelIndex] !== undefined) constant = song.ds[levelIndex];
+       const isWE = levelIndex === 5;
+       
+       const realScore = rec.score || 0;
+       // 优先使用水鱼自带 rating，如果没有则我们用引擎自己算
+       const singleRating = isWE ? 0 : (rec.rating || calculateChuniRating(realScore, constant));
+
+       processedScores.push({
+         userId: req.user.id,
+         songId: song.id,
+         songName: song.title || song.basic_info?.title,
+         imageUrl: `https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`,
+         level: levelIndex,
+         constant: isWE ? 0 : constant,
+         score: realScore,
+         rating: singleRating,
+         rank: rec.rank || '',
+         clearStatus: rec.clear || '',
+         fcStatus: rec.fc || rec.full_combo || '',
+         isNew: song.basic_info?.from === 'LUMINOUS PLUS' || false, // 可根据当前中二版本号微调
+         finishTime: new Date(rec.upload_time || rec.play_time || Date.now())
+       });
+    }
+
+    await ChunithmScore.deleteMany({ userId: req.user.id });
+    await ChunithmScore.insertMany(processedScores);
+
+    // 🔥 计算并更新 B50 (B30 + R20)
+    const validScores = processedScores.filter(s => s.level !== 5 && s.rating > 0);
+    validScores.sort((a, b) => b.rating - a.rating || b.score - a.score);
+    
+    const b30 = validScores.filter(s => !s.isNew).slice(0, 30);
+    const r20 = validScores.filter(s => s.isNew).slice(0, 20);
+    
+    const sumB30 = b30.reduce((sum, s) => sum + s.rating, 0);
+    const sumR20 = r20.reduce((sum, s) => sum + s.rating, 0);
+    const totalCount = b30.length + r20.length;
+    const avgRating = totalCount > 0 ? Number(((sumB30 + sumR20) / totalCount).toFixed(2)) : 0;
+
+    await User.findByIdAndUpdate(req.user.id, {
+       importToken: importToken, 
+       chuniRating: avgRating
+    });
+
+    res.json({ msg: `水鱼数据同步成功！载入 ${processedScores.length} 条记录。`, rating: avgRating });
+  } catch (err) {
+    console.error('水鱼中二同步失败:', err.response?.data || err.message);
+    res.status(500).json({ msg: '水鱼同步失败，请检查 Token 或网络状态' });
   }
 });
 
