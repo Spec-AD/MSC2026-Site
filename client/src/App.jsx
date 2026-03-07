@@ -8,6 +8,7 @@ import OsuCallback from './pages/OsuCallback';
 import Friends from './pages/Friends';
 import MaimaiProfile from './pages/MaimaiProfile';
 import Settings from './pages/Settings';
+import ChunithmProfile from './pages/ChunithmProfile';
 
 // 引入页面组件
 import Home from './pages/Home';
