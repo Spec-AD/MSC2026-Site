@@ -1739,7 +1739,7 @@ app.get('/api/chunithm-songs', async (req, res) => {
 // 1. 拉取当前用户的所有设置项
 app.get('/api/users/settings/me', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('location occupation website twitter birthday isB50Visible email');
+    const user = await User.findById(req.user.id).select('location occupation website twitter birthday isB50Visible isChuniB50Visible email');
     if (!user) return res.status(404).json({ msg: '用户不存在' });
     res.json(user);
   } catch (err) {
@@ -1763,8 +1763,8 @@ app.put('/api/users/settings/profile', authMiddleware, async (req, res) => {
 // 3. 储存隐私设置更新
 app.put('/api/users/settings/privacy', authMiddleware, async (req, res) => {
   try {
-    const { isB50Visible } = req.body;
-    await User.findByIdAndUpdate(req.user.id, { isB50Visible });
+    const { isB50Visible, isChuniB50Visible } = req.body;
+    await User.findByIdAndUpdate(req.user.id, { isB50Visible, isChuniB50Visible });
     res.json({ msg: '隐私设置更新成功' });
   } catch (err) {
     res.status(500).json({ msg: '隐私设置更新失败' });
@@ -1784,6 +1784,32 @@ app.post('/api/users/settings/request-deletion', authMiddleware, async (req, res
   } catch (err) {
     res.status(500).json({ msg: '申请提交失败' });
   }
+});
+
+// ==========================================
+// CHUNITHM 排行榜与单曲数据 API
+// ==========================================
+
+// 1. 获取 CHUNITHM 综合实力排行榜
+app.get('/api/leaderboard/chunithm', async (req, res) => {
+  try {
+    const topPlayers = await User.find({ chuniRating: { $gt: 0 } })
+      .sort({ chuniRating: -1 })
+      .limit(100) // 取前 100 名
+      .select('username avatarUrl chuniRating isChuniB50Visible');
+    res.json(topPlayers);
+  } catch (err) { res.status(500).json({ msg: '获取中二排行榜失败' }); }
+});
+
+// 2. 获取单曲的玩家成绩排行榜
+app.get('/api/chunithm-songs/:songId/leaderboard', async (req, res) => {
+  try {
+    const scores = await ChunithmScore.find({ songId: req.params.songId, score: { $gt: 0 } })
+      .populate('userId', 'username avatarUrl') // 关联查询出玩家名字和头像
+      .sort({ score: -1, finishTime: 1 }) // 分数相同则按时间早的排前面
+      .limit(50);
+    res.json(scores);
+  } catch (err) { res.status(500).json({ msg: '获取单曲排行失败' }); }
 });
 
 const PORT = process.env.PORT || 5000;
