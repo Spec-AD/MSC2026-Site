@@ -1385,7 +1385,7 @@ app.post('/api/wiki/read-reward', authMiddleware, async (req, res) => {
 app.get('/api/leaderboard/:type', async (req, res) => {
   try {
     const type = req.params.type;
-    const { game, mode } = req.query; // 接收前端传来的多游戏参数
+    const { game, mode } = req.query; 
     
     let sortQuery = {};
     let filterQuery = {};
@@ -1395,17 +1395,18 @@ app.get('/api/leaderboard/:type', async (req, res) => {
       case 'wiki': sortQuery = { wikiApprovedCount: -1, createdAt: 1 }; break;
       case 'feedback': sortQuery = { feedbackApprovedCount: -1, createdAt: 1 }; break;
       case 'checkin': sortQuery = { checkInCount: -1, createdAt: 1 }; break;
-      case 'chunithm': // 完美截获中二请求
+      case 'chunithm': 
         sortQuery = { chuniRating: -1, createdAt: 1 }; 
-        filterQuery = { chuniRating: { $gt: 0 } }; // 只展示有打过中二的玩家
+        filterQuery = { chuniRating: { $gt: 0 } }; 
         break;
       case 'pf':
       default: 
         if (game === 'osu') {
-          sortQuery = { osuPp: -1, createdAt: 1 };
-          filterQuery = { osuPp: { $gt: 0 }, osuMode: mode || 'standard' };
+          // 🔥 核心修复：精准定向到四模式的独立字典字段
+          const currentMode = mode || 'standard';
+          sortQuery = { [`osuDetails.${currentMode}.pp`]: -1, createdAt: 1 };
+          filterQuery = { [`osuDetails.${currentMode}.pp`]: { $gt: 0 } };
         } else {
-          // 默认 Maimai DX
           sortQuery = { totalPf: -1, createdAt: 1 };
           filterQuery = { totalPf: { $gt: 0 } };
         }
@@ -1414,15 +1415,15 @@ app.get('/api/leaderboard/:type', async (req, res) => {
 
     const users = await User.find(filterQuery)
       .sort(sortQuery)
-      // 🔥 核心修复：必须在 select 中暴露所有的字段，包括中二和osu的数据！
-      .select('username uid avatarUrl totalPf rating role isRegistered isB50Visible xp level wikiApprovedCount feedbackApprovedCount checkInCount chuniRating isChuniB50Visible osuPp osuMode')
+      // 必须暴露 osuDetails 字典让前端读取
+      .select('username uid avatarUrl totalPf rating role isRegistered isB50Visible xp level wikiApprovedCount feedbackApprovedCount checkInCount chuniRating isChuniB50Visible osuPp osuMode osuDetails')
       .limit(100)
       .lean();
       
-    // 兼容前端 osu 的字段读取习惯
+    // 🔥 映射数据：将正确的模式 PP 值赋给顶级 pp 字段供排行榜展示
     const formattedUsers = users.map(u => ({
        ...u,
-       pp: u.osuPp 
+       pp: game === 'osu' ? (u.osuDetails?.[mode || 'standard']?.pp || 0) : undefined
     }));
 
     res.json(formattedUsers);
@@ -1552,7 +1553,6 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
       level: Number(level) 
     };   
     
-    // 如果是中二，确保排除分数为0的占位数据
     if (game === 'chunithm') {
         query.score = { $gt: 0 };
     }
@@ -1569,44 +1569,28 @@ app.get('/api/songs/:songId/leaderboard', optionalAuth, async (req, res) => {
       query.userId = { $in: [...friendIds, currentUser._id] };
     }
 
-    // 🌟 核心引擎：根据请求的游戏参数，智能切换数据库模型和排序规则
     const Model = game === 'chunithm' ? ChunithmScore : Score;
     const sortCriteria = game === 'chunithm' ? { score: -1, finishTime: 1 } : { achievement: -1, dxScore: -1 };
 
-    const leaderboard = await Model.aggregate([
-      { $match: query },
-      { $sort: sortCriteria }, 
-      { $limit: 100 },
-      {
-        $lookup: {
-          from: 'users', 
-          let: { uId: '$userId' }, 
-          pipeline: [
-            { $match: { $expr: { $eq: ['$_id', { $convert: { input: '$$uId', to: 'objectId', onError: '$$uId', onNull: '$$uId' } }] } } }
-          ],
-          as: 'userInfo'
-        }
-      },
-      { $unwind: '$userInfo' },
-      {
-        $project: {
-          _id: 1,
-          achievement: 1,
-          dxScore: 1,
-          pf: 1,
-          rating: 1,
-          score: 1, // 返回中二特有分数
-          fcStatus: { $ifNull: ['$fc', '$fcStatus'] }, 
-          fsStatus: { $ifNull: ['$fs', '$fsStatus'] },
-          username: '$userInfo.username',
-          avatarUrl: '$userInfo.avatarUrl',
-          uid: '$userInfo.uid',
-          sponsorTier: '$userInfo.sponsorTier'
-        }
-      }
-    ]);
+    // 🔥 核心修复：放弃不稳定的 aggregate，改用稳如泰山的 find + populate
+    const scores = await Model.find(query)
+      .sort(sortCriteria)
+      .limit(100)
+      .populate('userId', 'username avatarUrl uid sponsorTier role')
+      .lean();
 
-    res.json(leaderboard);
+    const formattedScores = scores.map(s => ({
+      ...s,
+      username: s.userId?.username || s.nickname || 'Unknown Player',
+      avatarUrl: s.userId?.avatarUrl,
+      uid: s.userId?.uid,
+      sponsorTier: s.userId?.sponsorTier,
+      role: s.userId?.role,
+      fcStatus: s.fc || s.fcStatus || '',
+      fsStatus: s.fs || s.fsStatus || ''
+    }));
+
+    res.json(formattedScores);
   } catch (err) {
     console.error('[单曲排行榜报错]', err);
     res.status(500).json({ msg: '获取单曲排行榜失败' });
