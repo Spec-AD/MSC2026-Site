@@ -47,6 +47,7 @@ const UserSchema = new mongoose.Schema({
     // --- 比赛报名信息 ---
     isRegistered: { type: Boolean, default: false },
     isB50Visible: { type: Boolean, default: false },
+    isChuniB50Visible: { type: Boolean, default: false },
     divingFishUsername: { 
        type: String, 
        default: '' 
