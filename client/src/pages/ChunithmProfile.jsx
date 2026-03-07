@@ -36,6 +36,10 @@ export default function ChunithmProfile() {
   const [error, setError] = useState('');
   
   const [newSongIds, setNewSongIds] = useState(new Set());
+  
+  // 新增：双源同步状态
+  const [syncSource, setSyncSource] = useState('df'); // 'df' 为水鱼, 'lx' 为落雪
+  const [importToken, setImportToken] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   
   const [selectedLevelDetail, setSelectedLevelDetail] = useState(null);
@@ -64,11 +68,12 @@ export default function ChunithmProfile() {
         // 并发拉取：用户档案、中二玩家成绩、中二本地全量曲库
         const [profileRes, scoresRes, musicRes] = await Promise.all([
           axios.get(`/api/users/${username}?t=${Date.now()}`),
-          axios.get(`/api/users/${username}/chunithm-scores`).catch(() => ({ data: [] })), // 需要在后端增加获取该玩家所有中二成绩的接口
+          axios.get(`/api/users/${username}/chunithm-scores`).catch(() => ({ data: [] })), 
           axios.get('/api/chunithm-songs').catch(() => ({ data: [] }))
         ]);
 
         setProfile(profileRes.data);
+        setImportToken(profileRes.data.importToken || '');
         setChuniScores(scoresRes.data || []);
         setMusicData(musicRes.data || []);
 
@@ -93,6 +98,7 @@ export default function ChunithmProfile() {
   // ==========================================
   const executeLuoxueOAuthSync = async (code) => {
     setIsSyncing(true);
+    setSyncSource('lx');
     try {
       const token = localStorage.getItem('token');
       const currentRedirectUri = `${window.location.origin}/profile`; // 必须对应落雪后台配置
@@ -119,6 +125,27 @@ export default function ChunithmProfile() {
     // ⚠️ 重点：传入 state 为 username_chunithm，让 Profile 拦截器知道要跳回中二页面
     const authUrl = `https://maimai.lxns.net/oauth/authorize?response_type=code&client_id=${LXNS_CLIENT_ID}&redirect_uri=${redirectUri}&scope=${scopes}&state=${username}_chunithm`;
     window.location.href = authUrl;
+  };
+
+  // ==========================================
+  // 执行水鱼 (Diving-fish) API 同步
+  // ==========================================
+  const handleSync = async () => {
+    if (syncSource === 'df' && !importToken.trim()) return addToast('请提供水鱼 Import-Token', 'error'); 
+    
+    setIsSyncing(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post('/api/users/sync-chunithm', { importToken }, { headers: { Authorization: `Bearer ${token}` } });
+      
+      addToast(res.data.msg || `水鱼数据同步成功！`, 'success');
+      const scoresRes = await axios.get(`/api/users/${username}/chunithm-scores`);
+      setChuniScores(scoresRes.data);
+    } catch (err) {
+      addToast(err.response?.data?.msg || '同步失败，请检查 Token 或网络', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // ==========================================
@@ -318,15 +345,52 @@ export default function ChunithmProfile() {
             </div>
           </div>
 
+          {/* 🔥 智能双源同步控制台 */}
           {isOwnProfile && (
-            <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md p-2 rounded-2xl border border-white/[0.05] shadow-sm w-full md:w-auto">
-              <button 
-                onClick={handleLuoxueOAuthLogin}
-                disabled={isSyncing}
-                className="w-full md:w-[364px] bg-yellow-600 hover:bg-yellow-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
-              >
-                {isSyncing ? <FaSpinner className="animate-spin" /> : '🔗 使用落雪账号授权同步数据'}
-              </button>
+            <div className="flex flex-col gap-3 w-full md:w-auto">
+              <div className="flex items-center gap-2 bg-[#15151e]/80 p-1 rounded-xl border border-white/[0.05] w-fit">
+                <button 
+                  onClick={() => setSyncSource('df')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${syncSource === 'df' ? 'bg-amber-500/20 text-amber-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  水鱼查分器
+                </button>
+                <button 
+                  onClick={() => setSyncSource('lx')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${syncSource === 'lx' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  落雪查分器
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md p-2 rounded-2xl border border-white/[0.05] shadow-sm w-full md:w-auto">
+                {syncSource === 'df' ? (
+                  <>
+                    <input 
+                      type="password" 
+                      value={importToken}
+                      onChange={(e) => setImportToken(e.target.value)}
+                      placeholder="粘贴水鱼 Import-token..."
+                      className="w-full md:w-64 bg-transparent border-none text-zinc-200 px-3 py-2 text-sm focus:outline-none placeholder-zinc-600 font-mono"
+                    />
+                    <button 
+                      onClick={handleSync}
+                      disabled={isSyncing}
+                      className="bg-amber-500 hover:bg-amber-400 text-zinc-900 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shrink-0 active:scale-95"
+                    >
+                      {isSyncing ? <FaSpinner className="animate-spin" /> : <><FaSyncAlt /> 同步云端</>}
+                    </button>
+                  </>
+                ) : (
+                  <button 
+                    onClick={handleLuoxueOAuthLogin}
+                    disabled={isSyncing}
+                    className="w-full md:w-[364px] bg-indigo-500 hover:bg-indigo-400 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
+                  >
+                    {isSyncing ? <FaSpinner className="animate-spin" /> : '🔗 使用落雪账号授权同步数据'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

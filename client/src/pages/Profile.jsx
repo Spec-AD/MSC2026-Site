@@ -37,13 +37,13 @@ const Profile = () => {
     profile.username.toLowerCase() === currentUser.username.toLowerCase()
   );
 
-  // 落雪 OAuth 回跳拦截器
+  // 🌟 落雪 OAuth 回跳拦截器 (智能分流多游戏)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const code = params.get('code');
     const state = params.get('state');
 
-   if (code && state) {
+    if (code && state) {
       // 解析 state (格式如: Wolong_maimai 或 Wolong_chunithm)
       const [stateUsername, stateGame] = state.split('_');
       const targetGame = stateGame || 'maimai'; // 默认回退到舞萌
@@ -294,7 +294,7 @@ const Profile = () => {
                 </span>
               </div>
 
-              {/* 🔥 新增：个人资料展示区 (图标 + 内容) */}
+              {/* 个人资料展示区 */}
               <div className="flex flex-wrap justify-center md:justify-start gap-x-5 gap-y-2 mt-2 text-xs font-medium text-zinc-400">
                 {profile.location && (
                   <div className="flex items-center gap-1.5" title="位置"><FaMapMarkerAlt className="text-zinc-500" /> {profile.location}</div>
@@ -418,7 +418,7 @@ const Profile = () => {
                 <textarea 
                   value={editData.bio}
                   onChange={(e) => setEditData({...editData, bio: e.target.value})}
-                  placeholder="在这里记录你的游戏格言、简介或近况..."
+                  placeholder="自我介绍一下吧"
                   className="w-full h-40 bg-[#0c0c11] border border-white/[0.05] rounded-xl p-4 text-zinc-200 outline-none focus:border-cyan-500/50 transition-colors text-sm resize-none whitespace-pre-wrap leading-relaxed"
                 />
               ) : (
@@ -472,14 +472,16 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* 4. 游戏数据档案库 */}
+         {/* 🌟 4. 游戏数据档案库 (引入 CHUNITHM 三格并列设计) */}
         <div className="mt-12">
           <div className="flex items-center gap-3 mb-6 px-2">
             <div className="w-1 h-5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
             <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">数据档案库</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            {/* Maimai DX */}
             <div onClick={() => navigate(`/profile/${profile.username}/maimai`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-cyan-500/30">
               <div className="absolute -right-10 -bottom-10 opacity-5 text-9xl text-cyan-400 transform -rotate-12 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
               <div className="relative z-10 flex flex-col h-full">
@@ -495,6 +497,23 @@ const Profile = () => {
               </div>
             </div>
 
+            {/* 🔥 新增：CHUNITHM */}
+            <div onClick={() => navigate(`/profile/${profile.username}/chunithm`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-yellow-500/30">
+              <div className="absolute -right-6 -bottom-6 opacity-5 text-9xl text-yellow-400 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
+              <div className="relative z-10 flex flex-col h-full">
+                <h3 className="text-xl font-bold text-yellow-400 mb-1">CHUNITHM</h3>
+                <p className="text-xs text-zinc-500 font-medium mb-8">查看 B30+R20 成绩单与谱面评级</p>
+                <div className="mt-auto flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Rating</span>
+                    <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{profile.chuniRating ? profile.chuniRating.toFixed(2) : '--'}</span>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-yellow-500 group-hover:text-white transition-colors"><FaChevronRight className="text-sm" /></div>
+                </div>
+              </div>
+            </div>
+
+            {/* osu! */}
             <div onClick={() => navigate(`/profile/${profile.username}/osu`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-pink-500/30">
               <div className="absolute -right-6 -bottom-6 opacity-5 text-9xl text-pink-400 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
               <div className="relative z-10 flex flex-col h-full">
@@ -509,9 +528,9 @@ const Profile = () => {
                 </div>
               </div>
             </div>
+
           </div>
         </div>
-
       </div>
     </div>
   );
