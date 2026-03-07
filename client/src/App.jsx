@@ -9,6 +9,7 @@ import Friends from './pages/Friends';
 import MaimaiProfile from './pages/MaimaiProfile';
 import Settings from './pages/Settings';
 import ChunithmProfile from './pages/ChunithmProfile';
+import OsuProfile from './pages/OsuProfile';
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -57,6 +58,7 @@ function App() {
             <Route path="/friends" element={<Friends />} />
             <Route path="/profile/:username/maimai" element={<MaimaiProfile />} />
             <Route path="/profile/:username/chunithm" element={<ChunithmProfile />} />
+            <Route path="/profile/:username/osu" element={<OsuProfile />} />
             {/* 曲目图鉴页路由 */}
             <Route path="songs" element={<Songs />} />
             
