@@ -126,7 +126,7 @@ app.get('/api/daily-song', async (req, res) => {
       return res.json({
         title: "今天正在精挑细选...",
         artist: "System",
-        source: "PureBeat 社区",
+        source: "PureBeat",
         coverUrl: "/assets/logos.png"
       });
     }
@@ -135,6 +135,27 @@ app.get('/api/daily-song', async (req, res) => {
   } catch (err) {
     console.error('获取每日推荐失败:', err);
     res.status(500).json({ msg: '获取每日推荐失败' });
+  }
+});
+
+// ==========================================
+// 🌟 获取每日推荐曲目历史列表 (防剧透版)
+// ==========================================
+app.get('/api/daily-song/history', async (req, res) => {
+  try {
+    const now = new Date();
+    const offsetMs = now.getTime() - (4 * 60 * 60 * 1000);
+    const offsetDate = new Date(offsetMs);
+    const todayKey = `${offsetDate.getFullYear()}-${String(offsetDate.getMonth() + 1).padStart(2, '0')}-${String(offsetDate.getDate()).padStart(2, '0')}`;
+
+    const history = await DailySong.find({ dateKey: { $lte: todayKey } })
+      .sort({ dateKey: -1 })
+      .limit(50);
+
+    res.json(history);
+  } catch (err) {
+    console.error('获取历史推荐失败:', err);
+    res.status(500).json({ msg: '获取历史推荐失败' });
   }
 });
 
