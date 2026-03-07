@@ -7,6 +7,7 @@ import Leaderboard from './pages/Leaderboard';
 import OsuCallback from './pages/OsuCallback';
 import Friends from './pages/Friends';
 import MaimaiProfile from './pages/MaimaiProfile';
+import Settings from './pages/Settings';
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -48,6 +49,7 @@ function App() {
             <Route path="/inbox" element={<Inbox />} />
             <Route path="/tournaments" element={<Tournaments />} />
             <Route path="/tournament-info" element={<TournamentInfo />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/wiki" element={<WikiIndex />} />
             <Route path="/wiki/:slug" element={<WikiArticle />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
