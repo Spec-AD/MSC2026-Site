@@ -166,7 +166,10 @@ const syncAliasesTask = async () => {
   try {
     console.log('开始自动同步曲目别名库...');
     // 使用 responseType: 'text' 防止因头部非 JSON 导致的 Axios 解析失败
-    const response = await axios.get('http://114.66.10.76:5000/GetAliasFile', { responseType: 'text' });
+    const response = await axios.get('http://114.66.10.76:5000/GetAliasFile', { 
+      responseType: 'text',
+      timeout: 10000
+    });
     
     let aliasData;
     try {
