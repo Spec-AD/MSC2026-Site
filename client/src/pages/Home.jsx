@@ -437,7 +437,17 @@ const Home = () => {
                     className="w-12 h-12 rounded-full object-cover bg-[#0c0c11] border border-white/[0.05] shrink-0 shadow-sm" 
                   />
                   <div className="flex flex-col min-w-0">
-                    <span className="text-lg font-bold text-zinc-100 truncate">{userStats?.username || user.username}</span>
+                    <span className="text-lg font-bold text-zinc-100 truncate">
+                      {userStats?.username || user.username}
+                    </span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <img 
+                        src={`/assets/lv${userStats?.level || user.level || 1}_badge.png`} 
+                        alt={`Lv.${userStats?.level || user.level || 1} Badge`}
+                        className="h-4 object-contain drop-shadow-md"
+                        // 兜底机制：如果玩家等级超过了你画的徽章上限(如 Lv.41)，或者某张图没传，自动隐藏图片防止裂图
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
                     <span 
                       className="text-xs text-cyan-400 font-bold mt-0.5"
                       style={{ fontFamily: "'Quicksand', sans-serif" }}
@@ -446,6 +456,7 @@ const Home = () => {
                     </span>
                   </div>
                 </div>
+              </div>
 
                 <div className="flex flex-col gap-2 mb-4">
                   <div className="flex items-center gap-1.5 bg-[#0c0c11] p-1 rounded-xl border border-white/[0.02] w-fit flex-wrap">
