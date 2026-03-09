@@ -1,12 +1,13 @@
-// server/models/Announcement.js
 const mongoose = require('mongoose');
 
-const AnnouncementSchema = new mongoose.Schema({
+const announcementSchema = new mongoose.Schema({
   title: { type: String, required: true },
-  type: { type: String, required: true, default: 'NEWS' }, // 如 TOURNAMENT, SYSTEM, NEWS
-  content: { type: String, required: true }, // 存放 BBCode
+  subtitle: { type: String },    //  新增：用于首页列表的简短说明
+  type: { type: String, default: 'NEWS' },
+  content: { type: String, required: true },
+  coverUrl: { type: String },    // 新增：这是横幅画面路径
   author: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('Announcement', AnnouncementSchema);
+module.exports = mongoose.model('Announcement', announcementSchema);
