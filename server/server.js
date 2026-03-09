@@ -168,7 +168,7 @@ const syncAliasesTask = async () => {
     // 使用 responseType: 'text' 防止因头部非 JSON 导致的 Axios 解析失败
     const response = await axios.get('http://114.66.10.76:5000/GetAliasFile', { 
       responseType: 'text',
-      timeout: 10000
+      timeout: 60000
     });
     
     let aliasData;
@@ -1398,4 +1398,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📅 Current Server Time: ${new Date().toLocaleString()}`);
+
 });
