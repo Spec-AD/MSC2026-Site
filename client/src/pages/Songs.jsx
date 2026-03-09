@@ -101,27 +101,14 @@ export default function Songs() {
           
           const rawData = await response.json();
 
+          // 直接继承后端的洗练数据，只提取 title 激活搜索
           const processedData = rawData.map(song => {
-            const dsArray = [null, null, null, null, null];
-            if (song.difficulties && Array.isArray(song.difficulties)) {
-              song.difficulties.forEach(d => {
-                // 🔥 核心修复：优先读取真实定数 ratingReal (如 10.5)，没有才回退到 rating (如 10)
-                dsArray[d.ratingClass] = d.ratingReal || d.constant || d.rating || 0; 
-              });
-            }
             return {
               ...song,
-              basic_info: {
-                title: song.title_localized?.en || song.id,
-                artist: song.artist,
-                genre: song.set, 
-                bpm: song.bpm,
-                from: song.version
-              },
-              ds: dsArray,
-              title: song.title_localized?.en || song.id
+              title: song.basic_info?.title || song.title_localized?.en || song.id
             };
           });
+
           setArcaeaSongs(processedData.reverse()); 
         } catch (err) {
           console.error("获取 Arcaea 曲目失败:", err);
