@@ -161,15 +161,20 @@ export default function Songs() {
     const numBpmMin = parseInt(bpmMin) || 0;
     const numBpmMax = parseInt(bpmMax) || 400;
 
-    return currentSongs.filter(song => {
+  return currentSongs.filter(song => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const titleMatch = song.title?.toLowerCase().includes(query) || song.basic_info?.title?.toLowerCase().includes(query);
         const artistMatch = song.basic_info?.artist?.toLowerCase().includes(query);
         const idMatch = String(song.id).includes(query);
-        if (!titleMatch && !artistMatch && !idMatch) return false;
+        
+        // v1.5.3：别名模糊匹配
+        const aliasMatch = song.aliases && song.aliases.some(alias => alias.toLowerCase().includes(query));
+
+        // 只要 标题 / 曲师 / ID / 别名 其中一个命中，就返回 true
+        if (!titleMatch && !artistMatch && !idMatch && !aliasMatch) return false;
       }
-      
+           
       if (activeGame === 'maimai' && isNewOnly && !song.basic_info?.is_new) return false;
       
       if (selectedCategories.length > 0 && !selectedCategories.includes(song.basic_info?.genre)) return false;
