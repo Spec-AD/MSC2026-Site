@@ -41,7 +41,8 @@ export default function Songs() {
     const fetchMaimai = async () => {
       try {
         setIsMaimaiLoading(true);
-        const response = await fetch('/proxy/diving-fish/music_data');
+        // 🔥 核心修改：改为请求本地数据库接口，获取携带 aliases 字段的完整数据
+        const response = await fetch('/api/songs');
         if (!response.ok) throw new Error('网络请求失败');
         
         const rawData = await response.json();
@@ -53,7 +54,7 @@ export default function Songs() {
         setMaimaiSongs(processedData.reverse()); 
       } catch (err) {
         console.error("获取 Maimai 曲目失败:", err);
-        setError("无法连接到 Maimai 查分器服务器");
+        setError("无法连接到 Maimai 数据源");
       } finally {
         setIsMaimaiLoading(false);
       }

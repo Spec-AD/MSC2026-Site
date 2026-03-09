@@ -120,7 +120,7 @@ const MaimaiProfile = () => {
       try {
         const [profileRes, musicRes] = await Promise.all([
           axios.get(`/api/users/${username}?t=${Date.now()}`),
-          axios.get('/proxy/diving-fish/music_data').catch(() => ({ data: [] }))
+          axios.get('/api/songs').catch(() => ({ data: [] }))
         ]);
 
         setProfile(profileRes.data);
