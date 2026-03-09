@@ -56,7 +56,8 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardData, setBoardData] = useState([]);
   const [boardScope, setBoardScope] = useState('global'); 
-  const [boardLevel, setBoardLevel] = useState(3);        
+  const [boardLevel, setBoardLevel] = useState(3); 
+  const [currentCover, setCurrentCover] = useState('/assets/bg.png');       
 
   const config = GAME_CONFIG[activeGame] || GAME_CONFIG.maimai;
   const isUtage = song?.basic_info?.genre === '宴会场' || song?.type === 'UTAGE';
@@ -132,12 +133,54 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
     return 0;
   };
 
-  // 🔥 动态获取封面 URL (新增 Arcaea 支持)
-  const coverUrl = activeGame === 'chunithm' 
-    ? `https://assets2.lxns.net/chunithm/jacket/${song?.id}.png`
-    : activeGame === 'arcaea'
-      ? `https://arcapi.estertion.win/assets/songs/${song?.id}/base.jpg`
-      : `https://www.diving-fish.com/covers/${String(song?.id).padStart(5, '0')}.png`;
+// ==========================================
+  // 🌟 智能图床探测引擎 (完美适配 Arcaea 本地资产)
+  // ==========================================
+  useEffect(() => {
+    if (!song) return;
+
+    if (activeGame === 'arcaea') {
+      const isBYD = boardLevel === 3; // 判断用户当前是否点击了 Beyond 难度
+      const sId = song.id;
+
+      // 构建探测队列 (按优先级排列)
+      const pathsToTry = [];
+
+      // 1. 如果选中了 BYD 难度，优先探测 3.jpg 相关的变体
+      if (isBYD) {
+        pathsToTry.push(`/assets/arcaea/songs/${sId}/3.jpg`);
+        pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/3.jpg`);
+        pathsToTry.push(`/assets/arcaea/songs/${sId}/${sId}_3.jpg`);
+        pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/${sId}_3.jpg`);
+      }
+
+      // 2. 探测基础曲绘 base.jpg 的各种变体
+      pathsToTry.push(`/assets/arcaea/songs/${sId}/base.jpg`);
+      pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/base.jpg`);
+      pathsToTry.push(`/assets/arcaea/songs/${sId}/${sId}_base.jpg`);
+      pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/${sId}_base.jpg`);
+
+      // 3. 终极兜底图
+      pathsToTry.push('/assets/bg.png');
+
+      // 递归探测：自动挨个试，哪个能加载出来就用哪个
+      const probeImage = (index) => {
+        if (index >= pathsToTry.length) return;
+        const img = new Image();
+        img.onload = () => setCurrentCover(pathsToTry[index]);
+        img.onerror = () => probeImage(index + 1); // 裂图了就悄悄试下一个
+        img.src = pathsToTry[index];
+      };
+
+      // 启动探测
+      probeImage(0);
+
+    } else if (activeGame === 'chunithm') {
+      setCurrentCover(`https://assets2.lxns.net/chunithm/jacket/${song.id}.png`);
+    } else {
+      setCurrentCover(`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`);
+    }
+  }, [song, activeGame, boardLevel]); // 🔥 监听 boardLevel，点击不同难度自动重新探测！
 
   return (
     <>
@@ -163,10 +206,9 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
               </button>
               
               <img 
-                src={coverUrl} 
+                src={currentCover} 
                 alt="cover" 
                 className="w-20 h-20 rounded-xl object-cover shadow-lg border border-white/10 shrink-0" 
-                onError={(e) => { e.target.src = '/assets/bg.png'; }}
               />
 
               <div className="pr-6 flex flex-col justify-center min-w-0">
