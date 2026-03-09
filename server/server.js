@@ -162,21 +162,49 @@ app.get('/api/daily-song/history', async (req, res) => {
 // ==========================================
 // 🌟 v1.5.3 别名自动同步引擎 (自动兼容解析)
 // ==========================================
+// ==========================================
+// 🌟 v1.5.3 别名自动同步引擎 (加入高可用抗抖动与重试机制)
+// ==========================================
 const syncAliasesTask = async () => {
+  console.log('🔄 [v1.5.3] 开始自动同步曲目别名库...');
+  
+  let response;
+  let success = false;
+  const maxRetries = 3; // 最大重试 3 次
+
+  // 1. 发起带重试机制的网络请求
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      response = await axios.get('http://114.66.10.76:5000/GetAliasFile', { 
+        responseType: 'text',
+        timeout: 120000, // 🔥 提升到 120 秒，给对方小水管充足的时间
+        headers: { 'Accept-Encoding': 'gzip, deflate, br' } 
+      });
+      success = true;
+      break; // 如果成功拿到数据，直接跳出循环
+    } catch (err) {
+      console.warn(`⚠️ 第 ${i + 1} 次尝试拉取别名失败: ${err.message}`);
+      if (i < maxRetries - 1) {
+        console.log(`⏳ 等待 5 秒后进行第 ${i + 2} 次重试...`);
+        // 阻塞等待 5 秒
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+  }
+
+  // 如果 3 次全部失败，则终止本次同步
+  if (!success) {
+    console.error('❌ [v1.5.3] 别名同步最终失败：网络持续不稳定，已达到最大重试次数。下次定时任务再试。');
+    return;
+  }
+
+  // 2. 解析与入库逻辑
   try {
-    console.log('开始自动同步曲目别名库...');
-    // 使用 responseType: 'text' 防止因头部非 JSON 导致的 Axios 解析失败
-    const response = await axios.get('http://114.66.10.76:5000/GetAliasFile', { 
-      responseType: 'text',
-      timeout: 60000,
-	  headers: { 'Accept-Encoding': 'gzip, deflate, br' }
-    });
-    
     let aliasData;
     try {
       aliasData = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
     } catch (e) {
-      console.error('解析别名文件失败，可能不是标准的 JSON 格式');
+      console.error('❌ 解析别名文件失败，可能下载的数据不完整或不是标准的 JSON 格式');
       return;
     }
 
@@ -211,34 +239,19 @@ const syncAliasesTask = async () => {
 
     if (bulkOps.length > 0) {
       await Song.bulkWrite(bulkOps);
-      console.log(`别名库同步完成！共为 ${bulkOps.length} 首曲目挂载了别名。`);
+      console.log(`✅ [v1.5.3] 别名库同步完成！共为 ${bulkOps.length} 首曲目挂载了别名。`);
     } else {
-      console.log('别名库解析为空，请检查文件格式。');
+      console.log('⚠️ 别名库解析为空，请检查文件格式。');
     }
   } catch (err) {
-    console.error('同步别名失败:', err.message);
+    console.error('❌ [v1.5.3] 同步别名时数据库操作失败:', err.message);
   }
 };
 
 // 启动服务器后，延迟 5 秒执行一次全量拉取
 setTimeout(syncAliasesTask, 5000);
-// 之后每隔 12 小时自动同步一次，与朋友的 Bot 数据保持实时同调
+// 之后每隔 12 小时自动同步一次
 setInterval(syncAliasesTask, 12 * 60 * 60 * 1000);
-
-
-// 🌟 给管理员预留的手动强制更新接口
-app.post('/api/admin/sync-aliases', authMiddleware, async (req, res) => {
-  try {
-    const adminUser = await User.findById(req.user.id || req.user._id);
-    if (!adminUser || adminUser.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
-    
-    // 异步执行任务，直接响应前端
-    syncAliasesTask();
-    res.json({ msg: '正在后台执行别名同步，请稍后刷新页面查看。' });
-  } catch (err) {
-    res.status(500).json({ msg: '触发同步失败' });
-  }
-});
 
 // ==========================================
 // 认证与安全 API
@@ -1399,6 +1412,4 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📅 Current Server Time: ${new Date().toLocaleString()}`);
-
 });
-
