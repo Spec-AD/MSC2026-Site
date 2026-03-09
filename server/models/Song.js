@@ -11,7 +11,8 @@ const SongSchema = new mongoose.Schema({
     artist: String,
     genre: String,
     bpm: Number,
-    is_new: Boolean
+    is_new: Boolean,
+    from: String
   },
   // 🔥 终极防丢手段：显式声明物量字段为混合类型，强迫 MongoDB 接收所有音符数据
   charts: { type: mongoose.Schema.Types.Mixed }, 
