@@ -160,6 +160,83 @@ app.get('/api/daily-song/history', async (req, res) => {
 });
 
 // ==========================================
+// 🌟 v1.5.3 别名自动同步引擎 (自动兼容解析)
+// ==========================================
+const syncAliasesTask = async () => {
+  try {
+    console.log('开始自动同步曲目别名库...');
+    // 使用 responseType: 'text' 防止因头部非 JSON 导致的 Axios 解析失败
+    const response = await axios.get('http://114.66.10.76:5000/GetAliasFile', { responseType: 'text' });
+    
+    let aliasData;
+    try {
+      aliasData = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+    } catch (e) {
+      console.error('解析别名文件失败，可能不是标准的 JSON 格式');
+      return;
+    }
+
+    let bulkOps = [];
+    
+    // 兼容解析 1：字典格式 { "833": ["皇帝", "农夫山泉"], ... }
+    if (typeof aliasData === 'object' && !Array.isArray(aliasData)) {
+      for (const [songId, aliases] of Object.entries(aliasData)) {
+        bulkOps.push({
+          updateOne: {
+            filter: { id: String(songId) },
+            update: { $set: { aliases: Array.isArray(aliases) ? aliases : [aliases] } }
+          }
+        });
+      }
+    } 
+    // 兼容解析 2：数组格式 [ { SongID: 833, Alias: ["..."] } ]
+    else if (Array.isArray(aliasData)) {
+      aliasData.forEach(item => {
+        const sId = item.SongID || item.songId || item.id;
+        const aliases = item.Alias || item.aliases || item.alias;
+        if (sId && aliases) {
+          bulkOps.push({
+            updateOne: {
+              filter: { id: String(sId) },
+              update: { $set: { aliases: Array.isArray(aliases) ? aliases : [aliases] } }
+            }
+          });
+        }
+      });
+    }
+
+    if (bulkOps.length > 0) {
+      await Song.bulkWrite(bulkOps);
+      console.log(`别名库同步完成！共为 ${bulkOps.length} 首曲目挂载了别名。`);
+    } else {
+      console.log('别名库解析为空，请检查文件格式。');
+    }
+  } catch (err) {
+    console.error('同步别名失败:', err.message);
+  }
+};
+
+// 启动服务器后，延迟 5 秒执行一次全量拉取
+setTimeout(syncAliasesTask, 5000);
+// 之后每隔 12 小时自动同步一次，与朋友的 Bot 数据保持实时同调
+setInterval(syncAliasesTask, 12 * 60 * 60 * 1000);
+
+
+// 🌟 给管理员预留的手动强制更新接口
+app.post('/api/admin/sync-aliases', authMiddleware, async (req, res) => {
+  try {
+    const adminUser = await User.findById(req.user.id || req.user._id);
+    if (!adminUser || adminUser.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
+    
+    // 异步执行任务，直接响应前端
+    syncAliasesTask();
+    res.json({ msg: '正在后台执行别名同步，请稍后刷新页面查看。' });
+  } catch (err) {
+    res.status(500).json({ msg: '触发同步失败' });
+  }
+});
+
+// ==========================================
 // 认证与安全 API
 // ==========================================
 app.post('/api/auth/send-otp', async (req, res) => {
