@@ -18,8 +18,11 @@ export default function Songs() {
 
   const [maimaiSongs, setMaimaiSongs] = useState([]);
   const [chunithmSongs, setChunithmSongs] = useState([]);
+  const [arcaeaSongs, setArcaeaSongs] = useState([]); // 🔥 Arcaea 数据源
+  
   const [isMaimaiLoading, setIsMaimaiLoading] = useState(true);
   const [isChuniLoading, setIsChuniLoading] = useState(false);
+  const [isArcaeaLoading, setIsArcaeaLoading] = useState(false); // 🔥 Arcaea 加载状态
   const [error, setError] = useState(null);
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,11 +40,11 @@ export default function Songs() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedVersions, setSelectedVersions] = useState([]);
 
+  // 1. Maimai 数据拉取
   useEffect(() => {
     const fetchMaimai = async () => {
       try {
         setIsMaimaiLoading(true);
-        // 🔥 核心修改：改为请求本地数据库接口，获取携带 aliases 字段的完整数据
         const response = await fetch('/api/songs');
         if (!response.ok) throw new Error('网络请求失败');
         
@@ -62,6 +65,7 @@ export default function Songs() {
     fetchMaimai();
   }, []);
 
+  // 2. CHUNITHM 数据拉取
   useEffect(() => {
     if (activeGame === 'chunithm' && chunithmSongs.length === 0) {
       const fetchChunithm = async () => {
@@ -86,9 +90,56 @@ export default function Songs() {
     }
   }, [activeGame, chunithmSongs.length]);
 
-  const currentSongs = activeGame === 'maimai' ? maimaiSongs : chunithmSongs;
-  const isLoading = activeGame === 'maimai' ? isMaimaiLoading : isChuniLoading;
+  // 3. 🔥 Arcaea 数据拉取与清洗
+  useEffect(() => {
+    if (activeGame === 'arcaea' && arcaeaSongs.length === 0) {
+      const fetchArcaea = async () => {
+        try {
+          setIsArcaeaLoading(true);
+          const response = await fetch('/api/arcaea-songs');
+          if (!response.ok) throw new Error('网络请求失败');
+          
+          const rawData = await response.json();
+          // 数据适配，让 Arcaea 兼容现有筛选引擎
+          const processedData = rawData.map(song => {
+            const dsArray = [null, null, null, null, null];
+            if (song.difficulties) {
+              song.difficulties.forEach(d => {
+                dsArray[d.ratingClass] = d.constant || d.rating; 
+              });
+            }
+            return {
+              ...song,
+              basic_info: {
+                title: song.title_localized?.en || song.id,
+                artist: song.artist,
+                genre: song.set, 
+                bpm: song.bpm,
+                from: song.version
+              },
+              ds: dsArray,
+              title: song.title_localized?.en || song.id
+            };
+          });
+          setArcaeaSongs(processedData.reverse()); 
+        } catch (err) {
+          console.error("获取 Arcaea 曲目失败:", err);
+          setError("无法连接到 Arcaea 数据源");
+        } finally {
+          setIsArcaeaLoading(false);
+        }
+      };
+      fetchArcaea();
+    }
+  }, [activeGame, arcaeaSongs.length]);
 
+  // 动态数据源选择
+  const currentSongs = activeGame === 'maimai' ? maimaiSongs : (activeGame === 'chunithm' ? chunithmSongs : arcaeaSongs);
+  const isLoading = activeGame === 'maimai' ? isMaimaiLoading : (activeGame === 'chunithm' ? isChuniLoading : isArcaeaLoading);
+
+  // ==========================================
+  // 难度配置字典
+  // ==========================================
   const MAIMAI_DIFF_CONFIG = [
     { label: 'BASIC', color: 'text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10', activeBg: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40', tagClass: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
     { label: 'ADVANCED', color: 'text-amber-400 border-amber-500/20 hover:bg-amber-500/10', activeBg: 'bg-amber-500/20 text-amber-400 border-amber-500/40', tagClass: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
@@ -106,7 +157,15 @@ export default function Songs() {
     { label: "WORLD'S END", color: 'text-zinc-300 border-white/20 hover:bg-white/10', activeBg: 'bg-white/10 text-white border-white/40 shadow-[0_0_8px_rgba(255,255,255,0.2)]', tagClass: 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300 bg-[#15151e] border-white/20' }
   ];
 
-  const currentDiffConfig = activeGame === 'chunithm' ? CHUNI_DIFF_CONFIG : MAIMAI_DIFF_CONFIG;
+  const ARCAEA_DIFF_CONFIG = [
+    { label: 'Past', color: 'text-blue-400 border-blue-500/20 hover:bg-blue-500/10', activeBg: 'bg-blue-500/20 text-blue-400 border-blue-500/40', tagClass: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+    { label: 'Present', color: 'text-green-400 border-green-500/20 hover:bg-green-500/10', activeBg: 'bg-green-500/20 text-green-400 border-green-500/40', tagClass: 'text-green-400 bg-green-500/10 border-green-500/20' },
+    { label: 'Future', color: 'text-purple-400 border-purple-500/20 hover:bg-purple-500/10', activeBg: 'bg-purple-500/20 text-purple-400 border-purple-500/40', tagClass: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+    { label: 'Beyond', color: 'text-red-500 border-red-500/20 hover:bg-red-500/10', activeBg: 'bg-red-500/20 text-red-500 border-red-500/40', tagClass: 'text-red-500 bg-red-500/10 border-red-500/20' },
+    { label: 'Eternal', color: 'text-fuchsia-400 border-fuchsia-500/20 hover:bg-fuchsia-500/10', activeBg: 'bg-[#150015] text-fuchsia-400 border-fuchsia-500/40 shadow-[0_0_8px_rgba(232,121,249,0.2)]', tagClass: 'text-fuchsia-400 bg-[#1a0a1a] border-fuchsia-500/30' }
+  ];
+
+  const currentDiffConfig = activeGame === 'chunithm' ? CHUNI_DIFF_CONFIG : (activeGame === 'arcaea' ? ARCAEA_DIFF_CONFIG : MAIMAI_DIFF_CONFIG);
   const maxDiffIndex = activeGame === 'chunithm' ? 5 : 4;
 
   const filterOptions = useMemo(() => {
@@ -181,7 +240,15 @@ export default function Songs() {
       if (selectedCategories.length > 0 && !selectedCategories.includes(song.basic_info?.genre)) return false;
       if (selectedVersions.length > 0 && !selectedVersions.includes(song.basic_info?.from)) return false;
       
-      const bpm = song.basic_info?.bpm || 0;
+      // Arcaea 部分歌曲可能没有 bpm (为字符串区间如 "100-200")，做个兼容转换
+      let bpm = 0;
+      if (typeof song.basic_info?.bpm === 'string') {
+        const match = song.basic_info.bpm.match(/\d+/);
+        if (match) bpm = parseInt(match[0], 10);
+      } else {
+        bpm = song.basic_info?.bpm || 0;
+      }
+
       if (bpm < numBpmMin || bpm > numBpmMax) return false;
 
       const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: maxDiffIndex + 1 }, (_, i) => i);
@@ -220,25 +287,55 @@ export default function Songs() {
     return <div className="text-rose-400 text-center mt-20 font-bold bg-[#0c0c11] h-screen">{error}</div>;
   }
 
+  // 动态提取主题色
+  const getThemeColorClass = (type) => {
+    if (activeGame === 'chunithm') {
+      if (type === 'bg') return 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]';
+      if (type === 'text') return 'text-yellow-400 border-yellow-500/20';
+      if (type === 'input') return 'focus:border-yellow-500/50';
+      if (type === 'btn') return 'bg-yellow-500 text-zinc-900';
+      if (type === 'spinner') return 'text-yellow-500/50';
+      if (type === 'hoverText') return 'group-hover:text-yellow-300';
+    }
+    if (activeGame === 'arcaea') {
+      if (type === 'bg') return 'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.5)]';
+      if (type === 'text') return 'text-purple-400 border-purple-500/20';
+      if (type === 'input') return 'focus:border-purple-500/50';
+      if (type === 'btn') return 'bg-purple-500 text-white';
+      if (type === 'spinner') return 'text-purple-500/50';
+      if (type === 'hoverText') return 'group-hover:text-purple-300';
+    }
+    // Maimai 默认
+    if (type === 'bg') return 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]';
+    if (type === 'text') return 'text-cyan-400 border-cyan-500/20';
+    if (type === 'input') return 'focus:border-cyan-500/50';
+    if (type === 'btn') return 'bg-cyan-500 text-white';
+    if (type === 'spinner') return 'text-cyan-500/50';
+    if (type === 'hoverText') return 'group-hover:text-cyan-300';
+    return '';
+  };
+
   return (
     <div className="w-full h-screen bg-[#0c0c11] text-zinc-200 flex flex-col font-sans selection:bg-indigo-500/30 relative">
       
       {/* 动态环境散光背景 */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden transition-colors duration-1000">
-        <div className={`absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full blur-[140px] mix-blend-screen transition-colors duration-1000 ${activeGame === 'chunithm' ? 'bg-yellow-900/10' : 'bg-cyan-900/10'}`}></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-purple-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
+        <div className={`absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full blur-[140px] mix-blend-screen transition-colors duration-1000 ${
+          activeGame === 'chunithm' ? 'bg-yellow-900/10' : (activeGame === 'arcaea' ? 'bg-purple-900/10' : 'bg-cyan-900/10')
+        }`}></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-indigo-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
       </div>
 
       <div className="max-w-7xl w-full mx-auto px-4 md:px-8 pt-8 md:pt-12 pb-6 flex flex-col flex-1 overflow-hidden z-10">
         
         <div className="mb-6 flex flex-col gap-4 shrink-0">
           <div className="flex items-center gap-3">
-            <div className={`w-1 h-6 rounded-full transition-colors duration-500 ${activeGame === 'chunithm' ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]' : 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]'}`}></div>
+            <div className={`w-1 h-6 rounded-full transition-colors duration-500 ${getThemeColorClass('bg')}`}></div>
             <h1 className="text-3xl font-bold text-zinc-100 tracking-tight flex items-center gap-3 transition-colors">
               曲目图鉴 
-              {['maimai', 'chunithm'].includes(activeGame) && !isLoading && (
+              {['maimai', 'chunithm', 'arcaea'].includes(activeGame) && !isLoading && (
                 <span 
-                  className={`text-xs border px-2.5 py-1 rounded-lg font-bold bg-[#15151e] ${activeGame === 'chunithm' ? 'text-yellow-400 border-yellow-500/20' : 'text-cyan-400 border-cyan-500/20'}`}
+                  className={`text-xs border px-2.5 py-1 rounded-lg font-bold bg-[#15151e] ${getThemeColorClass('text')}`}
                   style={{ fontFamily: "'Quicksand', sans-serif" }}
                 >
                   {filteredSongs.length} TRACKS
@@ -272,7 +369,7 @@ export default function Songs() {
         </div>
 
         <AnimatePresence mode="wait">
-          {['maimai', 'chunithm'].includes(activeGame) ? (
+          {['maimai', 'chunithm', 'arcaea'].includes(activeGame) ? (
             <motion.div 
               key="content-panel"
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
@@ -286,13 +383,13 @@ export default function Songs() {
                     type="text" 
                     placeholder="搜索曲名、曲师或 ID..." 
                     value={searchQuery}
-                    className={`w-full bg-[#15151e]/80 backdrop-blur-md border border-white/[0.05] text-zinc-200 pl-10 pr-4 py-2.5 rounded-xl focus:outline-none transition-colors shadow-sm text-sm placeholder-zinc-600 ${activeGame === 'chunithm' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`}
+                    className={`w-full bg-[#15151e]/80 backdrop-blur-md border border-white/[0.05] text-zinc-200 pl-10 pr-4 py-2.5 rounded-xl focus:outline-none transition-colors shadow-sm text-sm placeholder-zinc-600 ${getThemeColorClass('input')}`}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
                 <button 
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all border active:scale-95 ${isFilterOpen ? (activeGame === 'chunithm' ? 'bg-yellow-500 text-zinc-900 border-transparent shadow-md' : 'bg-cyan-500 text-white border-transparent shadow-md') : 'bg-[#15151e]/80 backdrop-blur-md text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all border active:scale-95 ${isFilterOpen ? `${getThemeColorClass('btn')} border-transparent shadow-md` : 'bg-[#15151e]/80 backdrop-blur-md text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}
                 >
                   {isFilterOpen ? <FaTimes /> : <FaFilter />} 高级筛选
                 </button>
@@ -346,7 +443,7 @@ export default function Songs() {
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-zinc-500 flex justify-between uppercase tracking-widest">
                         <span>Constant Range</span>
-                        <span style={{ fontFamily: "'Quicksand', sans-serif" }} className={activeGame === 'chunithm' ? 'text-yellow-400' : 'text-cyan-400'}>
+                        <span style={{ fontFamily: "'Quicksand', sans-serif" }} className={getThemeColorClass('text').split(' ')[0]}>
                           {(parseFloat(dsMin)||0.0).toFixed(1)} - {(parseFloat(dsMax)||15.7).toFixed(1)}
                         </span>
                       </label>
@@ -354,14 +451,14 @@ export default function Songs() {
                         <input 
                           type="number" step="0.1" min="0.0" max="15.7"
                           value={dsMin} onChange={e => setDsMin(e.target.value)} onBlur={() => handleDsBlur('min')}
-                          className={`w-full bg-[#0c0c11] border border-white/[0.05] rounded-xl p-2 text-center text-sm text-zinc-200 outline-none transition-colors ${activeGame === 'chunithm' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} 
+                          className={`w-full bg-[#0c0c11] border border-white/[0.05] rounded-xl p-2 text-center text-sm text-zinc-200 outline-none transition-colors ${getThemeColorClass('input')}`} 
                           style={{ fontFamily: "'Quicksand', sans-serif" }}
                         />
                         <span className="text-zinc-600">-</span>
                         <input 
                           type="number" step="0.1" min="0.0" max="15.7"
                           value={dsMax} onChange={e => setDsMax(e.target.value)} onBlur={() => handleDsBlur('max')}
-                          className={`w-full bg-[#0c0c11] border border-white/[0.05] rounded-xl p-2 text-center text-sm text-zinc-200 outline-none transition-colors ${activeGame === 'chunithm' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} 
+                          className={`w-full bg-[#0c0c11] border border-white/[0.05] rounded-xl p-2 text-center text-sm text-zinc-200 outline-none transition-colors ${getThemeColorClass('input')}`} 
                           style={{ fontFamily: "'Quicksand', sans-serif" }}
                         />
                       </div>
@@ -370,7 +467,7 @@ export default function Songs() {
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-zinc-500 flex justify-between uppercase tracking-widest">
                         <span>BPM Range</span>
-                        <span style={{ fontFamily: "'Quicksand', sans-serif" }} className={activeGame === 'chunithm' ? 'text-yellow-400' : 'text-cyan-400'}>
+                        <span style={{ fontFamily: "'Quicksand', sans-serif" }} className={getThemeColorClass('text').split(' ')[0]}>
                           {parseInt(bpmMin)||0} - {parseInt(bpmMax)||0}
                         </span>
                       </label>
@@ -378,14 +475,14 @@ export default function Songs() {
                         <input 
                           type="number" step="1" min="0" max="1000"
                           value={bpmMin} onChange={e => setBpmMin(e.target.value)} onBlur={() => handleBpmBlur('min')}
-                          className={`w-full bg-[#0c0c11] border border-white/[0.05] rounded-xl p-2 text-center text-sm text-zinc-200 outline-none transition-colors ${activeGame === 'chunithm' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} 
+                          className={`w-full bg-[#0c0c11] border border-white/[0.05] rounded-xl p-2 text-center text-sm text-zinc-200 outline-none transition-colors ${getThemeColorClass('input')}`} 
                           style={{ fontFamily: "'Quicksand', sans-serif" }}
                         />
                         <span className="text-zinc-600">-</span>
                         <input 
                           type="number" step="1" min="0" max="1000"
                           value={bpmMax} onChange={e => setBpmMax(e.target.value)} onBlur={() => handleBpmBlur('max')}
-                          className={`w-full bg-[#0c0c11] border border-white/[0.05] rounded-xl p-2 text-center text-sm text-zinc-200 outline-none transition-colors ${activeGame === 'chunithm' ? 'focus:border-yellow-500/50' : 'focus:border-cyan-500/50'}`} 
+                          className={`w-full bg-[#0c0c11] border border-white/[0.05] rounded-xl p-2 text-center text-sm text-zinc-200 outline-none transition-colors ${getThemeColorClass('input')}`} 
                           style={{ fontFamily: "'Quicksand', sans-serif" }}
                         />
                       </div>
@@ -433,7 +530,7 @@ export default function Songs() {
                 <div className="flex-1 bg-[#15151e]/80 backdrop-blur-md rounded-2xl border border-white/[0.05] overflow-hidden shadow-sm flex flex-col relative">
                   {isLoading ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c0c11]/50 backdrop-blur-sm z-10">
-                      <FaSpinner className={`animate-spin text-4xl mb-4 ${activeGame === 'chunithm' ? 'text-yellow-500/50' : 'text-cyan-500/50'}`} />
+                      <FaSpinner className={`animate-spin text-4xl mb-4 ${getThemeColorClass('spinner')}`} />
                     </div>
                   ) : null}
 
@@ -448,6 +545,7 @@ export default function Songs() {
                       data={filteredSongs}
                       itemContent={(index, song) => {
                         const isMaimai = activeGame === 'maimai';
+                        const isArcaea = activeGame === 'arcaea';
                         
                         let displayDs = 0; 
                         let dsTagClass = currentDiffConfig[maxDiffIndex].tagClass; 
@@ -466,15 +564,15 @@ export default function Songs() {
                         }
 
                         const isUtageVisual = isMaimai && displayDs === 0;
-                        const isWE = !isMaimai && song.ds && song.ds[5] > 0;
+                        const isWE = !isMaimai && !isArcaea && song.ds && song.ds[5] > 0;
 
                         const gameTagColor = isMaimai 
                           ? (song.type === 'DX' ? 'text-blue-400 border-blue-500/20 bg-blue-500/10' : song.type === 'UTAGE' ? 'text-pink-400 border-pink-500/20 bg-pink-500/10' : 'text-orange-400 border-orange-500/20 bg-orange-500/10')
-                          : (isWE ? 'text-cyan-300 border-cyan-500/20 bg-cyan-500/10' : 'text-yellow-400 border-yellow-500/20 bg-yellow-500/10');
+                          : (isArcaea ? 'text-purple-400 border-purple-500/20 bg-purple-500/10' : (isWE ? 'text-cyan-300 border-cyan-500/20 bg-cyan-500/10' : 'text-yellow-400 border-yellow-500/20 bg-yellow-500/10'));
                           
                         const gameTagText = isMaimai 
                           ? (song.type === 'UTAGE' ? 'UT' : song.type) 
-                          : (isWE ? 'WE' : 'CHU');
+                          : (isArcaea ? 'ARC' : (isWE ? 'WE' : 'CHU'));
 
                         return (
                           <div 
@@ -490,7 +588,7 @@ export default function Songs() {
                               </div>
                               
                               <div className="flex flex-col truncate min-w-0">
-                                <span className={`text-base font-bold text-zinc-100 truncate transition-colors flex items-center gap-2 ${activeGame === 'chunithm' ? 'group-hover:text-yellow-300' : 'group-hover:text-cyan-300'}`}>
+                                <span className={`text-base font-bold text-zinc-100 truncate transition-colors flex items-center gap-2 ${getThemeColorClass('hoverText')}`}>
                                   {song.title || song.basic_info?.title}
                                   {song.basic_info?.is_new && <span className="bg-rose-500/20 text-rose-400 text-[9px] px-1.5 py-0.5 rounded uppercase tracking-widest font-bold">NEW</span>}
                                 </span>
@@ -540,7 +638,7 @@ export default function Songs() {
                 onClick={() => setActiveGame('maimai')}
                 className="mt-8 px-6 py-2.5 bg-zinc-200 text-zinc-900 rounded-xl text-sm font-bold active:scale-95 transition-all shadow-sm"
               >
-                返回舞萌 DX 曲库
+                返回曲库
               </button>
             </motion.div>
           )}
