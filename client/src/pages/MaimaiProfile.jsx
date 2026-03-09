@@ -6,7 +6,6 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, FaLock, FaTimes } from 'react-icons/fa';
 
-
 const B50_FILTERS = [
   { value: 'DEFAULT', label: '默认 B50' }, { value: 'IDEAL', label: '理想 B50' },
   { value: 'AP50', label: 'AP 50' }, { value: 'FC50', label: 'FC 50' },
@@ -20,9 +19,6 @@ const B50_FILTERS = [
   { value: 'YUE50', label: '越 50' }
 ];
 
-// ==========================================
-// 牌子世代配置引擎
-// ==========================================
 const PLATE_VERSIONS = [
   { id: '舞', plates: [{ name: '舞', img: 'maimai' }], label: '舞 (maimai~FiNALE)', versions: ['maimai', 'maimai PLUS', 'maimai GreeN', 'maimai GreeN PLUS', 'maimai ORANGE', 'maimai ORANGE PLUS', 'maimai PiNK', 'maimai PiNK PLUS', 'maimai MURASAKi', 'maimai MURASAKi PLUS', 'maimai MiLK', 'MiLK PLUS', 'maimai MiLK PLUS', 'maimai FiNALE'] },
   { id: '真', plates: [{ name: '真', img: 'plus' }], label: '真 (PLUS)', versions: ['maimai PLUS'] },
@@ -59,7 +55,6 @@ const DIFF_COLORS = [
 const getFc = (s) => (s?.fcStatus || s?.fc || '').toLowerCase();
 const getFs = (s) => (s?.fsStatus || s?.fs || '').toLowerCase();
 
-// 落雪 OAuth 应用 Client ID
 const LXNS_CLIENT_ID = "eef52117-75ed-4283-b861-245375750e62";
 
 const MaimaiProfile = () => {
@@ -82,24 +77,20 @@ const MaimaiProfile = () => {
   const [b50Filter, setB50Filter] = useState('DEFAULT');
   const [selectedPfScore, setSelectedPfScore] = useState(null);
   
-  // 牌子系统状态
   const [selectedPlateVersion, setSelectedPlateVersion] = useState('舞');
   const [selectedPlateDetail, setSelectedPlateDetail] = useState(null); 
   const [detailDiff, setDetailDiff] = useState(3); 
 
-  // 等级进度系统状态
   const [selectedLevelDetail, setSelectedLevelDetail] = useState(null);
 
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
 
   const oauthCalled = useRef(false);
-  // 🔥 核心新增：监听 URL 中的 OAuth 回跳 code
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     
     if (code && isOwnProfile && !oauthCalled.current) {
-      // 清理地址栏，防止刷新重复触发
       oauthCalled.current = true;
       window.history.replaceState({}, document.title, window.location.pathname);
       executeLuoxueOAuthSync(code);
@@ -152,7 +143,6 @@ const MaimaiProfile = () => {
     initData();
   }, [username]);
 
-  // 执行水鱼同步
   const handleSync = async () => {
     if (syncSource === 'df' && !importToken.trim()) return addToast('请提供水鱼 Import-Token', 'error'); 
     
@@ -171,13 +161,11 @@ const MaimaiProfile = () => {
     }
   };
 
-// 🔥 执行落雪 OAuth 同步
   const executeLuoxueOAuthSync = async (code) => {
     setIsSyncing(true);
     setSyncSource('lx'); 
     try {
       const token = localStorage.getItem('token');
-      
       const currentRedirectUri = `${window.location.origin}/profile`;
       
       const res = await axios.post('/api/users/sync-luoxue-oauth', 
@@ -195,13 +183,10 @@ const MaimaiProfile = () => {
     }
   };
 
-// 🔥 触发跳转至落雪授权页面
   const handleLuoxueOAuthLogin = () => {
-    // ⚠️ 重定向地址必须与落雪后台填写的【完全一致】，不能带动态的 username
     const redirectUri = encodeURIComponent(`${window.location.origin}/profile`);
     const scopes = "read_user_profile+write_player+read_player+read_user_token";
     const authUrl = `https://maimai.lxns.net/oauth/authorize?response_type=code&client_id=${LXNS_CLIENT_ID}&redirect_uri=${redirectUri}&scope=${scopes}&state=${username}`;
-    
     window.location.href = authUrl;
   };
 
@@ -243,9 +228,6 @@ const MaimaiProfile = () => {
     return false;
   };
 
-  // ==========================================
-  // 牌子进度计算引擎
-  // ==========================================
   const plateProgress = useMemo(() => {
     if (!musicData || musicData.length === 0 || !profile?.allScores) return null;
 
@@ -303,9 +285,6 @@ const MaimaiProfile = () => {
     return result;
   }, [musicData, profile, selectedPlateVersion, userScoreMap]);
 
-  // ==========================================
-  // 等级进度计算引擎
-  // ==========================================
   const levelProgress = useMemo(() => {
     if (!musicData || musicData.length === 0 || !userScoreMap) return null;
 
@@ -516,7 +495,6 @@ const MaimaiProfile = () => {
             </div>
           </div>
 
-          {/* 智能双源同步控制台 */}
           {isOwnProfile && (
             <div className="flex flex-col gap-3 w-full md:w-auto">
               <div className="flex items-center gap-2 bg-[#15151e]/80 p-1 rounded-xl border border-white/[0.05] w-fit">
@@ -573,9 +551,6 @@ const MaimaiProfile = () => {
           </div>
         ) : (
           <>
-            {/* ========================================== */}
-            {/* 牌子完成度可视化面板 */}
-            {/* ========================================== */}
             <div className="mb-10 border-b border-white/[0.05] pb-10">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex items-center gap-3">
@@ -677,9 +652,6 @@ const MaimaiProfile = () => {
               </div>
             </div>
 
-            {/* ========================================== */}
-            {/* 🔥 等级完成度面板 (全新加入) */}
-            {/* ========================================== */}
             <div className="mb-14 border-b border-white/[0.05] pb-10">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex items-center gap-3">
@@ -700,7 +672,6 @@ const MaimaiProfile = () => {
                     let baseClass = 'border-white/[0.05] bg-[#15151e] hover:bg-[#1a1a24]';
                     let glowClass = '';
 
-                    // 极致光效叠加逻辑
                     if (isAllAPP) {
                         baseClass = 'border-transparent bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-cyan-500/20';
                         glowClass = 'ring-2 ring-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)]';
@@ -750,9 +721,6 @@ const MaimaiProfile = () => {
               </div>
             </div>
 
-            {/* ========================================== */}
-            {/* B50 成绩模块 */}
-            {/* ========================================== */}
             <div className="mb-16">
               <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-white/[0.05] pb-4 mb-6 gap-4">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -868,7 +836,9 @@ const MaimaiProfile = () => {
           </>
         )}
 
-        {/* PF 详情模态窗 */}
+        {/* ========================================== */}
+        {/* PF 详情模态窗 (重写并对齐 pfCalculator.js 逻辑) */}
+        {/* ========================================== */}
         <AnimatePresence>
           {selectedPfScore && (
             <div 
@@ -896,13 +866,31 @@ const MaimaiProfile = () => {
                 </div>
 
                 {(() => {
-                  const ach = selectedPfScore.achievement || 0;
+                  const ach = selectedPfScore.achievement || selectedPfScore.achievementRate || 0;
                   const dxScore = selectedPfScore.dxScore || 0;
                   const dxRatio = selectedPfScore.dxRatio || 0;
                   const maxDxScore = dxRatio > 0 ? Math.round(dxScore / dxRatio) : 0;
+                  const constant = selectedPfScore.constant || 0;
 
-                  const achMultiplier = (Math.min(ach, 101.0000) / 101.0000) * 0.6;
-                  const dxMultiplier = Math.min(dxRatio, 1.0) * 0.4;
+                  // 1. 难度基数：(定数 - 5)^3
+                  const baseDiff = Math.pow(Math.max(0, constant - 5), 3);
+
+                  // 2. 达成率乘区计算 (严格对齐 pfCalculator.js 凹函数曲线)
+                  let achMultiplier = 0;
+                  if (ach >= 101.0) {
+                    achMultiplier = 0.60;
+                  } else if (ach >= 100.0) {
+                    achMultiplier = 0.40 + 0.20 * Math.pow((ach - 100.0) / 1.0, 2);
+                  } else if (ach >= 97.0) {
+                    achMultiplier = 0.10 + 0.30 * Math.pow((ach - 97.0) / 3.0, 2);
+                  } else if (ach >= 80.0) {
+                    achMultiplier = 0.10 * Math.pow((ach - 80.0) / 17.0, 2);
+                  }
+
+                  // 3. DX 乘区计算
+                  const dxMultiplier = 0.40 * Math.pow(dxRatio, 2);
+
+                  // 4. 总乘数
                   const totalMultiplier = achMultiplier + dxMultiplier;
                   const percent = totalMultiplier * 100;
                   const displayPercent = Math.min(percent, 100); 
@@ -939,7 +927,7 @@ const MaimaiProfile = () => {
                            <span className="text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{ach.toFixed(4)}%</span>
                          </div>
                          <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
-                           <span className="text-zinc-500">达成率分值 <span className="text-[10px] font-medium opacity-50">/ 0.6</span></span>
+                           <span className="text-zinc-500">达成率乘区 <span className="text-[10px] font-medium opacity-50">/ 0.6</span></span>
                            <span className="text-cyan-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>{achMultiplier.toFixed(4)}</span>
                          </div>
                          <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
@@ -947,12 +935,16 @@ const MaimaiProfile = () => {
                            <span className="text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{dxScore} <span className="text-zinc-600 text-xs">/ {maxDxScore}</span></span>
                          </div>
                          <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
-                           <span className="text-zinc-500">DX 分值 <span className="text-[10px] font-medium opacity-50">/ 0.4</span></span>
+                           <span className="text-zinc-500">DX 乘区 <span className="text-[10px] font-medium opacity-50">/ 0.4</span></span>
                            <span className="text-indigo-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>{dxMultiplier.toFixed(4)}</span>
                          </div>
-                         <div className="flex justify-between items-center pt-1">
-                           <span className="text-zinc-300">总分值 <span className="text-[10px] font-medium opacity-50">/ 1.0</span></span>
+                         <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
+                           <span className="text-zinc-300">总乘数 <span className="text-[10px] font-medium opacity-50">/ 1.0</span></span>
                            <span className="text-amber-400 text-base" style={{ fontFamily: "'Quicksand', sans-serif" }}>{totalMultiplier.toFixed(4)}</span>
+                         </div>
+                         <div className="flex justify-between items-center pt-1">
+                           <span className="text-zinc-500">难度基数 </span>
+                           <span className="text-pink-400 text-base" style={{ fontFamily: "'Quicksand', sans-serif" }}>{baseDiff.toFixed(2)}</span>
                          </div>
                       </div>
                     </>
