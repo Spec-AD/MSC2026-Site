@@ -122,32 +122,29 @@ app.get('/api/arcaea-songs', async (req, res) => {
 });
 
 // ==========================================
-// 🌟 [修复] v1.6.0 Arcaea 曲库同步接口 (高可用自动容灾版)
+// 🌟 [终极修复] v1.6.0 Arcaea 曲库同步 (包含 ETL 数据清洗)
 // ==========================================
 app.post('/api/admin/sync-arcaea', authMiddleware, async (req, res) => {
   try {
     const adminUser = await User.findById(req.user.id || req.user._id);
     if (!adminUser || adminUser.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
 
-    console.log('[v1.6.0] 开始从开源社区获取 Arcaea 曲库...');
+    console.log('🔄 [v1.6.0] 开始从开源社区获取 Arcaea 曲库...');
     
-    // 🔥 采用多个稳定的社区开源源，并加入国内加速代理，防止服务器拉取超时
     const sources = [
       'https://mirror.ghproxy.com/https://raw.githubusercontent.com/Arcaea-Infinity/ArcaeaSongDatabase/main/arcsong.json',
       'https://ghfast.top/https://raw.githubusercontent.com/Arcaea-Infinity/ArcaeaSongDatabase/main/arcsong.json',
-      'https://raw.githubusercontent.com/Arcaea-Infinity/ArcaeaSongDatabase/main/arcsong.json' // 备用直连
+      'https://raw.githubusercontent.com/Arcaea-Infinity/ArcaeaSongDatabase/main/arcsong.json'
     ];
 
     let songData = null;
     let fetchSuccess = false;
 
-    // 智能轮询拉取：只要有一个成功，就立即停止尝试
+    // 智能轮询拉取
     for (const url of sources) {
       try {
         console.log(`📡 正在尝试连接数据源: ${url.substring(0, 40)}...`);
-        const response = await axios.get(url, { timeout: 15000 }); // 每个源给 15 秒机会
-        
-        // 兼容处理：防止不同源的 JSON 结构包裹方式不同
+        const response = await axios.get(url, { timeout: 15000 }); 
         songData = Array.isArray(response.data) ? response.data : response.data.songs;
         
         if (songData && songData.length > 0) {
@@ -164,17 +161,74 @@ app.post('/api/admin/sync-arcaea', authMiddleware, async (req, res) => {
       return res.status(500).json({ msg: '所有远端数据源均拉取失败，请检查服务器网络' });
     }
 
-    // 批量写入数据库 (Upsert 模式：有则更新，无则插入)
-    let bulkOps = songData.map(song => ({
-      updateOne: {
-        filter: { id: song.id },
-        update: { $set: song },
-        upsert: true
+    // 🧹 第一步：清理垃圾数据 (清理之前因为 id 错位产生的脏数据)
+    await ArcaeaSong.deleteMany({ id: null });
+
+    // 🛁 第二步：数据清洗 (将异构数据转换为前端完美识别的标准格式)
+    let bulkOps = songData.map(song => {
+      // 提取核心信息 (防空值处理)
+      const diff0 = song.difficulties && song.difficulties[0] ? song.difficulties[0] : {};
+      
+      const dsArray = [];
+      const levelArray = [];
+      const standardDifficulties = [];
+
+      if (song.difficulties) {
+        song.difficulties.forEach((d, index) => {
+          const constant = (d.rating || 0) / 10; // 将 45 转换为 4.5 真实定数
+          dsArray[index] = constant;
+
+          // 自动推算 Arcaea 标级 (例如 9.7 -> 9+)
+          let displayLevel = Math.floor(constant).toString();
+          if (constant - Math.floor(constant) >= 0.7) {
+             displayLevel += '+';
+          }
+          levelArray[index] = displayLevel;
+
+          standardDifficulties.push({
+            ratingClass: index,
+            chartDesigner: d.chart_designer,
+            jacketDesigner: d.jacket_designer,
+            rating: displayLevel,
+            constant: constant
+          });
+        });
       }
-    }));
+
+      // 组装成前端完美兼容的超级对象
+      const normalizedSong = {
+        id: song.song_id, // 🔥 修复了致命的 ID 丢失问题
+        title: diff0.name_en || song.song_id,
+        title_localized: {
+          en: diff0.name_en || song.song_id,
+          ja: diff0.name_jp || ''
+        },
+        type: 'ARC',
+        // 伪装成基础信息，让前端无缝渲染
+        basic_info: {
+          title: diff0.name_en || song.song_id,
+          artist: diff0.artist || 'Unknown',
+          genre: diff0.set_friendly || diff0.set || 'Memory Archive',
+          bpm: diff0.bpm || '0',
+          from: diff0.version || '1.0'
+        },
+        ds: dsArray,
+        level: levelArray,
+        difficulties: standardDifficulties,
+        aliases: song.alias || [] // 继承中文别名
+      };
+
+      return {
+        updateOne: {
+          filter: { id: normalizedSong.id },
+          update: { $set: normalizedSong },
+          upsert: true
+        }
+      };
+    });
 
     await ArcaeaSong.bulkWrite(bulkOps);
-    res.json({ msg: `✅ 成功同步 ${bulkOps.length} 首 Arcaea 曲目！` });
+    res.json({ msg: `✅ 成功同步并清洗了 ${bulkOps.length} 首 Arcaea 曲目！` });
   } catch (err) {
     console.error('同步 Arcaea 曲目失败:', err);
     res.status(500).json({ msg: '同步失败，发生内部错误' });
