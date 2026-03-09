@@ -100,12 +100,13 @@ export default function Songs() {
           if (!response.ok) throw new Error('网络请求失败');
           
           const rawData = await response.json();
-          // 数据适配，让 Arcaea 兼容现有筛选引擎
+
           const processedData = rawData.map(song => {
             const dsArray = [null, null, null, null, null];
-            if (song.difficulties) {
+            if (song.difficulties && Array.isArray(song.difficulties)) {
               song.difficulties.forEach(d => {
-                dsArray[d.ratingClass] = d.constant || d.rating; 
+                // 🔥 核心修复：优先读取真实定数 ratingReal (如 10.5)，没有才回退到 rating (如 10)
+                dsArray[d.ratingClass] = d.ratingReal || d.constant || d.rating || 0; 
               });
             }
             return {
