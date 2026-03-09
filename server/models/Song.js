@@ -6,6 +6,7 @@ const SongSchema = new mongoose.Schema({
   type: { type: String, required: true },
   ds: [{ type: Number }],
   level: [{ type: String }],
+  aliases: { type: [String], default: [] },
   basic_info: {
     artist: String,
     genre: String,
