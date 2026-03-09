@@ -17,6 +17,7 @@ const ChunithmSong = require('./models/ChunithmSong');
 const nodemailer = require('nodemailer');
 const Otp = require('./models/Otp');
 const DailySong = require('./models/DailySong');
+const ArcaeaSong = require('./models/ArcaeaSong');
 
 // ==========================================
 // CHUNITHM 单曲 Rating 算分引擎
@@ -104,6 +105,53 @@ const optionalAuth = (req, res, next) => {
     if (token) { try { req.user = jwt.verify(token, process.env.JWT_SECRET); } catch (e) {} }
     next();
 };
+
+// ==========================================
+// 🌟 v1.6.0 Arcaea 全量曲库系统 API
+// ==========================================
+
+// 1. 前端获取本地 Arcaea 曲库
+app.get('/api/arcaea-songs', async (req, res) => {
+  try {
+    const songs = await ArcaeaSong.find({}).lean();
+    res.json(songs);
+  } catch (err) {
+    console.error('获取 Arcaea 曲库失败:', err);
+    res.status(500).json({ msg: '获取 Arcaea 曲库失败' });
+  }
+});
+
+// 2. [管理员] 从远端源同步 Arcaea 曲库
+app.post('/api/admin/sync-arcaea', authMiddleware, async (req, res) => {
+  try {
+    const adminUser = await User.findById(req.user.id || req.user._id);
+    if (!adminUser || adminUser.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
+
+    // 使用 Estertion 提供的公开解析源获取最新 songlist
+    const response = await axios.get('https://arcapi.estertion.win/songlist', {
+      headers: { 'Accept-Encoding': 'gzip, deflate' }
+    });
+
+    const songData = response.data.songs;
+    if (!songData || !Array.isArray(songData)) {
+      return res.status(500).json({ msg: '远端数据格式异常' });
+    }
+
+    let bulkOps = songData.map(song => ({
+      updateOne: {
+        filter: { id: song.id },
+        update: { $set: song },
+        upsert: true
+      }
+    }));
+
+    await ArcaeaSong.bulkWrite(bulkOps);
+    res.json({ msg: `成功同步 ${bulkOps.length} 首 Arcaea 曲目！` });
+  } catch (err) {
+    console.error('同步 Arcaea 曲目失败:', err);
+    res.status(500).json({ msg: '同步失败，请检查网络或远端源状态' });
+  }
+});
 
 // ==========================================
 // 🌟 v1.4.0 泛音乐每日推荐引擎 (凌晨4点刷新)
