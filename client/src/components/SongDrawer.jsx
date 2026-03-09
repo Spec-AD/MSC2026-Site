@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 // ==========================================
-// 🚀 多游戏生态配置引擎 (新增 Arcaea)
+// 🚀 多游戏生态配置引擎
 // ==========================================
 const GAME_CONFIG = {
   maimai: {
@@ -56,8 +56,10 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardData, setBoardData] = useState([]);
   const [boardScope, setBoardScope] = useState('global'); 
-  const [boardLevel, setBoardLevel] = useState(3); 
-  const [currentCover, setCurrentCover] = useState('/assets/bg.png');       
+  const [boardLevel, setBoardLevel] = useState(3);        
+
+  // 🔥 专门用于存储探测到的本地曲绘路径
+  const [currentCover, setCurrentCover] = useState('/assets/bg.png');
 
   const config = GAME_CONFIG[activeGame] || GAME_CONFIG.maimai;
   const isUtage = song?.basic_info?.genre === '宴会场' || song?.type === 'UTAGE';
@@ -80,8 +82,54 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
     }
   }, [song, isOpen, isUtage, config.diffNames.length]);
 
+  // ==========================================
+  // 🌟 智能图床探测引擎 (处理 dl_ 和 BYD 3.jpg)
+  // ==========================================
+  useEffect(() => {
+    if (!song) return;
+
+    if (activeGame === 'arcaea') {
+      const isBYD = boardLevel === 3; 
+      const sId = song.id;
+      const pathsToTry = [];
+
+      // 如果选中 BYD 难度，优先找 3.jpg
+      if (isBYD) {
+        pathsToTry.push(`/assets/arcaea/songs/${sId}/3.jpg`);
+        pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/3.jpg`);
+        pathsToTry.push(`/assets/arcaea/songs/${sId}/${sId}_3.jpg`);
+        pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/${sId}_3.jpg`);
+      }
+
+      // 常规 base.jpg 探测
+      pathsToTry.push(`/assets/arcaea/songs/${sId}/base.jpg`);
+      pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/base.jpg`);
+      pathsToTry.push(`/assets/arcaea/songs/${sId}/${sId}_base.jpg`);
+      pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/${sId}_base.jpg`);
+
+      pathsToTry.push('/assets/bg.png'); // 终极兜底
+
+      const probeImage = (index) => {
+        if (index >= pathsToTry.length) return;
+        const img = new Image();
+        img.onload = () => setCurrentCover(pathsToTry[index]);
+        img.onerror = () => probeImage(index + 1);
+        img.src = pathsToTry[index];
+      };
+
+      probeImage(0);
+
+    } else if (activeGame === 'chunithm') {
+      setCurrentCover(`https://assets2.lxns.net/chunithm/jacket/${song.id}.png`);
+    } else {
+      setCurrentCover(`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`);
+    }
+  }, [song, activeGame, boardLevel]);
+
+
   useEffect(() => {
     if (!isOpen || !song) return; 
+    if (activeGame === 'arcaea') return; // Arcaea 不需要拉取排行榜
     if (!isUtage && (!song.ds || song.ds[boardLevel] === undefined)) return;
     
     const fetchLeaderboard = async () => {
@@ -90,10 +138,9 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         
-        // 🌟 智能路由：根据不同游戏请求对应的排行榜 API
-        let endpoint = `/api/songs/${song.id}/leaderboard`;
-        if (activeGame === 'chunithm') endpoint = `/api/chunithm-songs/${song.id}/leaderboard`;
-        if (activeGame === 'arcaea') endpoint = `/api/arcaea-songs/${song.id}/leaderboard`;
+        const endpoint = activeGame === 'chunithm' 
+          ? `/api/chunithm-songs/${song.id}/leaderboard`
+          : `/api/songs/${song.id}/leaderboard`;
 
         const res = await axios.get(endpoint, {
           params: { level: boardLevel, scope: boardScope },
@@ -133,55 +180,6 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
     return 0;
   };
 
-// ==========================================
-  // 🌟 智能图床探测引擎 (完美适配 Arcaea 本地资产)
-  // ==========================================
-  useEffect(() => {
-    if (!song) return;
-
-    if (activeGame === 'arcaea') {
-      const isBYD = boardLevel === 3; // 判断用户当前是否点击了 Beyond 难度
-      const sId = song.id;
-
-      // 构建探测队列 (按优先级排列)
-      const pathsToTry = [];
-
-      // 1. 如果选中了 BYD 难度，优先探测 3.jpg 相关的变体
-      if (isBYD) {
-        pathsToTry.push(`/assets/arcaea/songs/${sId}/3.jpg`);
-        pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/3.jpg`);
-        pathsToTry.push(`/assets/arcaea/songs/${sId}/${sId}_3.jpg`);
-        pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/${sId}_3.jpg`);
-      }
-
-      // 2. 探测基础曲绘 base.jpg 的各种变体
-      pathsToTry.push(`/assets/arcaea/songs/${sId}/base.jpg`);
-      pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/base.jpg`);
-      pathsToTry.push(`/assets/arcaea/songs/${sId}/${sId}_base.jpg`);
-      pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/${sId}_base.jpg`);
-
-      // 3. 终极兜底图
-      pathsToTry.push('/assets/bg.png');
-
-      // 递归探测：自动挨个试，哪个能加载出来就用哪个
-      const probeImage = (index) => {
-        if (index >= pathsToTry.length) return;
-        const img = new Image();
-        img.onload = () => setCurrentCover(pathsToTry[index]);
-        img.onerror = () => probeImage(index + 1); // 裂图了就悄悄试下一个
-        img.src = pathsToTry[index];
-      };
-
-      // 启动探测
-      probeImage(0);
-
-    } else if (activeGame === 'chunithm') {
-      setCurrentCover(`https://assets2.lxns.net/chunithm/jacket/${song.id}.png`);
-    } else {
-      setCurrentCover(`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`);
-    }
-  }, [song, activeGame, boardLevel]); // 🔥 监听 boardLevel，点击不同难度自动重新探测！
-
   return (
     <>
       <div 
@@ -208,7 +206,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
               <img 
                 src={currentCover} 
                 alt="cover" 
-                className="w-20 h-20 rounded-xl object-cover shadow-lg border border-white/10 shrink-0" 
+                className="w-20 h-20 rounded-xl object-cover shadow-lg border border-white/10 shrink-0 transition-all duration-300" 
               />
 
               <div className="pr-6 flex flex-col justify-center min-w-0">
@@ -222,12 +220,20 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                   </span>
                   <span className="text-xs text-gray-400 font-mono tracking-wider">ID: {song.id}</span>
                 </div>
+                
                 <h2 className="text-xl font-bold text-white leading-tight mb-1 truncate" title={song.title || song.basic_info?.title}>
                   {song.title || song.basic_info?.title}
                 </h2>
+
+                {/* 🔥 日文原名展示 */}
+                {song.title_localized?.ja && song.title_localized.ja !== (song.title || song.basic_info?.title) && (
+                  <p className="text-xs text-purple-300/80 font-medium mb-1 truncate">
+                    {song.title_localized.ja}
+                  </p>
+                )}
+
                 <p className="text-sm text-gray-400">{song.basic_info?.artist}</p>
                 
-                {/* 别名徽章展示 */}
                 {song.aliases && song.aliases.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-3">
                     {song.aliases.map((alias, idx) => (
@@ -269,7 +275,6 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                   {song.ds && song.ds.map((constant, idx) => {
                     if (constant === undefined || constant === null) return null;
                     
-                    // 🔥 Arcaea 谱师与等级映射逻辑
                     const chartInfo = song.charts && song.charts[idx];
                     const arcaeaDiffInfo = song.difficulties && song.difficulties.find(d => d.ratingClass === idx);
                     
@@ -282,7 +287,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
 
                     let displayLevel = song.level ? song.level[idx] : null;
                     if (activeGame === 'arcaea' && arcaeaDiffInfo) {
-                      displayLevel = `${arcaeaDiffInfo.rating}${arcaeaDiffInfo.ratingPlus ? '+' : ''}`;
+                      displayLevel = arcaeaDiffInfo.rating;
                     }
 
                     let totalNotes = activeGame === 'arcaea' ? '-' : getNotesCount(chartInfo);
@@ -322,161 +327,144 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-gray-800">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 font-mono">
-                  <FaMedal className={`${activeGame === 'arcaea' ? 'text-purple-400' : 'text-yellow-500'}`} /> LEADERBOARD
-                </h3>
+              {/* 🔥 Arcaea 隐藏排行榜模块 */}
+              {activeGame !== 'arcaea' && (
+                <div className="pt-4 border-t border-gray-800">
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 font-mono">
+                    <FaMedal className="text-yellow-500" /> LEADERBOARD
+                  </h3>
 
-                <div className="bg-gray-900/80 border border-white/5 rounded-2xl p-4 mb-4 shadow-inner">
-                  {!isUtage && (
-                    <div className="flex items-center gap-3 mb-4 pb-4 border-b border-white/5">
-                      <span className="text-xs text-gray-500 font-bold uppercase tracking-widest shrink-0">Diff</span>
-                      <div className="flex gap-2 flex-1 overflow-x-auto custom-scrollbar pb-1">
-                        {song.ds && song.ds.map((constant, idx) => {
-                          // Arcaea 一般玩家可能会玩 PRS，所以保留所有难度可供切换；如果是 Maimai，依然保留过滤 idx < 2
-                          if ((activeGame !== 'arcaea' && idx < 2) || constant === undefined || constant === null) return null; 
-                          const isBtnActive = boardLevel === idx;
-                          return (
-                            <button 
-                              key={idx}
-                              onClick={() => setBoardLevel(idx)} 
-                              className={`px-3 py-1.5 rounded text-[11px] font-bold border transition-all whitespace-nowrap ${isBtnActive ? `bg-white/10 ${config.diffColors[idx]} border-white/20` : 'border-white/5 text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
-                            >
-                              {config.diffNames[idx]}
-                            </button>
-                          )
-                        })}
+                  <div className="bg-gray-900/80 border border-white/5 rounded-2xl p-4 mb-4 shadow-inner">
+                    {!isUtage && (
+                      <div className="flex items-center gap-3 mb-4 pb-4 border-b border-white/5">
+                        <span className="text-xs text-gray-500 font-bold uppercase tracking-widest shrink-0">Diff</span>
+                        <div className="flex gap-2 flex-1 overflow-x-auto custom-scrollbar pb-1">
+                          {song.ds && song.ds.map((constant, idx) => {
+                            if (idx < 2 || constant === undefined || constant === null) return null; 
+                            const isBtnActive = boardLevel === idx;
+                            return (
+                              <button 
+                                key={idx}
+                                onClick={() => setBoardLevel(idx)} 
+                                className={`px-3 py-1.5 rounded text-[11px] font-bold border transition-all whitespace-nowrap ${isBtnActive ? `bg-white/10 ${config.diffColors[idx]} border-white/20` : 'border-white/5 text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
+                              >
+                                {config.diffNames[idx]}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Scope</span>
+                      <div className="flex bg-black/50 border border-white/5 rounded-lg p-1">
+                        <button 
+                          onClick={() => handleScopeSwitch('global')}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${boardScope === 'global' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-300'}`}
+                        >
+                          <FaGlobe /> 全局
+                        </button>
+                        <button 
+                          onClick={() => handleScopeSwitch('friends')}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${boardScope === 'friends' ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]' : 'text-gray-400 hover:text-gray-300'}`}
+                        >
+                          {(!currentUser || (currentUser.sponsorTier || 0) < 1) ? <FaLock className="text-gray-500" /> : <FaUserFriends />} 好友
+                        </button>
                       </div>
                     </div>
-                  )}
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Scope</span>
-                    <div className="flex bg-black/50 border border-white/5 rounded-lg p-1">
-                      <button 
-                        onClick={() => handleScopeSwitch('global')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${boardScope === 'global' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-300'}`}
-                      >
-                        <FaGlobe /> 全局
-                      </button>
-                      <button 
-                        onClick={() => handleScopeSwitch('friends')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${boardScope === 'friends' ? (activeGame === 'arcaea' ? 'bg-purple-600 text-white shadow-[0_0_10px_rgba(147,51,234,0.4)]' : 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]') : 'text-gray-400 hover:text-gray-300'}`}
-                      >
-                        {(!currentUser || (currentUser.sponsorTier || 0) < 1) ? <FaLock className="text-gray-500" /> : <FaUserFriends />} 好友
-                      </button>
-                    </div>
                   </div>
-                </div>
 
-                <div className="min-h-[200px]">
-                  {boardLoading ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-                      <FaSpinner className={`animate-spin text-3xl mb-4 ${activeGame === 'arcaea' ? 'text-purple-400' : 'text-cyan-400'}`} />
-                      <span className="font-mono text-xs tracking-widest font-bold uppercase">Loading Data...</span>
-                    </div>
-                  ) : boardData.length === 0 ? (
-                    <div className="text-center py-16 bg-black/20 border border-white/5 rounded-2xl text-gray-500 font-mono text-xs tracking-widest font-bold">
-                      NO RECORDS FOUND
-                    </div>
-                  ) : (
-                    <div className="space-y-2 pb-10">
-                      {boardData.map((score, index) => {
-                        
-                        // 兼容 Maimai DX 的星级计算
-                        let starCount = 0;
-                        if (config.hasDX) {
-                          const chartInfo = song.charts && song.charts[boardLevel];
-                          const maxDxScore = (chartInfo && chartInfo.notes) ? chartInfo.notes.reduce((a, b) => a + b, 0) * 3 : 0;
-                          const dxRatio = maxDxScore > 0 ? score.dxScore / maxDxScore : 0;
-                          
-                          if (dxRatio >= 0.97) starCount = 5;
-                          else if (dxRatio >= 0.95) starCount = 4;
-                          else if (dxRatio >= 0.93) starCount = 3;
-                          else if (dxRatio >= 0.90) starCount = 2;
-                          else if (dxRatio >= 0.85) starCount = 1;
-                        }
-
-                        const playerName = score.userId?.username || score.username || 'Unknown Player';
-
-                        // 🔥 Arcaea 的分数由于数值极大 (一千万分满分)，因此采用和 CHUNITHM 相同的 toLocaleString()
-                        const displayScore = activeGame === 'chunithm' || activeGame === 'arcaea'
-                          ? (score.score ? score.score.toLocaleString() : '-') 
-                          : (score.achievement ? score.achievement.toFixed(4) + '%' : '-');
-
-                        // 🔥 动态适配状态标识 (AJC / AP / FC / PM / FR)
-                        const fc = (score.fcStatus || score.clear_type || '').toLowerCase(); // Arcaea 可能使用 clear_type 存储状态
-                        let fcBadge = null;
-                        
-                        if (activeGame === 'chunithm') {
-                          if (fc.includes('ajc')) fcBadge = <span className="bg-gradient-to-r from-yellow-300 to-yellow-500 text-yellow-950 px-1 rounded text-[9px] font-black">AJC</span>;
-                          else if (fc.includes('aj')) fcBadge = <span className="bg-yellow-400 text-yellow-950 px-1 rounded text-[9px] font-black">AJ</span>;
-                          else if (fc.includes('fc')) fcBadge = <span className="bg-emerald-400 text-emerald-950 px-1 rounded text-[9px] font-black">FC</span>;
-                        } else if (activeGame === 'arcaea') {
-                          if (fc.includes('pm') || fc === '3') fcBadge = <span className="bg-gradient-to-r from-blue-300 to-blue-500 text-blue-950 px-1.5 rounded text-[9px] font-black shadow-[0_0_8px_rgba(59,130,246,0.5)]">PM</span>;
-                          else if (fc.includes('fr') || fc === '2') fcBadge = <span className="bg-green-400 text-green-950 px-1.5 rounded text-[9px] font-black">FR</span>;
-                        } else {
-                          if (['fc', 'fcp', 'ap', 'app'].includes(fc)) {
-                            fcBadge = <span className={`text-[9px] font-black text-white px-1 rounded ${fc.includes('ap') ? 'bg-yellow-500' : 'bg-pink-500'}`}>{fc.toUpperCase()}</span>;
+                  <div className="min-h-[200px]">
+                    {boardLoading ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+                        <FaSpinner className="animate-spin text-3xl mb-4 text-cyan-400" />
+                        <span className="font-mono text-xs tracking-widest font-bold uppercase">Loading Data...</span>
+                      </div>
+                    ) : boardData.length === 0 ? (
+                      <div className="text-center py-16 bg-black/20 border border-white/5 rounded-2xl text-gray-500 font-mono text-xs tracking-widest font-bold">
+                        NO RECORDS FOUND
+                      </div>
+                    ) : (
+                      <div className="space-y-2 pb-10">
+                        {boardData.map((score, index) => {
+                          let starCount = 0;
+                          if (config.hasDX) {
+                            const chartInfo = song.charts && song.charts[boardLevel];
+                            const maxDxScore = (chartInfo && chartInfo.notes) ? chartInfo.notes.reduce((a, b) => a + b, 0) * 3 : 0;
+                            const dxRatio = maxDxScore > 0 ? score.dxScore / maxDxScore : 0;
+                            if (dxRatio >= 0.97) starCount = 5;
+                            else if (dxRatio >= 0.95) starCount = 4;
+                            else if (dxRatio >= 0.93) starCount = 3;
+                            else if (dxRatio >= 0.90) starCount = 2;
+                            else if (dxRatio >= 0.85) starCount = 1;
                           }
-                        }
 
-                        // 动态高亮文字颜色
-                        const scoreTextColor = activeGame === 'chunithm' 
-                          ? 'text-yellow-400' : activeGame === 'arcaea' 
-                          ? 'text-purple-300' : 'text-cyan-400';
+                          const playerName = score.userId?.username || score.username || 'Unknown Player';
+                          const displayScore = activeGame === 'chunithm' 
+                            ? (score.score ? score.score.toLocaleString() : '-') 
+                            : (score.achievement ? score.achievement.toFixed(4) + '%' : '-');
 
-                        return (
-                          <div 
-                            key={score._id || index} 
-                            onClick={() => navigate(`/profile/${playerName}/${activeGame}`)}
-                            className="flex items-center bg-white/5 border border-white/5 rounded-xl p-3 hover:bg-white/10 transition-colors cursor-pointer active:scale-95 group"
-                          >
-                            <div className={`w-8 text-center font-mono font-black text-lg ${getRankColor(index)}`}>
-                              {index + 1}
-                            </div>
+                          const fc = (score.fcStatus || '').toLowerCase();
+                          let fcBadge = null;
+                          if (activeGame === 'chunithm') {
+                            if (fc.includes('ajc')) fcBadge = <span className="bg-gradient-to-r from-yellow-300 to-yellow-500 text-yellow-950 px-1 rounded text-[9px] font-black">AJC</span>;
+                            else if (fc.includes('aj')) fcBadge = <span className="bg-yellow-400 text-yellow-950 px-1 rounded text-[9px] font-black">AJ</span>;
+                            else if (fc.includes('fc')) fcBadge = <span className="bg-emerald-400 text-emerald-950 px-1 rounded text-[9px] font-black">FC</span>;
+                          } else {
+                            if (['fc', 'fcp', 'ap', 'app'].includes(fc)) {
+                              fcBadge = <span className={`text-[9px] font-black text-white px-1 rounded ${fc.includes('ap') ? 'bg-yellow-500' : 'bg-pink-500'}`}>{fc.toUpperCase()}</span>;
+                            }
+                          }
 
-                            <img 
-                              src={score.userId?.avatarUrl || score.avatarUrl || '/assets/logos.png'} 
-                              alt="avatar" 
-                              className="w-10 h-10 rounded-lg object-cover ml-2 mr-3 border border-white/10 group-hover:scale-105 transition-transform" 
-                            />
-
-                            <div className="flex-1 overflow-hidden">
-                              <div className={`text-white font-bold text-sm truncate transition-colors group-hover:${scoreTextColor}`}>
-                                {playerName}
+                          return (
+                            <div 
+                              key={score._id} 
+                              onClick={() => navigate(`/profile/${playerName}/${activeGame}`)}
+                              className="flex items-center bg-white/5 border border-white/5 rounded-xl p-3 hover:bg-white/10 transition-colors cursor-pointer active:scale-95 group"
+                            >
+                              <div className={`w-8 text-center font-mono font-black text-lg ${getRankColor(index)}`}>
+                                {index + 1}
                               </div>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className={`${scoreTextColor} font-mono font-bold text-sm`}>
-                                  {displayScore}
-                                </span>
-                                {fcBadge}
-                              </div>
-                            </div>
-
-                            {/* DX 分信息 (仅当有配置 DX 时显示) */}
-                            {config.hasDX && (
-                              <div className="flex items-center gap-2 shrink-0">
-                                {starCount > 0 && (
-                                  <img 
-                                    src={`/assets/${starCount}dxstar.png`} 
-                                    alt={`DX Star`} 
-                                    className="h-[14px] md:h-4 object-contain drop-shadow-md"
-                                  />
-                                )}
-                                <div className="text-right flex flex-col items-end">
-                                  <span className="text-gray-300 font-mono font-bold text-sm">{score.dxScore || 0}</span>
-                                  <span className="text-gray-500 text-[9px] font-bold uppercase mt-0.5">DX Score</span>
+                              <img 
+                                src={score.userId?.avatarUrl || score.avatarUrl || '/assets/logos.png'} 
+                                alt="avatar" 
+                                className="w-10 h-10 rounded-lg object-cover ml-2 mr-3 border border-white/10 group-hover:scale-105 transition-transform" 
+                              />
+                              <div className="flex-1 overflow-hidden">
+                                <div className="text-white font-bold text-sm truncate group-hover:text-cyan-300 transition-colors">
+                                  {playerName}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className={`${activeGame === 'chunithm' ? 'text-yellow-400' : 'text-cyan-400'} font-mono font-bold text-sm`}>
+                                    {displayScore}
+                                  </span>
+                                  {fcBadge}
                                 </div>
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                              {config.hasDX && (
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {starCount > 0 && (
+                                    <img 
+                                      src={`/assets/${starCount}dxstar.png`} 
+                                      alt={`DX Star`} 
+                                      className="h-[14px] md:h-4 object-contain drop-shadow-md"
+                                    />
+                                  )}
+                                  <div className="text-right flex flex-col items-end">
+                                    <span className="text-gray-300 font-mono font-bold text-sm">{score.dxScore || 0}</span>
+                                    <span className="text-gray-500 text-[9px] font-bold uppercase mt-0.5">DX Score</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
