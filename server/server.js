@@ -519,6 +519,21 @@ app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '同步失败' }); }
 });
 
+// ==========================================
+//  前端拉取本地 Maimai 曲库 (包含别名 aliases)
+// ==========================================
+app.get('/api/songs', async (req, res) => {
+  try {
+    // 从我们自己的数据库读取曲库，这里面才包含刚刚同步的 aliases 字段！
+    // 使用 .lean() 提高大数据量查询性能
+    const songs = await Song.find({}).sort({ id: 1 }).lean(); 
+    res.json(songs);
+  } catch (err) {
+    console.error('获取本地曲库失败:', err);
+    res.status(500).json({ msg: '获取曲库数据失败' });
+  }
+});
+
 app.post('/api/users/:username/friend-request', authMiddleware, async (req, res) => {
   try {
     const sender = await User.findById(req.user.id);
