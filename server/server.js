@@ -486,10 +486,31 @@ app.put('/api/users/profile', authMiddleware, async (req, res) => {
     } catch (err) { res.status(500).json({ msg: '更新失败' }); }
 });
 
-app.get('/api/announcements', async (req, res) => {
-  try { res.json(await Announcement.find().sort({ createdAt: -1 })); } catch (err) { res.status(500).json({ msg: '获取公告失败' }); }
-});
+app.post('/api/announcements', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'ADM') return res.status(403).json({ msg: '权限不足：只有管理员可以发布公告！' });
 
+    // 🔥 把 coverUrl 和 subtitle 也接收进来
+    const { title, subtitle, type, content, coverUrl } = req.body;
+    if (!title || !content) return res.status(400).json({ msg: '标题和内容不能为空' });
+
+    const newAnnouncement = new Announcement({ 
+      title, 
+      subtitle,       // 存入副标题
+      type: type || 'NEWS', 
+      content, 
+      coverUrl,       // 存入横幅画面
+      author: user._id 
+    });
+    
+    await newAnnouncement.save();
+    res.json({ msg: '公告发布成功！', data: newAnnouncement });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: '发布失败，服务器错误' });
+  }
+});
 app.post('/api/announcements', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
