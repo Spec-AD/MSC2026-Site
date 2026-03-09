@@ -18,6 +18,8 @@ const nodemailer = require('nodemailer');
 const Otp = require('./models/Otp');
 const DailySong = require('./models/DailySong');
 const ArcaeaSong = require('./models/ArcaeaSong');
+const fs = require('fs');
+const path = require('path');
 
 // ==========================================
 // CHUNITHM 单曲 Rating 算分引擎
@@ -122,100 +124,88 @@ app.get('/api/arcaea-songs', async (req, res) => {
 });
 
 // ==========================================
-// 🌟 [终极修复] v1.6.0 Arcaea 曲库同步 (包含 ETL 数据清洗)
+// 🌟 [本地化进阶] v1.6.x Arcaea 曲库同步 (读取本地官方全量 JSON)
 // ==========================================
 app.post('/api/admin/sync-arcaea', authMiddleware, async (req, res) => {
   try {
     const adminUser = await User.findById(req.user.id || req.user._id);
     if (!adminUser || adminUser.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
 
-    console.log('🔄 [v1.6.0] 开始从开源社区获取 Arcaea 曲库...');
+    console.log('🔄 开始读取本地 Arcaea 曲库...');
     
-    const sources = [
-      'https://mirror.ghproxy.com/https://raw.githubusercontent.com/Arcaea-Infinity/ArcaeaSongDatabase/main/arcsong.json',
-      'https://ghfast.top/https://raw.githubusercontent.com/Arcaea-Infinity/ArcaeaSongDatabase/main/arcsong.json',
-      'https://raw.githubusercontent.com/Arcaea-Infinity/ArcaeaSongDatabase/main/arcsong.json'
-    ];
-
-    let songData = null;
-    let fetchSuccess = false;
-
-    // 智能轮询拉取
-    for (const url of sources) {
-      try {
-        console.log(`📡 正在尝试连接数据源: ${url.substring(0, 40)}...`);
-        const response = await axios.get(url, { timeout: 15000 }); 
-        songData = Array.isArray(response.data) ? response.data : response.data.songs;
-        
-        if (songData && songData.length > 0) {
-          fetchSuccess = true;
-          console.log(`✅ 成功获取到 ${songData.length} 首 Arcaea 曲目数据！`);
-          break; 
-        }
-      } catch (e) {
-        console.warn(`⚠️ 该源拉取失败，准备尝试下一个...`);
-      }
+    // 1. 定位到项目根目录下的 arcaea_song.json
+    const filePath = path.join(__dirname, 'arcaea_song.json');
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ msg: '找不到 arcaea_song.json，请确保它放在 server.js 同级目录！' });
     }
 
-    if (!fetchSuccess || !songData) {
-      return res.status(500).json({ msg: '所有远端数据源均拉取失败，请检查服务器网络' });
+    // 同步读取并解析本地 JSON
+    const rawData = fs.readFileSync(filePath, 'utf8');
+    const parsedData = JSON.parse(rawData);
+    const songData = parsedData.songs;
+
+    if (!songData || !Array.isArray(songData)) {
+      return res.status(500).json({ msg: 'JSON 格式异常，无法找到 songs 数组' });
     }
 
-    // 🧹 第一步：清理垃圾数据 (清理之前因为 id 错位产生的脏数据)
-    await ArcaeaSong.deleteMany({ id: null });
+    // 2. 清空旧库 (绝不留脏数据)
+    await ArcaeaSong.deleteMany({});
 
-    // 🛁 第二步：数据清洗 (将异构数据转换为前端完美识别的标准格式)
+    // 3. 数据清洗 (完美适配官方原生 JSON 字段)
     let bulkOps = songData.map(song => {
-      // 提取核心信息 (防空值处理)
-      const diff0 = song.difficulties && song.difficulties[0] ? song.difficulties[0] : {};
-      
       const dsArray = [];
       const levelArray = [];
       const standardDifficulties = [];
 
       if (song.difficulties) {
-        song.difficulties.forEach((d, index) => {
-          const constant = (d.rating || 0) / 10; // 将 45 转换为 4.5 真实定数
-          dsArray[index] = constant;
-
-          // 自动推算 Arcaea 标级 (例如 9.7 -> 9+)
-          let displayLevel = Math.floor(constant).toString();
-          if (constant - Math.floor(constant) >= 0.7) {
-             displayLevel += '+';
+        song.difficulties.forEach(d => {
+          // ⚠️ 官方数据里没有精确定数（如 10.9），只有基础级 rating（如 10）和 ratingPlus（如 true/false）
+          // 我们这里做一个“伪定数”生成器，把带 + 的难度近似处理为 .7，方便前端滑块能进行数值筛选
+          let constant = d.rating || 0;
+          let displayLevel = constant.toString();
+          
+          if (d.ratingPlus) {
+            displayLevel += '+';
+            constant += 0.7; // 例如 9+ 默认记作 9.7 方便前端排序
           }
-          levelArray[index] = displayLevel;
+
+          dsArray[d.ratingClass] = constant;
+          levelArray[d.ratingClass] = displayLevel;
 
           standardDifficulties.push({
-            ratingClass: index,
-            chartDesigner: d.chart_designer,
-            jacketDesigner: d.jacket_designer,
+            ratingClass: d.ratingClass,
+            chartDesigner: d.chartDesigner || 'Unknown',
+            jacketDesigner: d.jacketDesigner || '',
             rating: displayLevel,
             constant: constant
           });
         });
       }
 
-      // 组装成前端完美兼容的超级对象
+      // 提取官方给的罗马音/韩文等用于高级模糊匹配
+      let aliases = [];
+      if (song.search_title) {
+        if (song.search_title.ja) aliases.push(...song.search_title.ja);
+        if (song.search_title.ko) aliases.push(...song.search_title.ko);
+      }
+
       const normalizedSong = {
-        id: song.song_id, // 🔥 修复了致命的 ID 丢失问题
-        title: diff0.name_en || song.song_id,
-        title_localized: {
-          en: diff0.name_en || song.song_id,
-          ja: diff0.name_jp || ''
-        },
+        id: song.id, // 官方结构叫 id
+        title: song.title_localized?.en || song.id,
+        title_localized: song.title_localized || {},
         type: 'ARC',
-        // 伪装成基础信息，让前端无缝渲染
         basic_info: {
-          title: diff0.name_en || song.song_id,
-          artist: diff0.artist || 'Unknown',
-          genre: diff0.set_friendly || diff0.set || 'Memory Archive',
-          bpm: diff0.bpm || '0',
-          from: diff0.version || '1.0'
+          title: song.title_localized?.en || song.id,
+          artist: song.artist || 'Unknown',
+          genre: song.set || 'Memory Archive',
+          bpm: song.bpm || '0',
+          from: song.version || '1.0'
         },
         ds: dsArray,
         level: levelArray,
         difficulties: standardDifficulties,
-        aliases: song.alias || [] // 继承中文别名
+        aliases: aliases
       };
 
       return {
@@ -228,13 +218,12 @@ app.post('/api/admin/sync-arcaea', authMiddleware, async (req, res) => {
     });
 
     await ArcaeaSong.bulkWrite(bulkOps);
-    res.json({ msg: `✅ 成功同步并清洗了 ${bulkOps.length} 首 Arcaea 曲目！` });
+    res.json({ msg: `✅ 成功从本地同步并清洗了 ${bulkOps.length} 首 Arcaea v6.13 曲目！` });
   } catch (err) {
     console.error('同步 Arcaea 曲目失败:', err);
-    res.status(500).json({ msg: '同步失败，发生内部错误' });
+    res.status(500).json({ msg: '同步失败，请检查后端日志或 JSON 格式是否正确' });
   }
 });
-
 // ==========================================
 // 🌟 v1.4.0 泛音乐每日推荐引擎 (凌晨4点刷新)
 // ==========================================
