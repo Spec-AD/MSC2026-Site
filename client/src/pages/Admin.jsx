@@ -18,9 +18,10 @@ const Admin = () => {
   const [qualifierData, setQualifierData] = useState({ targetUid: '', songName: '', level: '3', achievement: '', dxScore: '' });
   const [isSubmittingScore, setIsSubmittingScore] = useState(false);
 
-  // 🌟 同步模块状态 (双轨)
+  // 🌟 同步模块状态 (三轨)
   const [isSyncing, setIsSyncing] = useState(false); // Maimai 同步状态
   const [isSyncingChuni, setIsSyncingChuni] = useState(false); // 中二 同步状态
+  const [isSyncingArcaea, setIsSyncingArcaea] = useState(false); // 🔥 新增：Arcaea 同步状态
 
   // 🌟 模块 6：WIKI 管理状态
   const [categories, setCategories] = useState([]); 
@@ -83,6 +84,9 @@ const Admin = () => {
   
   // 🔥 CHUNITHM 同步
   const handleSyncChuniSongs = async () => { if (!window.confirm('确定要全量同步 CHUNITHM 曲库吗？这可能需要几秒钟的时间。')) return; setIsSyncingChuni(true); try { const token = localStorage.getItem('token'); const res = await axios.post('/api/chunithm-songs/sync', {}, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ ' + res.data.msg); } catch (err) { alert('❌ ' + (err.response?.data?.msg || '同步失败')); } finally { setIsSyncingChuni(false); } };
+
+  // 🔥 Arcaea 同步 (新增)
+  const handleSyncArcaeaSongs = async () => { if (!window.confirm('确定要全量同步 Arcaea 曲库吗？这可能需要几秒钟的时间。')) return; setIsSyncingArcaea(true); try { const token = localStorage.getItem('token'); const res = await axios.post('/api/admin/sync-arcaea', {}, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ ' + res.data.msg); } catch (err) { alert('❌ ' + (err.response?.data?.msg || '同步失败')); } finally { setIsSyncingArcaea(false); } };
 
   const handleCategorySubmit = async (e) => {
     e.preventDefault();
@@ -379,7 +383,7 @@ const Admin = () => {
       </div>
 
       {/* ========================================================= */}
-      {/* 🔥 核心数据同步引擎 (双轨) */}
+      {/* 🔥 核心数据同步引擎 (三轨并列) */}
       {/* ========================================================= */}
       <div className="bg-black/40 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(59,130,246,0.1)]">
         <h2 className="text-2xl font-black italic tracking-tight text-blue-500 mb-4 flex items-center gap-3">
@@ -408,6 +412,16 @@ const Admin = () => {
           >
             {isSyncingChuni ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
             {isSyncingChuni ? 'DOWNLOADING...' : '同步 CHUNITHM 曲库'}
+          </button>
+
+          {/* 🔥 新增：Arcaea 曲库同步按钮 */}
+          <button 
+            onClick={handleSyncArcaeaSongs} 
+            disabled={isSyncingArcaea} 
+            className="flex-1 py-4 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/50 text-purple-400 font-bold tracking-widest rounded-xl transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap disabled:opacity-50"
+          >
+            {isSyncingArcaea ? <FaSpinner className="animate-spin" /> : <FaSyncAlt />}
+            {isSyncingArcaea ? 'DOWNLOADING...' : '同步 Arcaea 曲库'}
           </button>
         </div>
       </div>
