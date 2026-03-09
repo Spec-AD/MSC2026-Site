@@ -430,18 +430,37 @@ const Profile = () => {
           </div>
 
           <div className="flex flex-col gap-6">
+            {/* 🔥 v1.5.x 落地：动态等级徽章 */}
             <div className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 shadow-sm flex flex-col items-center">
-              <div className="flex justify-between w-full mb-4 px-2">
+              <div className="flex justify-between items-center w-full mb-4 px-2">
                 <span className="text-zinc-400 font-bold text-xs uppercase tracking-widest">Community Level</span>
-                <span className="text-cyan-400 font-bold text-sm" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                  Lv.{profile.level || 1}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {/* 右上角的微缩版徽章 */}
+                  <img 
+                    src={`/assets/lv${profile.level || 1}_badge.png`} 
+                    alt="badge" 
+                    className="h-4 object-contain drop-shadow-md"
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                  <span className="text-cyan-400 font-bold text-sm" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                    Lv.{profile.level || 1}
+                  </span>
+                </div>
               </div>
+              
               <div className="w-28 h-28 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center mb-8 relative group shadow-inner">
-                <FaCrown className="text-4xl text-zinc-700 opacity-30 group-hover:scale-110 transition-transform duration-500" /> 
-                <span className="absolute -bottom-3 bg-cyan-500/20 text-cyan-400 text-[9px] font-bold px-2 py-0.5 rounded border border-cyan-500/30 tracking-widest">
-                   BADGE WIP
-                </span>
+                {/* 居中展示的超大版发光徽章 */}
+                <img 
+                  src={`/assets/lv${profile.level || 1}_badge.png`} 
+                  alt={`Lv.${profile.level || 1} Badge`}
+                  className="w-16 h-16 object-contain drop-shadow-[0_0_15px_rgba(34,211,238,0.25)] group-hover:scale-110 group-hover:drop-shadow-[0_0_25px_rgba(34,211,238,0.4)] transition-all duration-500"
+                  onError={(e) => { 
+                    e.target.style.display = 'none'; 
+                    e.target.nextElementSibling.style.display = 'block'; 
+                  }}
+                />
+                {/* 兜底的暗色王冠 (默认隐藏) */}
+                <FaCrown className="hidden text-4xl text-zinc-700 opacity-30 group-hover:scale-110 transition-transform duration-500" /> 
               </div>
               <div className="w-full px-2">
                 <div className="flex justify-between text-xs text-zinc-500 font-bold mb-2 uppercase" style={{ fontFamily: "'Quicksand', sans-serif" }}>
@@ -472,7 +491,7 @@ const Profile = () => {
           </div>
         </div>
 
-         {/* 🌟 4. 游戏数据档案库 (引入 CHUNITHM 三格并列设计) */}
+         {/* 🌟 4. 游戏数据档案库 */}
         <div className="mt-12">
           <div className="flex items-center gap-3 mb-6 px-2">
             <div className="w-1 h-5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
@@ -497,7 +516,7 @@ const Profile = () => {
               </div>
             </div>
 
-            {/* 🔥 新增：CHUNITHM */}
+            {/* CHUNITHM */}
             <div onClick={() => navigate(`/profile/${profile.username}/chunithm`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-yellow-500/30">
               <div className="absolute -right-6 -bottom-6 opacity-5 text-9xl text-yellow-400 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
               <div className="relative z-10 flex flex-col h-full">
