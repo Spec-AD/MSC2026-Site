@@ -430,16 +430,18 @@ const Profile = () => {
           </div>
 
           <div className="flex flex-col gap-6">
-            {/* 🔥 v1.5.x 落地：动态等级徽章 */}
+{/* 🔥 v1.5.x 落地：动态等级徽章 (专为正七边形重构的视觉效果) */}
             <div className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 shadow-sm flex flex-col items-center">
-              <div className="flex justify-between items-center w-full mb-4 px-2">
+              
+              {/* 顶部标题与微缩徽章 */}
+              <div className="flex justify-between items-center w-full mb-6 px-2">
                 <span className="text-zinc-400 font-bold text-xs uppercase tracking-widest">Community Level</span>
-                <div className="flex items-center gap-1.5">
-                  {/* 右上角的微缩版徽章 */}
+                <div className="flex items-center gap-1.5 bg-[#0c0c11] px-2.5 py-1 rounded-xl border border-white/[0.02] shadow-inner">
+                  {/* 微缩版适当放大到 h-5，增加轻微阴影使其立体 */}
                   <img 
                     src={`/assets/lv${profile.level || 1}_badge.png`} 
                     alt="badge" 
-                    className="h-4 object-contain drop-shadow-md"
+                    className="w-5 h-5 object-contain drop-shadow"
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                   <span className="text-cyan-400 font-bold text-sm" style={{ fontFamily: "'Quicksand', sans-serif" }}>
@@ -448,31 +450,42 @@ const Profile = () => {
                 </div>
               </div>
               
-              <div className="w-28 h-28 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center mb-8 relative group shadow-inner">
-                {/* 居中展示的超大版发光徽章 */}
+              {/* 徽章主展示区：移除硬性圆形边框，改用发光力场 */}
+              <div className="relative flex items-center justify-center mb-10 mt-2 group w-full">
+                {/* 底部环境光晕：模糊的霓虹光效，完美包容任何形状的徽章 */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 bg-cyan-500/20 rounded-full blur-[32px] group-hover:bg-cyan-400/30 group-hover:scale-110 transition-all duration-700 pointer-events-none"></div>
+                
+                {/* 居中展示的超大版七边形徽章 */}
                 <img 
                   src={`/assets/lv${profile.level || 1}_badge.png`} 
                   alt={`Lv.${profile.level || 1} Badge`}
-                  className="w-16 h-16 object-contain drop-shadow-[0_0_15px_rgba(34,211,238,0.25)] group-hover:scale-110 group-hover:drop-shadow-[0_0_25px_rgba(34,211,238,0.4)] transition-all duration-500"
+                  // 尺寸放大到 w-28 h-28 (112px)，引入更深邃的投影，悬浮时带有“向上升起”的科幻动效
+                  className="w-28 h-28 object-contain relative z-10 drop-shadow-[0_10px_20px_rgba(34,211,238,0.15)] group-hover:scale-110 group-hover:-translate-y-2 group-hover:drop-shadow-[0_20px_35px_rgba(34,211,238,0.35)] transition-all duration-500 ease-out"
                   onError={(e) => { 
                     e.target.style.display = 'none'; 
-                    e.target.nextElementSibling.style.display = 'block'; 
+                    e.target.nextElementSibling.style.display = 'flex'; 
                   }}
                 />
-                {/* 兜底的暗色王冠 (默认隐藏) */}
-                <FaCrown className="hidden text-4xl text-zinc-700 opacity-30 group-hover:scale-110 transition-transform duration-500" /> 
+                
+                {/* 兜底的暗色王冠 (图片未找到时显示) */}
+                <div className="hidden w-24 h-24 rounded-full bg-[#0c0c11] border border-white/[0.05] items-center justify-center shadow-inner relative z-10">
+                  <FaCrown className="text-4xl text-zinc-700 opacity-30 group-hover:scale-110 transition-transform duration-500" /> 
+                </div>
               </div>
+
+              {/* 经验条 */}
               <div className="w-full px-2">
                 <div className="flex justify-between text-xs text-zinc-500 font-bold mb-2 uppercase" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                    <span className="text-zinc-300">{(profile.xp || 0) % 300} XP</span>
                    <span>300 XP</span>
                 </div>
-                <div className="h-2.5 w-full bg-[#0c0c11] rounded-full overflow-hidden border border-white/[0.02]">
+                <div className="h-2.5 w-full bg-[#0c0c11] rounded-full overflow-hidden border border-white/[0.02] shadow-inner">
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: `${((profile.xp || 0) % 300) / 300 * 100}%` }}
                       transition={{ duration: 1.2, ease: "easeOut" }}
-                      className="h-full bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+                      // 经验条加入渐变色，呼应徽章的光感
+                      className="h-full bg-gradient-to-r from-cyan-500 to-blue-400 rounded-full shadow-[0_0_10px_rgba(34,211,238,0.6)]"
                     />
                 </div>
               </div>
