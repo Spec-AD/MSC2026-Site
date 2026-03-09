@@ -168,7 +168,18 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                 <h2 className="text-xl font-bold text-white leading-tight mb-1 truncate" title={song.title || song.basic_info?.title}>
                   {song.title || song.basic_info?.title}
                 </h2>
-                <p className="text-xs text-gray-400 truncate">{song.basic_info?.artist}</p>
+                <p className="text-sm text-gray-400">{song.basic_info?.artist}</p>
+                
+                {/* 🔥 v1.5.3 别名徽章展示 */}
+                {song.aliases && song.aliases.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {song.aliases.map((alias, idx) => (
+                      <span key={idx} className="text-[10px] bg-white/10 border border-white/5 text-zinc-300 px-2 py-0.5 rounded-md">
+                        {alias}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
