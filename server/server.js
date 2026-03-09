@@ -486,12 +486,27 @@ app.put('/api/users/profile', authMiddleware, async (req, res) => {
     } catch (err) { res.status(500).json({ msg: '更新失败' }); }
 });
 
+// ==========================================
+// 📰 公告与新闻系统 API
+// ==========================================
+
+// 1. 获取新闻列表 (用于首页展示)
+app.get('/api/announcements', async (req, res) => {
+  try {
+    const announcements = await Announcement.find().sort({ createdAt: -1 });
+    res.json(announcements);
+  } catch (err) {
+    res.status(500).json({ msg: '获取公告失败' });
+  }
+});
+
+// 2. 发布新闻 (管理员专属，支持横幅大图与副标题)
 app.post('/api/announcements', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    if (!user || user.role !== 'ADM') return res.status(403).json({ msg: '权限不足：只有管理员可以发布公告！' });
+    if (!user || user.role !== 'ADM') return res.status(403).json({ msg: '🚨 权限不足：只有管理员可以发布公告！' });
 
-    // 🔥 把 coverUrl 和 subtitle 也接收进来
+    // 🔥 完整接收包含 coverUrl(画面) 和 subtitle(副标题) 的数据
     const { title, subtitle, type, content, coverUrl } = req.body;
     if (!title || !content) return res.status(400).json({ msg: '标题和内容不能为空' });
 
@@ -510,16 +525,6 @@ app.post('/api/announcements', authMiddleware, async (req, res) => {
     console.error(err);
     res.status(500).json({ msg: '发布失败，服务器错误' });
   }
-});
-app.post('/api/announcements', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user || user.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
-    const { title, type, content } = req.body;
-    if (!title || !content) return res.status(400).json({ msg: '标题和内容不能为空' });
-    const newAnnouncement = new Announcement({ title, type: type || 'NEWS', content, author: user._id });
-    await newAnnouncement.save(); res.json({ msg: '发布成功', data: newAnnouncement });
-  } catch (err) { res.status(500).json({ msg: '发布失败' }); }
 });
 
 app.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
