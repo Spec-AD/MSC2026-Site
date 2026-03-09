@@ -121,22 +121,50 @@ app.get('/api/arcaea-songs', async (req, res) => {
   }
 });
 
-// 2. [管理员] 从远端源同步 Arcaea 曲库
+// ==========================================
+// 🌟 [修复] v1.6.0 Arcaea 曲库同步接口 (高可用自动容灾版)
+// ==========================================
 app.post('/api/admin/sync-arcaea', authMiddleware, async (req, res) => {
   try {
     const adminUser = await User.findById(req.user.id || req.user._id);
     if (!adminUser || adminUser.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
 
-    // 使用 Estertion 提供的公开解析源获取最新 songlist
-    const response = await axios.get('https://arcapi.estertion.win/songlist', {
-      headers: { 'Accept-Encoding': 'gzip, deflate' }
-    });
+    console.log('[v1.6.0] 开始从开源社区获取 Arcaea 曲库...');
+    
+    // 🔥 采用多个稳定的社区开源源，并加入国内加速代理，防止服务器拉取超时
+    const sources = [
+      'https://mirror.ghproxy.com/https://raw.githubusercontent.com/Arcaea-Infinity/ArcaeaSongDatabase/main/arcsong.json',
+      'https://ghfast.top/https://raw.githubusercontent.com/Arcaea-Infinity/ArcaeaSongDatabase/main/arcsong.json',
+      'https://raw.githubusercontent.com/Arcaea-Infinity/ArcaeaSongDatabase/main/arcsong.json' // 备用直连
+    ];
 
-    const songData = response.data.songs;
-    if (!songData || !Array.isArray(songData)) {
-      return res.status(500).json({ msg: '远端数据格式异常' });
+    let songData = null;
+    let fetchSuccess = false;
+
+    // 智能轮询拉取：只要有一个成功，就立即停止尝试
+    for (const url of sources) {
+      try {
+        console.log(`📡 正在尝试连接数据源: ${url.substring(0, 40)}...`);
+        const response = await axios.get(url, { timeout: 15000 }); // 每个源给 15 秒机会
+        
+        // 兼容处理：防止不同源的 JSON 结构包裹方式不同
+        songData = Array.isArray(response.data) ? response.data : response.data.songs;
+        
+        if (songData && songData.length > 0) {
+          fetchSuccess = true;
+          console.log(`✅ 成功获取到 ${songData.length} 首 Arcaea 曲目数据！`);
+          break; 
+        }
+      } catch (e) {
+        console.warn(`⚠️ 该源拉取失败，准备尝试下一个...`);
+      }
     }
 
+    if (!fetchSuccess || !songData) {
+      return res.status(500).json({ msg: '所有远端数据源均拉取失败，请检查服务器网络' });
+    }
+
+    // 批量写入数据库 (Upsert 模式：有则更新，无则插入)
     let bulkOps = songData.map(song => ({
       updateOne: {
         filter: { id: song.id },
@@ -146,10 +174,10 @@ app.post('/api/admin/sync-arcaea', authMiddleware, async (req, res) => {
     }));
 
     await ArcaeaSong.bulkWrite(bulkOps);
-    res.json({ msg: `成功同步 ${bulkOps.length} 首 Arcaea 曲目！` });
+    res.json({ msg: `✅ 成功同步 ${bulkOps.length} 首 Arcaea 曲目！` });
   } catch (err) {
     console.error('同步 Arcaea 曲目失败:', err);
-    res.status(500).json({ msg: '同步失败，请检查网络或远端源状态' });
+    res.status(500).json({ msg: '同步失败，发生内部错误' });
   }
 });
 
