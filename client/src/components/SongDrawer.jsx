@@ -88,32 +88,31 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
     setCoverIndex(0);
   }, [song, boardLevel]);
 
-  // 3. 构建本地图片兜底探测队列
+// 3. 构建本地图片兜底探测队列
   const getCoverPaths = () => {
     if (!song) return ['/assets/bg.png'];
     if (activeGame === 'chunithm') return [`https://assets2.lxns.net/chunithm/jacket/${song.id}.png`, '/assets/bg.png'];
     if (activeGame === 'maimai') return [`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`, '/assets/bg.png'];
 
-    // Arcaea 本地极速图床路径矩阵
+    // 🔥 Arcaea 本地极速图床路径矩阵 (支持 1080p 高清原画)
     const sId = song.id;
     const isBYD = boardLevel === 3;
     const paths = [];
 
-    // 如果选了 BYD 难度，优先尝试加载 3.jpg 觉醒曲绘
+    // 如果选了 BYD 难度，优先尝试加载 1080_3.jpg 或 3.jpg 觉醒曲绘
     if (isBYD) {
+      paths.push(`/assets/arcaea/songs/${sId}/1080_3.jpg`);
+      paths.push(`/assets/arcaea/songs/dl_${sId}/1080_3.jpg`);
       paths.push(`/assets/arcaea/songs/${sId}/3.jpg`);
       paths.push(`/assets/arcaea/songs/dl_${sId}/3.jpg`);
-      paths.push(`/assets/arcaea/songs/${sId}/${sId}_3.jpg`);
-      paths.push(`/assets/arcaea/songs/dl_${sId}/${sId}_3.jpg`);
     }
-    // 常规 base.jpg 兜底探测
+    // 常规高清 base.jpg 兜底探测
+    paths.push(`/assets/arcaea/songs/${sId}/1080_base.jpg`);
+    paths.push(`/assets/arcaea/songs/dl_${sId}/1080_base.jpg`);
     paths.push(`/assets/arcaea/songs/${sId}/base.jpg`);
     paths.push(`/assets/arcaea/songs/dl_${sId}/base.jpg`);
-    paths.push(`/assets/arcaea/songs/${sId}/${sId}_base.jpg`);
-    paths.push(`/assets/arcaea/songs/dl_${sId}/${sId}_base.jpg`);
     
-    // 终极兜底背景
-    paths.push('/assets/bg.png'); 
+    paths.push('/assets/bg.png'); // 终极兜底背景
     return paths;
   };
 
@@ -260,13 +259,20 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                 <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
                   <div className="text-[10px] text-gray-500 mb-1">BPM</div>
                   <div className="text-sm text-gray-200 font-mono">{song.basic_info?.bpm || '-'}</div>
-                </div>
-                <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                  <div className="text-[10px] text-gray-500 mb-1">新曲标识</div>
-                  <div className="text-sm text-gray-200">
-                    {song.basic_info?.is_new ? '✨ 是 (New)' : '否'}
+		
+		</div>
+		{activeGame !== 'arcaea' ? (
+                  <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
+                    <div className="text-[10px] text-gray-500 mb-1">新曲标识</div>
+                    <div className="text-sm text-gray-200">
+                      {song.basic_info?.is_new ? '✨ 是 (New)' : '否'}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800 flex items-center justify-center opacity-30">
+                    <div className="text-xl font-bold font-mono tracking-widest text-gray-600">ARCAEA</div>
+                  </div>
+                )}
               </div>
 
               <div>
