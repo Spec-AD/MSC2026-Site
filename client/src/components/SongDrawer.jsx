@@ -56,73 +56,93 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardData, setBoardData] = useState([]);
   const [boardScope, setBoardScope] = useState('global'); 
-  const [boardLevel, setBoardLevel] = useState(3);        
-  
-  // 🔥 新增：图片探测索引，用于自动降级尝试本地图片
-  const [coverIndex, setCoverIndex] = useState(0);
+  const [boardLevel, setBoardLevel] = useState(2); // 默认调整为 2 (FTR/EXPERT) 
+  const [coverIndex, setCoverIndex] = useState(0); 
 
   const config = GAME_CONFIG[activeGame] || GAME_CONFIG.maimai;
   const isUtage = song?.basic_info?.genre === '宴会场' || song?.type === 'UTAGE';
 
-  // 1. 重置初始状态与默认难度选择
+  // 🌟 1. 智能初始化默认难度
   useEffect(() => {
     if (song && isOpen) {
       if (isUtage) {
         setBoardLevel(0);
+      } else if (activeGame === 'arcaea') {
+        // 🔥 Arcaea 优先默认选中 FTR(2)，避免玩家被异象直接糊脸
+        if (song.ds && song.ds[2] !== undefined && song.ds[2] !== null) {
+          setBoardLevel(2);
+        } else {
+          // 如果罕见地没有 FTR，则找最高难度
+          let defaultLevel = 0;
+          for (let i = config.diffNames.length - 1; i >= 0; i--) {
+            if (song.ds && song.ds[i] !== undefined && song.ds[i] !== null) { defaultLevel = i; break; }
+          }
+          setBoardLevel(defaultLevel);
+        }
       } else {
+        // 其他游戏逻辑不变
         let defaultLevel = 0;
         for (let i = config.diffNames.length - 1; i >= 0; i--) {
-          if (song.ds && song.ds[i] !== undefined && song.ds[i] !== null) {
-            defaultLevel = i;
-            break;
-          }
+          if (song.ds && song.ds[i] !== undefined && song.ds[i] !== null) { defaultLevel = i; break; }
         }
         setBoardLevel(defaultLevel);
       }
       setBoardScope('global'); 
     }
-  }, [song, isOpen, isUtage, config.diffNames.length]);
+  }, [song, isOpen, isUtage, activeGame, config.diffNames.length]);
 
-  // 2. 当切换歌曲或难度时，重置图片尝试索引
   useEffect(() => {
     setCoverIndex(0);
   }, [song, boardLevel]);
 
-// 3. 构建本地图片兜底探测队列
+  // 🔥 2. 提取当前难度的覆写元数据 (Override Data)
+  const currentDiffInfo = song?.difficulties?.find(d => d.ratingClass === boardLevel);
+  
+  // 动态变量：如果有当前难度的覆写值，则优先使用；否则退回基础值
+  const displayTitle = currentDiffInfo?.title_localized?.en || song?.title_localized?.en || song?.basic_info?.title;
+  const displayJa = currentDiffInfo?.title_localized?.ja || song?.title_localized?.ja;
+  const displayArtist = currentDiffInfo?.artist || song?.basic_info?.artist;
+  const displayBpm = currentDiffInfo?.bpm || song?.basic_info?.bpm;
+
+  // 🌟 3. 严格构建图片探测队列
   const getCoverPaths = () => {
     if (!song) return ['/assets/bg.png'];
     if (activeGame === 'chunithm') return [`https://assets2.lxns.net/chunithm/jacket/${song.id}.png`, '/assets/bg.png'];
     if (activeGame === 'maimai') return [`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`, '/assets/bg.png'];
 
-    // 🔥 Arcaea 本地极速图床路径矩阵 (支持 1080p 高清原画)
     const sId = song.id;
-    const isBYD = boardLevel === 3;
     const paths = [];
+    
+    // 检查数据库中记录的当前难度是否有官方的曲绘异变标签，或强行对 BYD 进行 3.jpg 探测
+    const hasOverride = currentDiffInfo?.jacketOverride;
+    const isBYD = boardLevel === 3;
 
-    // 如果选了 BYD 难度，优先尝试加载 1080_3.jpg 或 3.jpg 觉醒曲绘
-    if (isBYD) {
-      paths.push(`/assets/arcaea/songs/${sId}/1080_3.jpg`);
-      paths.push(`/assets/arcaea/songs/dl_${sId}/1080_3.jpg`);
-      paths.push(`/assets/arcaea/songs/${sId}/3.jpg`);
-      paths.push(`/assets/arcaea/songs/dl_${sId}/3.jpg`);
+    if (hasOverride || isBYD) {
+      paths.push(`/assets/arcaea/songs/${sId}/1080_${boardLevel}.jpg`);
+      paths.push(`/assets/arcaea/songs/dl_${sId}/1080_${boardLevel}.jpg`);
+      paths.push(`/assets/arcaea/songs/${sId}/${boardLevel}.jpg`);
+      paths.push(`/assets/arcaea/songs/dl_${sId}/${boardLevel}.jpg`);
+      paths.push(`/assets/arcaea/songs/${sId}/${sId}_${boardLevel}.jpg`);
     }
-    // 常规高清 base.jpg 兜底探测
+    
+    // 常规 base.jpg 兜底探测
     paths.push(`/assets/arcaea/songs/${sId}/1080_base.jpg`);
     paths.push(`/assets/arcaea/songs/dl_${sId}/1080_base.jpg`);
     paths.push(`/assets/arcaea/songs/${sId}/base.jpg`);
     paths.push(`/assets/arcaea/songs/dl_${sId}/base.jpg`);
+    paths.push(`/assets/arcaea/songs/${sId}/${sId}_base.jpg`);
     
-    paths.push('/assets/bg.png'); // 终极兜底背景
+    paths.push('/assets/bg.png'); 
     return paths;
   };
 
   const coverPaths = getCoverPaths();
   const currentCoverUrl = coverPaths[coverIndex] || '/assets/bg.png';
 
-  // 4. 排行榜拉取逻辑 (Arcaea 将不会触发此接口)
+  // 排行榜拉取逻辑
   useEffect(() => {
     if (!isOpen || !song) return; 
-    if (activeGame === 'arcaea') return; // Arcaea 暂不调用水鱼系查分榜
+    if (activeGame === 'arcaea') return; 
     if (!isUtage && (!song.ds || song.ds[boardLevel] === undefined)) return;
     
     const fetchLeaderboard = async () => {
@@ -130,15 +150,8 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
       try {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        
-        const endpoint = activeGame === 'chunithm' 
-          ? `/api/chunithm-songs/${song.id}/leaderboard`
-          : `/api/songs/${song.id}/leaderboard`;
-
-        const res = await axios.get(endpoint, {
-          params: { level: boardLevel, scope: boardScope },
-          headers
-        });
+        const endpoint = activeGame === 'chunithm' ? `/api/chunithm-songs/${song.id}/leaderboard` : `/api/songs/${song.id}/leaderboard`;
+        const res = await axios.get(endpoint, { params: { level: boardLevel, scope: boardScope }, headers });
         setBoardData(res.data);
       } catch (err) {
         addToast(err.response?.data?.msg || '获取排行榜失败', 'error');
@@ -147,7 +160,6 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
         setBoardLoading(false);
       }
     };
-    
     fetchLeaderboard();
   }, [song, boardLevel, boardScope, isOpen, isUtage, activeGame]);
 
@@ -176,8 +188,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
   return (
     <>
       <div 
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity z-40 
-          ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity z-40 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
       />
 
@@ -189,15 +200,12 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
           <div className="font-sans h-full flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
             
             <div className="p-6 pb-4 border-b border-gray-800 relative bg-gradient-to-b from-gray-800/40 to-transparent shrink-0 flex gap-4">
-              <button 
-                onClick={onClose} 
-                className="absolute top-6 right-6 text-gray-400 hover:text-white transition-transform hover:rotate-90 text-xl z-10"
-              >
+              <button onClick={onClose} className="absolute top-6 right-6 text-gray-400 hover:text-white transition-transform hover:rotate-90 text-xl z-10">
                 <FaTimes />
               </button>
               
-              {/* 🔥 React 原生优雅容灾降级引擎：失败自动加 1 试下一张 */}
               <img 
+                key={currentCoverUrl} // 添加 key 确保源变化时能重新触发渐变和加载逻辑
                 src={currentCoverUrl} 
                 alt="cover" 
                 className="w-20 h-20 rounded-xl object-cover shadow-lg border border-white/10 shrink-0 transition-all duration-300" 
@@ -220,18 +228,22 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                   <span className="text-xs text-gray-400 font-mono tracking-wider">ID: {song.id}</span>
                 </div>
                 
-                <h2 className="text-xl font-bold text-white leading-tight mb-1 truncate" title={song.title || song.basic_info?.title}>
-                  {song.title || song.basic_info?.title}
+                {/* 🔥 动态曲名渲染 */}
+                <h2 className="text-xl font-bold text-white leading-tight mb-1 truncate transition-colors duration-300" title={displayTitle}>
+                  {displayTitle}
                 </h2>
 
-                {/* 日文原名展示 */}
-                {song.title_localized?.ja && song.title_localized.ja !== (song.title || song.basic_info?.title) && (
-                  <p className="text-xs text-purple-300/80 font-medium mb-1 truncate">
-                    {song.title_localized.ja}
+                {/* 🔥 动态日文原名渲染 */}
+                {displayJa && displayJa !== displayTitle && (
+                  <p className="text-xs text-purple-300/80 font-medium mb-1 truncate transition-opacity duration-300">
+                    {displayJa}
                   </p>
                 )}
 
-                <p className="text-sm text-gray-400">{song.basic_info?.artist}</p>
+                {/* 🔥 动态曲师渲染 */}
+                <p className="text-sm text-gray-400 truncate transition-colors duration-300" title={displayArtist}>
+                  {displayArtist}
+                </p>
                 
                 {song.aliases && song.aliases.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-3">
@@ -249,19 +261,21 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                  <div className="text-[10px] text-gray-500 mb-1">所属分类</div>
+                  <div className="text-[10px] text-gray-500 mb-1">所属分类 (Pack)</div>
                   <div className="text-sm text-gray-200">{song.basic_info?.genre || '-'}</div>
                 </div>
                 <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
                   <div className="text-[10px] text-gray-500 mb-1">实装版本</div>
-                  <div className="text-sm text-gray-200">{song.basic_info?.from || '-'}</div>
+                  <div className="text-sm text-gray-200 font-mono">v{song.basic_info?.from || '-'}</div>
                 </div>
+                
+                {/* 🔥 动态 BPM 渲染 */}
                 <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
                   <div className="text-[10px] text-gray-500 mb-1">BPM</div>
-                  <div className="text-sm text-gray-200 font-mono">{song.basic_info?.bpm || '-'}</div>
-		
-		</div>
-		{activeGame !== 'arcaea' ? (
+                  <div className="text-sm text-gray-200 font-mono transition-colors duration-300">{displayBpm || '-'}</div>
+                </div>
+                
+                {activeGame !== 'arcaea' ? (
                   <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
                     <div className="text-[10px] text-gray-500 mb-1">新曲标识</div>
                     <div className="text-sm text-gray-200">
@@ -277,6 +291,8 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
 
               <div>
                 <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-widest">Difficulty & Charter</h3>
+                
+                {/* 🔥 增强的难度选择条体验：支持点击难度条直接切换数据 */}
                 <div className="space-y-2">
                   {song.ds && song.ds.map((constant, idx) => {
                     if (constant === undefined || constant === null) return null;
@@ -284,7 +300,6 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                     const chartInfo = song.charts && song.charts[idx];
                     const arcaeaDiffInfo = song.difficulties && song.difficulties.find(d => d.ratingClass === idx);
                     
-                    // 动态获取谱师 (兼容官方 JSON 格式)
                     let charterName = '未知谱师';
                     if (activeGame === 'arcaea' && arcaeaDiffInfo?.chartDesigner) {
                       charterName = arcaeaDiffInfo.chartDesigner;
@@ -292,18 +307,22 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                       charterName = chartInfo.charter;
                     }
 
-                    // 动态获取展示标级 (读取后端的 level 数组, 或官方 rating 字段)
                     let displayLevel = song.level ? song.level[idx] : null;
                     if (activeGame === 'arcaea' && arcaeaDiffInfo) {
                       displayLevel = song.level ? song.level[idx] : arcaeaDiffInfo.rating;
                     }
 
                     let totalNotes = activeGame === 'arcaea' ? '-' : getNotesCount(chartInfo);
+                    const isSelected = boardLevel === idx;
 
                     return (
                       <div 
                         key={idx} 
-                        className={`flex flex-col p-3 rounded-xl border ${config.diffBgColors[idx] || 'bg-gray-800 border-gray-700'} backdrop-blur-sm`}
+                        onClick={() => setBoardLevel(idx)}
+                        className={`flex flex-col p-3 rounded-xl border backdrop-blur-sm cursor-pointer transition-all duration-300
+                          ${isSelected ? config.diffBgColors[idx] : 'bg-gray-800 border-gray-700 opacity-60 hover:opacity-100'}
+                          ${activeGame === 'arcaea' && isSelected ? 'shadow-lg scale-[1.02]' : 'scale-100'}
+                        `}
                       >
                         <div className="flex justify-between items-center mb-1">
                           <div className="flex items-center gap-2">
@@ -335,7 +354,6 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                 </div>
               </div>
 
-              {/* 🔥 隐藏 Arcaea 的排行榜模块 */}
               {activeGame !== 'arcaea' && (
                 <div className="pt-4 border-t border-gray-800">
                   <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 font-mono">
@@ -367,16 +385,10 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Scope</span>
                       <div className="flex bg-black/50 border border-white/5 rounded-lg p-1">
-                        <button 
-                          onClick={() => handleScopeSwitch('global')}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${boardScope === 'global' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-300'}`}
-                        >
+                        <button onClick={() => handleScopeSwitch('global')} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${boardScope === 'global' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-300'}`}>
                           <FaGlobe /> 全局
                         </button>
-                        <button 
-                          onClick={() => handleScopeSwitch('friends')}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${boardScope === 'friends' ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]' : 'text-gray-400 hover:text-gray-300'}`}
-                        >
+                        <button onClick={() => handleScopeSwitch('friends')} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${boardScope === 'friends' ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]' : 'text-gray-400 hover:text-gray-300'}`}>
                           {(!currentUser || (currentUser.sponsorTier || 0) < 1) ? <FaLock className="text-gray-500" /> : <FaUserFriends />} 好友
                         </button>
                       </div>
@@ -401,24 +413,15 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                             const chartInfo = song.charts && song.charts[boardLevel];
                             const maxDxScore = (chartInfo && chartInfo.notes) ? chartInfo.notes.reduce((a, b) => a + b, 0) * 3 : 0;
                             const dxRatio = maxDxScore > 0 ? score.dxScore / maxDxScore : 0;
-                            if (dxRatio >= 0.97) starCount = 5;
-                            else if (dxRatio >= 0.95) starCount = 4;
-                            else if (dxRatio >= 0.93) starCount = 3;
-                            else if (dxRatio >= 0.90) starCount = 2;
-                            else if (dxRatio >= 0.85) starCount = 1;
+                            if (dxRatio >= 0.97) starCount = 5; else if (dxRatio >= 0.95) starCount = 4; else if (dxRatio >= 0.93) starCount = 3; else if (dxRatio >= 0.90) starCount = 2; else if (dxRatio >= 0.85) starCount = 1;
                           }
 
                           const playerName = score.userId?.username || score.username || 'Unknown Player';
-                          const displayScore = activeGame === 'chunithm' 
-                            ? (score.score ? score.score.toLocaleString() : '-') 
-                            : (score.achievement ? score.achievement.toFixed(4) + '%' : '-');
-
+                          const displayScore = activeGame === 'chunithm' ? (score.score ? score.score.toLocaleString() : '-') : (score.achievement ? score.achievement.toFixed(4) + '%' : '-');
                           const fc = (score.fcStatus || '').toLowerCase();
                           let fcBadge = null;
                           if (activeGame === 'chunithm') {
-                            if (fc.includes('ajc')) fcBadge = <span className="bg-gradient-to-r from-yellow-300 to-yellow-500 text-yellow-950 px-1 rounded text-[9px] font-black">AJC</span>;
-                            else if (fc.includes('aj')) fcBadge = <span className="bg-yellow-400 text-yellow-950 px-1 rounded text-[9px] font-black">AJ</span>;
-                            else if (fc.includes('fc')) fcBadge = <span className="bg-emerald-400 text-emerald-950 px-1 rounded text-[9px] font-black">FC</span>;
+                            if (fc.includes('ajc')) fcBadge = <span className="bg-gradient-to-r from-yellow-300 to-yellow-500 text-yellow-950 px-1 rounded text-[9px] font-black">AJC</span>; else if (fc.includes('aj')) fcBadge = <span className="bg-yellow-400 text-yellow-950 px-1 rounded text-[9px] font-black">AJ</span>; else if (fc.includes('fc')) fcBadge = <span className="bg-emerald-400 text-emerald-950 px-1 rounded text-[9px] font-black">FC</span>;
                           } else {
                             if (['fc', 'fcp', 'ap', 'app'].includes(fc)) {
                               fcBadge = <span className={`text-[9px] font-black text-white px-1 rounded ${fc.includes('ap') ? 'bg-yellow-500' : 'bg-pink-500'}`}>{fc.toUpperCase()}</span>;
@@ -426,39 +429,19 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                           }
 
                           return (
-                            <div 
-                              key={score._id} 
-                              onClick={() => navigate(`/profile/${playerName}/${activeGame}`)}
-                              className="flex items-center bg-white/5 border border-white/5 rounded-xl p-3 hover:bg-white/10 transition-colors cursor-pointer active:scale-95 group"
-                            >
-                              <div className={`w-8 text-center font-mono font-black text-lg ${getRankColor(index)}`}>
-                                {index + 1}
-                              </div>
-                              <img 
-                                src={score.userId?.avatarUrl || score.avatarUrl || '/assets/logos.png'} 
-                                alt="avatar" 
-                                className="w-10 h-10 rounded-lg object-cover ml-2 mr-3 border border-white/10 group-hover:scale-105 transition-transform" 
-                              />
+                            <div key={score._id} onClick={() => navigate(`/profile/${playerName}/${activeGame}`)} className="flex items-center bg-white/5 border border-white/5 rounded-xl p-3 hover:bg-white/10 transition-colors cursor-pointer active:scale-95 group">
+                              <div className={`w-8 text-center font-mono font-black text-lg ${getRankColor(index)}`}>{index + 1}</div>
+                              <img src={score.userId?.avatarUrl || score.avatarUrl || '/assets/logos.png'} alt="avatar" className="w-10 h-10 rounded-lg object-cover ml-2 mr-3 border border-white/10 group-hover:scale-105 transition-transform" />
                               <div className="flex-1 overflow-hidden">
-                                <div className="text-white font-bold text-sm truncate group-hover:text-cyan-300 transition-colors">
-                                  {playerName}
-                                </div>
+                                <div className="text-white font-bold text-sm truncate group-hover:text-cyan-300 transition-colors">{playerName}</div>
                                 <div className="flex items-center gap-2 mt-0.5">
-                                  <span className={`${activeGame === 'chunithm' ? 'text-yellow-400' : 'text-cyan-400'} font-mono font-bold text-sm`}>
-                                    {displayScore}
-                                  </span>
+                                  <span className={`${activeGame === 'chunithm' ? 'text-yellow-400' : 'text-cyan-400'} font-mono font-bold text-sm`}>{displayScore}</span>
                                   {fcBadge}
                                 </div>
                               </div>
                               {config.hasDX && (
                                 <div className="flex items-center gap-2 shrink-0">
-                                  {starCount > 0 && (
-                                    <img 
-                                      src={`/assets/${starCount}dxstar.png`} 
-                                      alt={`DX Star`} 
-                                      className="h-[14px] md:h-4 object-contain drop-shadow-md"
-                                    />
-                                  )}
+                                  {starCount > 0 && <img src={`/assets/${starCount}dxstar.png`} alt={`DX Star`} className="h-[14px] md:h-4 object-contain drop-shadow-md" />}
                                   <div className="text-right flex flex-col items-end">
                                     <span className="text-gray-300 font-mono font-bold text-sm">{score.dxScore || 0}</span>
                                     <span className="text-gray-500 text-[9px] font-bold uppercase mt-0.5">DX Score</span>
