@@ -260,6 +260,10 @@ app.post('/api/admin/sync-arcaea', authMiddleware, async (req, res) => {
             jacketDesigner: d.jacketDesigner || '',
             rating: displayLevel,
             constant: constant
+	    title_localized: d.title_localized || null,
+            artist: d.artist || null,
+            bpm: d.bpm || null,
+            jacketOverride: d.jacketOverride || false
           });
         });
       }
