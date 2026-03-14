@@ -57,13 +57,14 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
   const [boardData, setBoardData] = useState([]);
   const [boardScope, setBoardScope] = useState('global'); 
   const [boardLevel, setBoardLevel] = useState(3);        
-
-  // 🔥 专门用于存储探测到的本地曲绘路径
-  const [currentCover, setCurrentCover] = useState('/assets/bg.png');
+  
+  // 🔥 新增：图片探测索引，用于自动降级尝试本地图片
+  const [coverIndex, setCoverIndex] = useState(0);
 
   const config = GAME_CONFIG[activeGame] || GAME_CONFIG.maimai;
   const isUtage = song?.basic_info?.genre === '宴会场' || song?.type === 'UTAGE';
 
+  // 1. 重置初始状态与默认难度选择
   useEffect(() => {
     if (song && isOpen) {
       if (isUtage) {
@@ -82,54 +83,47 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
     }
   }, [song, isOpen, isUtage, config.diffNames.length]);
 
-  // ==========================================
-  // 🌟 智能图床探测引擎 (处理 dl_ 和 BYD 3.jpg)
-  // ==========================================
+  // 2. 当切换歌曲或难度时，重置图片尝试索引
   useEffect(() => {
-    if (!song) return;
+    setCoverIndex(0);
+  }, [song, boardLevel]);
 
-    if (activeGame === 'arcaea') {
-      const isBYD = boardLevel === 3; 
-      const sId = song.id;
-      const pathsToTry = [];
+  // 3. 构建本地图片兜底探测队列
+  const getCoverPaths = () => {
+    if (!song) return ['/assets/bg.png'];
+    if (activeGame === 'chunithm') return [`https://assets2.lxns.net/chunithm/jacket/${song.id}.png`, '/assets/bg.png'];
+    if (activeGame === 'maimai') return [`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`, '/assets/bg.png'];
 
-      // 如果选中 BYD 难度，优先找 3.jpg
-      if (isBYD) {
-        pathsToTry.push(`/assets/arcaea/songs/${sId}/3.jpg`);
-        pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/3.jpg`);
-        pathsToTry.push(`/assets/arcaea/songs/${sId}/${sId}_3.jpg`);
-        pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/${sId}_3.jpg`);
-      }
+    // Arcaea 本地极速图床路径矩阵
+    const sId = song.id;
+    const isBYD = boardLevel === 3;
+    const paths = [];
 
-      // 常规 base.jpg 探测
-      pathsToTry.push(`/assets/arcaea/songs/${sId}/base.jpg`);
-      pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/base.jpg`);
-      pathsToTry.push(`/assets/arcaea/songs/${sId}/${sId}_base.jpg`);
-      pathsToTry.push(`/assets/arcaea/songs/dl_${sId}/${sId}_base.jpg`);
-
-      pathsToTry.push('/assets/bg.png'); // 终极兜底
-
-      const probeImage = (index) => {
-        if (index >= pathsToTry.length) return;
-        const img = new Image();
-        img.onload = () => setCurrentCover(pathsToTry[index]);
-        img.onerror = () => probeImage(index + 1);
-        img.src = pathsToTry[index];
-      };
-
-      probeImage(0);
-
-    } else if (activeGame === 'chunithm') {
-      setCurrentCover(`https://assets2.lxns.net/chunithm/jacket/${song.id}.png`);
-    } else {
-      setCurrentCover(`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`);
+    // 如果选了 BYD 难度，优先尝试加载 3.jpg 觉醒曲绘
+    if (isBYD) {
+      paths.push(`/assets/arcaea/songs/${sId}/3.jpg`);
+      paths.push(`/assets/arcaea/songs/dl_${sId}/3.jpg`);
+      paths.push(`/assets/arcaea/songs/${sId}/${sId}_3.jpg`);
+      paths.push(`/assets/arcaea/songs/dl_${sId}/${sId}_3.jpg`);
     }
-  }, [song, activeGame, boardLevel]);
+    // 常规 base.jpg 兜底探测
+    paths.push(`/assets/arcaea/songs/${sId}/base.jpg`);
+    paths.push(`/assets/arcaea/songs/dl_${sId}/base.jpg`);
+    paths.push(`/assets/arcaea/songs/${sId}/${sId}_base.jpg`);
+    paths.push(`/assets/arcaea/songs/dl_${sId}/${sId}_base.jpg`);
+    
+    // 终极兜底背景
+    paths.push('/assets/bg.png'); 
+    return paths;
+  };
 
+  const coverPaths = getCoverPaths();
+  const currentCoverUrl = coverPaths[coverIndex] || '/assets/bg.png';
 
+  // 4. 排行榜拉取逻辑 (Arcaea 将不会触发此接口)
   useEffect(() => {
     if (!isOpen || !song) return; 
-    if (activeGame === 'arcaea') return; // Arcaea 不需要拉取排行榜
+    if (activeGame === 'arcaea') return; // Arcaea 暂不调用水鱼系查分榜
     if (!isUtage && (!song.ds || song.ds[boardLevel] === undefined)) return;
     
     const fetchLeaderboard = async () => {
@@ -203,10 +197,16 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                 <FaTimes />
               </button>
               
+              {/* 🔥 React 原生优雅容灾降级引擎：失败自动加 1 试下一张 */}
               <img 
-                src={currentCover} 
+                src={currentCoverUrl} 
                 alt="cover" 
                 className="w-20 h-20 rounded-xl object-cover shadow-lg border border-white/10 shrink-0 transition-all duration-300" 
+                onError={() => {
+                  if (coverIndex < coverPaths.length - 1) {
+                    setCoverIndex(prev => prev + 1);
+                  }
+                }}
               />
 
               <div className="pr-6 flex flex-col justify-center min-w-0">
@@ -225,7 +225,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                   {song.title || song.basic_info?.title}
                 </h2>
 
-                {/* 🔥 日文原名展示 */}
+                {/* 日文原名展示 */}
                 {song.title_localized?.ja && song.title_localized.ja !== (song.title || song.basic_info?.title) && (
                   <p className="text-xs text-purple-300/80 font-medium mb-1 truncate">
                     {song.title_localized.ja}
@@ -278,6 +278,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                     const chartInfo = song.charts && song.charts[idx];
                     const arcaeaDiffInfo = song.difficulties && song.difficulties.find(d => d.ratingClass === idx);
                     
+                    // 动态获取谱师 (兼容官方 JSON 格式)
                     let charterName = '未知谱师';
                     if (activeGame === 'arcaea' && arcaeaDiffInfo?.chartDesigner) {
                       charterName = arcaeaDiffInfo.chartDesigner;
@@ -285,9 +286,10 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                       charterName = chartInfo.charter;
                     }
 
+                    // 动态获取展示标级 (读取后端的 level 数组, 或官方 rating 字段)
                     let displayLevel = song.level ? song.level[idx] : null;
                     if (activeGame === 'arcaea' && arcaeaDiffInfo) {
-                      displayLevel = arcaeaDiffInfo.rating;
+                      displayLevel = song.level ? song.level[idx] : arcaeaDiffInfo.rating;
                     }
 
                     let totalNotes = activeGame === 'arcaea' ? '-' : getNotesCount(chartInfo);
@@ -327,7 +329,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                 </div>
               </div>
 
-              {/* 🔥 Arcaea 隐藏排行榜模块 */}
+              {/* 🔥 隐藏 Arcaea 的排行榜模块 */}
               {activeGame !== 'arcaea' && (
                 <div className="pt-4 border-t border-gray-800">
                   <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 font-mono">
