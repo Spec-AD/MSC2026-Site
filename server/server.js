@@ -259,7 +259,7 @@ app.post('/api/admin/sync-arcaea', authMiddleware, async (req, res) => {
             chartDesigner: d.chartDesigner || 'Unknown',
             jacketDesigner: d.jacketDesigner || '',
             rating: displayLevel,
-            constant: constant
+            constant: constant,
 	    title_localized: d.title_localized || null,
             artist: d.artist || null,
             bpm: d.bpm || null,
