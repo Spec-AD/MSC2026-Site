@@ -96,37 +96,20 @@ function generateMaskedTitle(title, openedChars, mods = []) {
   return masked;
 }
 
-function calculateSessionStarRating(baseOvs, mods = []) {
-  // 1. 求和所有歌曲的基础文本熵值
+function calculateSessionStarRating(baseOvs) {
   const totalBaseOv = baseOvs.reduce((a, b) => a + b, 0);
-  
-  // 2. 基础星数转换 (假设总熵值 150 约为 5 星难度)
-  let baseStar = totalBaseOv / 30.0;
-
-  // 3. 模组乘区叠加
-  const MOD_MULTIPLIERS = {
-    Tenacity: 1.15, Fear: 1.15, Prudence: 1.55, Reflection: 1.30, 
-    Perceiver: 1.30, Puzzle: 1.70, Easy: 0.45, Brave: 0.50, Lucky: 0.20, Strength: 0.10
-  };
-  let modMult = 1.0;
-  mods.forEach(mod => { if (MOD_MULTIPLIERS[mod]) modMult *= MOD_MULTIPLIERS[mod]; });
-
-  let finalStar = baseStar * modMult;
-  return Number(finalStar.toFixed(2));
+  return Number((totalBaseOv / 60.0).toFixed(2));
 }
 
 /**
- * 🚀 非线性 OV 收益转换
- * 难度越高，完美通关的 OV 收益呈指数级暴增
+ * 🚀 非线性 OV 收益转换 (基于纯粹星数)
+ * 完美通关总 Base 收益 = 10 * (星数 ^ 1.8)
+ * 例如：3星=72 OV, 5星=181 OV, 10星=630 OV
  */
 function distributeNonLinearOV(starRating, songBaseOvs) {
-  // 核心非线性公式：完美总 OV = 15 * (星数 ^ 1.6)
-  // 例如：5星 = 196 OV， 10星 = 597 OV， 12星 = 804 OV！
-  const perfectSessionOv = 15 * Math.pow(starRating, 1.6);
+  const perfectSessionOv = 10 * Math.pow(starRating, 1.8);
+  const totalBase = songBaseOvs.reduce((a, b) => a + b, 0) || 1; 
   
-  const totalBase = songBaseOvs.reduce((a, b) => a + b, 0);
-  
-  // 将非线性暴增后的总 OV，按比例重新分配给这 5 首歌作为新的 BaseOV
   return songBaseOvs.map(ov => Number((perfectSessionOv * (ov / totalBase)).toFixed(2)));
 }
 
