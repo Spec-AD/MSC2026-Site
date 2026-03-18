@@ -24,7 +24,8 @@ const ActiveSessionSchema = new mongoose.Schema({
   gameType: { type: String, required: true }, // 例如 'arcaea'
   mods: [{ type: String }],
   openedChars: [{ type: String }], // 全局已开出的字符集合
-  expireAt: { type: Date, required: true }, // 核心计时器 (前端倒计时的基准)
+  expireAt: { type: Date, required: true }, 
+  starRating: { type: Number, default: 0 },
   songs: [{
     songId: String,
     realTitle: String, // 真实歌名 (绝对不可发给前端！)
@@ -36,7 +37,7 @@ const ActiveSessionSchema = new mongoose.Schema({
     hasKanji: { type: Boolean, default: false },
     hasSym: { type: Boolean, default: false }
   }],
-  createdAt: { type: Date, default: Date.now, expires: 3600 } // TTL 索引: 1小时后自动销毁掉线的残局
+  createdAt: { type: Date, default: Date.now, expires: 900 } // TTL 索引: 1小时后自动销毁掉线的残局
 });
 
 const GameRecord = mongoose.model('GameRecord', GameRecordSchema);
