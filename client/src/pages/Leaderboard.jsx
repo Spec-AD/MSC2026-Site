@@ -38,6 +38,9 @@ const Leaderboard = () => {
         if (activeTab === 'pf') {
           if (activeGame === 'chunithm') {
             endpoint = `/api/leaderboard/chunithm`;
+          } else if (activeGame === 'decode') {
+            // 🔥 新增：请求后端的 Decode 专属排行榜
+            endpoint = `/api/leaderboard/decode`;
           } else {
             endpoint += `?game=${activeGame}`;
             if (activeGame === 'osu') {
@@ -88,6 +91,16 @@ const Leaderboard = () => {
     return 'text-yellow-400 font-bold';
   };
 
+  // 🔮 Decode 专属色彩系统 (OV阶梯)
+  const getDecodeOvColor = (ov) => {
+    const v = Number(ov) || 0;
+    if (v >= 2000) return 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 font-black drop-shadow-[0_0_8px_rgba(192,132,252,0.6)]';
+    if (v >= 1000) return 'text-purple-400 font-bold drop-shadow-sm';
+    if (v >= 500) return 'text-cyan-400 font-bold';
+    if (v >= 100) return 'text-indigo-400 font-semibold';
+    return 'text-zinc-400 font-medium';
+  };
+
   const renderRankBadge = (index) => {
     if (index === 0) return <FaMedal className="text-[22px] text-amber-400 drop-shadow-sm" />;
     if (index === 1) return <FaMedal className="text-[22px] text-zinc-300 drop-shadow-sm" />;
@@ -114,16 +127,12 @@ const Leaderboard = () => {
               >
                 {player.pp ? Math.round(player.pp) : (player.totalPf ? Math.round(player.totalPf) : '0')}
               </div>
-              <span 
-                className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5"
-                style={{ fontFamily: "'Quicksand', sans-serif" }}
-              >
+              <span className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                 PP
               </span>
             </>
           );
         } else if (activeGame === 'chunithm') {
-          // 🔥 移除 isChuniB50Visible 限制，始终公开展示 Rating 和彩色流明特效
           return (
             <>
               <div 
@@ -132,11 +141,26 @@ const Leaderboard = () => {
               >
                 {player.chuniRating ? player.chuniRating.toFixed(2) : '0.00'}
               </div>
-              <span 
-                className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5"
+              <span className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                RATING
+              </span>
+            </>
+          );
+        } else if (activeGame === 'decode') {
+          // 🔥 渲染 Decode 竞技场专属数据面板 (OV + 准确率)
+          const ov = player.letterGameStats?.totalOv || 0;
+          const acc = player.letterGameStats?.accuracy || 0;
+          return (
+            <>
+              <div 
+                className={`text-xl tracking-tight pb-0.5 ${getDecodeOvColor(ov)}`}
                 style={{ fontFamily: "'Quicksand', sans-serif" }}
               >
-                RATING
+                {ov.toFixed(2)}
+              </div>
+              <span className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5 flex flex-col items-end leading-none" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                TOTAL OV
+                <span className="text-[9px] text-zinc-600 mt-1 font-medium tracking-normal lowercase">acc: {(acc * 100).toFixed(1)}%</span>
               </span>
             </>
           );
@@ -149,10 +173,7 @@ const Leaderboard = () => {
               >
                 {player.totalPf ? player.totalPf.toFixed(2) : '0.00'}
               </div>
-              <span 
-                className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5"
-                style={{ fontFamily: "'Quicksand', sans-serif" }}
-              >
+              <span className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                 PF
               </span>
             </>
@@ -161,16 +182,10 @@ const Leaderboard = () => {
       case 'level':
         return (
           <>
-            <div 
-              className="text-xl font-bold text-cyan-400 tracking-tight pb-0.5"
-              style={{ fontFamily: "'Quicksand', sans-serif" }}
-            >
+            <div className="text-xl font-bold text-cyan-400 tracking-tight pb-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
               Lv.{player.level || 1}
             </div>
-            <span 
-              className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5"
-              style={{ fontFamily: "'Quicksand', sans-serif" }}
-            >
+            <span className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
               {player.xp || 0} XP
             </span>
           </>
@@ -178,43 +193,28 @@ const Leaderboard = () => {
       case 'wiki':
         return (
           <>
-            <div 
-              className="text-xl font-bold text-purple-400 tracking-tight pb-0.5"
-              style={{ fontFamily: "'Quicksand', sans-serif" }}
-            >
+            <div className="text-xl font-bold text-purple-400 tracking-tight pb-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
               {player.wikiApprovedCount || 0}
             </div>
-            <span className="text-[11px] text-zinc-500 font-bold tracking-widest mt-0.5">
-              过审词条
-            </span>
+            <span className="text-[11px] text-zinc-500 font-bold tracking-widest mt-0.5">过审词条</span>
           </>
         );
       case 'feedback':
         return (
           <>
-            <div 
-              className="text-xl font-bold text-emerald-400 tracking-tight pb-0.5"
-              style={{ fontFamily: "'Quicksand', sans-serif" }}
-            >
+            <div className="text-xl font-bold text-emerald-400 tracking-tight pb-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
               {player.feedbackApprovedCount || 0}
             </div>
-            <span className="text-[11px] text-zinc-500 font-bold tracking-widest mt-0.5">
-              采纳建议
-            </span>
+            <span className="text-[11px] text-zinc-500 font-bold tracking-widest mt-0.5">采纳建议</span>
           </>
         );
       case 'checkin':
         return (
           <>
-            <div 
-              className="text-xl font-bold text-amber-400 tracking-tight pb-0.5"
-              style={{ fontFamily: "'Quicksand', sans-serif" }}
-            >
+            <div className="text-xl font-bold text-amber-400 tracking-tight pb-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
               {player.checkInCount || 0}
             </div>
-            <span className="text-[11px] text-zinc-500 font-bold tracking-widest mt-0.5">
-              累计签到
-            </span>
+            <span className="text-[11px] text-zinc-500 font-bold tracking-widest mt-0.5">累计签到</span>
           </>
         );
       default: return null;
@@ -275,8 +275,8 @@ const Leaderboard = () => {
               initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
               className="mb-8 flex flex-col sm:flex-row items-start sm:items-center gap-3 overflow-hidden"
             >
-              {/* 二级：游戏选择 (加入 CHUNITHM) */}
-              <div className="flex items-center gap-1.5 bg-[#15151e]/60 backdrop-blur-md p-1.5 rounded-xl border border-white/[0.05]">
+              {/* 二级：游戏选择 (加入 Decode 竞技场) */}
+              <div className="flex flex-wrap items-center gap-1.5 bg-[#15151e]/60 backdrop-blur-md p-1.5 rounded-xl border border-white/[0.05]">
                 <button 
                   onClick={() => setActiveGame('maimai')} 
                   className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all active:scale-95 ${activeGame === 'maimai' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
@@ -294,6 +294,13 @@ const Leaderboard = () => {
                   className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all active:scale-95 ${activeGame === 'osu' ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
                 >
                   osu!
+                </button>
+                {/* 🔥 新增 Decode 选择 */}
+                <button 
+                  onClick={() => setActiveGame('decode')} 
+                  className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all active:scale-95 ${activeGame === 'decode' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-sm' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
+                >
+                  DECODE 竞技场
                 </button>
               </div>
 
@@ -355,9 +362,20 @@ const Leaderboard = () => {
                     let currentVal, prevVal;
                     switch (activeTab) {
                       case 'pf': 
-                        if (activeGame === 'osu') { currentVal = player.pp || player.totalPf; prevVal = prevPlayer.pp || prevPlayer.totalPf; }
-                        else if (activeGame === 'chunithm') { currentVal = player.chuniRating; prevVal = prevPlayer.chuniRating; }
-                        else { currentVal = player.totalPf; prevVal = prevPlayer.totalPf; }
+                        if (activeGame === 'osu') { 
+                          currentVal = player.pp || player.totalPf; prevVal = prevPlayer.pp || prevPlayer.totalPf; 
+                        }
+                        else if (activeGame === 'chunithm') { 
+                          currentVal = player.chuniRating; prevVal = prevPlayer.chuniRating; 
+                        }
+                        else if (activeGame === 'decode') {
+                          // 🔥 Decode 的并列判断：只有 OV 和 Accuracy 都完全相同才算并列
+                          currentVal = `${(player.letterGameStats?.totalOv || 0).toFixed(2)}_${(player.letterGameStats?.accuracy || 0).toFixed(4)}`;
+                          prevVal = `${(prevPlayer.letterGameStats?.totalOv || 0).toFixed(2)}_${(prevPlayer.letterGameStats?.accuracy || 0).toFixed(4)}`;
+                        }
+                        else { 
+                          currentVal = player.totalPf; prevVal = prevPlayer.totalPf; 
+                        }
                         break;
                       case 'level': currentVal = player.xp; prevVal = prevPlayer.xp; break;
                       case 'wiki': currentVal = player.wikiApprovedCount; prevVal = prevPlayer.wikiApprovedCount; break;
@@ -414,7 +432,7 @@ const Leaderboard = () => {
                       </div>
                     </div>
 
-                    {/* 原生评分列 (仅 Maimai 显示在中间，中二显示在右侧数值列) */}
+                    {/* 原生评分列 (仅 Maimai 显示在中间，其它显示在右侧数值列) */}
                     {activeTab === 'pf' && activeGame === 'maimai' && (
                       <div className="hidden md:flex w-32 justify-center shrink-0 border-l border-white/[0.05]">
                         <span 
