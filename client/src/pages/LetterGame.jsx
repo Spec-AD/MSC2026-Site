@@ -44,6 +44,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
     return 60000;
   }, [activeMods]);
 
+  const timeoutFired = useRef(false);
   // 高精度倒计时引擎 (每 50ms 刷新)
   useEffect(() => {
     if (gameResult) return;
@@ -236,17 +237,32 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
                 {/* 背景发光 */}
                 {isSelected && <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent pointer-events-none"></div>}
                 
-                <div className="flex items-center gap-4 z-10 overflow-hidden">
+<div className="flex items-center gap-4 z-10 overflow-hidden w-full pr-4">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 font-black text-sm
                     ${isCleared ? 'bg-emerald-500 text-black' : isDead ? 'bg-zinc-800 text-zinc-500' : isSelected ? 'bg-cyan-500 text-black' : 'bg-white/10 text-zinc-400'}
                   `}>
                     {isCleared ? <FaCheckCircle /> : isDead ? <FaSkull /> : `0${i+1}`}
                   </div>
-                  <span className={`text-xl md:text-2xl font-mono tracking-[0.2em] font-bold truncate drop-shadow-md transition-all
-                    ${isCleared ? 'text-emerald-300' : isDead ? 'text-zinc-600' : 'text-white'}
-                  `}>
-                    {song.maskedTitle}
-                  </span>
+                  
+                  {/* 🔥 增加flex-col，让标签挂在歌名上方或旁边 */}
+                  <div className="flex flex-col overflow-hidden w-full">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xl md:text-2xl font-mono tracking-[0.2em] font-bold truncate drop-shadow-md transition-all
+                        ${isCleared ? 'text-emerald-300' : isDead ? 'text-zinc-600' : 'text-white'}
+                      `}>
+                        {song.maskedTitle}
+                      </span>
+                      
+                      {/* 🔥 字符提示 Tag 矩阵 */}
+                      {!isCleared && (
+                        <div className="flex gap-1.5 shrink-0 ml-2">
+                          {song.hasKanji && <span className="text-[9px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded font-bold uppercase tracking-widest shadow-sm">汉字</span>}
+                          {song.hasKana && <span className="text-[9px] px-1.5 py-0.5 bg-pink-500/20 text-pink-300 border border-pink-500/30 rounded font-bold uppercase tracking-widest shadow-sm">假名</span>}
+                          {song.hasSym && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded font-bold uppercase tracking-widest shadow-sm">符号</span>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {isCleared && <span className="font-black text-emerald-400 text-sm z-10 shrink-0">+{song.actualOv?.toFixed(2)} OV</span>}
