@@ -1832,7 +1832,7 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '校验失败' }); }
 });
 
-==============================================
+// ==============================================
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
