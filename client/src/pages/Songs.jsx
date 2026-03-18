@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { FaSpinner, FaSearch, FaFilter, FaTimes, FaUndo, FaDatabase, FaChevronLeft, FaMusic } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -72,13 +72,23 @@ const ARCAEA_PACK_MAPPING = {
 };
 
 // ==========================================
+// 🌟 Arcaea 完美还原：主包排版矩阵
+// ==========================================
+const ARCAEA_ROWS = [
+  { title: "Arcaea", keys: ["base", "single", "extend_4", "extend_3", "extend_2", "extend"] },
+  { title: "Main Story", keys: ["eclipse", "lephon", "nihil", "eden", "epilogue", "finale", "vs", "prelude", "rei", "yugamu", "core"] },
+  { title: "Side Story", keys: ["anima", "observer", "dividedheart", "alice", "yugure", "zettai", "nijuusei", "mirai", "shiawase"] },
+  { title: "Collaboration", keys: ["megarex", "nextstage", "djmax", "undertale", "rotaeno", "cytusii", "musedash", "wacca", "maimai", "ongeki", "chunithm", "groovecoaster", "tonesphere", "lanota", "dynamix"] }
+];
+
+
+// ==========================================
 // 🎨 Arcaea 专属：单曲详情独立渲染面板
 // ==========================================
 const ArcaeaSongDetail = ({ song, diffConfig }) => {
   const [boardLevel, setBoardLevel] = useState(2);
   const [coverIndex, setCoverIndex] = useState(0);
 
-  // 1. 智能初始化难度
   useEffect(() => {
     if (!song) return;
     if (song.ds && song.ds[2] !== undefined && song.ds[2] !== null) {
@@ -94,14 +104,12 @@ const ArcaeaSongDetail = ({ song, diffConfig }) => {
 
   useEffect(() => { setCoverIndex(0); }, [song, boardLevel]);
 
-  // 2. 提取当前难度的覆写元数据 (Override Data)
   const currentDiffInfo = song?.difficulties?.find(d => d.ratingClass === boardLevel);
   const displayTitle = currentDiffInfo?.title_localized?.en || song?.title_localized?.en || song?.basic_info?.title || song?.title;
   const displayJa = currentDiffInfo?.title_localized?.ja || song?.title_localized?.ja;
   const displayArtist = currentDiffInfo?.artist || song?.basic_info?.artist || song?.artist;
   const displayBpm = currentDiffInfo?.bpm || song?.basic_info?.bpm;
 
-  // 3. 构建图片探测队列
   const coverPaths = useMemo(() => {
     if (!song) return ['/assets/bg.png'];
     const sId = song.id;
@@ -129,7 +137,7 @@ const ArcaeaSongDetail = ({ song, diffConfig }) => {
 
   const currentCoverUrl = coverPaths[coverIndex] || '/assets/bg.png';
 
-  if (!song) return <div className="h-full flex items-center justify-center text-gray-500">选择一首曲目以查看详情</div>;
+  if (!song) return <div className="h-full flex items-center justify-center text-gray-500 font-bold" style={{ fontFamily: "'Quicksand', sans-serif" }}>Select a track to view details</div>;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto custom-scrollbar p-6 bg-[#0a0a0c] rounded-3xl border border-white/5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
@@ -166,7 +174,7 @@ const ArcaeaSongDetail = ({ song, diffConfig }) => {
 
       <div className="grid grid-cols-2 gap-4 mb-8">
         <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800">
-          <div className="text-[11px] text-gray-500 mb-1 font-sans">所属分类 (Pack)</div>
+          <div className="text-[11px] text-gray-500 mb-1 font-sans">Pack</div>
           <div className="text-sm font-bold text-purple-300 truncate">{song.basic_info?.genre || '-'}</div>
         </div>
         <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800">
@@ -225,133 +233,242 @@ const ArcaeaSongDetail = ({ song, diffConfig }) => {
 };
 
 // ==========================================
-// 🎨 Arcaea 专属：曲包与选曲总控面板
+// 🖱️ 专属 Hooks: 鼠标拖拽平滑滚动引擎
+// ==========================================
+const useDragToScroll = () => {
+  const ref = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
+
+  const onMouseDown = (e) => {
+    if (!ref.current) return;
+    setIsDragging(true);
+    startX.current = e.pageX - ref.current.offsetLeft;
+    scrollLeft.current = ref.current.scrollLeft;
+  };
+
+  const onMouseLeave = () => setIsDragging(false);
+  const onMouseUp = () => setIsDragging(false);
+
+  const onMouseMove = (e) => {
+    if (!isDragging || !ref.current) return;
+    e.preventDefault();
+    const x = e.pageX - ref.current.offsetLeft;
+    const walk = (x - startX.current) * 2; // 滑动速度乘数
+    ref.current.scrollLeft = scrollLeft.current - walk;
+  };
+
+  return { ref, onMouseDown, onMouseLeave, onMouseUp, onMouseMove, isDragging };
+};
+
+
+// ==========================================
+// 🎨 Arcaea 专属：曲包沉浸式选曲总控
 // ==========================================
 const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
   const [selectedPackId, setSelectedPackId] = useState(null);
   const [selectedSong, setSelectedSong] = useState(null);
 
-  // 1. 根据过滤后的歌曲，逆向生成带有歌曲的曲包列表
-  const packs = useMemo(() => {
-    const groups = {};
+  // 1. 数据洗练：将所有提取出的曲包分类，自动归并附属 Append 追加包
+  const processedData = useMemo(() => {
+    const rawGroups = {};
     songs.forEach(song => {
       const genre = song.basic_info?.genre || 'Memory Archive';
-      // 通过中文名反查 packId
       const packEntry = Object.entries(ARCAEA_PACK_MAPPING).find(([k, v]) => v === genre || k === genre);
       const packId = packEntry ? packEntry[0] : 'unknown';
       const packName = packEntry ? packEntry[1] : genre;
 
-      if (!groups[packId]) {
-        groups[packId] = { id: packId, name: packName, songs: [] };
-      }
-      groups[packId].songs.push(song);
+      if (!rawGroups[packId]) rawGroups[packId] = { id: packId, name: packName, songs: [], appends: [] };
+      rawGroups[packId].songs.push(song);
     });
-    // 简单排序：让曲子多的包排在前面
-    return Object.values(groups).sort((a, b) => b.songs.length - a.songs.length);
+
+    const mainPacks = {};
+    const appendPacks = [];
+
+    // 筛选出所有 append 包
+    Object.values(rawGroups).forEach(p => {
+      if (p.id.includes('_append_')) appendPacks.push(p);
+      else mainPacks[p.id] = p;
+    });
+
+    // 智能挂载 append 包到它的父包下方
+    appendPacks.forEach(app => {
+      const parentId = app.id.split('_append_')[0];
+      if (mainPacks[parentId]) {
+        mainPacks[parentId].appends.push(app);
+      } else {
+        mainPacks[app.id] = app; // 兜底：如果父包因为筛选为空不存在，则独立展示
+      }
+    });
+
+    return mainPacks;
   }, [songs]);
 
-  // 如果因搜索导致当前选中的曲包消失，则自动退回上一级
+  // 重置状态
   useEffect(() => {
-    if (selectedPackId && !packs.find(p => p.id === selectedPackId)) {
+    if (selectedPackId && !processedData[selectedPackId] && !Object.values(processedData).some(p => p.appends.find(a => a.id === selectedPackId))) {
       setSelectedPackId(null);
       setSelectedSong(null);
     }
-  }, [packs, selectedPackId]);
+  }, [processedData, selectedPackId]);
 
-  // 当进入一个曲包时，自动选中第一首歌
   useEffect(() => {
     if (selectedPackId) {
-      const currentPack = packs.find(p => p.id === selectedPackId);
-      if (currentPack && currentPack.songs.length > 0) {
-        setSelectedSong(currentPack.songs[0]);
-      }
+      const findPack = () => {
+        if (processedData[selectedPackId]) return processedData[selectedPackId];
+        for (let key in processedData) {
+          const app = processedData[key].appends.find(a => a.id === selectedPackId);
+          if (app) return app;
+        }
+        return null;
+      };
+      const pack = findPack();
+      if (pack && pack.songs.length > 0) setSelectedSong(pack.songs[0]);
     }
-  }, [selectedPackId, packs]);
+  }, [selectedPackId, processedData]);
 
-  // --- 视图 1：展示曲包网格 ---
+  // =====================================
+  // 视图 1：纯净无边框曲包浏览大厅
+  // =====================================
   if (!selectedPackId) {
     return (
-      <motion.div 
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 p-2 overflow-y-auto custom-scrollbar h-full"
-      >
-        {packs.map(pack => (
-          <div 
-            key={pack.id} 
-            onClick={() => setSelectedPackId(pack.id)}
-            className="group relative aspect-[1/2] rounded-3xl overflow-hidden cursor-pointer shadow-lg border border-white/5 hover:border-purple-500/50 transition-all duration-300 hover:-translate-y-2 bg-[#0c0c11]"
-          >
-            <img 
-              src={`/assets/arcaea/packs/${pack.id}.png`} 
-              alt={pack.name}
-              className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-500"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.nextElementSibling.style.display = 'flex'; // 触发兜底 CSS
-              }}
-            />
-            {/* 兜底 CSS 曲包卡片 */}
-            <div className="hidden absolute inset-0 bg-gradient-to-b from-purple-900/60 to-[#0c0c11] flex-col items-center justify-center p-4 text-center">
-              <div className="text-xl font-bold text-white mb-2 shadow-black drop-shadow-lg" style={{ fontFamily: "'Quicksand', sans-serif" }}>{pack.name}</div>
+      <div className="flex flex-col gap-10 overflow-y-auto custom-scrollbar p-6 h-full pb-20 select-none">
+        {ARCAEA_ROWS.map(row => {
+          // 只渲染当前数据里有曲子的包
+          const availableKeys = row.keys.filter(key => processedData[key]);
+          if (availableKeys.length === 0) return null;
+
+          // 为每一行实例化独立的拖拽引擎
+          const dragProps = useDragToScroll();
+
+          return (
+            <div key={row.title} className="flex flex-col gap-4">
+              <h3 className="text-xl md:text-2xl font-bold text-white/80 tracking-[0.2em] uppercase pl-2 border-l-4 border-purple-500/50" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                {row.title}
+              </h3>
+              
+              <div 
+                {...dragProps}
+                className="flex overflow-x-auto custom-scrollbar gap-6 md:gap-8 pb-6 pt-2 items-start cursor-grab active:cursor-grabbing"
+              >
+                {availableKeys.map(key => {
+                  const pack = processedData[key];
+                  return (
+                    <div key={key} className="flex flex-col gap-3 shrink-0 items-center w-36 md:w-44">
+                      
+                      {/* 💎 核心立绘呈现：无边框，完全保留 PNG 的透明六边形或不规则形，仅用高级泛光托底 */}
+                      <div className="relative group w-full flex flex-col items-center">
+                        <img 
+                          src={`/assets/arcaea/packs/${pack.id}.png`}
+                          onClick={() => !dragProps.isDragging && setSelectedPackId(pack.id)}
+                          alt={pack.name}
+                          className="w-full h-auto object-contain cursor-pointer drop-shadow-[0_15px_15px_rgba(0,0,0,0.6)] group-hover:drop-shadow-[0_0_25px_rgba(192,132,252,0.6)] group-hover:-translate-y-2 transition-all duration-300 z-10"
+                          draggable="false"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextElementSibling.style.display = 'flex';
+                          }}
+                        />
+                        {/* CSS 完美兜底：如果没找到图片，优雅地渲染毛玻璃卡片 */}
+                        <div 
+                          onClick={() => !dragProps.isDragging && setSelectedPackId(pack.id)} 
+                          className="hidden w-full aspect-[1/2] bg-white/5 border border-white/10 rounded-2xl flex-col items-center justify-center p-4 text-center cursor-pointer hover:bg-white/10 hover:-translate-y-2 transition-all duration-300 shadow-xl backdrop-blur-sm"
+                        >
+                           <span className="text-sm font-bold text-purple-300" style={{ fontFamily: "'Quicksand', sans-serif" }}>{pack.name}</span>
+                           <span className="text-[10px] text-gray-500 mt-2 font-mono">{pack.songs.length} Tracks</span>
+                        </div>
+                      </div>
+
+                      {/* 🎀 Append 追加包挂载：自然顺延在主包下方，展现横幅特质 */}
+                      {pack.appends.map(app => (
+                        <div key={app.id} className="relative group w-[110%] flex flex-col items-center mt-2">
+                           <img 
+                             src={`/assets/arcaea/packs/${app.id}.png`}
+                             onClick={() => !dragProps.isDragging && setSelectedPackId(app.id)}
+                             alt={app.name}
+                             className="w-full h-auto object-contain cursor-pointer drop-shadow-[0_10px_10px_rgba(0,0,0,0.6)] group-hover:drop-shadow-[0_0_20px_rgba(192,132,252,0.5)] group-hover:-translate-y-1 transition-all duration-300 z-10"
+                             draggable="false"
+                             onError={(e) => {
+                               e.target.style.display = 'none';
+                               e.target.nextElementSibling.style.display = 'flex';
+                             }}
+                           />
+                           <div 
+                             onClick={() => !dragProps.isDragging && setSelectedPackId(app.id)} 
+                             className="hidden w-full h-16 bg-white/5 border border-white/10 rounded-xl flex-col items-center justify-center p-2 text-center cursor-pointer hover:bg-white/10 hover:-translate-y-1 transition-all duration-300 shadow-lg backdrop-blur-sm"
+                           >
+                              <span className="text-[11px] font-bold text-cyan-300 leading-tight" style={{ fontFamily: "'Quicksand', sans-serif" }}>{app.name}</span>
+                           </div>
+                        </div>
+                      ))}
+
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            
-            {/* 常驻底部信息 */}
-            <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-4 flex flex-col items-center">
-               <span className="text-[10px] text-purple-300 font-bold tracking-widest uppercase mb-1">PACK</span>
-               <span className="text-xs text-gray-300 font-medium">{pack.songs.length} Tracks</span>
-            </div>
-          </div>
-        ))}
-      </motion.div>
+          );
+        })}
+      </div>
     );
   }
 
-  const currentPack = packs.find(p => p.id === selectedPackId);
+  // =====================================
+  // 视图 2：沉浸式分屏选曲 (高度还原游戏)
+  // =====================================
+  const findCurrentPack = () => {
+    if (processedData[selectedPackId]) return processedData[selectedPackId];
+    for (let key in processedData) {
+      const app = processedData[key].appends.find(a => a.id === selectedPackId);
+      if (app) return app;
+    }
+    return null;
+  };
+  const currentPack = findCurrentPack();
 
-  // --- 视图 2：沉浸式分屏选曲 ---
   return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col h-full overflow-hidden bg-[#15151e]/40 rounded-3xl border border-white/5">
-      {/* 顶部导航 */}
-      <div className="flex items-center gap-4 p-4 border-b border-white/5 shrink-0 bg-black/20">
+    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col h-full overflow-hidden bg-[#15151e]/60 rounded-3xl border border-white/5 shadow-2xl backdrop-blur-md">
+      <div className="flex items-center gap-4 p-4 border-b border-white/5 shrink-0 bg-black/40">
         <button 
           onClick={() => { setSelectedPackId(null); setSelectedSong(null); }}
-          className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold text-gray-300 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 hover:text-white rounded-xl text-sm font-bold text-gray-400 transition-colors"
         >
-          <FaChevronLeft /> 返回曲包
+          <FaChevronLeft /> Back to Packs
         </button>
         <div className="h-4 w-px bg-white/10"></div>
-        <h3 className="font-bold text-purple-300" style={{ fontFamily: "'Quicksand', sans-serif" }}>{currentPack?.name}</h3>
+        <h3 className="font-bold text-purple-300 tracking-wide" style={{ fontFamily: "'Quicksand', sans-serif" }}>{currentPack?.name}</h3>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* 左侧：该包内的曲目列表 */}
-        <div className="w-1/3 min-w-[250px] overflow-y-auto custom-scrollbar border-r border-white/5 p-2 space-y-1 bg-black/10">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+        {/* 左侧：曲目纵向列表 */}
+        <div className="md:w-1/3 min-w-[280px] overflow-y-auto custom-scrollbar border-r border-white/5 p-3 space-y-1.5 bg-black/20">
           {currentPack?.songs.map(s => {
             const isSelected = selectedSong?.id === s.id;
             return (
               <div 
                 key={s.id}
                 onClick={() => setSelectedSong(s)}
-                className={`p-3 rounded-xl cursor-pointer transition-colors flex items-center gap-3
-                  ${isSelected ? 'bg-purple-600/20 border border-purple-500/30' : 'hover:bg-white/5 border border-transparent'}
+                className={`p-3 rounded-xl cursor-pointer transition-all flex items-center gap-4
+                  ${isSelected ? 'bg-gradient-to-r from-purple-600/30 to-transparent border-l-4 border-purple-400' : 'hover:bg-white/5 border-l-4 border-transparent'}
                 `}
               >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isSelected ? 'bg-purple-500 text-white' : 'bg-gray-800 text-gray-400'}`}>
-                  <FaMusic className="text-xs" />
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 shadow-inner ${isSelected ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-gray-800/50 text-gray-500'}`}>
+                  <FaMusic className="text-sm" />
                 </div>
                 <div className="flex flex-col overflow-hidden">
-                  <span className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                  <span className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-gray-300'}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
                     {s.title || s.basic_info?.title}
                   </span>
-                  <span className="text-[10px] text-gray-500 truncate">{s.basic_info?.artist}</span>
+                  <span className="text-[10px] text-gray-500 truncate font-sans mt-0.5">{s.basic_info?.artist}</span>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* 右侧：单曲详情嵌入面板 */}
-        <div className="flex-1 overflow-hidden p-4">
+        {/* 右侧：单曲详情核心注入 */}
+        <div className="flex-1 overflow-hidden p-4 md:p-6 bg-[#0c0c11]">
           <ArcaeaSongDetail song={selectedSong} diffConfig={diffConfig} />
         </div>
       </div>
@@ -361,7 +478,7 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
 
 
 // ==========================================
-// 🚀 核心主组件
+// 🚀 核心主组件 (保持不变，已隔离逻辑)
 // ==========================================
 export default function Songs() {
   const GAMES = [
@@ -397,7 +514,6 @@ export default function Songs() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedVersions, setSelectedVersions] = useState([]);
 
-  // 1. Maimai 数据拉取
   useEffect(() => {
     const fetchMaimai = async () => {
       try {
@@ -420,7 +536,6 @@ export default function Songs() {
     fetchMaimai();
   }, []);
 
-  // 2. CHUNITHM 数据拉取
   useEffect(() => {
     if (activeGame === 'chunithm' && chunithmSongs.length === 0) {
       const fetchChunithm = async () => {
@@ -443,7 +558,6 @@ export default function Songs() {
     }
   }, [activeGame, chunithmSongs.length]);
 
-  // 3. Arcaea 数据拉取与清洗
   useEffect(() => {
     if (activeGame === 'arcaea' && arcaeaSongs.length === 0) {
       const fetchArcaea = async () => {
@@ -452,7 +566,6 @@ export default function Songs() {
           const response = await fetch('/api/arcaea-songs');
           if (!response.ok) throw new Error('网络请求失败');
           const rawData = await response.json();
-          // 完全信任后端数据，仅提取 title 激活搜索
           const processedData = rawData.map(song => ({
             ...song,
             title: song.basic_info?.title || song.title_localized?.en || song.id
@@ -651,17 +764,19 @@ export default function Songs() {
                     className={`w-full bg-[#15151e]/80 backdrop-blur-md border border-white/[0.05] text-zinc-200 pl-10 pr-4 py-2.5 rounded-xl focus:outline-none transition-colors shadow-sm text-sm placeholder-zinc-600 ${getThemeColorClass('input')}`}
                   />
                 </div>
-                <button 
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all border active:scale-95 ${isFilterOpen ? `${getThemeColorClass('btn')} border-transparent shadow-md` : 'bg-[#15151e]/80 backdrop-blur-md text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}
-                >
-                  {isFilterOpen ? <FaTimes /> : <FaFilter />} 高级筛选
-                </button>
+                {/* Arcaea 模式下由于曲包已经充当了分类，我们隐藏复杂的筛选按钮，保持 UI 清爽 */}
+                {activeGame !== 'arcaea' && (
+                  <button 
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all border active:scale-95 ${isFilterOpen ? `${getThemeColorClass('btn')} border-transparent shadow-md` : 'bg-[#15151e]/80 backdrop-blur-md text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}
+                  >
+                    {isFilterOpen ? <FaTimes /> : <FaFilter />} 高级筛选
+                  </button>
+                )}
               </div>
 
               <div className="flex flex-col md:flex-row flex-1 gap-5 overflow-hidden">
-                {/* 筛选侧边栏 */}
-                {isFilterOpen && (
+                {isFilterOpen && activeGame !== 'arcaea' && (
                   <div className="w-full md:w-80 shrink-0 max-h-[40vh] md:max-h-none bg-[#15151e]/80 backdrop-blur-md rounded-2xl border border-white/[0.05] shadow-xl overflow-y-auto p-5 custom-scrollbar flex flex-col gap-6">
                     <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
                       <div className="flex items-center gap-2">
@@ -736,10 +851,9 @@ export default function Songs() {
                       <p className="text-sm font-medium">未找到符合条件的曲目</p>
                     </div>
                   ) : activeGame === 'arcaea' ? (
-                    // 🔥 Arcaea 专属界面注入：完全替换 Virtuoso 长列表
+                    // 🔥 Arcaea 专属全屏沉浸式面板
                     <ArcaeaPackExplorer songs={filteredSongs} diffConfig={ARCAEA_DIFF_CONFIG} />
                   ) : (
-                    // 🌟 Maimai / CHUNITHM 维持原生 Virtuoso 列表展现
                     <Virtuoso
                       className="h-full custom-scrollbar"
                       data={filteredSongs}
@@ -811,7 +925,6 @@ export default function Songs() {
         </AnimatePresence>
       </div>
 
-      {/* 仅针对 Maimai 与 CHUNITHM 渲染右侧抽屉，Arcaea 已经物理隔离不再触发 */}
       {activeGame !== 'arcaea' && (
         <SongDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} song={selectedSong} activeGame={activeGame} />
       )}
