@@ -21,7 +21,7 @@ const ArcaeaSong = require('./models/ArcaeaSong');
 const fs = require('fs');
 const path = require('path');
 const { GameRecord, ActiveSession } = require('./models/LetterGame');
-const { normalizeTitle, calculateBaseOV, generateMaskedTitle, calculateActualOV, getRevealRatio } = require('./utils/gameEngine');
+const { normalizeTitle, calculateBaseOV, generateMaskedTitle, calculateActualOV, getRevealRatio, calculateSessionStarRating, distributeNonLinearOV } = require('./utils/gameEngine');
 
 // ==========================================
 // CHUNITHM 单曲 Rating 算分引擎
@@ -39,19 +39,16 @@ const calculateChuniRating = (score, constant) => {
 };
 
 // ==================================================
-// 🎮 内部辅助：游戏结束与 OV100 全局结算引擎
+// 🎮 内部辅助：游戏结束与 OV100 全局结算引擎 (升级版)
 // ==================================================
-async function finishGameSession(session) {
+async function finishGameSession(session, isAbort = false) {
   let totalOv = 0;
-  let allCleared = true;
+  let allCleared = !isAbort; // 如果是中途强退，绝对不算全连
 
-  // 1. 组装本局成绩单，提取每一首歌的开字率 (Reveal Ratio)
   const finalSongs = session.songs.map(song => {
     if (song.status !== 'CLEARED') allCleared = false;
     totalOv += (song.actualOv || 0);
     
-    const revealRatio = getRevealRatio(song.realTitle, session.openedChars, session.mods);
-
     return {
       songId: song.songId,
       title: song.realTitle,
@@ -59,17 +56,22 @@ async function finishGameSession(session) {
       actualOv: song.actualOv || 0,
       mistakes: song.mistakes,
       isCleared: song.status === 'CLEARED',
-      revealRatio: revealRatio
+      revealRatio: getRevealRatio(song.realTitle, session.openedChars, session.mods)
     };
   });
 
-  // 全连加成与竞速加成
+  // 全连加成
   if (allCleared) totalOv *= 1.15;
-  const timeRemaining = Math.max(0, session.expireAt.getTime() - Date.now());
-  const speedBonus = 1 + (timeRemaining / 1000) / 1000; 
-  totalOv *= speedBonus;
+  
+  // 计算用时与竞速加成 (强退不给竞速加成)
+  let timeUsed = Date.now() - session.createdAt.getTime();
+  if (!isAbort) {
+    const timeRemaining = Math.max(0, session.expireAt.getTime() - Date.now());
+    const speedBonus = 1 + (timeRemaining / 1000) / 1000; 
+    totalOv *= speedBonus;
+  }
 
-  // 2. 落库保存单局战绩
+  // 1. 保存单局战绩
   const record = new GameRecord({
     userId: session.userId,
     totalOv: Number(totalOv.toFixed(2)),
@@ -80,17 +82,17 @@ async function finishGameSession(session) {
   await record.save();
   await ActiveSession.deleteOne({ _id: session._id });
 
-  // 3. 🔥 核心：OV100 衰减重算与玩家生涯数据聚合
+  // 2. 获取更新前的旧数据 (用于前端对比展示)
+  const userBefore = await User.findById(session.userId);
+  const oldStats = userBefore.letterGameStats ? { ...userBefore.letterGameStats.toObject() } : {};
+
+  // 3. 执行 OV100 数据聚合更新
   try {
     const topPlays = await GameRecord.find({ userId: session.userId })
-      .sort({ totalOv: -1 })
-      .limit(100)
-      .select('totalOv');
+      .sort({ totalOv: -1 }).limit(100).select('totalOv');
 
     let weightedTotalOv = 0;
-    topPlays.forEach((play, index) => {
-      weightedTotalOv += play.totalOv * Math.pow(0.95, index);
-    });
+    topPlays.forEach((play, index) => { weightedTotalOv += play.totalOv * Math.pow(0.95, index); });
 
     const statsAggr = await GameRecord.aggregate([
       { $match: { userId: session.userId } },
@@ -127,7 +129,12 @@ async function finishGameSession(session) {
     console.error('用户 OV 数据聚合失败:', err);
   }
 
-  return record;
+  // 4. 获取更新后的新数据
+  const userAfter = await User.findById(session.userId);
+  const newStats = userAfter.letterGameStats ? userAfter.letterGameStats.toObject() : {};
+
+  // 返回极其详尽的结算报告
+  return { record, oldStats, newStats, timeUsed };
 }
 
 // 配置 Cloudinary
@@ -611,19 +618,23 @@ app.post('/api/users/settings/change-email', authMiddleware, async (req, res) =>
 });
 
 // ==================================================
-// 🎮 API 1：开始开字母 2.0 游戏
+// 🎮 API 1：开始游戏 (注入星级系统)
 // ==================================================
 app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
   try {
     let { mods = [], gameType = 'arcaea' } = req.body;
 
-    // 🔥 彩蛋：Tenacity + Fear = Prudence
     if (mods.includes('Tenacity') && mods.includes('Fear')) {
       mods = mods.filter(m => m !== 'Tenacity' && m !== 'Fear');
       if (!mods.includes('Prudence')) mods.push('Prudence');
     }
 
-    const randomSongs = await ArcaeaSong.aggregate([{ $sample: { size: 5 } }]);
+    let TargetModel;
+    if (gameType === 'maimai') TargetModel = Song;
+    else if (gameType === 'chunithm') TargetModel = ChunithmSong;
+    else TargetModel = ArcaeaSong;
+
+    const randomSongs = await TargetModel.aggregate([{ $sample: { size: 5 } }]);
     if (randomSongs.length < 5) return res.status(400).json({ msg: '曲库不足' });
 
     let initialOpenedChars = new Set();
@@ -638,7 +649,8 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     if (mods.includes('Lucky')) {
       let globalChars = new Set();
       randomSongs.forEach(s => {
-        for (let char of (s.title || s.basic_info.title)) {
+        const title = s.title || s.basic_info?.title || s.id;
+        for (let char of title) {
           if (char.trim() !== '') globalChars.add(char.toLowerCase());
         }
       });
@@ -650,21 +662,28 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
       }
     }
 
-    const sessionSongs = randomSongs.map(s => {
-      const realTitle = s.title || s.basic_info.title;
+    // 🔥 核心算力跃迁：计算基础熵值 -> 换算星级 -> 分配非线性分
+    const rawBaseOvs = randomSongs.map(s => calculateBaseOV(s.title || s.basic_info?.title || s.id));
+    const starRating = calculateSessionStarRating(rawBaseOvs, mods);
+    const nonLinearOvs = distributeNonLinearOV(starRating, rawBaseOvs);
+
+    const sessionSongs = randomSongs.map((s, index) => {
+      const realTitle = s.title || s.basic_info?.title || s.id;
       return {
-        songId: s.id,
+        songId: s.id || s._id,
         realTitle: realTitle,
-        baseOv: calculateBaseOV(realTitle),
+        baseOv: nonLinearOvs[index], // 注入非线性爆炸分数
         mistakes: 0,
-        status: 'PLAYING'
+        status: 'PLAYING',
+        hasKana: /[\u3040-\u309F\u30A0-\u30FF]/.test(realTitle),
+        hasKanji: /[\u4E00-\u9FAF]/.test(realTitle),
+        hasSym: /[^\sa-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(realTitle)
       };
     });
 
     const newSession = new ActiveSession({
       userId: req.user.id || req.user._id,
-      gameType,
-      mods,
+      gameType, mods, starRating,
       openedChars: Array.from(initialOpenedChars),
       expireAt: new Date(Date.now() + baseTime),
       songs: sessionSongs
@@ -674,10 +693,16 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     const clientSongs = sessionSongs.map((song, idx) => ({
       index: idx,
       maskedTitle: generateMaskedTitle(song.realTitle, newSession.openedChars, mods),
-      status: song.status
+      status: song.status,
+      hasKana: song.hasKana, hasKanji: song.hasKanji, hasSym: song.hasSym
     }));
 
-    res.json({ sessionId: newSession._id, expireAt: newSession.expireAt, songs: clientSongs });
+    // 返回时附带星级与已开字符
+    res.json({ 
+      sessionId: newSession._id, expireAt: newSession.expireAt, 
+      starRating, openedChars: newSession.openedChars,
+      songs: clientSongs 
+    });
   } catch (err) {
     res.status(500).json({ msg: '游戏初始化失败' });
   }
@@ -690,11 +715,11 @@ app.post('/api/letter-game/open', authMiddleware, async (req, res) => {
   try {
     const { sessionId, char } = req.body;
     const session = await ActiveSession.findById(sessionId);
-    if (!session) return res.status(404).json({ msg: '对局不存在或已过期' });
+    if (!session) return res.status(404).json({ msg: '对局不存在' });
 
     if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
-      const record = await finishGameSession(session);
-      return res.json({ gameOver: true, record, msg: 'Time Out' });
+      const resultData = await finishGameSession(session);
+      return res.json({ gameOver: true, ...resultData, msg: 'Time Out' });
     }
 
     const targetChar = char.toLowerCase();
@@ -721,7 +746,8 @@ app.post('/api/letter-game/open', authMiddleware, async (req, res) => {
     const clientSongs = session.songs.map((song, idx) => ({
       index: idx,
       maskedTitle: song.status === 'CLEARED' ? song.realTitle : generateMaskedTitle(song.realTitle, session.openedChars, session.mods),
-      status: song.status
+      status: song.status,
+      hasKana: song.hasKana, hasKanji: song.hasKanji, hasSym: song.hasSym
     }));
 
     res.json({ expireAt: session.expireAt, songs: clientSongs });
@@ -737,11 +763,11 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
   try {
     const { sessionId, songIndex, guess } = req.body;
     const session = await ActiveSession.findById(sessionId);
-    if (!session) return res.status(404).json({ msg: '对局不存在或已过期' });
+    if (!session) return res.status(404).json({ msg: '对局不存在' });
 
     if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
-      const record = await finishGameSession(session);
-      return res.json({ gameOver: true, record, msg: 'Time Out' });
+      const resultData = await finishGameSession(session);
+      return res.json({ gameOver: true, ...resultData, msg: 'Time Out' });
     }
 
     const song = session.songs[songIndex];
@@ -760,22 +786,22 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
       if (session.mods.includes('Brave')) penalty = 5000;
 
       if (session.mods.includes('Prudence')) {
-        const record = await finishGameSession(session);
-        return res.json({ gameOver: true, record, msg: 'Prudence! 一击必死。' });
+        const resultData = await finishGameSession(session);
+        return res.json({ gameOver: true, ...resultData, msg: 'Prudence! 一击必死。' });
       }
 
       session.expireAt = new Date(session.expireAt.getTime() - penalty);
 
       if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
-        const record = await finishGameSession(session);
-        return res.json({ gameOver: true, record, msg: '惩罚导致时间耗尽。' });
+        const resultData = await finishGameSession(session);
+        return res.json({ gameOver: true, ...resultData, msg: '惩罚导致时间耗尽。' });
       }
     }
 
     const isAllDone = session.songs.every(s => s.status !== 'PLAYING');
     if (isAllDone) {
-      const record = await finishGameSession(session);
-      return res.json({ gameOver: true, record });
+      const resultData = await finishGameSession(session);
+      return res.json({ gameOver: true, isCorrect, ...resultData });
     }
 
     await session.save();
@@ -784,7 +810,8 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
       index: idx,
       maskedTitle: s.status === 'CLEARED' ? s.realTitle : generateMaskedTitle(s.realTitle, session.openedChars, session.mods),
       status: s.status,
-      actualOv: s.actualOv
+      actualOv: s.actualOv,
+      hasKana: s.hasKana, hasKanji: s.hasKanji, hasSym: s.hasSym
     }));
 
     res.json({ isCorrect, expireAt: session.expireAt, songs: clientSongs });
@@ -794,7 +821,26 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
 });
 
 // ==================================================
-// 🎮 API 4：获取玩家 Letter Decode 档案与 OV100 记录
+// 🎮 API 4：中途强退 (Abort)
+// ==================================================
+app.post('/api/letter-game/abort', authMiddleware, async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    const session = await ActiveSession.findById(sessionId);
+    if (!session) return res.status(404).json({ msg: '对局不存在' });
+
+    // 强制挂起未完成的题目
+    session.songs.forEach(s => { if (s.status === 'PLAYING') s.status = 'DEAD'; });
+    
+    const resultData = await finishGameSession(session, true); // true 代表是强制终止
+    res.json({ gameOver: true, ...resultData, msg: '行动已强行终止' });
+  } catch (err) {
+    res.status(500).json({ msg: '强退失败' });
+  }
+});
+
+// ==================================================
+// 🎮 API 5：获取玩家 Letter Decode 档案与 OV100 记录
 // ==================================================
 app.get('/api/letter-game/records/:username', async (req, res) => {
   try {
@@ -821,7 +867,7 @@ app.get('/api/letter-game/records/:username', async (req, res) => {
 });
 
 // ==================================================
-// 🎮 API 5：拉取开字母竞技场 2.0 排行榜
+// 🎮 API 6：拉取开字母竞技场 2.0 排行榜
 // ==================================================
 app.get('/api/leaderboard/decode', async (req, res) => {
   try {
@@ -840,6 +886,21 @@ app.get('/api/leaderboard/decode', async (req, res) => {
   }
 });
 
+app.post('/api/letter-game/abort', authMiddleware, async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    const session = await ActiveSession.findById(sessionId);
+    if (!session) return res.status(404).json({ msg: '对局不存在' });
+
+    // 强制标记所有未完成的歌曲为 DEAD
+    session.songs.forEach(s => { if (s.status === 'PLAYING') s.status = 'DEAD'; });
+    
+    const result = await finishGameSession(session, true); // true 表示是 Abort
+    res.json({ gameOver: true, ...result, msg: '对局已强行终止' });
+  } catch (err) {
+    res.status(500).json({ msg: '操作失败' });
+  }
+});
 
 
 app.post('/api/auth/register', async (req, res) => {
