@@ -432,7 +432,7 @@ export default function LetterGame() {
             <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 tracking-tighter drop-shadow-md">
               开字母
             </h1>
-            <p className="text-zinc-500 font-bold tracking-widest text-xs uppercase mt-2">PureBeat 综合大厅 2.0</p>
+            <p className="text-zinc-500 font-bold tracking-widest text-xs uppercase mt-2">Decode lobby</p>
           </div>
           {user && (
             <button 
@@ -494,15 +494,15 @@ export default function LetterGame() {
                     </div>
                     
                     <input 
-                      type="range" min="1.0" max="10.0" step="0.5" 
+                      type="range" min="1.0" max="10.0" step="0.02" 
                       value={targetStar} onChange={(e) => setTargetStar(parseFloat(e.target.value))}
                       className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
                     />
                     
                     <div className="flex justify-between text-[10px] text-zinc-600 font-bold px-1 mt-1">
-                      <span>1.0★ (简易)</span>
-                      <span>5.0★ (标准)</span>
-                      <span className="text-rose-500">10.0★ (极难)</span>
+                      <span>1.0★</span>
+                      <span>5.0★</span>
+                      <span className="text-rose-500">10.0★</span>
                     </div>
                   </div>
 
