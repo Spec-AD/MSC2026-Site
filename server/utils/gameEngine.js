@@ -12,6 +12,11 @@ const REGEX = {
   sym: /[^\sa-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g 
 };
 
+function normalizeTitle(str) {
+  if (!str) return '';
+  // 仅保留字母、数字、平假名、片假名、汉字，其余全部剔除
+  return str.toLowerCase().replace(/[^\w\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g, '');
+}
 /**
  * 🎯 计算多语种文本熵值基础算力 (Base OV)
  */
@@ -91,6 +96,22 @@ function generateMaskedTitle(title, openedChars, mods = []) {
   return masked;
 }
 
+function getRevealRatio(title, openedChars, mods = []) {
+  const openedSet = new Set(openedChars.map(c => c.toLowerCase()));
+  const hasPerceiver = mods.includes('Perceiver');
+  
+  let totalValid = 0;
+  let revealed = 0;
+
+  for (let char of title) {
+    if (char.trim() === '' && !hasPerceiver) continue; // 正常模式不统计空格
+    totalValid++;
+    if (openedSet.has(char.toLowerCase())) revealed++;
+  }
+
+  return totalValid === 0 ? 0 : (revealed / totalValid);
+}
+
 /**
  * ⚖️ 计算单曲最终实际得分 (Actual OV)
  */
@@ -136,4 +157,4 @@ function calculateActualOV(baseOv, title, openedChars, mistakes, mods = []) {
   return Number(actualOv.toFixed(2));
 }
 
-module.exports = { calculateBaseOV, generateMaskedTitle, calculateActualOV };
+module.exports = { normalizeTitle, calculateBaseOV, generateMaskedTitle, calculateActualOV, getRevealRatio };
