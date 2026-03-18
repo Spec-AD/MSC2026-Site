@@ -21,7 +21,7 @@ const ArcaeaSong = require('./models/ArcaeaSong');
 const fs = require('fs');
 const path = require('path');
 const { GameRecord, ActiveSession } = require('./models/LetterGame');
-const { normalizeTitle, calculateBaseOV, generateMaskedTitle, calculateActualOV } = require('./utils/gameEngine');
+const { normalizeTitle, calculateBaseOV, generateMaskedTitle, calculateActualOV, getRevealRatio } = require('./utils/gameEngine');
 
 // ==========================================
 // CHUNITHM 单曲 Rating 算分引擎
@@ -37,6 +37,98 @@ const calculateChuniRating = (score, constant) => {
   if (score >= 800000) return (constant - 5.0) / 2 + (score - 800000) * ((constant - 5.0) / 2) / 100000;
   return 0;
 };
+
+// ==================================================
+// 🎮 内部辅助：游戏结束与 OV100 全局结算引擎
+// ==================================================
+async function finishGameSession(session) {
+  let totalOv = 0;
+  let allCleared = true;
+
+  // 1. 组装本局成绩单，提取每一首歌的开字率 (Reveal Ratio)
+  const finalSongs = session.songs.map(song => {
+    if (song.status !== 'CLEARED') allCleared = false;
+    totalOv += (song.actualOv || 0);
+    
+    const revealRatio = getRevealRatio(song.realTitle, session.openedChars, session.mods);
+
+    return {
+      songId: song.songId,
+      title: song.realTitle,
+      baseOv: song.baseOv,
+      actualOv: song.actualOv || 0,
+      mistakes: song.mistakes,
+      isCleared: song.status === 'CLEARED',
+      revealRatio: revealRatio
+    };
+  });
+
+  // 全连加成与竞速加成
+  if (allCleared) totalOv *= 1.15;
+  const timeRemaining = Math.max(0, session.expireAt.getTime() - Date.now());
+  const speedBonus = 1 + (timeRemaining / 1000) / 1000; 
+  totalOv *= speedBonus;
+
+  // 2. 落库保存单局战绩
+  const record = new GameRecord({
+    userId: session.userId,
+    totalOv: Number(totalOv.toFixed(2)),
+    mods: session.mods,
+    isFullCombo: allCleared,
+    songs: finalSongs
+  });
+  await record.save();
+  await ActiveSession.deleteOne({ _id: session._id });
+
+  // 3. 🔥 核心：OV100 衰减重算与玩家生涯数据聚合
+  try {
+    const topPlays = await GameRecord.find({ userId: session.userId })
+      .sort({ totalOv: -1 })
+      .limit(100)
+      .select('totalOv');
+
+    let weightedTotalOv = 0;
+    topPlays.forEach((play, index) => {
+      weightedTotalOv += play.totalOv * Math.pow(0.95, index);
+    });
+
+    const statsAggr = await GameRecord.aggregate([
+      { $match: { userId: session.userId } },
+      { $unwind: "$songs" },
+      { 
+        $group: {
+          _id: null,
+          totalSongs: { $sum: 1 },
+          clearedSongs: { $sum: { $cond: ["$songs.isCleared", 1, 0] } },
+          totalRevealRatio: { $sum: { $cond: ["$songs.isCleared", "$songs.revealRatio", 0] } }
+        }
+      }
+    ]);
+
+    const totalPlaysRecord = await GameRecord.countDocuments({ userId: session.userId });
+
+    if (statsAggr.length > 0) {
+      const stats = statsAggr[0];
+      const accuracy = stats.totalSongs > 0 ? (stats.clearedSongs / stats.totalSongs) : 0;
+      const conservativeness = stats.clearedSongs > 0 ? (stats.totalRevealRatio / stats.clearedSongs) : 0;
+
+      await User.findByIdAndUpdate(session.userId, {
+        $set: {
+          'letterGameStats.totalOv': Number(weightedTotalOv.toFixed(2)),
+          'letterGameStats.totalPlays': totalPlaysRecord,
+          'letterGameStats.totalSongsEncountered': stats.totalSongs,
+          'letterGameStats.clearedSongs': stats.clearedSongs,
+          'letterGameStats.accuracy': Number(accuracy.toFixed(4)),
+          'letterGameStats.conservativeness': Number(conservativeness.toFixed(4))
+        }
+      });
+    }
+  } catch (err) {
+    console.error('用户 OV 数据聚合失败:', err);
+  }
+
+  return record;
+}
 
 // 配置 Cloudinary
 cloudinary.config({
@@ -517,6 +609,190 @@ app.post('/api/users/settings/change-email', authMiddleware, async (req, res) =>
     res.json({ msg: '邮箱换绑成功！' });
   } catch (err) { res.status(500).json({ msg: '换绑失败' }); }
 });
+
+// ==================================================
+// 🎮 API 1：开始开字母 2.0 游戏
+// ==================================================
+app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
+  try {
+    let { mods = [], gameType = 'arcaea' } = req.body;
+
+    // 🔥 彩蛋：Tenacity + Fear = Prudence
+    if (mods.includes('Tenacity') && mods.includes('Fear')) {
+      mods = mods.filter(m => m !== 'Tenacity' && m !== 'Fear');
+      if (!mods.includes('Prudence')) mods.push('Prudence');
+    }
+
+    const randomSongs = await ArcaeaSong.aggregate([{ $sample: { size: 5 } }]);
+    if (randomSongs.length < 5) return res.status(400).json({ msg: '曲库不足' });
+
+    let initialOpenedChars = new Set();
+    let baseTime = 60000; 
+    if (mods.includes('Tenacity')) baseTime = 30000;
+    if (mods.includes('Easy')) baseTime = 120000;
+
+    if (mods.includes('Easy')) {
+      ['a','e','i','o','u','あ','い','う','え','お','ア','イ','ウ','エ','オ'].forEach(c => initialOpenedChars.add(c));
+    }
+    
+    if (mods.includes('Lucky')) {
+      let globalChars = new Set();
+      randomSongs.forEach(s => {
+        for (let char of (s.title || s.basic_info.title)) {
+          if (char.trim() !== '') globalChars.add(char.toLowerCase());
+        }
+      });
+      const luckyCount = Math.min(7, Math.ceil(globalChars.size * 0.3));
+      const poolArray = Array.from(globalChars);
+      for(let i = 0; i < luckyCount; i++){
+        const randIdx = Math.floor(Math.random() * poolArray.length);
+        initialOpenedChars.add(poolArray.splice(randIdx, 1)[0]);
+      }
+    }
+
+    const sessionSongs = randomSongs.map(s => {
+      const realTitle = s.title || s.basic_info.title;
+      return {
+        songId: s.id,
+        realTitle: realTitle,
+        baseOv: calculateBaseOV(realTitle),
+        mistakes: 0,
+        status: 'PLAYING'
+      };
+    });
+
+    const newSession = new ActiveSession({
+      userId: req.user.id || req.user._id,
+      gameType,
+      mods,
+      openedChars: Array.from(initialOpenedChars),
+      expireAt: new Date(Date.now() + baseTime),
+      songs: sessionSongs
+    });
+    await newSession.save();
+
+    const clientSongs = sessionSongs.map((song, idx) => ({
+      index: idx,
+      maskedTitle: generateMaskedTitle(song.realTitle, newSession.openedChars, mods),
+      status: song.status
+    }));
+
+    res.json({ sessionId: newSession._id, expireAt: newSession.expireAt, songs: clientSongs });
+  } catch (err) {
+    res.status(500).json({ msg: '游戏初始化失败' });
+  }
+});
+
+// ==================================================
+// 🎮 API 2：开字母操作
+// ==================================================
+app.post('/api/letter-game/open', authMiddleware, async (req, res) => {
+  try {
+    const { sessionId, char } = req.body;
+    const session = await ActiveSession.findById(sessionId);
+    if (!session) return res.status(404).json({ msg: '对局不存在或已过期' });
+
+    if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
+      const record = await finishGameSession(session);
+      return res.json({ gameOver: true, record, msg: 'Time Out' });
+    }
+
+    const targetChar = char.toLowerCase();
+    if (!session.openedChars.includes(targetChar)) {
+      session.openedChars.push(targetChar);
+    }
+
+    let baseTime = 60000;
+    if (session.mods.includes('Tenacity')) baseTime = 30000;
+    if (session.mods.includes('Easy')) baseTime = 120000;
+    session.expireAt = new Date(Date.now() + baseTime);
+
+    session.songs.forEach(song => {
+      if (song.status === 'PLAYING') {
+        const R_CheckMask = generateMaskedTitle(song.realTitle, session.openedChars, session.mods);
+        if (!R_CheckMask.includes('*') && !session.mods.includes('Puzzle')) {
+          song.status = 'DEAD'; 
+        }
+      }
+    });
+    
+    await session.save();
+
+    const clientSongs = session.songs.map((song, idx) => ({
+      index: idx,
+      maskedTitle: song.status === 'CLEARED' ? song.realTitle : generateMaskedTitle(song.realTitle, session.openedChars, session.mods),
+      status: song.status
+    }));
+
+    res.json({ expireAt: session.expireAt, songs: clientSongs });
+  } catch (err) {
+    res.status(500).json({ msg: '操作失败' });
+  }
+});
+
+// ==================================================
+// 🎮 API 3：猜歌名核心裁决
+// ==================================================
+app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
+  try {
+    const { sessionId, songIndex, guess } = req.body;
+    const session = await ActiveSession.findById(sessionId);
+    if (!session) return res.status(404).json({ msg: '对局不存在或已过期' });
+
+    if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
+      const record = await finishGameSession(session);
+      return res.json({ gameOver: true, record, msg: 'Time Out' });
+    }
+
+    const song = session.songs[songIndex];
+    if (!song || song.status !== 'PLAYING') return res.status(400).json({ msg: '该曲目无法作答' });
+
+    const isCorrect = normalizeTitle(guess) === normalizeTitle(song.realTitle);
+
+    if (isCorrect) {
+      song.status = 'CLEARED';
+      song.actualOv = calculateActualOV(song.baseOv, song.realTitle, session.openedChars, song.mistakes, session.mods);
+    } else {
+      song.mistakes += 1;
+      
+      let penalty = 15000;
+      if (session.mods.includes('Fear')) penalty = 30000;
+      if (session.mods.includes('Brave')) penalty = 5000;
+
+      if (session.mods.includes('Prudence')) {
+        const record = await finishGameSession(session);
+        return res.json({ gameOver: true, record, msg: 'Prudence! 一击必死。' });
+      }
+
+      session.expireAt = new Date(session.expireAt.getTime() - penalty);
+
+      if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
+        const record = await finishGameSession(session);
+        return res.json({ gameOver: true, record, msg: '惩罚导致时间耗尽。' });
+      }
+    }
+
+    const isAllDone = session.songs.every(s => s.status !== 'PLAYING');
+    if (isAllDone) {
+      const record = await finishGameSession(session);
+      return res.json({ gameOver: true, record });
+    }
+
+    await session.save();
+
+    const clientSongs = session.songs.map((s, idx) => ({
+      index: idx,
+      maskedTitle: s.status === 'CLEARED' ? s.realTitle : generateMaskedTitle(s.realTitle, session.openedChars, session.mods),
+      status: s.status,
+      actualOv: s.actualOv
+    }));
+
+    res.json({ isCorrect, expireAt: session.expireAt, songs: clientSongs });
+  } catch (err) {
+    res.status(500).json({ msg: '校验失败' });
+  }
+});
+
 
 app.post('/api/auth/register', async (req, res) => {
     try {
@@ -1832,7 +2108,7 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '校验失败' }); }
 });
 
-// ==============================================
+==============================================
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
