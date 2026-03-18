@@ -41,9 +41,12 @@ const calculateChuniRating = (score, constant) => {
 // ==================================================
 // 🎮 内部辅助：游戏结束与 OV100 全局结算引擎 (升级版)
 // ==================================================
-async function finishGameSession(session, isAbort = false) {
+// ==================================================
+// 🎮 内部辅助：游戏结束与 OV100 全局结算引擎 (终极修复版)
+// ==================================================
+async function finishGameSession(session) {
   let totalOv = 0;
-  let allCleared = !isAbort; // 如果是中途强退，绝对不算全连
+  let allCleared = true;
 
   const finalSongs = session.songs.map(song => {
     if (song.status !== 'CLEARED') allCleared = false;
@@ -63,13 +66,10 @@ async function finishGameSession(session, isAbort = false) {
   // 全连加成
   if (allCleared) totalOv *= 1.15;
   
-  // 计算用时与竞速加成 (强退不给竞速加成)
-  let timeUsed = Date.now() - session.createdAt.getTime();
-  if (!isAbort) {
-    const timeRemaining = Math.max(0, session.expireAt.getTime() - Date.now());
-    const speedBonus = 1 + (timeRemaining / 1000) / 1000; 
-    totalOv *= speedBonus;
-  }
+  // 竞速加成
+  const timeRemaining = Math.max(0, session.expireAt.getTime() - Date.now());
+  const speedBonus = 1 + (timeRemaining / 1000) / 1000; 
+  totalOv *= speedBonus;
 
   // 1. 保存单局战绩
   const record = new GameRecord({
@@ -94,21 +94,30 @@ async function finishGameSession(session, isAbort = false) {
     let weightedTotalOv = 0;
     topPlays.forEach((play, index) => { weightedTotalOv += play.totalOv * Math.pow(0.95, index); });
 
+    // 🔥 修复一：强制将 userId 转化为 MongoDB 的纯正 ObjectId，防止 aggregate 匹配失败
+    const userIdObj = new mongoose.Types.ObjectId(session.userId.toString());
+
+    // 🔥 修复二：使用极度严格的 $eq 进行布尔判断，并加入 $ifNull 容错，防止因旧数据字段缺失导致聚合崩溃
     const statsAggr = await GameRecord.aggregate([
-      { $match: { userId: session.userId } },
+      { $match: { userId: userIdObj } },
       { $unwind: "$songs" },
       { 
         $group: {
           _id: null,
           totalSongs: { $sum: 1 },
-          clearedSongs: { $sum: { $cond: ["$songs.isCleared", 1, 0] } },
-          totalRevealRatio: { $sum: { $cond: ["$songs.isCleared", "$songs.revealRatio", 0] } }
+          clearedSongs: { 
+            $sum: { $cond: [{ $eq: ["$songs.isCleared", true] }, 1, 0] } 
+          },
+          totalRevealRatio: { 
+            $sum: { $cond: [{ $eq: ["$songs.isCleared", true] }, { $ifNull: ["$songs.revealRatio", 0] }, 0] } 
+          }
         }
       }
     ]);
 
     const totalPlaysRecord = await GameRecord.countDocuments({ userId: session.userId });
 
+    // 只有在匹配到战绩时才进行计算与更新
     if (statsAggr.length > 0) {
       const stats = statsAggr[0];
       const accuracy = stats.totalSongs > 0 ? (stats.clearedSongs / stats.totalSongs) : 0;
@@ -126,14 +135,16 @@ async function finishGameSession(session, isAbort = false) {
       });
     }
   } catch (err) {
-    console.error('用户 OV 数据聚合失败:', err);
+    console.error('【Letter Decode 数据聚合失败】:', err);
   }
 
   // 4. 获取更新后的新数据
   const userAfter = await User.findById(session.userId);
   const newStats = userAfter.letterGameStats ? userAfter.letterGameStats.toObject() : {};
 
-  // 返回极其详尽的结算报告
+  // 用时结算
+  const timeUsed = Date.now() - session.createdAt.getTime();
+
   return { record, oldStats, newStats, timeUsed };
 }
 
@@ -633,15 +644,15 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     // 🔥 核心：从所有选中的曲库中分别抽取样本，并合并为一个巨大的缓冲池
     let poolSongs = [];
     if (gameTypes.includes('maimai')) {
-      const ms = await Song.aggregate([{ $sample: { size: 800 } }]);
+      const ms = await Song.aggregate([{ $sample: { size: 50 } }]);
       poolSongs = poolSongs.concat(ms);
     }
     if (gameTypes.includes('chunithm')) {
-      const cs = await ChunithmSong.aggregate([{ $sample: { size: 800 } }]);
+      const cs = await ChunithmSong.aggregate([{ $sample: { size: 50 } }]);
       poolSongs = poolSongs.concat(cs);
     }
     if (gameTypes.includes('arcaea')) {
-      const as = await ArcaeaSong.aggregate([{ $sample: { size: 300 } }]);
+      const as = await ArcaeaSong.aggregate([{ $sample: { size: 50 } }]);
       poolSongs = poolSongs.concat(as);
     }
 
