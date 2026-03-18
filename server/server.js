@@ -633,15 +633,15 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     // 🔥 核心：从所有选中的曲库中分别抽取样本，并合并为一个巨大的缓冲池
     let poolSongs = [];
     if (gameTypes.includes('maimai')) {
-      const ms = await Song.aggregate([{ $sample: { size: 50 } }]);
+      const ms = await Song.aggregate([{ $sample: { size: 800 } }]);
       poolSongs = poolSongs.concat(ms);
     }
     if (gameTypes.includes('chunithm')) {
-      const cs = await ChunithmSong.aggregate([{ $sample: { size: 50 } }]);
+      const cs = await ChunithmSong.aggregate([{ $sample: { size: 800 } }]);
       poolSongs = poolSongs.concat(cs);
     }
     if (gameTypes.includes('arcaea')) {
-      const as = await ArcaeaSong.aggregate([{ $sample: { size: 50 } }]);
+      const as = await ArcaeaSong.aggregate([{ $sample: { size: 300 } }]);
       poolSongs = poolSongs.concat(as);
     }
 
