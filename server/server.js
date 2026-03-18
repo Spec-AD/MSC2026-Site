@@ -1927,40 +1927,8 @@ app.get('/api/users/:username', async (req, res) => {
 });
 
 // ==================================================
-// 🎮 开字母 2.0 (Letter Game) 对局核心系统
+// 🎮 API 1：开始开字母 2.0 游戏
 // ==================================================
-
-async function finishGameSession(session) {
-  let totalOv = 0;
-  let allCleared = true;
-
-  const finalSongs = session.songs.map(song => {
-    if (song.status !== 'CLEARED') allCleared = false;
-    totalOv += (song.actualOv || 0);
-    return {
-      songId: song.songId, title: song.realTitle, baseOv: song.baseOv,
-      actualOv: song.actualOv || 0, mistakes: song.mistakes, isCleared: song.status === 'CLEARED'
-    };
-  });
-
-  if (allCleared) totalOv *= 1.15;
-  const timeRemaining = Math.max(0, session.expireAt.getTime() - Date.now());
-  const speedBonus = 1 + (timeRemaining / 1000) / 1000; 
-  totalOv *= speedBonus;
-
-  const record = new GameRecord({
-    userId: session.userId, totalOv: Number(totalOv.toFixed(2)),
-    mods: session.mods, isFullCombo: allCleared, songs: finalSongs
-  });
-  await record.save();
-  await ActiveSession.deleteOne({ _id: session._id }); 
-  
-  // 奖励经验值
-  await addXp(session.userId, Math.floor(totalOv / 2) + 10);
-  return record;
-}
-
-// 1. 开始游戏
 app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
   try {
     let { mods = [], gameType = 'arcaea' } = req.body;
@@ -1970,7 +1938,13 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
       if (!mods.includes('Prudence')) mods.push('Prudence');
     }
 
-    const randomSongs = await ArcaeaSong.aggregate([{ $sample: { size: 5 } }]);
+    // 🔥 修复 2：动态切库
+    let TargetModel;
+    if (gameType === 'maimai') TargetModel = Song;
+    else if (gameType === 'chunithm') TargetModel = ChunithmSong;
+    else TargetModel = ArcaeaSong;
+
+    const randomSongs = await TargetModel.aggregate([{ $sample: { size: 5 } }]);
     if (randomSongs.length < 5) return res.status(400).json({ msg: '曲库不足' });
 
     let initialOpenedChars = new Set();
@@ -1985,7 +1959,8 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     if (mods.includes('Lucky')) {
       let globalChars = new Set();
       randomSongs.forEach(s => {
-        for (let char of (s.title || s.basic_info.title)) {
+        const title = s.title || s.basic_info?.title || s.id;
+        for (let char of title) {
           if (char.trim() !== '') globalChars.add(char.toLowerCase());
         }
       });
@@ -1997,13 +1972,25 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
       }
     }
 
+    // 🔥 修复 3：打上特殊字符 Tag
     const sessionSongs = randomSongs.map(s => {
-      const realTitle = s.title || s.basic_info.title;
-      return { songId: s.id, realTitle, baseOv: calculateBaseOV(realTitle), mistakes: 0, status: 'PLAYING' };
+      const realTitle = s.title || s.basic_info?.title || s.id;
+      return {
+        songId: s.id || s._id,
+        realTitle: realTitle,
+        baseOv: calculateBaseOV(realTitle),
+        mistakes: 0,
+        status: 'PLAYING',
+        hasKana: /[\u3040-\u309F\u30A0-\u30FF]/.test(realTitle),
+        hasKanji: /[\u4E00-\u9FAF]/.test(realTitle),
+        hasSym: /[^\sa-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(realTitle)
+      };
     });
 
     const newSession = new ActiveSession({
-      userId: req.user.id || req.user._id, gameType, mods,
+      userId: req.user.id || req.user._id,
+      gameType,
+      mods,
       openedChars: Array.from(initialOpenedChars),
       expireAt: new Date(Date.now() + baseTime),
       songs: sessionSongs
@@ -2011,14 +1998,23 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     await newSession.save();
 
     const clientSongs = sessionSongs.map((song, idx) => ({
-      index: idx, maskedTitle: generateMaskedTitle(song.realTitle, newSession.openedChars, mods), status: song.status
+      index: idx,
+      maskedTitle: generateMaskedTitle(song.realTitle, newSession.openedChars, mods),
+      status: song.status,
+      hasKana: song.hasKana,
+      hasKanji: song.hasKanji,
+      hasSym: song.hasSym
     }));
 
     res.json({ sessionId: newSession._id, expireAt: newSession.expireAt, songs: clientSongs });
-  } catch (err) { res.status(500).json({ msg: '游戏初始化失败' }); }
+  } catch (err) {
+    res.status(500).json({ msg: '游戏初始化失败' });
+  }
 });
 
-// 2. 开字母操作
+// ==================================================
+// 🎮 API 2：开字母操作
+// ==================================================
 app.post('/api/letter-game/open', authMiddleware, async (req, res) => {
   try {
     const { sessionId, char } = req.body;
@@ -2031,7 +2027,9 @@ app.post('/api/letter-game/open', authMiddleware, async (req, res) => {
     }
 
     const targetChar = char.toLowerCase();
-    if (!session.openedChars.includes(targetChar)) session.openedChars.push(targetChar);
+    if (!session.openedChars.includes(targetChar)) {
+      session.openedChars.push(targetChar);
+    }
 
     let baseTime = 60000;
     if (session.mods.includes('Tenacity')) baseTime = 30000;
@@ -2040,21 +2038,33 @@ app.post('/api/letter-game/open', authMiddleware, async (req, res) => {
 
     session.songs.forEach(song => {
       if (song.status === 'PLAYING') {
-        const checkMask = generateMaskedTitle(song.realTitle, session.openedChars, session.mods);
-        if (!checkMask.includes('*') && !session.mods.includes('Puzzle')) song.status = 'DEAD'; 
+        const R_CheckMask = generateMaskedTitle(song.realTitle, session.openedChars, session.mods);
+        if (!R_CheckMask.includes('*') && !session.mods.includes('Puzzle')) {
+          song.status = 'DEAD'; 
+        }
       }
     });
+    
     await session.save();
 
     const clientSongs = session.songs.map((song, idx) => ({
-      index: idx, maskedTitle: song.status === 'CLEARED' ? song.realTitle : generateMaskedTitle(song.realTitle, session.openedChars, session.mods), status: song.status
+      index: idx,
+      maskedTitle: song.status === 'CLEARED' ? song.realTitle : generateMaskedTitle(song.realTitle, session.openedChars, session.mods),
+      status: song.status,
+      hasKana: song.hasKana,
+      hasKanji: song.hasKanji,
+      hasSym: song.hasSym
     }));
 
     res.json({ expireAt: session.expireAt, songs: clientSongs });
-  } catch (err) { res.status(500).json({ msg: '操作失败' }); }
+  } catch (err) {
+    res.status(500).json({ msg: '操作失败' });
+  }
 });
 
-// 3. 猜歌名核心裁决
+// ==================================================
+// 🎮 API 3：猜歌名核心裁决
+// ==================================================
 app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
   try {
     const { sessionId, songIndex, guess } = req.body;
@@ -2076,6 +2086,7 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
       song.actualOv = calculateActualOV(song.baseOv, song.realTitle, session.openedChars, song.mistakes, session.mods);
     } else {
       song.mistakes += 1;
+      
       let penalty = 15000;
       if (session.mods.includes('Fear')) penalty = 30000;
       if (session.mods.includes('Brave')) penalty = 5000;
@@ -2086,6 +2097,7 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
       }
 
       session.expireAt = new Date(session.expireAt.getTime() - penalty);
+
       if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
         const record = await finishGameSession(session);
         return res.json({ gameOver: true, record, msg: '惩罚导致时间耗尽。' });
@@ -2099,13 +2111,21 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
     }
 
     await session.save();
+
     const clientSongs = session.songs.map((s, idx) => ({
-      index: idx, maskedTitle: s.status === 'CLEARED' ? s.realTitle : generateMaskedTitle(s.realTitle, session.openedChars, session.mods),
-      status: s.status, actualOv: s.actualOv
+      index: idx,
+      maskedTitle: s.status === 'CLEARED' ? s.realTitle : generateMaskedTitle(s.realTitle, session.openedChars, session.mods),
+      status: s.status,
+      actualOv: s.actualOv,
+      hasKana: s.hasKana,
+      hasKanji: s.hasKanji,
+      hasSym: s.hasSym
     }));
 
     res.json({ isCorrect, expireAt: session.expireAt, songs: clientSongs });
-  } catch (err) { res.status(500).json({ msg: '校验失败' }); }
+  } catch (err) {
+    res.status(500).json({ msg: '校验失败' });
+  }
 });
 
 // ==============================================
