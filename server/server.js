@@ -820,6 +820,26 @@ app.get('/api/letter-game/records/:username', async (req, res) => {
   }
 });
 
+// ==================================================
+// 🎮 API 5：拉取开字母竞技场 2.0 排行榜
+// ==================================================
+app.get('/api/leaderboard/decode', async (req, res) => {
+  try {
+    // 找出所有拥有过 OV 得分的玩家
+    const topPlayers = await User.find({ 'letterGameStats.totalOv': { $gt: 0 } })
+      .select('username avatarUrl role uid level letterGameStats')
+      // 排序的核心逻辑：Total OV 降序排第一，Accuracy 降序排第二（同分时谁更准谁排前面）
+      .sort({ 'letterGameStats.totalOv': -1, 'letterGameStats.accuracy': -1 })
+      .limit(100)
+      .lean();
+      
+    res.json(topPlayers);
+  } catch (err) {
+    console.error('拉取开字母排行榜失败:', err);
+    res.status(500).json({ msg: '拉取排行榜失败' });
+  }
+});
+
 
 
 app.post('/api/auth/register', async (req, res) => {
