@@ -154,7 +154,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#15151e]/90 backdrop-blur-xl border border-white/10 p-10 rounded-3xl shadow-2xl max-w-2xl w-full text-center">
           <FaTrophy className="text-6xl text-yellow-400 mx-auto mb-6 drop-shadow-[0_0_20px_rgba(250,204,21,0.6)]" />
           <h2 className="text-3xl font-black text-white mb-2 tracking-widest">DECODE COMPLETE</h2>
-          <p className="text-zinc-400 font-bold mb-8">TOTAL OVER VALUE (OV)</p>
+          <p className="text-zinc-400 font-bold mb-8">Your OV</p>
           
           <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-purple-500 mb-10 drop-shadow-lg">
             {gameResult.totalOv.toFixed(2)}
@@ -176,7 +176,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
           </div>
 
           <button onClick={onReturn} className="px-10 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold tracking-widest transition-all">
-            RETURN TO LOBBY
+            回到大厅
           </button>
         </motion.div>
       </div>
@@ -275,7 +275,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
                 type="submit" disabled={isProcessing || !charInput}
                 className="flex-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-xl font-bold hover:bg-cyan-500 hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                REVEAL
+                开码
               </button>
             </div>
             {activeMods.includes('Reflection') && <span className="absolute -bottom-5 left-0 text-[9px] text-purple-400 font-bold">* Reflection Active: Decays in 5s</span>}
@@ -297,7 +297,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
                 type="submit" disabled={isProcessing || !guessInput || session.songs[selectedSongIdx]?.status !== 'PLAYING'}
                 className="px-6 bg-purple-500 text-white rounded-xl font-black tracking-widest hover:shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                SUBMIT
+                提交
               </button>
             </div>
           </form>
@@ -391,9 +391,9 @@ export default function LetterGame() {
           
           <div className="text-center space-y-2">
             <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 tracking-tighter">
-              LETTER DECODE
+              开字母
             </h1>
-            <p className="text-zinc-500 font-medium tracking-widest text-sm uppercase">PureBeat Competitive Mode 2.0</p>
+            <p className="text-zinc-500 font-medium tracking-widest text-sm uppercase">挑战你的曲库极限</p>
           </div>
 
           <div className="bg-[#15151e]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col md:flex-row gap-8">
@@ -428,7 +428,7 @@ export default function LetterGame() {
                   {totalMultiplier.toFixed(2)}<span className="text-2xl text-purple-400 ml-1">x</span>
                 </div>
                 <p className="text-[10px] text-zinc-600 mt-4 text-center max-w-[80%]">
-                  OV = Base OV × (1 - R)² × Multiplier
+                  OV 获取倍率
                 </p>
               </div>
 
@@ -438,13 +438,13 @@ export default function LetterGame() {
                 className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-lg tracking-widest hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:-translate-y-1 transition-all flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isStarting ? <FaSpinner className="animate-spin" /> : <FaPlay className="text-sm" />}
-                {isStarting ? 'INITIALIZING...' : 'START DECODING'}
+                {isStarting ? '初始化......' : '开始开字母'}
               </button>
             </div>
 
             <div className="flex-[1.8] flex flex-col">
               <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <FaBolt className="text-yellow-400"/> Difficulty Modifiers
+                <FaBolt className="text-yellow-400"/> MODS
               </h3>
               
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -483,8 +483,8 @@ export default function LetterGame() {
               <div className="mt-auto pt-6 flex items-start gap-3 text-xs text-zinc-500 bg-white/[0.02] p-4 rounded-xl border border-white/[0.02]">
                 <FaInfoCircle className="text-purple-400 shrink-0 mt-0.5 text-base" />
                 <p className="leading-relaxed">
-                  Hover or click modifiers to toggle.<br/>
-                  Certain modifiers (like <span className="text-zinc-300">Tenacity</span> and <span className="text-zinc-300">Easy</span>) are mutually exclusive and will automatically replace each other. Hidden synergies may apply.
+                  单击以应用模组。<br/>
+                  一些特定模组 (像 <span className="text-zinc-300">Tenacity</span> 和 <span className="text-zinc-300">Easy</span>) 是互相排斥的，不能同时应用。
                 </p>
               </div>
             </div>
