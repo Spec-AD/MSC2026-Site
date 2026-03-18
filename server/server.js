@@ -618,7 +618,7 @@ app.post('/api/users/settings/change-email', authMiddleware, async (req, res) =>
 });
 
 // ==================================================
-// 🎮 API 1：开始游戏 (注入星级系统)
+// 🎮 API 1：开始开字母 2.0 游戏 (高容错加固版)
 // ==================================================
 app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
   try {
@@ -635,7 +635,7 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     else TargetModel = ArcaeaSong;
 
     const randomSongs = await TargetModel.aggregate([{ $sample: { size: 5 } }]);
-    if (randomSongs.length < 5) return res.status(400).json({ msg: '曲库不足' });
+    if (randomSongs.length < 5) return res.status(400).json({ msg: '曲库数量不足 5 首，无法生成对局' });
 
     let initialOpenedChars = new Set();
     let baseTime = 60000; 
@@ -649,7 +649,7 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     if (mods.includes('Lucky')) {
       let globalChars = new Set();
       randomSongs.forEach(s => {
-        const title = s.title || s.basic_info?.title || s.id;
+        const title = s.title || s.basic_info?.title || s.id || 'Unknown';
         for (let char of title) {
           if (char.trim() !== '') globalChars.add(char.toLowerCase());
         }
@@ -662,17 +662,17 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
       }
     }
 
-    // 🔥 核心算力跃迁：计算基础熵值 -> 换算星级 -> 分配非线性分
-    const rawBaseOvs = randomSongs.map(s => calculateBaseOV(s.title || s.basic_info?.title || s.id));
-    const starRating = calculateSessionStarRating(rawBaseOvs, mods);
-    const nonLinearOvs = distributeNonLinearOV(starRating, rawBaseOvs);
+    // 🔥 高容错算力生成 (防止 title 异常导致崩溃)
+    const rawBaseOvs = randomSongs.map(s => calculateBaseOV(s.title || s.basic_info?.title || s.id || 'Unknown_Song'));
+    const starRating = calculateSessionStarRating(rawBaseOvs, mods) || 1.0; 
+    const nonLinearOvs = distributeNonLinearOV(starRating, rawBaseOvs) || rawBaseOvs;
 
     const sessionSongs = randomSongs.map((s, index) => {
-      const realTitle = s.title || s.basic_info?.title || s.id;
+      const realTitle = String(s.title || s.basic_info?.title || s.id || 'Unknown_Song');
       return {
-        songId: s.id || s._id,
+        songId: String(s.id || s._id),
         realTitle: realTitle,
-        baseOv: nonLinearOvs[index], // 注入非线性爆炸分数
+        baseOv: nonLinearOvs[index] || 10, 
         mistakes: 0,
         status: 'PLAYING',
         hasKana: /[\u3040-\u309F\u30A0-\u30FF]/.test(realTitle),
@@ -697,14 +697,15 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
       hasKana: song.hasKana, hasKanji: song.hasKanji, hasSym: song.hasSym
     }));
 
-    // 返回时附带星级与已开字符
     res.json({ 
       sessionId: newSession._id, expireAt: newSession.expireAt, 
       starRating, openedChars: newSession.openedChars,
       songs: clientSongs 
     });
   } catch (err) {
-    res.status(500).json({ msg: '游戏初始化失败' });
+    // 🔥 将详细错误打印到后端控制台，方便排查
+    console.error('【Letter Decode 初始化致命错误】:', err);
+    res.status(500).json({ msg: '游戏初始化失败，请联系管理员或查看后台日志' });
   }
 });
 
