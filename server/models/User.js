@@ -31,6 +31,14 @@ const UserSchema = new mongoose.Schema({
     osuGlobalRank: { type: Number, default: 0 }, 
     osuCountryRank: { type: Number, default: 0 },
     osuMode: { type: String, default: 'osu' },
+    letterGameStats: {
+      totalOv: { type: Number, default: 0 }, // 经过 OV100 衰减算法计算后的总算力 (用于全球排位)
+      totalPlays: { type: Number, default: 0 }, // 总游玩局数 (完成的对局数)
+      totalSongsEncountered: { type: Number, default: 0 }, // 遇到的总曲目数
+      clearedSongs: { type: Number, default: 0 }, // 成功猜中的曲目数
+      accuracy: { type: Number, default: 0 }, // 准确率 (clearedSongs / totalSongsEncountered)
+      conservativeness: { type: Number, default: 0 } // 保守度 (猜中曲目的平均开字率 Reveal Ratio)
+    }
     // CHUNITHM 数据总览
     chuniRating: { type: Number, default: 0 },
     chuniPlayCount: { type: Number, default: 0 },
