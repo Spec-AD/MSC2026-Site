@@ -793,6 +793,34 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
   }
 });
 
+// ==================================================
+// 🎮 API 4：获取玩家 Letter Decode 档案与 OV100 记录
+// ==================================================
+app.get('/api/letter-game/records/:username', async (req, res) => {
+  try {
+    // 1. 查找目标用户
+    const targetUser = await User.findOne({ username: new RegExp(`^${req.params.username}$`, 'i') })
+      .select('username avatarUrl level letterGameStats');
+      
+    if (!targetUser) return res.status(404).json({ msg: '未找到该玩家' });
+
+    // 2. 提取 Top 100 战绩
+    const topRecords = await GameRecord.find({ userId: targetUser._id })
+      .sort({ totalOv: -1 })
+      .limit(100)
+      .lean(); // 使用 lean() 提升查询性能
+
+    res.json({
+      user: targetUser,
+      stats: targetUser.letterGameStats || {},
+      records: topRecords
+    });
+  } catch (err) {
+    res.status(500).json({ msg: '拉取战绩失败' });
+  }
+});
+
+
 
 app.post('/api/auth/register', async (req, res) => {
     try {
