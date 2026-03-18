@@ -49,7 +49,6 @@ const Home = () => {
     fetchAnnouncements();
   }, []);
 
-  // 🔥 v1.4.0 新增：独立拉取每日推荐曲目逻辑 (脱离游戏限制)
   useEffect(() => {
     const fetchDailySong = async () => {
       setIsDailyLoading(true);
@@ -126,6 +125,15 @@ const Home = () => {
 
   const getRankColor = (rank) => {
     if (rank === '-' || !rank) return 'text-zinc-500';
+    
+    // 🔥 新增：支持百分比类型的颜色判定 (如 85.5%)
+    if (typeof rank === 'string' && rank.includes('%')) {
+      const val = parseFloat(rank);
+      if (val >= 80) return 'text-emerald-400';
+      if (val >= 50) return 'text-yellow-400';
+      return 'text-rose-400';
+    }
+
     const r = Number(rank);
     if (r >= 1 && r <= 10) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-amber-400 to-cyan-400';
     if (r >= 11 && r <= 100) return 'text-cyan-400';
@@ -155,6 +163,18 @@ const Home = () => {
         scoreColor: color,
         rankLabel: '全站排位',
         rankValue: userStats?.chuniRank && userStats?.chuniRank !== '-' ? `#${userStats.chuniRank}` : '-'
+      };
+    } else if (activeGame === 'decode') {
+      // 🔥 v2.0.0 落地：开字母竞技场简略数据看板
+      const ov = userStats?.letterGameStats?.totalOv || 0;
+      const accuracy = userStats?.letterGameStats?.accuracy || 0;
+      
+      return {
+        scoreLabel: 'Total OV',
+        scoreValue: ov > 0 ? ov.toFixed(2) : '0.00',
+        scoreColor: ov > 0 ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 font-black drop-shadow-[0_0_8px_rgba(192,132,252,0.6)]' : 'text-zinc-400',
+        rankLabel: 'Accuracy',
+        rankValue: accuracy > 0 ? `${(accuracy * 100).toFixed(1)}%` : '-'
       };
     } else {
       const modeMatch = userStats?.osuMode?.toLowerCase() === osuMode.toLowerCase();
@@ -445,7 +465,6 @@ const Home = () => {
                         src={`/assets/lv${userStats?.level || user.level || 1}_badge.png`} 
                         alt={`Lv.${userStats?.level || user.level || 1} Badge`}
                         className="h-4 object-contain drop-shadow-md"
-                        // 兜底机制：如果玩家等级超过了你画的徽章上限(如 Lv.41)，或者某张图没传，自动隐藏图片防止裂图
                         onError={(e) => { e.target.style.display = 'none'; }}
                       />
                     <span 
@@ -477,6 +496,13 @@ const Home = () => {
                       className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'osu' ? 'bg-pink-500/10 text-pink-400' : 'text-zinc-600 hover:text-zinc-400'}`}
                     >
                       osu!
+                    </button>
+                    {/* 🔥 引入竞技场 2.0 数据面板选项 */}
+                    <button 
+                      onClick={() => setActiveGame('decode')} 
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'decode' ? 'bg-purple-500/10 text-purple-400' : 'text-zinc-600 hover:text-zinc-400'}`}
+                    >
+                      Decode
                     </button>
                   </div>
                   
@@ -543,7 +569,10 @@ const Home = () => {
             )}
           </motion.div>
 
-	  <motion.div 
+          {/* ========================================== */}
+          {/* 🔥 v2.0.0 落地：开字母竞技场入口 */}
+          {/* ========================================== */}
+          <motion.div 
             initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }} 
             onClick={() => navigate('/letter-game')}
             className="bg-[#15151e] border border-cyan-500/30 rounded-3xl p-6 shadow-[0_0_20px_rgba(6,182,212,0.1)] relative overflow-hidden group hover:bg-[#1a1a24] hover:border-cyan-400/60 transition-all cursor-pointer active:scale-95"
@@ -554,7 +583,7 @@ const Home = () => {
             <div className="flex items-center justify-between mb-4 relative z-10">
               <div className="flex items-center gap-2.5">
                 <div className="w-1 h-4 bg-cyan-400 rounded-full shadow-[0_0_6px_rgba(34,211,238,0.6)]"></div>
-                <h3 className="text-sm font-bold text-zinc-100 tracking-wide">开字母</h3>
+                <h3 className="text-sm font-bold text-zinc-100 tracking-wide">竞技场 2.0</h3>
               </div>
               <span className="text-[10px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md bg-cyan-500 text-black shadow-lg animate-pulse">
                 NEW
@@ -570,15 +599,12 @@ const Home = () => {
                   LETTER DECODE
                 </span>
                 <span className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                  挑战全新功能游戏：开字母！
+                  多语种文本熵值解谜。<br/>挑战全球 OV 算力排位！
                 </span>
               </div>
             </div>
           </motion.div>
 
-          {/* ========================================== */}
-          {/* 🔥 v1.4.0 落地：跨界每日推荐曲目卡片 (支持点击查看历史) */}
-          {/* ========================================== */}
           <motion.div 
             initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} 
             onClick={() => navigate('/daily-history')}
@@ -600,7 +626,6 @@ const Home = () => {
               </div>
             ) : dailySong && dailySong.title ? (
               <div className="flex items-center gap-4 relative z-10">
-                {/* 1. 曲绘缩略图 */}
                 <img 
                   src={dailySong.coverUrl} 
                   alt="Daily Recommend Cover" 
@@ -608,15 +633,12 @@ const Home = () => {
                   onError={(e) => { e.target.src = '/assets/bg.png'; }}
                 />
                 <div className="flex flex-col min-w-0 flex-1 justify-center">
-                  {/* 2. 歌名 */}
                   <span className="text-base font-bold truncate group-hover:text-indigo-400 text-zinc-100 transition-colors" title={dailySong.title}>
                     {dailySong.title}
                   </span>
-                  {/* 3. 曲师 */}
                   <span className="text-xs text-zinc-400 truncate mt-0.5">
                     {dailySong.artist}
                   </span>
-                  {/* 4. 出处分类 */}
                   <span className="text-[10px] text-zinc-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md w-fit mt-1.5 truncate max-w-full">
                     {dailySong.source}
                   </span>

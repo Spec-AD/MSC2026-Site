@@ -430,14 +430,11 @@ const Profile = () => {
           </div>
 
           <div className="flex flex-col gap-6">
-{/* 🔥 v1.5.x 落地：动态等级徽章 (专为正七边形重构的视觉效果) */}
             <div className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 shadow-sm flex flex-col items-center">
               
-              {/* 顶部标题与微缩徽章 */}
               <div className="flex justify-between items-center w-full mb-6 px-2">
                 <span className="text-zinc-400 font-bold text-xs uppercase tracking-widest">Community Level</span>
                 <div className="flex items-center gap-1.5 bg-[#0c0c11] px-2.5 py-1 rounded-xl border border-white/[0.02] shadow-inner">
-                  {/* 微缩版适当放大到 h-5，增加轻微阴影使其立体 */}
                   <img 
                     src={`/assets/lv${profile.level || 1}_badge.png`} 
                     alt="badge" 
@@ -450,16 +447,12 @@ const Profile = () => {
                 </div>
               </div>
               
-              {/* 徽章主展示区：移除硬性圆形边框，改用发光力场 */}
               <div className="relative flex items-center justify-center mb-10 mt-2 group w-full">
-                {/* 底部环境光晕：模糊的霓虹光效，完美包容任何形状的徽章 */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 bg-cyan-500/20 rounded-full blur-[32px] group-hover:bg-cyan-400/30 group-hover:scale-110 transition-all duration-700 pointer-events-none"></div>
                 
-                {/* 居中展示的超大版七边形徽章 */}
                 <img 
                   src={`/assets/lv${profile.level || 1}_badge.png`} 
                   alt={`Lv.${profile.level || 1} Badge`}
-                  // 尺寸放大到 w-28 h-28 (112px)，引入更深邃的投影，悬浮时带有“向上升起”的科幻动效
                   className="w-28 h-28 object-contain relative z-10 drop-shadow-[0_10px_20px_rgba(34,211,238,0.15)] group-hover:scale-110 group-hover:-translate-y-2 group-hover:drop-shadow-[0_20px_35px_rgba(34,211,238,0.35)] transition-all duration-500 ease-out"
                   onError={(e) => { 
                     e.target.style.display = 'none'; 
@@ -467,13 +460,11 @@ const Profile = () => {
                   }}
                 />
                 
-                {/* 兜底的暗色王冠 (图片未找到时显示) */}
                 <div className="hidden w-24 h-24 rounded-full bg-[#0c0c11] border border-white/[0.05] items-center justify-center shadow-inner relative z-10">
                   <FaCrown className="text-4xl text-zinc-700 opacity-30 group-hover:scale-110 transition-transform duration-500" /> 
                 </div>
               </div>
 
-              {/* 经验条 */}
               <div className="w-full px-2">
                 <div className="flex justify-between text-xs text-zinc-500 font-bold mb-2 uppercase" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                    <span className="text-zinc-300">{(profile.xp || 0) % 300} XP</span>
@@ -484,7 +475,6 @@ const Profile = () => {
                       initial={{ width: 0 }}
                       animate={{ width: `${((profile.xp || 0) % 300) / 300 * 100}%` }}
                       transition={{ duration: 1.2, ease: "easeOut" }}
-                      // 经验条加入渐变色，呼应徽章的光感
                       className="h-full bg-gradient-to-r from-cyan-500 to-blue-400 rounded-full shadow-[0_0_10px_rgba(34,211,238,0.6)]"
                     />
                 </div>
@@ -511,7 +501,7 @@ const Profile = () => {
             <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">数据档案库</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             
             {/* Maimai DX */}
             <div onClick={() => navigate(`/profile/${profile.username}/maimai`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-cyan-500/30">
@@ -557,6 +547,27 @@ const Profile = () => {
                     <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{profile.osuPp ? Math.round(profile.osuPp) : '--'}</span>
                   </div>
                   <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-pink-500 group-hover:text-white transition-colors"><FaChevronRight className="text-sm" /></div>
+                </div>
+              </div>
+            </div>
+
+            {/* 🔥 v2.0.0 新增: Letter Decode (竞技场) */}
+            <div onClick={() => navigate(`/profile/${profile.username}/decode`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-purple-500/30">
+              <div className="absolute -right-6 -bottom-6 opacity-5 text-9xl text-purple-400 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
+              <div className="relative z-10 flex flex-col h-full">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-xl font-bold text-purple-400">Letter Decode</h3>
+                  <span className="bg-purple-500/20 text-purple-300 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest border border-purple-500/30">V2.0</span>
+                </div>
+                <p className="text-xs text-zinc-500 font-medium mb-8">查看 OV100 算力衰减记录与个人流派画像</p>
+                <div className="mt-auto flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Total OV</span>
+                    <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                      {profile.letterGameStats?.totalOv ? profile.letterGameStats.totalOv.toFixed(2) : '0.00'}
+                    </span>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-purple-500 group-hover:text-white transition-colors"><FaChevronRight className="text-sm" /></div>
                 </div>
               </div>
             </div>
