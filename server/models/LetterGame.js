@@ -31,7 +31,10 @@ const ActiveSessionSchema = new mongoose.Schema({
     baseOv: Number,
     mistakes: { type: Number, default: 0 },
     status: { type: String, enum: ['PLAYING', 'CLEARED', 'DEAD'], default: 'PLAYING' },
-    actualOv: { type: Number, default: 0 } // 如果 CLEARED，记录得分
+    actualOv: { type: Number, default: 0 }, // 如果 CLEARED，记录得分
+    hasKana: { type: Boolean, default: false },
+    hasKanji: { type: Boolean, default: false },
+    hasSym: { type: Boolean, default: false }
   }],
   createdAt: { type: Date, default: Date.now, expires: 3600 } // TTL 索引: 1小时后自动销毁掉线的残局
 });
