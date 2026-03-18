@@ -618,11 +618,11 @@ app.post('/api/users/settings/change-email', authMiddleware, async (req, res) =>
 });
 
 // ==================================================
-// 🎮 API 1：开始开字母 2.0 游戏 (高容错加固版)
+// 🎮 API 1：开始开字母 2.0 游戏 (智能目标星级匹配版)
 // ==================================================
 app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
   try {
-    let { mods = [], gameType = 'arcaea' } = req.body;
+    let { mods = [], gameType = 'arcaea', targetStar = 3.0 } = req.body;
 
     if (mods.includes('Tenacity') && mods.includes('Fear')) {
       mods = mods.filter(m => m !== 'Tenacity' && m !== 'Fear');
@@ -634,8 +634,38 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     else if (gameType === 'chunithm') TargetModel = ChunithmSong;
     else TargetModel = ArcaeaSong;
 
-    const randomSongs = await TargetModel.aggregate([{ $sample: { size: 5 } }]);
-    if (randomSongs.length < 5) return res.status(400).json({ msg: '曲库数量不足 5 首，无法生成对局' });
+    // 🔥 核心：不再只抽 5 首，而是抽 50 首作为样本池
+    const poolSongs = await TargetModel.aggregate([{ $sample: { size: 50 } }]);
+    if (poolSongs.length < 5) return res.status(400).json({ msg: '曲库不足' });
+
+    // 预计算所有样本的 BaseOV
+    const poolWithOvs = poolSongs.map(s => {
+      const title = s.title || s.basic_info?.title || s.id || 'Unknown';
+      return { ...s, _baseOv: calculateBaseOV(title) };
+    });
+
+    // 🔥 贪心匹配算法：寻找最接近目标星级的 5 首歌组合
+    // 目标总 OV = 目标星数 * 60
+    const targetTotalOv = targetStar * 60; 
+    
+    // 简单起见，我们将样本按 OV 排序，用滑动窗口找最接近的一组
+    poolWithOvs.sort((a, b) => a._baseOv - b._baseOv);
+    let bestDiff = Infinity;
+    let bestSubset = [];
+
+    for (let i = 0; i <= poolWithOvs.length - 5; i++) {
+      const subset = poolWithOvs.slice(i, i + 5);
+      const currentSum = subset.reduce((sum, song) => sum + song._baseOv, 0);
+      const diff = Math.abs(currentSum - targetTotalOv);
+      
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestSubset = subset;
+      }
+    }
+
+    // 为了防止每次同一个星级出一样的题，将挑出来的 5 首歌打乱
+    const finalSongs = bestSubset.sort(() => Math.random() - 0.5);
 
     let initialOpenedChars = new Set();
     let baseTime = 60000; 
@@ -648,9 +678,8 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     
     if (mods.includes('Lucky')) {
       let globalChars = new Set();
-      randomSongs.forEach(s => {
-        const title = s.title || s.basic_info?.title || s.id || 'Unknown';
-        for (let char of title) {
+      finalSongs.forEach(s => {
+        for (let char of (s.title || s.basic_info?.title || s.id || '')) {
           if (char.trim() !== '') globalChars.add(char.toLowerCase());
         }
       });
@@ -662,13 +691,13 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
       }
     }
 
-    // 🔥 高容错算力生成 (防止 title 异常导致崩溃)
-    const rawBaseOvs = randomSongs.map(s => calculateBaseOV(s.title || s.basic_info?.title || s.id || 'Unknown_Song'));
-    const starRating = calculateSessionStarRating(rawBaseOvs, mods) || 1.0; 
-    const nonLinearOvs = distributeNonLinearOV(starRating, rawBaseOvs) || rawBaseOvs;
+    // 提取选定曲目的 BaseOV，计算实际匹配到的星级（可能与目标有微小偏差，如想要10星但曲库太简单只凑出8星）
+    const rawBaseOvs = finalSongs.map(s => s._baseOv);
+    const actualStarRating = calculateSessionStarRating(rawBaseOvs);
+    const nonLinearOvs = distributeNonLinearOV(actualStarRating, rawBaseOvs);
 
-    const sessionSongs = randomSongs.map((s, index) => {
-      const realTitle = String(s.title || s.basic_info?.title || s.id || 'Unknown_Song');
+    const sessionSongs = finalSongs.map((s, index) => {
+      const realTitle = String(s.title || s.basic_info?.title || s.id || 'Unknown');
       return {
         songId: String(s.id || s._id),
         realTitle: realTitle,
@@ -683,7 +712,7 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
 
     const newSession = new ActiveSession({
       userId: req.user.id || req.user._id,
-      gameType, mods, starRating,
+      gameType, mods, starRating: actualStarRating,
       openedChars: Array.from(initialOpenedChars),
       expireAt: new Date(Date.now() + baseTime),
       songs: sessionSongs
@@ -699,13 +728,12 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
 
     res.json({ 
       sessionId: newSession._id, expireAt: newSession.expireAt, 
-      starRating, openedChars: newSession.openedChars,
+      starRating: actualStarRating, openedChars: newSession.openedChars,
       songs: clientSongs 
     });
   } catch (err) {
-    // 🔥 将详细错误打印到后端控制台，方便排查
     console.error('【Letter Decode 初始化致命错误】:', err);
-    res.status(500).json({ msg: '游戏初始化失败，请联系管理员或查看后台日志' });
+    res.status(500).json({ msg: '游戏初始化失败，请查看后台日志' });
   }
 });
 
