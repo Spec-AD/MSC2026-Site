@@ -81,7 +81,6 @@ const ARCAEA_ROWS = [
   { title: "Collaboration", keys: ["megarex", "nextstage", "djmax", "undertale", "rotaeno", "cytusii", "musedash", "wacca", "maimai", "ongeki", "chunithm", "groovecoaster", "tonesphere", "lanota", "dynamix"] }
 ];
 
-
 // ==========================================
 // 🎨 Arcaea 专属：单曲详情独立渲染面板
 // ==========================================
@@ -255,7 +254,7 @@ const useDragToScroll = () => {
     if (!isDragging || !ref.current) return;
     e.preventDefault();
     const x = e.pageX - ref.current.offsetLeft;
-    const walk = (x - startX.current) * 2; // 滑动速度乘数
+    const walk = (x - startX.current) * 2; 
     ref.current.scrollLeft = scrollLeft.current - walk;
   };
 
@@ -263,7 +262,7 @@ const useDragToScroll = () => {
 };
 
 // ==========================================
-// 🌟 独立曲包行组件 (修复 Hook 在循环中调用的问题)
+// 🌟 独立曲包行组件
 // ==========================================
 const ArcaeaPackRow = ({ row, processedData, setSelectedPackId }) => {
   const dragProps = useDragToScroll();
@@ -307,7 +306,6 @@ const ArcaeaPackRow = ({ row, processedData, setSelectedPackId }) => {
                 </div>
               </div>
 
-              {/* Append 追加包 */}
               {pack.appends.map(app => (
                 <div key={app.id} className="relative group w-[110%] flex flex-col items-center mt-2">
                    <img 
@@ -329,7 +327,6 @@ const ArcaeaPackRow = ({ row, processedData, setSelectedPackId }) => {
                    </div>
                 </div>
               ))}
-
             </div>
           );
         })}
@@ -337,7 +334,6 @@ const ArcaeaPackRow = ({ row, processedData, setSelectedPackId }) => {
     </div>
   );
 };
-
 
 // ==========================================
 // 🎨 Arcaea 专属：曲包沉浸式选曲总控
@@ -378,6 +374,7 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
     return mainPacks;
   }, [songs]);
 
+  // 🔥 容错保护：如果在包外筛选导致当前选中的包消失，自动退回主界面
   useEffect(() => {
     if (selectedPackId && !processedData[selectedPackId] && !Object.values(processedData).some(p => p.appends.find(a => a.id === selectedPackId))) {
       setSelectedPackId(null);
@@ -385,6 +382,7 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
     }
   }, [processedData, selectedPackId]);
 
+  // 🔥 容错保护：如果在包内筛选导致当前选中的歌消失，自动选中列表里的第一首歌
   useEffect(() => {
     if (selectedPackId) {
       const findPack = () => {
@@ -396,7 +394,14 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
         return null;
       };
       const pack = findPack();
-      if (pack && pack.songs.length > 0) setSelectedSong(pack.songs[0]);
+      if (pack) {
+        setSelectedSong(prev => {
+          if (!prev || !pack.songs.some(s => s.id === prev.id)) {
+            return pack.songs.length > 0 ? pack.songs[0] : null;
+          }
+          return prev;
+        });
+      }
     }
   }, [selectedPackId, processedData]);
 
@@ -471,7 +476,6 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
     </motion.div>
   );
 };
-
 
 // ==========================================
 // 🚀 核心主组件
@@ -760,18 +764,17 @@ export default function Songs() {
                     className={`w-full bg-[#15151e]/80 backdrop-blur-md border border-white/[0.05] text-zinc-200 pl-10 pr-4 py-2.5 rounded-xl focus:outline-none transition-colors shadow-sm text-sm placeholder-zinc-600 ${getThemeColorClass('input')}`}
                   />
                 </div>
-                {activeGame !== 'arcaea' && (
-                  <button 
-                    onClick={() => setIsFilterOpen(!isFilterOpen)}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all border active:scale-95 ${isFilterOpen ? `${getThemeColorClass('btn')} border-transparent shadow-md` : 'bg-[#15151e]/80 backdrop-blur-md text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}
-                  >
-                    {isFilterOpen ? <FaTimes /> : <FaFilter />} 高级筛选
-                  </button>
-                )}
+                {/* 🔥 恢复 Arcaea 下的高级筛选按钮 */}
+                <button 
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all border active:scale-95 ${isFilterOpen ? `${getThemeColorClass('btn')} border-transparent shadow-md` : 'bg-[#15151e]/80 backdrop-blur-md text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}
+                >
+                  {isFilterOpen ? <FaTimes /> : <FaFilter />} 高级筛选
+                </button>
               </div>
 
               <div className="flex flex-col md:flex-row flex-1 gap-5 overflow-hidden">
-                {isFilterOpen && activeGame !== 'arcaea' && (
+                {isFilterOpen && (
                   <div className="w-full md:w-80 shrink-0 max-h-[40vh] md:max-h-none bg-[#15151e]/80 backdrop-blur-md rounded-2xl border border-white/[0.05] shadow-xl overflow-y-auto p-5 custom-scrollbar flex flex-col gap-6">
                     <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
                       <div className="flex items-center gap-2">
@@ -821,15 +824,18 @@ export default function Songs() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Categories</label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {filterOptions.categories.map(cat => {
-                          const isActive = selectedCategories.includes(cat);
-                          return <button key={cat} onClick={() => toggleArrayItem(selectedCategories, setSelectedCategories, cat)} className={`text-xs px-2.5 py-1.5 rounded-lg transition-all border active:scale-95 ${isActive ? 'bg-zinc-200 text-zinc-900 border-transparent font-bold' : 'bg-[#0c0c11] text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}>{cat}</button>;
-                        })}
+                    {/* 🔥 Arcaea 模式下隐藏曲包类别筛选，保持 UI 清爽 */}
+                    {activeGame !== 'arcaea' && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Categories</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {filterOptions.categories.map(cat => {
+                            const isActive = selectedCategories.includes(cat);
+                            return <button key={cat} onClick={() => toggleArrayItem(selectedCategories, setSelectedCategories, cat)} className={`text-xs px-2.5 py-1.5 rounded-lg transition-all border active:scale-95 ${isActive ? 'bg-zinc-200 text-zinc-900 border-transparent font-bold' : 'bg-[#0c0c11] text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}>{cat}</button>;
+                          })}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
