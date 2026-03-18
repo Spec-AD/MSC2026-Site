@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { FaTimes, FaGlobe, FaUserFriends, FaLock, FaSpinner, FaMedal } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -56,23 +56,21 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardData, setBoardData] = useState([]);
   const [boardScope, setBoardScope] = useState('global'); 
-  const [boardLevel, setBoardLevel] = useState(2); // 默认调整为 2 (FTR/EXPERT) 
+  const [boardLevel, setBoardLevel] = useState(2); 
   const [coverIndex, setCoverIndex] = useState(0); 
 
   const config = GAME_CONFIG[activeGame] || GAME_CONFIG.maimai;
   const isUtage = song?.basic_info?.genre === '宴会场' || song?.type === 'UTAGE';
 
-  // 🌟 1. 智能初始化默认难度
+  // 1. 智能初始化默认难度
   useEffect(() => {
     if (song && isOpen) {
       if (isUtage) {
         setBoardLevel(0);
       } else if (activeGame === 'arcaea') {
-        // 🔥 Arcaea 优先默认选中 FTR(2)，避免玩家被异象直接糊脸
         if (song.ds && song.ds[2] !== undefined && song.ds[2] !== null) {
           setBoardLevel(2);
         } else {
-          // 如果罕见地没有 FTR，则找最高难度
           let defaultLevel = 0;
           for (let i = config.diffNames.length - 1; i >= 0; i--) {
             if (song.ds && song.ds[i] !== undefined && song.ds[i] !== null) { defaultLevel = i; break; }
@@ -80,7 +78,6 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
           setBoardLevel(defaultLevel);
         }
       } else {
-        // 其他游戏逻辑不变
         let defaultLevel = 0;
         for (let i = config.diffNames.length - 1; i >= 0; i--) {
           if (song.ds && song.ds[i] !== undefined && song.ds[i] !== null) { defaultLevel = i; break; }
@@ -95,25 +92,21 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
     setCoverIndex(0);
   }, [song, boardLevel]);
 
-  // 🔥 2. 提取当前难度的覆写元数据 (Override Data)
+  // 🔥 2. 提取当前难度的覆写元数据 (完美兼容 Maimai 原始数据)
   const currentDiffInfo = song?.difficulties?.find(d => d.ratingClass === boardLevel);
-  
-  // 动态变量：如果有当前难度的覆写值，则优先使用；否则退回基础值
-  const displayTitle = currentDiffInfo?.title_localized?.en || song?.title_localized?.en || song?.basic_info?.title;
+  const displayTitle = currentDiffInfo?.title_localized?.en || song?.title_localized?.en || song?.basic_info?.title || song?.title;
   const displayJa = currentDiffInfo?.title_localized?.ja || song?.title_localized?.ja;
-  const displayArtist = currentDiffInfo?.artist || song?.basic_info?.artist;
+  const displayArtist = currentDiffInfo?.artist || song?.basic_info?.artist || song?.artist;
   const displayBpm = currentDiffInfo?.bpm || song?.basic_info?.bpm;
 
-  // 🌟 3. 严格构建图片探测队列
-  const getCoverPaths = () => {
+  // 🌟 3. 性能优化：使用 useMemo 缓存探测队列，避免每次渲染时产生巨量无用计算导致掉帧
+  const coverPaths = useMemo(() => {
     if (!song) return ['/assets/bg.png'];
     if (activeGame === 'chunithm') return [`https://assets2.lxns.net/chunithm/jacket/${song.id}.png`, '/assets/bg.png'];
     if (activeGame === 'maimai') return [`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`, '/assets/bg.png'];
 
     const sId = song.id;
     const paths = [];
-    
-    // 检查数据库中记录的当前难度是否有官方的曲绘异变标签，或强行对 BYD 进行 3.jpg 探测
     const hasOverride = currentDiffInfo?.jacketOverride;
     const isBYD = boardLevel === 3;
 
@@ -125,7 +118,6 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
       paths.push(`/assets/arcaea/songs/${sId}/${sId}_${boardLevel}.jpg`);
     }
     
-    // 常规 base.jpg 兜底探测
     paths.push(`/assets/arcaea/songs/${sId}/1080_base.jpg`);
     paths.push(`/assets/arcaea/songs/dl_${sId}/1080_base.jpg`);
     paths.push(`/assets/arcaea/songs/${sId}/base.jpg`);
@@ -134,34 +126,46 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
     
     paths.push('/assets/bg.png'); 
     return paths;
-  };
+  }, [song, activeGame, boardLevel, currentDiffInfo?.jacketOverride]);
 
-  const coverPaths = getCoverPaths();
   const currentCoverUrl = coverPaths[coverIndex] || '/assets/bg.png';
 
-  // 排行榜拉取逻辑
+  // 🌟 4. 防掉帧查榜引擎：延迟加载以保证 CSS 动画丝滑进行
   useEffect(() => {
     if (!isOpen || !song) return; 
-    if (activeGame === 'arcaea') return; 
+    
+    // 🔥 中二与 Arcaea 暂不接入单一的水鱼全服榜单
+    if (activeGame !== 'maimai') return; 
     if (!isUtage && (!song.ds || song.ds[boardLevel] === undefined)) return;
     
-    const fetchLeaderboard = async () => {
-      setBoardLoading(true);
+    let isMounted = true;
+    setBoardLoading(true);
+
+    // 延迟 350ms，等待左侧抽屉动画完全滑出，避免主线程在执行滑块动画时发起请求卡顿
+    const timer = setTimeout(async () => {
       try {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const endpoint = activeGame === 'chunithm' ? `/api/chunithm-songs/${song.id}/leaderboard` : `/api/songs/${song.id}/leaderboard`;
-        const res = await axios.get(endpoint, { params: { level: boardLevel, scope: boardScope }, headers });
-        setBoardData(res.data);
+        const res = await axios.get(`/api/songs/${song.id}/leaderboard`, { 
+          params: { level: boardLevel, scope: boardScope }, 
+          headers 
+        });
+        if (isMounted) setBoardData(res.data);
       } catch (err) {
-        addToast(err.response?.data?.msg || '获取排行榜失败', 'error');
-        if (boardScope === 'friends') setBoardScope('global'); 
+        if (isMounted) {
+          addToast(err.response?.data?.msg || '获取排行榜失败', 'error');
+          if (boardScope === 'friends') setBoardScope('global'); 
+        }
       } finally {
-        setBoardLoading(false);
+        if (isMounted) setBoardLoading(false);
       }
+    }, 350);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
     };
-    fetchLeaderboard();
-  }, [song, boardLevel, boardScope, isOpen, isUtage, activeGame]);
+  }, [song, boardLevel, boardScope, isOpen, isUtage, activeGame, addToast]);
 
   const handleScopeSwitch = (targetScope) => {
     if (targetScope === 'friends') {
@@ -197,7 +201,8 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
           ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {song && (
-          <div className="font-sans h-full flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
+          // 🔥 注入全局 Quicksand 字体，提升高品质排版感
+          <div className="h-full flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700" style={{ fontFamily: "'Quicksand', sans-serif" }}>
             
             <div className="p-6 pb-4 border-b border-gray-800 relative bg-gradient-to-b from-gray-800/40 to-transparent shrink-0 flex gap-4">
               <button onClick={onClose} className="absolute top-6 right-6 text-gray-400 hover:text-white transition-transform hover:rotate-90 text-xl z-10">
@@ -205,7 +210,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
               </button>
               
               <img 
-                key={currentCoverUrl} // 添加 key 确保源变化时能重新触发渐变和加载逻辑
+                key={currentCoverUrl}
                 src={currentCoverUrl} 
                 alt="cover" 
                 className="w-20 h-20 rounded-xl object-cover shadow-lg border border-white/10 shrink-0 transition-all duration-300" 
@@ -228,25 +233,22 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                   <span className="text-xs text-gray-400 font-mono tracking-wider">ID: {song.id}</span>
                 </div>
                 
-                {/* 🔥 动态曲名渲染 */}
                 <h2 className="text-xl font-bold text-white leading-tight mb-1 truncate transition-colors duration-300" title={displayTitle}>
                   {displayTitle}
                 </h2>
 
-                {/* 🔥 动态日文原名渲染 */}
                 {displayJa && displayJa !== displayTitle && (
-                  <p className="text-xs text-purple-300/80 font-medium mb-1 truncate transition-opacity duration-300">
+                  <p className="text-xs text-purple-300/80 font-medium mb-1 truncate transition-opacity duration-300 font-sans">
                     {displayJa}
                   </p>
                 )}
 
-                {/* 🔥 动态曲师渲染 */}
-                <p className="text-sm text-gray-400 truncate transition-colors duration-300" title={displayArtist}>
+                <p className="text-sm text-gray-400 truncate transition-colors duration-300 font-sans" title={displayArtist}>
                   {displayArtist}
                 </p>
                 
                 {song.aliases && song.aliases.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-3">
+                  <div className="flex flex-wrap gap-1.5 mt-3 font-sans">
                     {song.aliases.map((alias, idx) => (
                       <span key={idx} className="text-[10px] bg-white/10 border border-white/5 text-zinc-300 px-2 py-0.5 rounded-md">
                         {alias}
@@ -261,38 +263,33 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                  <div className="text-[10px] text-gray-500 mb-1">所属分类 (Pack)</div>
+                  <div className="text-[10px] text-gray-500 mb-1 font-sans">所属分类 (Pack)</div>
                   <div className="text-sm text-gray-200">{song.basic_info?.genre || '-'}</div>
                 </div>
                 <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                  <div className="text-[10px] text-gray-500 mb-1">实装版本</div>
-                  <div className="text-sm text-gray-200 font-mono">v{song.basic_info?.from || '-'}</div>
+                  <div className="text-[10px] text-gray-500 mb-1 font-sans">实装版本</div>
+                  {/* 🔥 去除硬编码的 v 前缀，还原游戏原生面貌 */}
+                  <div className="text-sm text-gray-200 font-mono">{song.basic_info?.from || '-'}</div>
                 </div>
                 
-                {/* 🔥 动态 BPM 渲染 */}
                 <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                  <div className="text-[10px] text-gray-500 mb-1">BPM</div>
+                  <div className="text-[10px] text-gray-500 mb-1 font-sans">BPM</div>
                   <div className="text-sm text-gray-200 font-mono transition-colors duration-300">{displayBpm || '-'}</div>
                 </div>
                 
-                {activeGame !== 'arcaea' ? (
+                {activeGame === 'maimai' && (
                   <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                    <div className="text-[10px] text-gray-500 mb-1">新曲标识</div>
-                    <div className="text-sm text-gray-200">
+                    <div className="text-[10px] text-gray-500 mb-1 font-sans">新曲标识</div>
+                    <div className="text-sm text-gray-200 font-sans">
                       {song.basic_info?.is_new ? '✨ 是 (New)' : '否'}
                     </div>
-                  </div>
-                ) : (
-                  <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800 flex items-center justify-center opacity-30">
-                    <div className="text-xl font-bold font-mono tracking-widest text-gray-600">ARCAEA</div>
                   </div>
                 )}
               </div>
 
               <div>
-                <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-widest">Difficulty & Charter</h3>
+                <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-widest font-sans">Difficulty & Charter</h3>
                 
-                {/* 🔥 增强的难度选择条体验：支持点击难度条直接切换数据 */}
                 <div className="space-y-2">
                   {song.ds && song.ds.map((constant, idx) => {
                     if (constant === undefined || constant === null) return null;
@@ -340,7 +337,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                           </span>
                         </div>
                         
-                        <div className="flex justify-between items-end mt-1">
+                        <div className="flex justify-between items-end mt-1 font-sans">
                           <span className="text-xs text-gray-400 opacity-80 truncate max-w-[200px]" title={charterName}>
                             {charterName !== '-' ? charterName : '未知谱师'}
                           </span>
@@ -354,16 +351,17 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                 </div>
               </div>
 
-              {activeGame !== 'arcaea' && (
+              {/* 🔥 只对 Maimai 开放单曲榜单渲染，防报错隔离 */}
+              {activeGame === 'maimai' && (
                 <div className="pt-4 border-t border-gray-800">
-                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 font-mono">
-                    <FaMedal className="text-yellow-500" /> LEADERBOARD
+                  <h3 className="text-lg font-bold text-cyan-400 mb-4 flex items-center gap-2 font-mono">
+                    <FaMedal /> LEADERBOARD
                   </h3>
 
                   <div className="bg-gray-900/80 border border-white/5 rounded-2xl p-4 mb-4 shadow-inner">
                     {!isUtage && (
                       <div className="flex items-center gap-3 mb-4 pb-4 border-b border-white/5">
-                        <span className="text-xs text-gray-500 font-bold uppercase tracking-widest shrink-0">Diff</span>
+                        <span className="text-xs text-gray-500 font-bold uppercase tracking-widest shrink-0 font-sans">Diff</span>
                         <div className="flex gap-2 flex-1 overflow-x-auto custom-scrollbar pb-1">
                           {song.ds && song.ds.map((constant, idx) => {
                             if (idx < 2 || constant === undefined || constant === null) return null; 
@@ -382,7 +380,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between font-sans">
                       <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Scope</span>
                       <div className="flex bg-black/50 border border-white/5 rounded-lg p-1">
                         <button onClick={() => handleScopeSwitch('global')} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${boardScope === 'global' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-300'}`}>
@@ -417,15 +415,11 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                           }
 
                           const playerName = score.userId?.username || score.username || 'Unknown Player';
-                          const displayScore = activeGame === 'chunithm' ? (score.score ? score.score.toLocaleString() : '-') : (score.achievement ? score.achievement.toFixed(4) + '%' : '-');
+                          const displayScore = score.achievement ? score.achievement.toFixed(4) + '%' : '-';
                           const fc = (score.fcStatus || '').toLowerCase();
                           let fcBadge = null;
-                          if (activeGame === 'chunithm') {
-                            if (fc.includes('ajc')) fcBadge = <span className="bg-gradient-to-r from-yellow-300 to-yellow-500 text-yellow-950 px-1 rounded text-[9px] font-black">AJC</span>; else if (fc.includes('aj')) fcBadge = <span className="bg-yellow-400 text-yellow-950 px-1 rounded text-[9px] font-black">AJ</span>; else if (fc.includes('fc')) fcBadge = <span className="bg-emerald-400 text-emerald-950 px-1 rounded text-[9px] font-black">FC</span>;
-                          } else {
-                            if (['fc', 'fcp', 'ap', 'app'].includes(fc)) {
-                              fcBadge = <span className={`text-[9px] font-black text-white px-1 rounded ${fc.includes('ap') ? 'bg-yellow-500' : 'bg-pink-500'}`}>{fc.toUpperCase()}</span>;
-                            }
+                          if (['fc', 'fcp', 'ap', 'app'].includes(fc)) {
+                             fcBadge = <span className={`text-[9px] font-black text-white px-1 rounded font-sans ${fc.includes('ap') ? 'bg-yellow-500' : 'bg-pink-500'}`}>{fc.toUpperCase()}</span>;
                           }
 
                           return (
@@ -433,9 +427,9 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                               <div className={`w-8 text-center font-mono font-black text-lg ${getRankColor(index)}`}>{index + 1}</div>
                               <img src={score.userId?.avatarUrl || score.avatarUrl || '/assets/logos.png'} alt="avatar" className="w-10 h-10 rounded-lg object-cover ml-2 mr-3 border border-white/10 group-hover:scale-105 transition-transform" />
                               <div className="flex-1 overflow-hidden">
-                                <div className="text-white font-bold text-sm truncate group-hover:text-cyan-300 transition-colors">{playerName}</div>
+                                <div className="text-white font-bold text-sm truncate group-hover:text-cyan-300 transition-colors font-sans">{playerName}</div>
                                 <div className="flex items-center gap-2 mt-0.5">
-                                  <span className={`${activeGame === 'chunithm' ? 'text-yellow-400' : 'text-cyan-400'} font-mono font-bold text-sm`}>{displayScore}</span>
+                                  <span className="text-cyan-400 font-mono font-bold text-sm">{displayScore}</span>
                                   {fcBadge}
                                 </div>
                               </div>
@@ -444,7 +438,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
                                   {starCount > 0 && <img src={`/assets/${starCount}dxstar.png`} alt={`DX Star`} className="h-[14px] md:h-4 object-contain drop-shadow-md" />}
                                   <div className="text-right flex flex-col items-end">
                                     <span className="text-gray-300 font-mono font-bold text-sm">{score.dxScore || 0}</span>
-                                    <span className="text-gray-500 text-[9px] font-bold uppercase mt-0.5">DX Score</span>
+                                    <span className="text-gray-500 text-[9px] font-bold uppercase mt-0.5 font-sans">DX Score</span>
                                   </div>
                                 </div>
                               )}
