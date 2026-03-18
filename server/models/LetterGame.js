@@ -28,7 +28,8 @@ const ActiveSessionSchema = new mongoose.Schema({
   starRating: { type: Number, default: 0 },
   songs: [{
     songId: String,
-    realTitle: String, // 真实歌名 (绝对不可发给前端！)
+    realTitle: String,
+    aliases: [{ type: String }],
     baseOv: Number,
     mistakes: { type: Number, default: 0 },
     status: { type: String, enum: ['PLAYING', 'CLEARED', 'DEAD'], default: 'PLAYING' },
