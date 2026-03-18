@@ -1,51 +1,48 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { 
   FaPlay, FaInfoCircle, FaBolt, FaTrophy, FaDatabase, FaChevronLeft, 
   FaKeyboard, FaPaperPlane, FaCheckCircle, FaTimesCircle, FaSkull, 
-  FaSpinner, FaExclamationTriangle, FaStar 
+  FaSpinner, FaExclamationTriangle, FaStar, FaGamepad, FaMap, FaCrown, FaUsers
 } from 'react-icons/fa';
 import axios from 'axios';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 // ==========================================
-// 🧮 Mod 核心元数据与冲突矩阵
+// 🧮 挑战模组数据
 // ==========================================
 const MOD_DEFINITIONS = [
-  { id: 'Tenacity', name: 'Tenacity', type: 'ID', mult: 1.15, desc: '思考时间缩短为30秒。', conflicts: ['Easy', 'Strength'] },
-  { id: 'Fear', name: 'Fear', type: 'ID', mult: 1.15, desc: '猜错惩罚加重为30秒。', conflicts: ['Brave', 'Prudence', 'Strength'] },
-  { id: 'Prudence', name: 'Prudence', type: 'ID', mult: 1.55, desc: '猜错一次直接失败 (猝死)。', conflicts: ['Fear', 'Strength', 'Brave'] },
-  { id: 'Reflection', name: 'Reflection', type: 'ID', mult: 1.30, desc: '开出的字母5秒后变回掩码。', conflicts: ['Puzzle'] },
-  { id: 'Perceiver', name: 'Perceiver', type: 'ID', mult: 1.30, desc: '空格也变为掩码。', conflicts: ['Puzzle'] },
-  { id: 'Puzzle', name: 'Puzzle', type: 'ID', mult: 1.70, desc: '歌名数字化，隐藏绝对位置。', conflicts: ['Perceiver', 'Reflection'] },
-  { id: 'Easy', name: 'Easy', type: 'DD', mult: 0.45, desc: '思考时间延长至120秒。', conflicts: ['Tenacity'] },
-  { id: 'Brave', name: 'Brave', type: 'DD', mult: 0.50, desc: '猜错惩罚减轻为5秒。', conflicts: ['Fear', 'Prudence'] },
-  { id: 'Lucky', name: 'Lucky', type: 'DD', mult: 0.20, desc: '开局随机赠送少量明文。', conflicts: [] },
-  { id: 'Strength', name: 'Strength', type: 'DD', mult: 0.10, desc: '时间结束后仍可继续游戏。', conflicts: ['Prudence', 'Tenacity', 'Fear'] }
+  { id: 'Tenacity', name: 'Tenacity', type: 'ID', mult: 1.15, desc: '倒计时上限为 30 秒。', conflicts: ['Easy', 'Strength'] },
+  { id: 'Fear', name: 'Fear', type: 'ID', mult: 1.15, desc: '失误惩罚加倍，扣除 30 秒。', conflicts: ['Brave', 'Prudence', 'Strength'] },
+  { id: 'Prudence', name: 'Prudence', type: 'ID', mult: 1.55, desc: '猜错一次直接失败。', conflicts: ['Fear', 'Strength', 'Brave'] },
+  { id: 'Reflection', name: 'Reflection', type: 'ID', mult: 1.30, desc: '已被开出的字母 5 秒后将再次遮蔽。', conflicts: ['Puzzle'] },
+  { id: 'Perceiver', name: 'Perceiver', type: 'ID', mult: 1.30, desc: '隐藏空格。', conflicts: ['Puzzle'] },
+  { id: 'Puzzle', name: 'Puzzle', type: 'ID', mult: 1.70, desc: '曲名完全数字化，仅显示剩余字母数量。', conflicts: ['Perceiver', 'Reflection'] },
+  { id: 'Easy', name: 'Easy', type: 'DD', mult: 0.45, desc: '倒计时上限延长至 120 秒。', conflicts: ['Tenacity'] },
+  { id: 'Brave', name: 'Brave', type: 'DD', mult: 0.50, desc: '失误惩罚减轻为扣除 5 秒。', conflicts: ['Fear', 'Prudence'] },
+  { id: 'Lucky', name: 'Lucky', type: 'DD', mult: 0.20, desc: '行动开始时自动开出少量字符。', conflicts: [] },
+  { id: 'Strength', name: 'Strength', type: 'DD', mult: 0.10, desc: '即使时间耗尽，游戏依然可以继续。', conflicts: ['Prudence', 'Tenacity', 'Fear'] }
 ];
 
 // ==========================================
-// 🎮 实机游玩面板子组件 (PlayBoard)
+// 🎮 实机对战面板 (PlayBoard)
 // ==========================================
 const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
   const { addToast } = useToast();
   const [session, setSession] = useState(initialSession);
   const [timeLeft, setTimeLeft] = useState(0);
   
-  // 控制台输入状态
   const [charInput, setCharInput] = useState('');
   const [guessInput, setGuessInput] = useState('');
   const [selectedSongIdx, setSelectedSongIdx] = useState(0);
   const [usedChars, setUsedChars] = useState(initialSession?.openedChars || []);
   
-  // 交互锁定与结算
   const [isProcessing, setIsProcessing] = useState(false);
   const [gameResult, setGameResult] = useState(null);
-
-  // 二次确认退出 Modal
   const [showAbortModal, setShowAbortModal] = useState(false);
 
-  // 动态基准时间 (用于血条百分比计算)
   const baseTime = useMemo(() => {
     if (activeMods.includes('Tenacity')) return 30000;
     if (activeMods.includes('Easy')) return 120000;
@@ -54,17 +51,14 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
 
   const timeoutFired = useRef(false);
 
-  // 高精度倒计时引擎 (每 50ms 刷新)
   useEffect(() => {
     if (gameResult || showAbortModal) return;
-
     const timer = setInterval(() => {
       const remaining = new Date(session.expireAt).getTime() - Date.now();
       setTimeLeft(Math.max(0, remaining));
       
       if (remaining > 0) timeoutFired.current = false;
       
-      // 时间耗尽且无不死 Mod 时，触发结算校验
       if (remaining <= 0 && !activeMods.includes('Strength')) {
         if (!timeoutFired.current) {
           timeoutFired.current = true;
@@ -72,7 +66,6 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
         }
       }
     }, 50);
-
     return () => clearInterval(timer);
   }, [session.expireAt, gameResult, activeMods, showAbortModal]);
 
@@ -81,49 +74,32 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
     setIsProcessing(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('/api/letter-game/open', { 
-        sessionId: session.sessionId, char: ' ' 
-      }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-      
-      if (res.data.gameOver) {
-        setGameResult(res.data);
-      }
-    } catch (err) {
-      addToast('结算同步失败', 'error');
-    }
+      const res = await axios.post('/api/letter-game/open', { sessionId: session.sessionId, char: ' ' }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (res.data.gameOver) setGameResult(res.data);
+    } catch (err) { addToast('结算同步失败', 'error'); }
     setIsProcessing(false);
   };
 
-  // 🔥 强制终止对局 (Abort)
   const handleAbort = async () => {
     setIsProcessing(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('/api/letter-game/abort', { sessionId: session.sessionId }, 
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const res = await axios.post('/api/letter-game/abort', { sessionId: session.sessionId }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       setShowAbortModal(false);
       setGameResult(res.data);
-      addToast('行动已终止。数据已记录。', 'error');
-    } catch (err) { 
-      addToast('强退失败', 'error'); 
-    }
+      addToast('已终止', 'error');
+    } catch (err) { addToast('终止游戏失败', 'error'); }
     setIsProcessing(false);
   };
 
-  // 1. 发送：开字母请求
   const handleOpenChar = async (e) => {
     e.preventDefault();
     if (!charInput.trim() || isProcessing) return;
-    
     setIsProcessing(true);
     try {
       const token = localStorage.getItem('token');
       const targetChar = charInput.trim()[0].toUpperCase();
-      
-      const res = await axios.post('/api/letter-game/open', {
-        sessionId: session.sessionId,
-        char: targetChar
-      }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const res = await axios.post('/api/letter-game/open', { sessionId: session.sessionId, char: targetChar }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
 
       if (res.data.gameOver) {
         setGameResult(res.data);
@@ -132,54 +108,39 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
         if (!usedChars.includes(targetChar)) setUsedChars([...usedChars, targetChar]);
         setCharInput(''); 
       }
-    } catch (err) {
-      addToast(err.response?.data?.msg || '操作失败', 'error');
-    } finally {
-      setIsProcessing(false);
-    }
+    } catch (err) { addToast(err.response?.data?.msg || '操作异常', 'error'); } 
+    finally { setIsProcessing(false); }
   };
 
-  // 2. 发送：猜歌名请求
   const handleGuessSong = async (e) => {
     e.preventDefault();
     if (!guessInput.trim() || isProcessing) return;
-    
     setIsProcessing(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('/api/letter-game/guess', {
-        sessionId: session.sessionId,
-        songIndex: selectedSongIdx,
-        guess: guessInput.trim()
-      }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const res = await axios.post('/api/letter-game/guess', { sessionId: session.sessionId, songIndex: selectedSongIdx, guess: guessInput.trim() }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
 
       if (res.data.gameOver) {
         setGameResult(res.data);
-        addToast(res.data.msg || '对局结束！', res.data.isCorrect ? 'success' : 'error');
+        addToast(res.data.msg || '游戏结束！', res.data.isCorrect ? 'success' : 'error');
       } else {
         setSession(prev => ({ ...prev, expireAt: res.data.expireAt, songs: res.data.songs }));
         setGuessInput('');
         if (res.data.isCorrect) {
-          addToast('正确！目标已击破！', 'success');
+          addToast('正确！', 'success');
           const nextIdx = res.data.songs.findIndex(s => s.status === 'PLAYING');
           if (nextIdx !== -1) setSelectedSongIdx(nextIdx);
         } else {
-          addToast(res.data.msg || '错误！时间遭到削减！', 'error');
+          addToast(res.data.msg || '失败!', 'error');
         }
       }
-    } catch (err) {
-      addToast(err.response?.data?.msg || '校验失败', 'error');
-    } finally {
-      setIsProcessing(false);
-    }
+    } catch (err) { addToast(err.response?.data?.msg || '网络异常', 'error'); } 
+    finally { setIsProcessing(false); }
   };
 
   const timePercent = Math.min(100, (timeLeft / baseTime) * 100);
-  const timeColor = timePercent > 50 ? 'bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]' : 
-                    timePercent > 20 ? 'bg-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : 
-                    'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.8)] animate-pulse';
+  const timeColor = timePercent > 50 ? 'bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]' : timePercent > 20 ? 'bg-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : 'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.8)] animate-pulse';
 
-  // 渲染结算模态框 (包含详尽新旧数据对比)
   if (gameResult) {
     const record = gameResult.record || gameResult; 
     const oldStats = gameResult.oldStats || {};
@@ -194,38 +155,31 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
       <div className="flex flex-col items-center justify-center h-full w-full py-10 px-4">
         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#15151e]/90 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl max-w-3xl w-full flex flex-col items-center">
           <FaTrophy className="text-6xl text-yellow-400 mx-auto mb-4 drop-shadow-[0_0_20px_rgba(250,204,21,0.6)]" />
-          <h2 className="text-3xl font-black text-white mb-1 tracking-widest uppercase">{record.isFullCombo ? 'Operation Successful' : 'Operation Concluded'}</h2>
+          <h2 className="text-3xl font-black text-white mb-1 tracking-widest uppercase">{record.isFullCombo ? '通过 (CLEARED)' : '失败 (CONCLUDED)'}</h2>
           <p className="text-zinc-400 font-bold mb-6 flex items-center gap-2">
-            <FaStar className="text-amber-400"/> 难度评级: {session.starRating || '?'} 星
+            <FaStar className="text-amber-400"/> 最终评级: {session.starRating || '?'} 星
           </p>
           
-          {/* 数据对比核心区 */}
           <div className="grid grid-cols-3 w-full gap-4 mb-8">
             <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center">
-               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Global OV</span>
+               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">OV</span>
                <span className="text-2xl font-black text-purple-400">{(newStats.totalOv || 0).toFixed(2)}</span>
-               <span className={`text-xs font-bold mt-1 ${diffOv >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                 {diffOv >= 0 ? '+' : ''}{diffOv.toFixed(2)} {diffOv >= 0 ? '▲' : '▼'}
-               </span>
+               <span className={`text-xs font-bold mt-1 ${diffOv >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{diffOv >= 0 ? '+' : ''}{diffOv.toFixed(2)} {diffOv >= 0 ? '▲' : '▼'}</span>
             </div>
             <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center">
-               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Accuracy</span>
+               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">精准度 ACC</span>
                <span className="text-2xl font-black text-cyan-400">{((newStats.accuracy || 0)*100).toFixed(1)}%</span>
-               <span className={`text-xs font-bold mt-1 ${diffAcc >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                 {diffAcc >= 0 ? '+' : ''}{diffAcc.toFixed(1)}% {diffAcc >= 0 ? '▲' : '▼'}
-               </span>
+               <span className={`text-xs font-bold mt-1 ${diffAcc >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{diffAcc >= 0 ? '+' : ''}{diffAcc.toFixed(1)}% {diffAcc >= 0 ? '▲' : '▼'}</span>
             </div>
             <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center">
-               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Conservativeness</span>
+               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">保守度 (CONS)</span>
                <span className="text-2xl font-black text-amber-400">{((newStats.conservativeness || 0)*100).toFixed(1)}%</span>
-               <span className={`text-xs font-bold mt-1 ${diffCons >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                 {diffCons >= 0 ? '+' : ''}{diffCons.toFixed(1)}% {diffCons >= 0 ? '▲' : '▼'}
-               </span>
+               <span className={`text-xs font-bold mt-1 ${diffCons >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{diffCons >= 0 ? '+' : ''}{diffCons.toFixed(1)}% {diffCons >= 0 ? '▲' : '▼'}</span>
             </div>
           </div>
 
           <div className="w-full text-left bg-black/20 p-4 rounded-xl mb-8 flex justify-between items-center border border-white/5">
-             <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest">Operation Time</span>
+             <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest">总用时</span>
              <span className="font-mono text-lg text-white font-black">{(timeUsed / 1000).toFixed(2)}s</span>
           </div>
 
@@ -237,15 +191,15 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
                   <span className={`font-bold text-sm truncate ${song.isCleared ? 'text-emerald-100' : 'text-rose-100'}`}>{song.title}</span>
                 </div>
                 <div className="flex gap-4 shrink-0 font-mono text-xs text-zinc-400 items-center">
-                  <span>Miss: <span className={song.mistakes > 0 ? "text-rose-400" : ""}>{song.mistakes}</span></span>
-                  <span className={`font-bold w-16 text-right ${song.isCleared ? "text-emerald-400" : "text-zinc-600"}`}>+{song.actualOv.toFixed(1)} OV</span>
+                  <span>失误: <span className={song.mistakes > 0 ? "text-rose-400" : ""}>{song.mistakes}</span></span>
+                  <span className={`font-bold w-20 text-right ${song.isCleared ? "text-emerald-400" : "text-zinc-600"}`}>+{song.actualOv.toFixed(1)} OV</span>
                 </div>
               </div>
             ))}
           </div>
 
           <button onClick={onReturn} className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black tracking-widest transition-all shadow-[0_0_20px_rgba(147,51,234,0.4)]">
-            RETURN TO LOBBY
+            返回大厅
           </button>
         </motion.div>
       </div>
@@ -253,7 +207,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
   }
 
   return (
-    <div className="w-full flex flex-col gap-6 max-w-5xl mx-auto h-full pb-10" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+    <div className="w-full flex flex-col gap-4 max-w-6xl mx-auto h-full pb-10" style={{ fontFamily: "'Quicksand', sans-serif" }}>
       
       {/* 二次确认退出 Modal */}
       <AnimatePresence>
@@ -261,8 +215,8 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-[#1a1010] border border-rose-500/30 p-8 rounded-3xl max-w-md w-full shadow-[0_0_40px_rgba(225,29,72,0.2)] text-center">
               <FaExclamationTriangle className="text-5xl text-rose-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-black text-rose-100 mb-2">警告：终止行动？</h2>
-              <p className="text-sm text-rose-400/80 mb-8 font-medium">中途放弃将立即判定为失败，所有未解开的曲目将计 0 分，并严重影响你的全局 OV 胜率与档案数据。</p>
+              <h2 className="text-2xl font-black text-rose-100 mb-2">终止本次游戏？</h2>
+              <p className="text-sm text-rose-400/80 mb-8 font-medium">中途放弃将立即判定为失败，所有未破译的曲目将计为 0 分，并会对你的全局准确率造成影响。</p>
               <div className="flex gap-4">
                 <button onClick={() => setShowAbortModal(false)} className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-colors">继续作战</button>
                 <button onClick={handleAbort} className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black transition-colors shadow-lg shadow-rose-600/30">确认放弃</button>
@@ -273,17 +227,17 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
       </AnimatePresence>
 
       {/* 顶部状态栏 */}
-      <div className="flex justify-between items-end">
-        <button onClick={() => setShowAbortModal(true)} className="text-rose-500/80 hover:text-rose-400 flex items-center gap-2 text-sm font-bold transition-colors bg-rose-500/10 px-4 py-2 rounded-lg border border-rose-500/20 shadow-sm active:scale-95">
-          <FaChevronLeft /> FORFEIT
+      <div className="flex justify-between items-end mt-4">
+        <button onClick={() => setShowAbortModal(true)} className="text-rose-500/80 hover:text-rose-400 flex items-center gap-2 text-sm font-bold transition-colors bg-rose-500/10 px-4 py-2 rounded-xl border border-rose-500/20 shadow-sm active:scale-95">
+          <FaChevronLeft /> 中止
         </button>
         <div className="text-right">
           <div className="flex items-center justify-end gap-2 mb-1">
              <FaStar className="text-amber-400"/>
-             <span className="font-bold text-amber-400 tracking-widest">{session.starRating || '?'} STARS</span>
+             <span className="font-bold text-amber-400 tracking-widest">{session.starRating || '?'} 星级考核</span>
           </div>
           <div className="flex gap-2 justify-end">
-            {activeMods.length === 0 ? <span className="text-xs text-zinc-600 font-bold">NOMOD</span> : 
+            {activeMods.length === 0 ? <span className="text-xs text-zinc-600 font-bold">无附加模组</span> : 
               activeMods.map(mod => <span key={mod} className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded font-black">{mod}</span>)
             }
           </div>
@@ -293,18 +247,16 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
       {/* 核心对局区 */}
       <div className="bg-[#15151e]/80 backdrop-blur-xl rounded-3xl border border-white/5 shadow-2xl overflow-hidden flex flex-col">
         
-        {/* 血条 (时间) */}
         <div className="w-full h-2 bg-black/50 relative">
           <div className={`h-full transition-all duration-75 ease-linear ${timeColor}`} style={{ width: `${timePercent}%` }}></div>
         </div>
         <div className="px-6 pt-3 pb-2 flex justify-between items-center bg-black/20">
-          <span className="text-xs font-bold text-zinc-500 tracking-widest uppercase">System Timer</span>
+          <span className="text-xs font-bold text-zinc-500 tracking-widest">倒计时</span>
           <span className={`font-mono text-xl font-black ${timeLeft < 10000 ? 'text-rose-500 animate-pulse' : 'text-white'}`}>
             {(timeLeft / 1000).toFixed(2)}s
           </span>
         </div>
 
-        {/* 曲目列表 */}
         <div className="p-6 space-y-3">
           {session.songs.map((song, i) => {
             const isSelected = selectedSongIdx === i;
@@ -313,13 +265,9 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
             
             return (
               <div 
-                key={i} 
-                onClick={() => !isCleared && !isDead && setSelectedSongIdx(i)}
+                key={i} onClick={() => !isCleared && !isDead && setSelectedSongIdx(i)}
                 className={`relative flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden group
-                  ${isCleared ? 'bg-emerald-500/10 border-emerald-500/30' : 
-                    isDead ? 'bg-black/40 border-white/5 opacity-50 grayscale' : 
-                    isSelected ? 'bg-cyan-500/10 border-cyan-500/40 shadow-[0_0_20px_rgba(6,182,212,0.15)]' : 
-                    'bg-black/30 border-white/5 hover:border-white/20'}
+                  ${isCleared ? 'bg-emerald-500/10 border-emerald-500/30' : isDead ? 'bg-black/40 border-white/5 opacity-50 grayscale' : isSelected ? 'bg-cyan-500/10 border-cyan-500/40 shadow-[0_0_20px_rgba(6,182,212,0.15)]' : 'bg-black/30 border-white/5 hover:border-white/20'}
                 `}
               >
                 {isSelected && <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent pointer-events-none"></div>}
@@ -333,13 +281,10 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
                   
                   <div className="flex flex-col overflow-hidden w-full">
                     <div className="flex items-center gap-2">
-                      <span className={`text-xl md:text-2xl font-mono tracking-[0.2em] font-bold truncate drop-shadow-md transition-all
-                        ${isCleared ? 'text-emerald-300' : isDead ? 'text-zinc-600' : 'text-white'}
-                      `}>
+                      <span className={`text-xl md:text-2xl font-mono tracking-[0.2em] font-bold truncate drop-shadow-md transition-all ${isCleared ? 'text-emerald-300' : isDead ? 'text-zinc-600' : 'text-white'}`}>
                         {song.maskedTitle}
                       </span>
                       
-                      {/* 字符提示 Tag 矩阵 */}
                       {!isCleared && (
                         <div className="flex gap-1.5 shrink-0 ml-2">
                           {song.hasKanji && <span className="text-[9px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded font-bold uppercase tracking-widest shadow-sm">汉字</span>}
@@ -359,12 +304,10 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
 
         {/* 控制台与历史记录 */}
         <div className="flex flex-col border-t border-white/5 bg-black/40 p-6 gap-6">
-          
-          {/* 已开字母记录区 */}
           <div className="flex items-center gap-3 w-full bg-black/30 p-3 rounded-xl border border-white/5">
-             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest shrink-0 whitespace-nowrap">Decoded Chars :</span>
+             <span className="text-xs font-bold text-zinc-500 tracking-widest shrink-0 whitespace-nowrap">已解决题目 :</span>
              <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
-                {usedChars.length === 0 ? <span className="text-xs text-zinc-600 italic">尚未开出任何字符...</span> : 
+                {usedChars.length === 0 ? <span className="text-xs text-zinc-600 italic">尚未解决任何题目</span> : 
                   usedChars.map((c, idx) => (
                     <span key={idx} className="w-6 h-6 flex items-center justify-center bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-black text-xs rounded shadow-sm">
                       {c}
@@ -376,14 +319,10 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <form onSubmit={handleOpenChar} className="flex flex-col gap-2 relative">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FaKeyboard/> Open Character</label>
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FaKeyboard/> 开字母</label>
               <div className="flex gap-2">
                 <input 
-                  type="text" 
-                  maxLength={1}
-                  value={charInput}
-                  onChange={e => setCharInput(e.target.value)}
-                  placeholder="A"
+                  type="text" maxLength={1} value={charInput} onChange={e => setCharInput(e.target.value)} placeholder="A"
                   disabled={isProcessing || activeMods.includes('Strength') && timeLeft <= 0 && false}
                   className="w-16 h-12 bg-[#0c0c11] border border-white/10 rounded-xl text-center text-2xl font-black text-cyan-300 focus:outline-none focus:border-cyan-500 transition-colors uppercase"
                 />
@@ -391,26 +330,22 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
                   type="submit" disabled={isProcessing || !charInput}
                   className="flex-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-xl font-bold hover:bg-cyan-500 hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  开码
+                  解码
                 </button>
               </div>
-              {activeMods.includes('Reflection') && <span className="absolute -bottom-5 left-0 text-[9px] text-purple-400 font-bold">* Reflection Active: Decays in 5s</span>}
             </form>
 
             <form onSubmit={handleGuessSong} className="md:col-span-2 flex flex-col gap-2">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FaPaperPlane/> Guess Title (Target: 0{selectedSongIdx+1})</label>
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FaPaperPlane/> 输入 (目标歌曲: 0{selectedSongIdx+1})</label>
               <div className="flex gap-2">
                 <input 
-                  type="text" 
-                  value={guessInput}
-                  onChange={e => setGuessInput(e.target.value)}
-                  placeholder="Enter full track title..."
+                  type="text" value={guessInput} onChange={e => setGuessInput(e.target.value)} placeholder="输入完整曲名"
                   disabled={isProcessing || session.songs[selectedSongIdx]?.status !== 'PLAYING'}
                   className="flex-1 h-12 px-4 bg-[#0c0c11] border border-white/10 rounded-xl text-sm font-bold text-white focus:outline-none focus:border-purple-500 transition-colors"
                 />
                 <button 
                   type="submit" disabled={isProcessing || !guessInput || session.songs[selectedSongIdx]?.status !== 'PLAYING'}
-                  className="px-6 bg-purple-500 text-white rounded-xl font-black tracking-widest hover:shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-8 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-black tracking-widest hover:shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   提交
                 </button>
@@ -425,12 +360,16 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
 
 
 // ==========================================
-// 🚀 主组件：大厅与 Mod 控制台
+// 🚀 主组件：独立游戏模式 Hub (全新大厅架构)
 // ==========================================
 export default function LetterGame() {
   const { addToast } = useToast();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   
   const [gameState, setGameState] = useState('lobby'); 
+  const [lobbyMode, setLobbyMode] = useState('classic'); // 导航：classic, course, ranked, custom
+  
   const [selectedGame, setSelectedGame] = useState('arcaea');
   const [activeMods, setActiveMods] = useState([]);
   const [isStarting, setIsStarting] = useState(false);
@@ -452,9 +391,8 @@ export default function LetterGame() {
         newMods.push(modId);
       }
 
-      // 彩蛋：Tenacity + Fear = Prudence
       if (newMods.includes('Tenacity') && newMods.includes('Fear')) {
-        addToast('Tenacity 与 Fear 产生共鸣，升华为 Prudence！', 'info');
+        addToast('已替换为效果相同的 MOD', 'info');
         newMods = newMods.filter(m => m !== 'Tenacity' && m !== 'Fear');
         const prudenceMod = MOD_DEFINITIONS.find(m => m.id === 'Prudence');
         newMods = newMods.filter(m => !prudenceMod.conflicts.includes(m));
@@ -479,133 +417,173 @@ export default function LetterGame() {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post('/api/letter-game/start', {
-        gameType: selectedGame,
-        mods: activeMods
+        gameType: selectedGame, mods: activeMods
       }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
 
       setSessionData(res.data);
-      addToast('对局生成成功，祝你好运！', 'success');
+      addToast('开始游戏！', 'success');
       setGameState('playing');
-    } catch (err) {
-      addToast(err.response?.data?.msg || '无法连接到游戏服务器', 'error');
-    } finally {
-      setIsStarting(false);
+    } catch (err) { 
+      addToast(err.response?.data?.msg || '出现了一点错误......', 'error'); 
+    } finally { 
+      setIsStarting(false); 
     }
   };
 
-  // --- 大厅渲染 ---
+  // --- 独立大厅渲染 ---
   if (gameState === 'lobby') {
     return (
-      <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 flex flex-col items-center justify-center p-6 selection:bg-purple-500/30" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+      <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 flex flex-col font-sans selection:bg-purple-500/30 relative">
         
+        {/* 环境光晕 */}
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden flex items-center justify-center">
-          <div className="absolute w-[60vw] h-[60vw] bg-purple-900/10 rounded-full blur-[150px] mix-blend-screen"></div>
+          <div className="absolute w-[80vw] h-[80vw] bg-purple-900/10 rounded-full blur-[150px] mix-blend-screen opacity-60"></div>
+          <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-cyan-900/10 rounded-full blur-[150px] mix-blend-screen"></div>
         </div>
 
-        <div className="relative z-10 w-full max-w-5xl flex flex-col gap-8 mt-10">
-          
-          <div className="text-center space-y-2">
-            <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 tracking-tighter drop-shadow-md">
-              LETTER DECODE
+        {/* 顶部标题栏 */}
+        <div className="w-full max-w-7xl mx-auto px-6 pt-10 pb-6 relative z-10 flex justify-between items-end border-b border-white/[0.05]">
+          <div className="flex flex-col">
+            <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 tracking-tighter drop-shadow-md">
+              开字母
             </h1>
-            <p className="text-zinc-500 font-medium tracking-widest text-sm uppercase">PureBeat Competitive Mode 2.0</p>
+            <p className="text-zinc-500 font-bold tracking-widest text-xs uppercase mt-2">PureBeat Intelligence Hub 2.0</p>
+          </div>
+          {user && (
+            <button 
+              onClick={() => navigate(`/profile/${user.username}/decode`)}
+              className="hidden md:flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500 hover:text-white rounded-xl text-sm font-bold transition-all shadow-sm"
+            >
+              <FaTrophy /> 个人数据档案
+            </button>
+          )}
+        </div>
+
+        {/* 核心两栏排版 */}
+        <div className="w-full max-w-7xl mx-auto px-6 py-8 relative z-10 flex flex-col lg:flex-row gap-8">
+          
+          {/* 左侧：专业导航面板 */}
+          <div className="w-full lg:w-64 flex flex-col gap-3 shrink-0">
+            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-2 mb-1">Select Directive</div>
+            
+            <button onClick={() => setLobbyMode('classic')} className={`flex items-center gap-3 p-4 rounded-2xl font-bold transition-all ${lobbyMode === 'classic' ? 'bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'bg-[#15151e] border border-white/5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}`}>
+              <FaGamepad className="text-xl" /> 经典游戏
+            </button>
+            <button onClick={() => setLobbyMode('course')} className={`flex items-center gap-3 p-4 rounded-2xl font-bold transition-all ${lobbyMode === 'course' ? 'bg-cyan-500 text-black shadow-[0_0_20px_rgba(6,182,212,0.4)]' : 'bg-[#15151e] border border-white/5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}`}>
+              <FaMap className="text-xl" /> 难度考核
+            </button>
+            <button onClick={() => setLobbyMode('ranked')} className={`flex items-center gap-3 p-4 rounded-2xl font-bold transition-all ${lobbyMode === 'ranked' ? 'bg-amber-500 text-black shadow-[0_0_20px_rgba(251,191,36,0.4)]' : 'bg-[#15151e] border border-white/5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}`}>
+              <FaCrown className="text-xl" /> 段位排位
+            </button>
+            <button onClick={() => setLobbyMode('custom')} className={`flex items-center gap-3 p-4 rounded-2xl font-bold transition-all ${lobbyMode === 'custom' ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'bg-[#15151e] border border-white/5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}`}>
+              <FaUsers className="text-xl" /> 玩家自制关卡
+            </button>
           </div>
 
-          <div className="bg-[#15151e]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col md:flex-row gap-8">
+          {/* 右侧：行动配置台 */}
+          <div className="flex-1 bg-[#15151e]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl min-h-[500px]">
             
-            <div className="flex-1 flex flex-col gap-6 md:border-r border-white/5 md:pr-8">
-              <div>
-                <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <FaDatabase className="text-purple-400"/> Game Pool Target
-                </h3>
-                <div className="flex gap-3 flex-wrap">
-                  {['arcaea', 'maimai', 'chunithm'].map(game => (
-                    <button 
-                      key={game} onClick={() => setSelectedGame(game)}
-                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex-1 md:flex-none ${
-                        selectedGame === game 
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]' 
-                        : 'bg-black/20 text-zinc-500 border border-transparent hover:text-zinc-300 hover:bg-black/40'
-                      }`}
-                    >
-                      {game.toUpperCase()}
-                    </button>
-                  ))}
+            {lobbyMode === 'classic' && (
+              <div className="flex flex-col md:flex-row gap-8 h-full">
+                {/* 经典模式：左半边配置 */}
+                <div className="flex-1 flex flex-col gap-6 md:border-r border-white/5 md:pr-8">
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-300 mb-4 flex items-center gap-2">
+                      <FaDatabase className="text-purple-400"/> 曲目池
+                    </h3>
+                    <div className="flex gap-3 flex-wrap">
+                      {[{id:'arcaea', label:'Arcaea'}, {id:'maimai', label:'舞萌 DX'}, {id:'chunithm', label:'CHUNITHM'}].map(game => (
+                        <button 
+                          key={game.id} onClick={() => setSelectedGame(game.id)}
+                          className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex-1 md:flex-none ${
+                            selectedGame === game.id 
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]' 
+                            : 'bg-black/40 text-zinc-500 border border-transparent hover:text-zinc-300 hover:bg-white/5'
+                          }`}
+                        >
+                          {game.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 bg-black/20 rounded-2xl border border-white/5 p-6 flex flex-col justify-center items-center relative overflow-hidden group min-h-[160px]">
+                    <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <FaStar className="text-4xl text-amber-500/30 mb-3" />
+                    <div className="text-xs text-zinc-500 font-bold tracking-widest uppercase mb-1">预计星级</div>
+                    <div className="text-4xl font-black text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all">
+                      ~{(5.0 * totalMultiplier).toFixed(2)}<span className="text-xl text-amber-500/50 ml-1">★</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-600 mt-4 text-center max-w-[85%]">
+                      选择MOD可以降低或提高游戏难度。
+                    </p>
+                  </div>
+
+                  <button 
+                    onClick={startGame} disabled={isStarting}
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-cyan-600 text-white font-black text-lg tracking-widest hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:-translate-y-1 transition-all flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isStarting ? <FaSpinner className="animate-spin" /> : <FaPlay className="text-sm" />}
+                    {isStarting ? '初始化...' : '开始游戏'}
+                  </button>
+                </div>
+
+                {/* 经典模式：右半边 Mod 矩阵 */}
+                <div className="flex-[1.5] flex flex-col">
+                  <h3 className="text-sm font-bold text-zinc-300 mb-4 flex items-center gap-2">
+                    <FaBolt className="text-yellow-400"/> 装备挑战模组 (MODS)
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <AnimatePresence>
+                      {MOD_DEFINITIONS.map(mod => {
+                        const isActive = activeMods.includes(mod.id);
+                        const isID = mod.type === 'ID'; 
+                        return (
+                          <motion.div 
+                            key={mod.id} layout onClick={() => handleModToggle(mod.id)}
+                            className={`relative p-3 rounded-xl border cursor-pointer transition-all duration-300 flex flex-col gap-1 overflow-hidden group
+                              ${isActive 
+                                ? (isID ? 'bg-rose-500/10 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.15)]' : 'bg-cyan-500/10 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.15)]') 
+                                : 'bg-black/40 border-white/5 hover:bg-white/5 hover:border-white/10'
+                              }
+                            `}
+                          >
+                            <div className="flex justify-between items-center z-10">
+                              <span className={`font-bold text-sm tracking-wide ${isActive ? (isID ? 'text-rose-400' : 'text-cyan-400') : 'text-zinc-400 group-hover:text-zinc-200'}`}>
+                                {mod.name}
+                              </span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/50 ${isID ? 'text-rose-300' : 'text-cyan-300'}`}>
+                                {mod.mult.toFixed(2)}x
+                              </span>
+                            </div>
+                            <p className={`text-[10px] leading-relaxed z-10 mt-1 ${isActive ? 'text-zinc-300' : 'text-zinc-600 group-hover:text-zinc-400'}`}>
+                              {mod.desc}
+                            </p>
+                          </motion.div>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
+            )}
 
-              <div className="flex-1 bg-black/20 rounded-2xl border border-white/5 p-5 flex flex-col justify-center items-center relative overflow-hidden group min-h-[160px]">
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <FaStar className="text-4xl text-amber-500/30 mb-3" />
-                <div className="text-xs text-zinc-500 font-bold tracking-widest uppercase mb-1">Estimated Rating (Stars)</div>
-                <div className="text-4xl font-black text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all">
-                  ~{(5.0 * totalMultiplier).toFixed(2)}<span className="text-xl text-amber-500/50 ml-1">★</span>
-                </div>
-                <p className="text-[10px] text-zinc-600 mt-4 text-center max-w-[85%]">
-                  Base difficulty varies by pool. Mods increase non-linear OV yield.
-                </p>
+            {/* 其它 WIP 面板的绝美占位符 */}
+            {lobbyMode !== 'classic' && (
+              <div className="w-full h-full flex flex-col items-center justify-center py-20 text-center">
+                <FaCrown className="text-7xl text-zinc-800 mb-6" />
+                <h2 className="text-2xl font-black text-zinc-300 mb-2">制作中......</h2>
+                <p className="text-zinc-500 font-medium">更多功能敬请期待</p>
+                <button onClick={() => setLobbyMode('classic')} className="mt-8 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold transition-all text-sm">返回经典探测</button>
               </div>
+            )}
 
-              <button 
-                onClick={startGame} disabled={isStarting}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-cyan-600 text-white font-black text-lg tracking-widest hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:-translate-y-1 transition-all flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isStarting ? <FaSpinner className="animate-spin" /> : <FaPlay className="text-sm" />}
-                {isStarting ? 'INITIALIZING...' : 'START DECODING'}
-              </button>
-            </div>
-
-            <div className="flex-[1.8] flex flex-col">
-              <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <FaBolt className="text-yellow-400"/> Difficulty Modifiers
-              </h3>
-              
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                <AnimatePresence>
-                  {MOD_DEFINITIONS.map(mod => {
-                    const isActive = activeMods.includes(mod.id);
-                    const isID = mod.type === 'ID'; 
-                    return (
-                      <motion.div 
-                        key={mod.id} layout onClick={() => handleModToggle(mod.id)}
-                        className={`relative p-3 rounded-xl border cursor-pointer transition-all duration-300 flex flex-col gap-1 overflow-hidden group
-                          ${isActive 
-                            ? (isID ? 'bg-rose-500/10 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.15)]' : 'bg-cyan-500/10 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.15)]') 
-                            : 'bg-black/30 border-white/5 hover:bg-white/5 hover:border-white/10'
-                          }
-                        `}
-                      >
-                        <div className="flex justify-between items-center z-10">
-                          <span className={`font-black text-sm tracking-wide ${isActive ? (isID ? 'text-rose-400' : 'text-cyan-400') : 'text-zinc-400 group-hover:text-zinc-200'}`}>
-                            {mod.name}
-                          </span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/40 ${isID ? 'text-rose-300' : 'text-cyan-300'}`}>
-                            {mod.mult.toFixed(2)}x
-                          </span>
-                        </div>
-                        <p className={`text-[9px] leading-tight z-10 mt-1 ${isActive ? 'text-zinc-300' : 'text-zinc-600 group-hover:text-zinc-400'}`}>
-                          {mod.desc}
-                        </p>
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
-              </div>
-
-              <div className="mt-auto pt-6 flex items-start gap-3 text-xs text-zinc-500 bg-white/[0.02] p-4 rounded-xl border border-white/[0.02]">
-                <FaInfoCircle className="text-purple-400 shrink-0 mt-0.5 text-base" />
-                <p className="leading-relaxed">
-                  Higher Star Ratings yield exponentially more OV upon perfect clears. Use modifiers strategically to climb the global leaderboard.
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // --- 实机对战渲染 ---
   return (
     <PlayBoard 
       initialSession={sessionData} activeMods={activeMods} 
