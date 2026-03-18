@@ -37,8 +37,8 @@ const UserSchema = new mongoose.Schema({
       totalSongsEncountered: { type: Number, default: 0 }, // 遇到的总曲目数
       clearedSongs: { type: Number, default: 0 }, // 成功猜中的曲目数
       accuracy: { type: Number, default: 0 }, // 准确率 (clearedSongs / totalSongsEncountered)
-      conservativeness: { type: Number, default: 0 }, // 保守度 (猜中曲目的平均开字率 Reveal Ratio)
-    }
+      conservativeness: { type: Number, default: 0 } // 保守度 (猜中曲目的平均开字率 Reveal Ratio)
+    },
     // CHUNITHM 数据总览
     chuniRating: { type: Number, default: 0 },
     chuniPlayCount: { type: Number, default: 0 },
