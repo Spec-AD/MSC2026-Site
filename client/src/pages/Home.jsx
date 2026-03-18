@@ -8,7 +8,7 @@ import { useToast } from '../context/ToastContext';
 import { 
   FaCalendarCheck, FaSpinner, FaCommentDots, FaHeart, 
   FaChevronRight, FaTimes, FaUserCircle, FaBell, FaMedal,
-  FaDiscord, FaPoll, FaUserFriends, FaHistory
+  FaDiscord, FaPoll, FaUserFriends, FaHistory, FaGamepad
 } from 'react-icons/fa'; 
 
 const Home = () => {
@@ -535,12 +535,45 @@ const Home = () => {
                 <div className="w-14 h-14 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center mb-4">
                   <FaUserCircle className="text-2xl text-zinc-600" />
                 </div>
-                <p className="text-xs font-medium text-zinc-400 mb-5 leading-relaxed px-2">登录系统，在此查阅您的多栖战力档案与社交动态。</p>
+                <p className="text-xs font-medium text-zinc-400 mb-5 leading-relaxed px-2">登录系统，在此查阅您的战力档案与社交动态。</p>
                 <Link to="/login" className="w-full py-2.5 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95">
                   立即登录
                 </Link>
               </div>
             )}
+          </motion.div>
+
+	  <motion.div 
+            initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }} 
+            onClick={() => navigate('/letter-game')}
+            className="bg-[#15151e] border border-cyan-500/30 rounded-3xl p-6 shadow-[0_0_20px_rgba(6,182,212,0.1)] relative overflow-hidden group hover:bg-[#1a1a24] hover:border-cyan-400/60 transition-all cursor-pointer active:scale-95"
+          >
+            {/* 动态渐变背景 */}
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-purple-500/5 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
+            
+            <div className="flex items-center justify-between mb-4 relative z-10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-1 h-4 bg-cyan-400 rounded-full shadow-[0_0_6px_rgba(34,211,238,0.6)]"></div>
+                <h3 className="text-sm font-bold text-zinc-100 tracking-wide">竞技场 2.0</h3>
+              </div>
+              <span className="text-[10px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md bg-cyan-500 text-black shadow-lg animate-pulse">
+                NEW
+              </span>
+            </div>
+
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="w-16 h-16 rounded-xl bg-[#0c0c11] border border-cyan-500/30 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-110 transition-transform duration-500">
+                <FaGamepad className="text-3xl text-cyan-400 drop-shadow-md group-hover:text-cyan-300 transition-colors" />
+              </div>
+              <div className="flex flex-col min-w-0 flex-1 justify-center">
+                <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 truncate tracking-tight">
+                  LETTER DECODE
+                </span>
+                <span className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                  多语种文本熵值解谜。<br/>挑战全球 OV 算力排位！
+                </span>
+              </div>
+            </div>
           </motion.div>
 
           {/* ========================================== */}
