@@ -554,7 +554,7 @@ const Home = () => {
             <div className="flex items-center justify-between mb-4 relative z-10">
               <div className="flex items-center gap-2.5">
                 <div className="w-1 h-4 bg-cyan-400 rounded-full shadow-[0_0_6px_rgba(34,211,238,0.6)]"></div>
-                <h3 className="text-sm font-bold text-zinc-100 tracking-wide">竞技场 2.0</h3>
+                <h3 className="text-sm font-bold text-zinc-100 tracking-wide">开字母</h3>
               </div>
               <span className="text-[10px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md bg-cyan-500 text-black shadow-lg animate-pulse">
                 NEW
@@ -570,7 +570,7 @@ const Home = () => {
                   LETTER DECODE
                 </span>
                 <span className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                  多语种文本熵值解谜。<br/>挑战全球 OV 算力排位！
+                  挑战全新功能游戏：开字母！
                 </span>
               </div>
             </div>
