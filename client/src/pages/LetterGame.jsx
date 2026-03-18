@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 // 🧮 挑战模组数据
 // ==========================================
 const MOD_DEFINITIONS = [
-  { id: 'Tenacity', name: 'Tenacity', type: 'ID', mult: 1.15, desc: '倒计时上限为 30 秒。', conflicts: ['Easy', 'Strength'] },
+  { id: 'Tenacity', name: 'Tenacity', type: 'ID', mult: 1.15, desc: '倒计时上限缩短为 30 秒。', conflicts: ['Easy', 'Strength'] },
   { id: 'Fear', name: 'Fear', type: 'ID', mult: 1.15, desc: '失误惩罚加倍，扣除 30 秒。', conflicts: ['Brave', 'Prudence', 'Strength'] },
   { id: 'Prudence', name: 'Prudence', type: 'ID', mult: 1.55, desc: '猜错一次直接失败。', conflicts: ['Fear', 'Strength', 'Brave'] },
   { id: 'Reflection', name: 'Reflection', type: 'ID', mult: 1.30, desc: '已被开出的字母 5 秒后将再次遮蔽。', conflicts: ['Puzzle'] },
@@ -22,7 +22,7 @@ const MOD_DEFINITIONS = [
   { id: 'Puzzle', name: 'Puzzle', type: 'ID', mult: 1.70, desc: '曲名完全数字化，仅显示剩余字母数量。', conflicts: ['Perceiver', 'Reflection'] },
   { id: 'Easy', name: 'Easy', type: 'DD', mult: 0.45, desc: '倒计时上限延长至 120 秒。', conflicts: ['Tenacity'] },
   { id: 'Brave', name: 'Brave', type: 'DD', mult: 0.50, desc: '失误惩罚减轻为扣除 5 秒。', conflicts: ['Fear', 'Prudence'] },
-  { id: 'Lucky', name: 'Lucky', type: 'DD', mult: 0.20, desc: '行动开始时自动开出少量字符。', conflicts: [] },
+  { id: 'Lucky', name: 'Lucky', type: 'DD', mult: 0.20, desc: '开局自动开出少量字符。', conflicts: [] },
   { id: 'Strength', name: 'Strength', type: 'DD', mult: 0.10, desc: '即使时间耗尽，游戏依然可以继续。', conflicts: ['Prudence', 'Tenacity', 'Fear'] }
 ];
 
@@ -87,7 +87,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
       const res = await axios.post('/api/letter-game/abort', { sessionId: session.sessionId }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       setShowAbortModal(false);
       setGameResult(res.data);
-      addToast('已终止', 'error');
+      addToast('已终止游戏。', 'error');
     } catch (err) { addToast('终止游戏失败', 'error'); }
     setIsProcessing(false);
   };
@@ -131,7 +131,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
           const nextIdx = res.data.songs.findIndex(s => s.status === 'PLAYING');
           if (nextIdx !== -1) setSelectedSongIdx(nextIdx);
         } else {
-          addToast(res.data.msg || '失败!', 'error');
+          addToast(res.data.msg || '错误，扣除时间！', 'error');
         }
       }
     } catch (err) { addToast(err.response?.data?.msg || '网络异常', 'error'); } 
@@ -155,19 +155,19 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
       <div className="flex flex-col items-center justify-center h-full w-full py-10 px-4">
         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#15151e]/90 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl max-w-3xl w-full flex flex-col items-center">
           <FaTrophy className="text-6xl text-yellow-400 mx-auto mb-4 drop-shadow-[0_0_20px_rgba(250,204,21,0.6)]" />
-          <h2 className="text-3xl font-black text-white mb-1 tracking-widest uppercase">{record.isFullCombo ? '通过 (CLEARED)' : '失败 (CONCLUDED)'}</h2>
+          <h2 className="text-3xl font-black text-white mb-1 tracking-widest">{record.isFullCombo ? '通关 (CLEARED)' : '游戏结算'}</h2>
           <p className="text-zinc-400 font-bold mb-6 flex items-center gap-2">
-            <FaStar className="text-amber-400"/> 最终评级: {session.starRating || '?'} 星
+            <FaStar className="text-amber-400"/> 难度星级: {session.starRating || '?'} 星
           </p>
           
           <div className="grid grid-cols-3 w-full gap-4 mb-8">
             <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center">
-               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">OV</span>
+               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">总 OV</span>
                <span className="text-2xl font-black text-purple-400">{(newStats.totalOv || 0).toFixed(2)}</span>
                <span className={`text-xs font-bold mt-1 ${diffOv >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{diffOv >= 0 ? '+' : ''}{diffOv.toFixed(2)} {diffOv >= 0 ? '▲' : '▼'}</span>
             </div>
             <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center">
-               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">精准度 ACC</span>
+               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">准确率 (ACC)</span>
                <span className="text-2xl font-black text-cyan-400">{((newStats.accuracy || 0)*100).toFixed(1)}%</span>
                <span className={`text-xs font-bold mt-1 ${diffAcc >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{diffAcc >= 0 ? '+' : ''}{diffAcc.toFixed(1)}% {diffAcc >= 0 ? '▲' : '▼'}</span>
             </div>
@@ -179,7 +179,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
           </div>
 
           <div className="w-full text-left bg-black/20 p-4 rounded-xl mb-8 flex justify-between items-center border border-white/5">
-             <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest">总用时</span>
+             <span className="text-sm font-bold text-zinc-400">总用时</span>
              <span className="font-mono text-lg text-white font-black">{(timeUsed / 1000).toFixed(2)}s</span>
           </div>
 
@@ -216,10 +216,10 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-[#1a1010] border border-rose-500/30 p-8 rounded-3xl max-w-md w-full shadow-[0_0_40px_rgba(225,29,72,0.2)] text-center">
               <FaExclamationTriangle className="text-5xl text-rose-500 mx-auto mb-4" />
               <h2 className="text-2xl font-black text-rose-100 mb-2">终止本次游戏？</h2>
-              <p className="text-sm text-rose-400/80 mb-8 font-medium">中途放弃将立即判定为失败，所有未破译的曲目将计为 0 分，并会对你的全局准确率造成影响。</p>
+              <p className="text-sm text-rose-400/80 mb-8 font-medium">中途放弃将立即判定为失败，未解出的曲目将计为 0 分，并影响准确率记录。</p>
               <div className="flex gap-4">
-                <button onClick={() => setShowAbortModal(false)} className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-colors">继续作战</button>
-                <button onClick={handleAbort} className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black transition-colors shadow-lg shadow-rose-600/30">确认放弃</button>
+                <button onClick={() => setShowAbortModal(false)} className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-colors">继续游戏</button>
+                <button onClick={handleAbort} className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black transition-colors shadow-lg shadow-rose-600/30">确认终止</button>
               </div>
             </motion.div>
           </div>
@@ -229,12 +229,12 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
       {/* 顶部状态栏 */}
       <div className="flex justify-between items-end mt-4">
         <button onClick={() => setShowAbortModal(true)} className="text-rose-500/80 hover:text-rose-400 flex items-center gap-2 text-sm font-bold transition-colors bg-rose-500/10 px-4 py-2 rounded-xl border border-rose-500/20 shadow-sm active:scale-95">
-          <FaChevronLeft /> 中止
+          <FaChevronLeft /> 中止游戏
         </button>
         <div className="text-right">
           <div className="flex items-center justify-end gap-2 mb-1">
              <FaStar className="text-amber-400"/>
-             <span className="font-bold text-amber-400 tracking-widest">{session.starRating || '?'} 星级考核</span>
+             <span className="font-bold text-amber-400 tracking-widest">{session.starRating || '?'} 星级难度</span>
           </div>
           <div className="flex gap-2 justify-end">
             {activeMods.length === 0 ? <span className="text-xs text-zinc-600 font-bold">无附加模组</span> : 
@@ -305,9 +305,9 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
         {/* 控制台与历史记录 */}
         <div className="flex flex-col border-t border-white/5 bg-black/40 p-6 gap-6">
           <div className="flex items-center gap-3 w-full bg-black/30 p-3 rounded-xl border border-white/5">
-             <span className="text-xs font-bold text-zinc-500 tracking-widest shrink-0 whitespace-nowrap">已解决题目 :</span>
+             <span className="text-xs font-bold text-zinc-500 tracking-widest shrink-0 whitespace-nowrap">已开出的字母 :</span>
              <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
-                {usedChars.length === 0 ? <span className="text-xs text-zinc-600 italic">尚未解决任何题目</span> : 
+                {usedChars.length === 0 ? <span className="text-xs text-zinc-600 italic">尚未开出任何字母</span> : 
                   usedChars.map((c, idx) => (
                     <span key={idx} className="w-6 h-6 flex items-center justify-center bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-black text-xs rounded shadow-sm">
                       {c}
@@ -330,13 +330,14 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
                   type="submit" disabled={isProcessing || !charInput}
                   className="flex-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-xl font-bold hover:bg-cyan-500 hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  解码
+                  确认
                 </button>
               </div>
+              {activeMods.includes('Reflection') && <span className="absolute -bottom-5 left-0 text-[9px] text-purple-400 font-bold">* 幻影模组激活: 5秒后将重新遮蔽</span>}
             </form>
 
             <form onSubmit={handleGuessSong} className="md:col-span-2 flex flex-col gap-2">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FaPaperPlane/> 输入 (目标歌曲: 0{selectedSongIdx+1})</label>
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FaPaperPlane/> 猜歌名 (目标曲目: 0{selectedSongIdx+1})</label>
               <div className="flex gap-2">
                 <input 
                   type="text" value={guessInput} onChange={e => setGuessInput(e.target.value)} placeholder="输入完整曲名"
@@ -360,7 +361,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
 
 
 // ==========================================
-// 🚀 主组件：独立游戏模式 Hub (全新大厅架构)
+// 🚀 主组件：大厅与 Mod 控制台
 // ==========================================
 export default function LetterGame() {
   const { addToast } = useToast();
@@ -368,10 +369,11 @@ export default function LetterGame() {
   const { user } = useAuth();
   
   const [gameState, setGameState] = useState('lobby'); 
-  const [lobbyMode, setLobbyMode] = useState('classic'); // 导航：classic, course, ranked, custom
+  const [lobbyMode, setLobbyMode] = useState('classic'); 
   
   const [selectedGame, setSelectedGame] = useState('arcaea');
   const [activeMods, setActiveMods] = useState([]);
+  const [targetStar, setTargetStar] = useState(5.0); // 🔥 玩家指定的目标难度星级
   const [isStarting, setIsStarting] = useState(false);
   const [sessionData, setSessionData] = useState(null); 
 
@@ -417,11 +419,13 @@ export default function LetterGame() {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post('/api/letter-game/start', {
-        gameType: selectedGame, mods: activeMods
+        gameType: selectedGame, 
+        mods: activeMods,
+        targetStar: targetStar // 将目标星级发送给后端匹配
       }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
 
       setSessionData(res.data);
-      addToast('开始游戏！', 'success');
+      addToast(`开始游戏！当前生成难度: ${res.data.starRating}★`, 'success');
       setGameState('playing');
     } catch (err) { 
       addToast(err.response?.data?.msg || '出现了一点错误......', 'error'); 
@@ -447,7 +451,7 @@ export default function LetterGame() {
             <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 tracking-tighter drop-shadow-md">
               开字母
             </h1>
-            <p className="text-zinc-500 font-bold tracking-widest text-xs uppercase mt-2">PureBeat Intelligence Hub 2.0</p>
+            <p className="text-zinc-500 font-bold tracking-widest text-xs uppercase mt-2">PureBeat 综合大厅 2.0</p>
           </div>
           {user && (
             <button 
@@ -464,10 +468,10 @@ export default function LetterGame() {
           
           {/* 左侧：专业导航面板 */}
           <div className="w-full lg:w-64 flex flex-col gap-3 shrink-0">
-            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-2 mb-1">Select Directive</div>
+            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-2 mb-1">选择模式</div>
             
             <button onClick={() => setLobbyMode('classic')} className={`flex items-center gap-3 p-4 rounded-2xl font-bold transition-all ${lobbyMode === 'classic' ? 'bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'bg-[#15151e] border border-white/5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}`}>
-              <FaGamepad className="text-xl" /> 经典游戏
+              <FaGamepad className="text-xl" /> 经典模式
             </button>
             <button onClick={() => setLobbyMode('course')} className={`flex items-center gap-3 p-4 rounded-2xl font-bold transition-all ${lobbyMode === 'course' ? 'bg-cyan-500 text-black shadow-[0_0_20px_rgba(6,182,212,0.4)]' : 'bg-[#15151e] border border-white/5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}`}>
               <FaMap className="text-xl" /> 难度考核
@@ -480,7 +484,7 @@ export default function LetterGame() {
             </button>
           </div>
 
-          {/* 右侧：行动配置台 */}
+          {/* 右侧：游戏设置 */}
           <div className="flex-1 bg-[#15151e]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl min-h-[500px]">
             
             {lobbyMode === 'classic' && (
@@ -489,7 +493,7 @@ export default function LetterGame() {
                 <div className="flex-1 flex flex-col gap-6 md:border-r border-white/5 md:pr-8">
                   <div>
                     <h3 className="text-sm font-bold text-zinc-300 mb-4 flex items-center gap-2">
-                      <FaDatabase className="text-purple-400"/> 曲目池
+                      <FaDatabase className="text-purple-400"/> 选择曲库
                     </h3>
                     <div className="flex gap-3 flex-wrap">
                       {[{id:'arcaea', label:'Arcaea'}, {id:'maimai', label:'舞萌 DX'}, {id:'chunithm', label:'CHUNITHM'}].map(game => (
@@ -507,32 +511,46 @@ export default function LetterGame() {
                     </div>
                   </div>
 
-                  <div className="flex-1 bg-black/20 rounded-2xl border border-white/5 p-6 flex flex-col justify-center items-center relative overflow-hidden group min-h-[160px]">
-                    <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <FaStar className="text-4xl text-amber-500/30 mb-3" />
-                    <div className="text-xs text-zinc-500 font-bold tracking-widest uppercase mb-1">预计星级</div>
-                    <div className="text-4xl font-black text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all">
-                      ~{(5.0 * totalMultiplier).toFixed(2)}<span className="text-xl text-amber-500/50 ml-1">★</span>
+                  {/* 🔥 目标难度调节器 (星级滑块) */}
+                  <div className="bg-black/20 rounded-2xl border border-white/5 p-5 flex flex-col gap-4 relative overflow-hidden">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                        <FaStar className="text-amber-400" /> 目标难度星级
+                      </span>
+                      <span className="text-2xl font-black text-amber-400">{targetStar.toFixed(1)}★</span>
                     </div>
-                    <p className="text-[11px] text-zinc-600 mt-4 text-center max-w-[85%]">
-                      选择MOD可以降低或提高游戏难度。
-                    </p>
+                    
+                    <input 
+                      type="range" min="1.0" max="10.0" step="0.5" 
+                      value={targetStar} onChange={(e) => setTargetStar(parseFloat(e.target.value))}
+                      className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                    />
+                    
+                    <div className="flex justify-between text-[10px] text-zinc-600 font-bold px-1 mt-1">
+                      <span>1.0★ (简易)</span>
+                      <span>5.0★ (标准)</span>
+                      <span className="text-rose-500">10.0★ (极难)</span>
+                    </div>
                   </div>
 
                   <button 
                     onClick={startGame} disabled={isStarting}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-cyan-600 text-white font-black text-lg tracking-widest hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:-translate-y-1 transition-all flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-4 mt-auto rounded-2xl bg-gradient-to-r from-purple-600 to-cyan-600 text-white font-black text-lg tracking-widest hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:-translate-y-1 transition-all flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isStarting ? <FaSpinner className="animate-spin" /> : <FaPlay className="text-sm" />}
-                    {isStarting ? '初始化...' : '开始游戏'}
+                    {isStarting ? '初始化中...' : '开始游戏'}
                   </button>
                 </div>
 
                 {/* 经典模式：右半边 Mod 矩阵 */}
                 <div className="flex-[1.5] flex flex-col">
-                  <h3 className="text-sm font-bold text-zinc-300 mb-4 flex items-center gap-2">
-                    <FaBolt className="text-yellow-400"/> 装备挑战模组 (MODS)
-                  </h3>
+                  <div className="flex justify-between items-end mb-4">
+                    <h3 className="text-sm font-bold text-zinc-300 flex items-center gap-2">
+                      <FaBolt className="text-yellow-400"/> 选择挑战模组 (MODS)
+                    </h3>
+                    <span className="text-xs font-bold text-zinc-500">最终 OV 倍率: <span className="text-cyan-400 text-lg">{totalMultiplier.toFixed(2)}x</span></span>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <AnimatePresence>
                       {MOD_DEFINITIONS.map(mod => {
@@ -564,6 +582,13 @@ export default function LetterGame() {
                       })}
                     </AnimatePresence>
                   </div>
+                  
+                  <div className="mt-auto pt-6 flex items-start gap-3 text-xs text-zinc-500 bg-white/[0.02] p-4 rounded-xl border border-white/[0.02]">
+                    <FaInfoCircle className="text-purple-400 shrink-0 mt-0.5 text-base" />
+                    <p className="leading-relaxed">
+                      基础难度由您选择的目标星级决定。勾选下方的挑战模组可大幅增加基础 OV 倍率收益。
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -574,7 +599,7 @@ export default function LetterGame() {
                 <FaCrown className="text-7xl text-zinc-800 mb-6" />
                 <h2 className="text-2xl font-black text-zinc-300 mb-2">制作中......</h2>
                 <p className="text-zinc-500 font-medium">更多功能敬请期待</p>
-                <button onClick={() => setLobbyMode('classic')} className="mt-8 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold transition-all text-sm">返回经典探测</button>
+                <button onClick={() => setLobbyMode('classic')} className="mt-8 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold transition-all text-sm">返回经典模式</button>
               </div>
             )}
 
