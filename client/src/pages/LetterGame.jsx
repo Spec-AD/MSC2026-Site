@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlay, FaInfoCircle, FaBolt, FaTrophy, FaDatabase, FaChevronLeft, FaKeyboard, FaPaperPlane, FaCheckCircle, FaTimesCircle, FaSkull, FaSpinner } from 'react-icons/fa';
+import { 
+  FaPlay, FaInfoCircle, FaBolt, FaTrophy, FaDatabase, FaChevronLeft, 
+  FaKeyboard, FaPaperPlane, FaCheckCircle, FaTimesCircle, FaSkull, 
+  FaSpinner, FaExclamationTriangle, FaStar 
+} from 'react-icons/fa';
 import axios from 'axios';
 import { useToast } from '../context/ToastContext';
 
@@ -32,10 +36,14 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
   const [charInput, setCharInput] = useState('');
   const [guessInput, setGuessInput] = useState('');
   const [selectedSongIdx, setSelectedSongIdx] = useState(0);
+  const [usedChars, setUsedChars] = useState(initialSession?.openedChars || []);
   
   // 交互锁定与结算
   const [isProcessing, setIsProcessing] = useState(false);
   const [gameResult, setGameResult] = useState(null);
+
+  // 二次确认退出 Modal
+  const [showAbortModal, setShowAbortModal] = useState(false);
 
   // 动态基准时间 (用于血条百分比计算)
   const baseTime = useMemo(() => {
@@ -45,22 +53,28 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
   }, [activeMods]);
 
   const timeoutFired = useRef(false);
+
   // 高精度倒计时引擎 (每 50ms 刷新)
   useEffect(() => {
-    if (gameResult) return;
+    if (gameResult || showAbortModal) return;
 
     const timer = setInterval(() => {
       const remaining = new Date(session.expireAt).getTime() - Date.now();
       setTimeLeft(Math.max(0, remaining));
       
+      if (remaining > 0) timeoutFired.current = false;
+      
       // 时间耗尽且无不死 Mod 时，触发结算校验
       if (remaining <= 0 && !activeMods.includes('Strength')) {
-        handleGameOverByTimeout();
+        if (!timeoutFired.current) {
+          timeoutFired.current = true;
+          handleGameOverByTimeout();
+        }
       }
     }, 50);
 
     return () => clearInterval(timer);
-  }, [session.expireAt, gameResult, activeMods]);
+  }, [session.expireAt, gameResult, activeMods, showAbortModal]);
 
   const handleGameOverByTimeout = async () => {
     if (isProcessing) return;
@@ -68,14 +82,30 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post('/api/letter-game/open', { 
-        sessionId: session.sessionId, char: ' ' // 发送一个空请求来触发后端的超时结算
+        sessionId: session.sessionId, char: ' ' 
       }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       
       if (res.data.gameOver) {
-        setGameResult(res.data.record);
+        setGameResult(res.data);
       }
     } catch (err) {
       addToast('结算同步失败', 'error');
+    }
+    setIsProcessing(false);
+  };
+
+  // 🔥 强制终止对局 (Abort)
+  const handleAbort = async () => {
+    setIsProcessing(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post('/api/letter-game/abort', { sessionId: session.sessionId }, 
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      setShowAbortModal(false);
+      setGameResult(res.data);
+      addToast('行动已终止。数据已记录。', 'error');
+    } catch (err) { 
+      addToast('强退失败', 'error'); 
     }
     setIsProcessing(false);
   };
@@ -88,16 +118,19 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
     setIsProcessing(true);
     try {
       const token = localStorage.getItem('token');
+      const targetChar = charInput.trim()[0].toUpperCase();
+      
       const res = await axios.post('/api/letter-game/open', {
         sessionId: session.sessionId,
-        char: charInput.trim()[0] // 只取第一个字符
+        char: targetChar
       }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
 
       if (res.data.gameOver) {
-        setGameResult(res.data.record);
+        setGameResult(res.data);
       } else {
         setSession(prev => ({ ...prev, expireAt: res.data.expireAt, songs: res.data.songs }));
-        setCharInput(''); // 清空输入框
+        if (!usedChars.includes(targetChar)) setUsedChars([...usedChars, targetChar]);
+        setCharInput(''); 
       }
     } catch (err) {
       addToast(err.response?.data?.msg || '操作失败', 'error');
@@ -121,14 +154,13 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
       }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
 
       if (res.data.gameOver) {
-        setGameResult(res.data.record);
-        addToast(res.data.msg || '游戏结束！', res.data.isCorrect ? 'success' : 'error');
+        setGameResult(res.data);
+        addToast(res.data.msg || '对局结束！', res.data.isCorrect ? 'success' : 'error');
       } else {
         setSession(prev => ({ ...prev, expireAt: res.data.expireAt, songs: res.data.songs }));
         setGuessInput('');
         if (res.data.isCorrect) {
           addToast('正确！目标已击破！', 'success');
-          // 自动选中下一个未猜出的歌
           const nextIdx = res.data.songs.findIndex(s => s.status === 'PLAYING');
           if (nextIdx !== -1) setSelectedSongIdx(nextIdx);
         } else {
@@ -142,42 +174,78 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
     }
   };
 
-  // 计算血条比例与颜色
   const timePercent = Math.min(100, (timeLeft / baseTime) * 100);
   const timeColor = timePercent > 50 ? 'bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]' : 
                     timePercent > 20 ? 'bg-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : 
                     'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.8)] animate-pulse';
 
-  // 渲染结算模态框
+  // 渲染结算模态框 (包含详尽新旧数据对比)
   if (gameResult) {
+    const record = gameResult.record || gameResult; 
+    const oldStats = gameResult.oldStats || {};
+    const newStats = gameResult.newStats || {};
+    const timeUsed = gameResult.timeUsed || 0;
+    
+    const diffOv = (newStats.totalOv || 0) - (oldStats.totalOv || 0);
+    const diffAcc = ((newStats.accuracy || 0) - (oldStats.accuracy || 0)) * 100;
+    const diffCons = ((newStats.conservativeness || 0) - (oldStats.conservativeness || 0)) * 100;
+
     return (
-      <div className="flex flex-col items-center justify-center h-full w-full py-10">
-        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#15151e]/90 backdrop-blur-xl border border-white/10 p-10 rounded-3xl shadow-2xl max-w-2xl w-full text-center">
-          <FaTrophy className="text-6xl text-yellow-400 mx-auto mb-6 drop-shadow-[0_0_20px_rgba(250,204,21,0.6)]" />
-          <h2 className="text-3xl font-black text-white mb-2 tracking-widest">DECODE COMPLETE</h2>
-          <p className="text-zinc-400 font-bold mb-8">Your OV</p>
+      <div className="flex flex-col items-center justify-center h-full w-full py-10 px-4">
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#15151e]/90 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl max-w-3xl w-full flex flex-col items-center">
+          <FaTrophy className="text-6xl text-yellow-400 mx-auto mb-4 drop-shadow-[0_0_20px_rgba(250,204,21,0.6)]" />
+          <h2 className="text-3xl font-black text-white mb-1 tracking-widest uppercase">{record.isFullCombo ? 'Operation Successful' : 'Operation Concluded'}</h2>
+          <p className="text-zinc-400 font-bold mb-6 flex items-center gap-2">
+            <FaStar className="text-amber-400"/> 难度评级: {session.starRating || '?'} 星
+          </p>
           
-          <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-purple-500 mb-10 drop-shadow-lg">
-            {gameResult.totalOv.toFixed(2)}
+          {/* 数据对比核心区 */}
+          <div className="grid grid-cols-3 w-full gap-4 mb-8">
+            <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center">
+               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Global OV</span>
+               <span className="text-2xl font-black text-purple-400">{(newStats.totalOv || 0).toFixed(2)}</span>
+               <span className={`text-xs font-bold mt-1 ${diffOv >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                 {diffOv >= 0 ? '+' : ''}{diffOv.toFixed(2)} {diffOv >= 0 ? '▲' : '▼'}
+               </span>
+            </div>
+            <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center">
+               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Accuracy</span>
+               <span className="text-2xl font-black text-cyan-400">{((newStats.accuracy || 0)*100).toFixed(1)}%</span>
+               <span className={`text-xs font-bold mt-1 ${diffAcc >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                 {diffAcc >= 0 ? '+' : ''}{diffAcc.toFixed(1)}% {diffAcc >= 0 ? '▲' : '▼'}
+               </span>
+            </div>
+            <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center">
+               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Conservativeness</span>
+               <span className="text-2xl font-black text-amber-400">{((newStats.conservativeness || 0)*100).toFixed(1)}%</span>
+               <span className={`text-xs font-bold mt-1 ${diffCons >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                 {diffCons >= 0 ? '+' : ''}{diffCons.toFixed(1)}% {diffCons >= 0 ? '▲' : '▼'}
+               </span>
+            </div>
           </div>
 
-          <div className="space-y-3 mb-8 text-left">
-            {gameResult.songs.map((song, i) => (
-              <div key={i} className="flex justify-between items-center p-3 bg-black/30 rounded-xl border border-white/5">
+          <div className="w-full text-left bg-black/20 p-4 rounded-xl mb-8 flex justify-between items-center border border-white/5">
+             <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest">Operation Time</span>
+             <span className="font-mono text-lg text-white font-black">{(timeUsed / 1000).toFixed(2)}s</span>
+          </div>
+
+          <div className="space-y-3 w-full mb-8 text-left">
+            {record.songs.map((song, i) => (
+              <div key={i} className={`flex justify-between items-center p-3 rounded-xl border ${song.isCleared ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
                 <div className="flex items-center gap-3 overflow-hidden">
                   {song.isCleared ? <FaCheckCircle className="text-emerald-400 shrink-0"/> : <FaTimesCircle className="text-rose-500 shrink-0"/>}
-                  <span className="font-bold text-sm text-zinc-300 truncate">{song.title}</span>
+                  <span className={`font-bold text-sm truncate ${song.isCleared ? 'text-emerald-100' : 'text-rose-100'}`}>{song.title}</span>
                 </div>
-                <div className="flex gap-4 shrink-0 font-mono text-xs text-zinc-500">
-                  <span>Miss: {song.mistakes}</span>
-                  <span className={song.isCleared ? "text-cyan-400 font-bold" : ""}>+{song.actualOv.toFixed(2)} OV</span>
+                <div className="flex gap-4 shrink-0 font-mono text-xs text-zinc-400 items-center">
+                  <span>Miss: <span className={song.mistakes > 0 ? "text-rose-400" : ""}>{song.mistakes}</span></span>
+                  <span className={`font-bold w-16 text-right ${song.isCleared ? "text-emerald-400" : "text-zinc-600"}`}>+{song.actualOv.toFixed(1)} OV</span>
                 </div>
               </div>
             ))}
           </div>
 
-          <button onClick={onReturn} className="px-10 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold tracking-widest transition-all">
-            回到大厅
+          <button onClick={onReturn} className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black tracking-widest transition-all shadow-[0_0_20px_rgba(147,51,234,0.4)]">
+            RETURN TO LOBBY
           </button>
         </motion.div>
       </div>
@@ -187,13 +255,33 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
   return (
     <div className="w-full flex flex-col gap-6 max-w-5xl mx-auto h-full pb-10" style={{ fontFamily: "'Quicksand', sans-serif" }}>
       
+      {/* 二次确认退出 Modal */}
+      <AnimatePresence>
+        {showAbortModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-[#1a1010] border border-rose-500/30 p-8 rounded-3xl max-w-md w-full shadow-[0_0_40px_rgba(225,29,72,0.2)] text-center">
+              <FaExclamationTriangle className="text-5xl text-rose-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-black text-rose-100 mb-2">警告：终止行动？</h2>
+              <p className="text-sm text-rose-400/80 mb-8 font-medium">中途放弃将立即判定为失败，所有未解开的曲目将计 0 分，并严重影响你的全局 OV 胜率与档案数据。</p>
+              <div className="flex gap-4">
+                <button onClick={() => setShowAbortModal(false)} className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-colors">继续作战</button>
+                <button onClick={handleAbort} className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black transition-colors shadow-lg shadow-rose-600/30">确认放弃</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* 顶部状态栏 */}
       <div className="flex justify-between items-end">
-        <button onClick={onReturn} className="text-zinc-500 hover:text-white flex items-center gap-2 text-sm font-bold transition-colors">
+        <button onClick={() => setShowAbortModal(true)} className="text-rose-500/80 hover:text-rose-400 flex items-center gap-2 text-sm font-bold transition-colors bg-rose-500/10 px-4 py-2 rounded-lg border border-rose-500/20 shadow-sm active:scale-95">
           <FaChevronLeft /> FORFEIT
         </button>
         <div className="text-right">
-          <div className="text-[10px] font-bold text-zinc-500 tracking-widest uppercase mb-1">Active Mods</div>
+          <div className="flex items-center justify-end gap-2 mb-1">
+             <FaStar className="text-amber-400"/>
+             <span className="font-bold text-amber-400 tracking-widest">{session.starRating || '?'} STARS</span>
+          </div>
           <div className="flex gap-2 justify-end">
             {activeMods.length === 0 ? <span className="text-xs text-zinc-600 font-bold">NOMOD</span> : 
               activeMods.map(mod => <span key={mod} className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded font-black">{mod}</span>)
@@ -234,17 +322,15 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
                     'bg-black/30 border-white/5 hover:border-white/20'}
                 `}
               >
-                {/* 背景发光 */}
                 {isSelected && <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent pointer-events-none"></div>}
                 
-<div className="flex items-center gap-4 z-10 overflow-hidden w-full pr-4">
+                <div className="flex items-center gap-4 z-10 overflow-hidden w-full pr-4">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 font-black text-sm
                     ${isCleared ? 'bg-emerald-500 text-black' : isDead ? 'bg-zinc-800 text-zinc-500' : isSelected ? 'bg-cyan-500 text-black' : 'bg-white/10 text-zinc-400'}
                   `}>
                     {isCleared ? <FaCheckCircle /> : isDead ? <FaSkull /> : `0${i+1}`}
                   </div>
                   
-                  {/* 🔥 增加flex-col，让标签挂在歌名上方或旁边 */}
                   <div className="flex flex-col overflow-hidden w-full">
                     <div className="flex items-center gap-2">
                       <span className={`text-xl md:text-2xl font-mono tracking-[0.2em] font-bold truncate drop-shadow-md transition-all
@@ -253,7 +339,7 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
                         {song.maskedTitle}
                       </span>
                       
-                      {/* 🔥 字符提示 Tag 矩阵 */}
+                      {/* 字符提示 Tag 矩阵 */}
                       {!isCleared && (
                         <div className="flex gap-1.5 shrink-0 ml-2">
                           {song.hasKanji && <span className="text-[9px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded font-bold uppercase tracking-widest shadow-sm">汉字</span>}
@@ -271,53 +357,66 @@ const PlayBoard = ({ initialSession, activeMods, onReturn }) => {
           })}
         </div>
 
-        {/* 控制台 (Console) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 border-t border-white/5 bg-black/40 p-6 gap-6">
+        {/* 控制台与历史记录 */}
+        <div className="flex flex-col border-t border-white/5 bg-black/40 p-6 gap-6">
           
-          {/* 左侧：开字母 */}
-          <form onSubmit={handleOpenChar} className="flex flex-col gap-2 relative">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FaKeyboard/> Open Character</label>
-            <div className="flex gap-2">
-              <input 
-                type="text" 
-                maxLength={1}
-                value={charInput}
-                onChange={e => setCharInput(e.target.value)}
-                placeholder="A"
-                disabled={isProcessing || activeMods.includes('Strength') && timeLeft <= 0 && false} // 简易防抖
-                className="w-16 h-12 bg-[#0c0c11] border border-white/10 rounded-xl text-center text-2xl font-black text-cyan-300 focus:outline-none focus:border-cyan-500 transition-colors uppercase"
-              />
-              <button 
-                type="submit" disabled={isProcessing || !charInput}
-                className="flex-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-xl font-bold hover:bg-cyan-500 hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                开码
-              </button>
-            </div>
-            {activeMods.includes('Reflection') && <span className="absolute -bottom-5 left-0 text-[9px] text-purple-400 font-bold">* Reflection Active: Decays in 5s</span>}
-          </form>
+          {/* 已开字母记录区 */}
+          <div className="flex items-center gap-3 w-full bg-black/30 p-3 rounded-xl border border-white/5">
+             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest shrink-0 whitespace-nowrap">Decoded Chars :</span>
+             <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+                {usedChars.length === 0 ? <span className="text-xs text-zinc-600 italic">尚未开出任何字符...</span> : 
+                  usedChars.map((c, idx) => (
+                    <span key={idx} className="w-6 h-6 flex items-center justify-center bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-black text-xs rounded shadow-sm">
+                      {c}
+                    </span>
+                  ))
+                }
+             </div>
+          </div>
 
-          {/* 右侧：猜歌名 */}
-          <form onSubmit={handleGuessSong} className="md:col-span-2 flex flex-col gap-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FaPaperPlane/> Guess Title (Target: 0{selectedSongIdx+1})</label>
-            <div className="flex gap-2">
-              <input 
-                type="text" 
-                value={guessInput}
-                onChange={e => setGuessInput(e.target.value)}
-                placeholder="Enter full track title..."
-                disabled={isProcessing || session.songs[selectedSongIdx]?.status !== 'PLAYING'}
-                className="flex-1 h-12 px-4 bg-[#0c0c11] border border-white/10 rounded-xl text-sm font-bold text-white focus:outline-none focus:border-purple-500 transition-colors"
-              />
-              <button 
-                type="submit" disabled={isProcessing || !guessInput || session.songs[selectedSongIdx]?.status !== 'PLAYING'}
-                className="px-6 bg-purple-500 text-white rounded-xl font-black tracking-widest hover:shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                提交
-              </button>
-            </div>
-          </form>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <form onSubmit={handleOpenChar} className="flex flex-col gap-2 relative">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FaKeyboard/> Open Character</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  maxLength={1}
+                  value={charInput}
+                  onChange={e => setCharInput(e.target.value)}
+                  placeholder="A"
+                  disabled={isProcessing || activeMods.includes('Strength') && timeLeft <= 0 && false}
+                  className="w-16 h-12 bg-[#0c0c11] border border-white/10 rounded-xl text-center text-2xl font-black text-cyan-300 focus:outline-none focus:border-cyan-500 transition-colors uppercase"
+                />
+                <button 
+                  type="submit" disabled={isProcessing || !charInput}
+                  className="flex-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-xl font-bold hover:bg-cyan-500 hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  开码
+                </button>
+              </div>
+              {activeMods.includes('Reflection') && <span className="absolute -bottom-5 left-0 text-[9px] text-purple-400 font-bold">* Reflection Active: Decays in 5s</span>}
+            </form>
 
+            <form onSubmit={handleGuessSong} className="md:col-span-2 flex flex-col gap-2">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FaPaperPlane/> Guess Title (Target: 0{selectedSongIdx+1})</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={guessInput}
+                  onChange={e => setGuessInput(e.target.value)}
+                  placeholder="Enter full track title..."
+                  disabled={isProcessing || session.songs[selectedSongIdx]?.status !== 'PLAYING'}
+                  className="flex-1 h-12 px-4 bg-[#0c0c11] border border-white/10 rounded-xl text-sm font-bold text-white focus:outline-none focus:border-purple-500 transition-colors"
+                />
+                <button 
+                  type="submit" disabled={isProcessing || !guessInput || session.songs[selectedSongIdx]?.status !== 'PLAYING'}
+                  className="px-6 bg-purple-500 text-white rounded-xl font-black tracking-widest hover:shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  提交
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
@@ -406,10 +505,10 @@ export default function LetterGame() {
         <div className="relative z-10 w-full max-w-5xl flex flex-col gap-8 mt-10">
           
           <div className="text-center space-y-2">
-            <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 tracking-tighter">
-              开字母
+            <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 tracking-tighter drop-shadow-md">
+              LETTER DECODE
             </h1>
-            <p className="text-zinc-500 font-medium tracking-widest text-sm uppercase">挑战你的曲库极限</p>
+            <p className="text-zinc-500 font-medium tracking-widest text-sm uppercase">PureBeat Competitive Mode 2.0</p>
           </div>
 
           <div className="bg-[#15151e]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col md:flex-row gap-8">
@@ -417,13 +516,12 @@ export default function LetterGame() {
             <div className="flex-1 flex flex-col gap-6 md:border-r border-white/5 md:pr-8">
               <div>
                 <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <FaDatabase className="text-purple-400"/> Select Target
+                  <FaDatabase className="text-purple-400"/> Game Pool Target
                 </h3>
                 <div className="flex gap-3 flex-wrap">
                   {['arcaea', 'maimai', 'chunithm'].map(game => (
                     <button 
-                      key={game}
-                      onClick={() => setSelectedGame(game)}
+                      key={game} onClick={() => setSelectedGame(game)}
                       className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex-1 md:flex-none ${
                         selectedGame === game 
                         ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]' 
@@ -437,30 +535,29 @@ export default function LetterGame() {
               </div>
 
               <div className="flex-1 bg-black/20 rounded-2xl border border-white/5 p-5 flex flex-col justify-center items-center relative overflow-hidden group min-h-[160px]">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <FaTrophy className="text-4xl text-purple-500/30 mb-3" />
-                <div className="text-xs text-zinc-500 font-bold tracking-widest uppercase mb-1">Estimated Multiplier</div>
-                <div className="text-5xl font-black text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] transition-all">
-                  {totalMultiplier.toFixed(2)}<span className="text-2xl text-purple-400 ml-1">x</span>
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <FaStar className="text-4xl text-amber-500/30 mb-3" />
+                <div className="text-xs text-zinc-500 font-bold tracking-widest uppercase mb-1">Estimated Rating (Stars)</div>
+                <div className="text-4xl font-black text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all">
+                  ~{(5.0 * totalMultiplier).toFixed(2)}<span className="text-xl text-amber-500/50 ml-1">★</span>
                 </div>
-                <p className="text-[10px] text-zinc-600 mt-4 text-center max-w-[80%]">
-                  OV 获取倍率
+                <p className="text-[10px] text-zinc-600 mt-4 text-center max-w-[85%]">
+                  Base difficulty varies by pool. Mods increase non-linear OV yield.
                 </p>
               </div>
 
               <button 
-                onClick={startGame}
-                disabled={isStarting}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-lg tracking-widest hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:-translate-y-1 transition-all flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={startGame} disabled={isStarting}
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-cyan-600 text-white font-black text-lg tracking-widest hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:-translate-y-1 transition-all flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isStarting ? <FaSpinner className="animate-spin" /> : <FaPlay className="text-sm" />}
-                {isStarting ? '初始化......' : '开始开字母'}
+                {isStarting ? 'INITIALIZING...' : 'START DECODING'}
               </button>
             </div>
 
             <div className="flex-[1.8] flex flex-col">
               <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <FaBolt className="text-yellow-400"/> MODS
+                <FaBolt className="text-yellow-400"/> Difficulty Modifiers
               </h3>
               
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -468,7 +565,6 @@ export default function LetterGame() {
                   {MOD_DEFINITIONS.map(mod => {
                     const isActive = activeMods.includes(mod.id);
                     const isID = mod.type === 'ID'; 
-                    
                     return (
                       <motion.div 
                         key={mod.id} layout onClick={() => handleModToggle(mod.id)}
@@ -499,8 +595,7 @@ export default function LetterGame() {
               <div className="mt-auto pt-6 flex items-start gap-3 text-xs text-zinc-500 bg-white/[0.02] p-4 rounded-xl border border-white/[0.02]">
                 <FaInfoCircle className="text-purple-400 shrink-0 mt-0.5 text-base" />
                 <p className="leading-relaxed">
-                  单击以应用模组。<br/>
-                  一些特定模组 (像 <span className="text-zinc-300">Tenacity</span> 和 <span className="text-zinc-300">Easy</span>) 是互相排斥的，不能同时应用。
+                  Higher Star Ratings yield exponentially more OV upon perfect clears. Use modifiers strategically to climb the global leaderboard.
                 </p>
               </div>
             </div>
@@ -513,12 +608,8 @@ export default function LetterGame() {
   // --- 实机对战渲染 ---
   return (
     <PlayBoard 
-      initialSession={sessionData} 
-      activeMods={activeMods} 
-      onReturn={() => {
-        setGameState('lobby');
-        setSessionData(null);
-      }} 
+      initialSession={sessionData} activeMods={activeMods} 
+      onReturn={() => { setGameState('lobby'); setSessionData(null); }} 
     />
   );
 }
