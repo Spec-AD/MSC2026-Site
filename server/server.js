@@ -618,53 +618,65 @@ app.post('/api/users/settings/change-email', authMiddleware, async (req, res) =>
 });
 
 // ==================================================
-// 🎮 API 1：开始开字母 2.0 游戏 (智能目标星级匹配版)
+// 🎮 API 1：开始开字母游戏 (支持多曲库混合 & 目标星级匹配)
 // ==================================================
 app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
   try {
-    let { mods = [], gameType = 'arcaea', targetStar = 3.0 } = req.body;
+    // 接收前端传来的多曲库数组，例如 ['arcaea', 'maimai']
+    let { mods = [], gameTypes = ['arcaea'], targetStar = 5.0 } = req.body;
 
     if (mods.includes('Tenacity') && mods.includes('Fear')) {
       mods = mods.filter(m => m !== 'Tenacity' && m !== 'Fear');
       if (!mods.includes('Prudence')) mods.push('Prudence');
     }
 
-    let TargetModel;
-    if (gameType === 'maimai') TargetModel = Song;
-    else if (gameType === 'chunithm') TargetModel = ChunithmSong;
-    else TargetModel = ArcaeaSong;
+    // 🔥 核心：从所有选中的曲库中分别抽取样本，并合并为一个巨大的缓冲池
+    let poolSongs = [];
+    if (gameTypes.includes('maimai')) {
+      const ms = await Song.aggregate([{ $sample: { size: 50 } }]);
+      poolSongs = poolSongs.concat(ms);
+    }
+    if (gameTypes.includes('chunithm')) {
+      const cs = await ChunithmSong.aggregate([{ $sample: { size: 50 } }]);
+      poolSongs = poolSongs.concat(cs);
+    }
+    if (gameTypes.includes('arcaea')) {
+      const as = await ArcaeaSong.aggregate([{ $sample: { size: 50 } }]);
+      poolSongs = poolSongs.concat(as);
+    }
 
-    // 🔥 核心：不再只抽 5 首，而是抽 50 首作为样本池
-    const poolSongs = await TargetModel.aggregate([{ $sample: { size: 50 } }]);
-    if (poolSongs.length < 5) return res.status(400).json({ msg: '曲库不足' });
+    if (poolSongs.length < 5) {
+      return res.status(400).json({ msg: '选中的曲库数据不足 5 首，无法生成对局' });
+    }
 
-    // 预计算所有样本的 BaseOV
+    // 随机打乱合并后的池子
+    poolSongs.sort(() => Math.random() - 0.5);
+
+    // 预计算池子中每首歌的 BaseOV
     const poolWithOvs = poolSongs.map(s => {
       const title = s.title || s.basic_info?.title || s.id || 'Unknown';
       return { ...s, _baseOv: calculateBaseOV(title) };
     });
 
-    // 🔥 贪心匹配算法：寻找最接近目标星级的 5 首歌组合
-    // 目标总 OV = 目标星数 * 60
+    // 🔥 贪心算法：寻找最接近目标星级的 5 首歌组合
     const targetTotalOv = targetStar * 60; 
-    
-    // 简单起见，我们将样本按 OV 排序，用滑动窗口找最接近的一组
     poolWithOvs.sort((a, b) => a._baseOv - b._baseOv);
+    
     let bestDiff = Infinity;
     let bestSubset = [];
 
+    // 滑动窗口寻找最优解
     for (let i = 0; i <= poolWithOvs.length - 5; i++) {
       const subset = poolWithOvs.slice(i, i + 5);
       const currentSum = subset.reduce((sum, song) => sum + song._baseOv, 0);
       const diff = Math.abs(currentSum - targetTotalOv);
-      
       if (diff < bestDiff) {
         bestDiff = diff;
         bestSubset = subset;
       }
     }
 
-    // 为了防止每次同一个星级出一样的题，将挑出来的 5 首歌打乱
+    // 打乱选出的这 5 首最终曲目
     const finalSongs = bestSubset.sort(() => Math.random() - 0.5);
 
     let initialOpenedChars = new Set();
@@ -691,16 +703,18 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
       }
     }
 
-    // 提取选定曲目的 BaseOV，计算实际匹配到的星级（可能与目标有微小偏差，如想要10星但曲库太简单只凑出8星）
+    // 计算这 5 首歌实际的星级与非线性红利 OV
     const rawBaseOvs = finalSongs.map(s => s._baseOv);
-    const actualStarRating = calculateSessionStarRating(rawBaseOvs);
-    const nonLinearOvs = distributeNonLinearOV(actualStarRating, rawBaseOvs);
+    const actualStarRating = calculateSessionStarRating(rawBaseOvs) || 1.0;
+    const nonLinearOvs = distributeNonLinearOV(actualStarRating, rawBaseOvs) || rawBaseOvs;
 
+    // 构建 Session 内部的歌曲状态结构 (注入别名)
     const sessionSongs = finalSongs.map((s, index) => {
       const realTitle = String(s.title || s.basic_info?.title || s.id || 'Unknown');
       return {
         songId: String(s.id || s._id),
         realTitle: realTitle,
+        aliases: s.aliases || [], // 🔥 注入数据库中的别名数组
         baseOv: nonLinearOvs[index] || 10, 
         mistakes: 0,
         status: 'PLAYING',
@@ -712,13 +726,16 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
 
     const newSession = new ActiveSession({
       userId: req.user.id || req.user._id,
-      gameType, mods, starRating: actualStarRating,
+      gameType: gameTypes.join(','), // 记录这是多曲库混合局
+      mods, 
+      starRating: actualStarRating,
       openedChars: Array.from(initialOpenedChars),
       expireAt: new Date(Date.now() + baseTime),
       songs: sessionSongs
     });
     await newSession.save();
 
+    // 绝不返回 realTitle 给前端
     const clientSongs = sessionSongs.map((song, idx) => ({
       index: idx,
       maskedTitle: generateMaskedTitle(song.realTitle, newSession.openedChars, mods),
@@ -727,13 +744,15 @@ app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
     }));
 
     res.json({ 
-      sessionId: newSession._id, expireAt: newSession.expireAt, 
-      starRating: actualStarRating, openedChars: newSession.openedChars,
+      sessionId: newSession._id, 
+      expireAt: newSession.expireAt, 
+      starRating: actualStarRating, 
+      openedChars: newSession.openedChars,
       songs: clientSongs 
     });
   } catch (err) {
-    console.error('【Letter Decode 初始化致命错误】:', err);
-    res.status(500).json({ msg: '游戏初始化失败，请查看后台日志' });
+    console.error('【Letter Decode 初始化错误】:', err);
+    res.status(500).json({ msg: '初始化失败，请查看后台日志' });
   }
 });
 
@@ -786,7 +805,7 @@ app.post('/api/letter-game/open', authMiddleware, async (req, res) => {
 });
 
 // ==================================================
-// 🎮 API 3：猜歌名核心裁决
+// 🎮 API 3：猜歌名核心裁决 (支持别名与转写平替)
 // ==================================================
 app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
   try {
@@ -796,13 +815,17 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
 
     if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
       const resultData = await finishGameSession(session);
-      return res.json({ gameOver: true, ...resultData, msg: 'Time Out' });
+      return res.json({ gameOver: true, ...resultData, msg: '时间已耗尽' });
     }
 
     const song = session.songs[songIndex];
     if (!song || song.status !== 'PLAYING') return res.status(400).json({ msg: '该曲目无法作答' });
 
-    const isCorrect = normalizeTitle(guess) === normalizeTitle(song.realTitle);
+    // 🔥 核心：执行极致的容错模糊判定 (结合 gameEngine 中的注音剔除与希腊/俄文转写)
+    const normalizedGuess = normalizeTitle(guess);
+    const isCorrect = 
+      normalizedGuess === normalizeTitle(song.realTitle) || 
+      (song.aliases && song.aliases.some(alias => normalizeTitle(alias) === normalizedGuess));
 
     if (isCorrect) {
       song.status = 'CLEARED';
@@ -816,7 +839,7 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
 
       if (session.mods.includes('Prudence')) {
         const resultData = await finishGameSession(session);
-        return res.json({ gameOver: true, ...resultData, msg: 'Prudence! 一击必死。' });
+        return res.json({ gameOver: true, ...resultData, msg: 'Prudence! 猜错即死。' });
       }
 
       session.expireAt = new Date(session.expireAt.getTime() - penalty);
@@ -850,7 +873,7 @@ app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
 });
 
 // ==================================================
-// 🎮 API 4：中途强退 (Abort)
+// 🎮 API 4：直接结束并查看答案 (无损废弃对局)
 // ==================================================
 app.post('/api/letter-game/abort', authMiddleware, async (req, res) => {
   try {
@@ -858,13 +881,39 @@ app.post('/api/letter-game/abort', authMiddleware, async (req, res) => {
     const session = await ActiveSession.findById(sessionId);
     if (!session) return res.status(404).json({ msg: '对局不存在' });
 
-    // 强制挂起未完成的题目
-    session.songs.forEach(s => { if (s.status === 'PLAYING') s.status = 'DEAD'; });
-    
-    const resultData = await finishGameSession(session, true); // true 代表是强制终止
-    res.json({ gameOver: true, ...resultData, msg: '行动已强行终止' });
+    // 1. 将所有题目的正确答案明文暴露并组装返回，但不保存任何战绩
+    const finalSongs = session.songs.map(song => ({
+      songId: song.songId,
+      title: song.realTitle, // 暴露真实曲名以便前端展示
+      baseOv: song.baseOv,
+      actualOv: 0,           // 不产生任何得分
+      mistakes: song.mistakes,
+      isCleared: false
+    }));
+
+    // 2. 彻底销毁这局游戏，当它从未发生过
+    await ActiveSession.deleteOne({ _id: session._id });
+
+    // 3. 获取用户原本的数据返回（因为数据没有变动，所以新旧数据一致）
+    const user = await User.findById(session.userId);
+    const currentStats = user.letterGameStats ? user.letterGameStats.toObject() : {};
+
+    const mockRecord = {
+      isFullCombo: false,
+      songs: finalSongs
+    };
+
+    res.json({ 
+      gameOver: true, 
+      isAborted: true, // 🔥 专门的无损废弃标识
+      record: mockRecord, 
+      oldStats: currentStats, 
+      newStats: currentStats, 
+      timeUsed: Date.now() - session.createdAt.getTime(),
+      msg: '行动已终止，未计入个人档案' 
+    });
   } catch (err) {
-    res.status(500).json({ msg: '强退失败' });
+    res.status(500).json({ msg: '终止失败' });
   }
 });
 
