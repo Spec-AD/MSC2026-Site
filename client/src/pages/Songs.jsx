@@ -262,6 +262,82 @@ const useDragToScroll = () => {
   return { ref, onMouseDown, onMouseLeave, onMouseUp, onMouseMove, isDragging };
 };
 
+// ==========================================
+// 🌟 独立曲包行组件 (修复 Hook 在循环中调用的问题)
+// ==========================================
+const ArcaeaPackRow = ({ row, processedData, setSelectedPackId }) => {
+  const dragProps = useDragToScroll();
+  
+  const availableKeys = row.keys.filter(key => processedData[key]);
+  if (availableKeys.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h3 className="text-xl md:text-2xl font-bold text-white/80 tracking-[0.2em] uppercase pl-2 border-l-4 border-purple-500/50" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+        {row.title}
+      </h3>
+      
+      <div 
+        {...dragProps}
+        className="flex overflow-x-auto custom-scrollbar gap-6 md:gap-8 pb-6 pt-2 items-start cursor-grab active:cursor-grabbing"
+      >
+        {availableKeys.map(key => {
+          const pack = processedData[key];
+          return (
+            <div key={key} className="flex flex-col gap-3 shrink-0 items-center w-36 md:w-44">
+              
+              <div className="relative group w-full flex flex-col items-center">
+                <img 
+                  src={`/assets/arcaea/packs/${pack.id}.png`}
+                  onClick={() => !dragProps.isDragging && setSelectedPackId(pack.id)}
+                  alt={pack.name}
+                  className="w-full h-auto object-contain cursor-pointer drop-shadow-[0_15px_15px_rgba(0,0,0,0.6)] group-hover:drop-shadow-[0_0_25px_rgba(192,132,252,0.6)] group-hover:-translate-y-2 transition-all duration-300 z-10"
+                  draggable="false"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextElementSibling.style.display = 'flex';
+                  }}
+                />
+                <div 
+                  onClick={() => !dragProps.isDragging && setSelectedPackId(pack.id)} 
+                  className="hidden w-full aspect-[1/2] bg-white/5 border border-white/10 rounded-2xl flex-col items-center justify-center p-4 text-center cursor-pointer hover:bg-white/10 hover:-translate-y-2 transition-all duration-300 shadow-xl backdrop-blur-sm"
+                >
+                   <span className="text-sm font-bold text-purple-300" style={{ fontFamily: "'Quicksand', sans-serif" }}>{pack.name}</span>
+                   <span className="text-[10px] text-gray-500 mt-2 font-mono">{pack.songs.length} Tracks</span>
+                </div>
+              </div>
+
+              {/* Append 追加包 */}
+              {pack.appends.map(app => (
+                <div key={app.id} className="relative group w-[110%] flex flex-col items-center mt-2">
+                   <img 
+                     src={`/assets/arcaea/packs/${app.id}.png`}
+                     onClick={() => !dragProps.isDragging && setSelectedPackId(app.id)}
+                     alt={app.name}
+                     className="w-full h-auto object-contain cursor-pointer drop-shadow-[0_10px_10px_rgba(0,0,0,0.6)] group-hover:drop-shadow-[0_0_20px_rgba(192,132,252,0.5)] group-hover:-translate-y-1 transition-all duration-300 z-10"
+                     draggable="false"
+                     onError={(e) => {
+                       e.target.style.display = 'none';
+                       e.target.nextElementSibling.style.display = 'flex';
+                     }}
+                   />
+                   <div 
+                     onClick={() => !dragProps.isDragging && setSelectedPackId(app.id)} 
+                     className="hidden w-full h-16 bg-white/5 border border-white/10 rounded-xl flex-col items-center justify-center p-2 text-center cursor-pointer hover:bg-white/10 hover:-translate-y-1 transition-all duration-300 shadow-lg backdrop-blur-sm"
+                   >
+                      <span className="text-[11px] font-bold text-cyan-300 leading-tight" style={{ fontFamily: "'Quicksand', sans-serif" }}>{app.name}</span>
+                   </div>
+                </div>
+              ))}
+
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 
 // ==========================================
 // 🎨 Arcaea 专属：曲包沉浸式选曲总控
@@ -270,7 +346,6 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
   const [selectedPackId, setSelectedPackId] = useState(null);
   const [selectedSong, setSelectedSong] = useState(null);
 
-  // 1. 数据洗练：将所有提取出的曲包分类，自动归并附属 Append 追加包
   const processedData = useMemo(() => {
     const rawGroups = {};
     songs.forEach(song => {
@@ -286,26 +361,23 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
     const mainPacks = {};
     const appendPacks = [];
 
-    // 筛选出所有 append 包
     Object.values(rawGroups).forEach(p => {
       if (p.id.includes('_append_')) appendPacks.push(p);
       else mainPacks[p.id] = p;
     });
 
-    // 智能挂载 append 包到它的父包下方
     appendPacks.forEach(app => {
       const parentId = app.id.split('_append_')[0];
       if (mainPacks[parentId]) {
         mainPacks[parentId].appends.push(app);
       } else {
-        mainPacks[app.id] = app; // 兜底：如果父包因为筛选为空不存在，则独立展示
+        mainPacks[app.id] = app; 
       }
     });
 
     return mainPacks;
   }, [songs]);
 
-  // 重置状态
   useEffect(() => {
     if (selectedPackId && !processedData[selectedPackId] && !Object.values(processedData).some(p => p.appends.find(a => a.id === selectedPackId))) {
       setSelectedPackId(null);
@@ -328,95 +400,21 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
     }
   }, [selectedPackId, processedData]);
 
-  // =====================================
-  // 视图 1：纯净无边框曲包浏览大厅
-  // =====================================
   if (!selectedPackId) {
     return (
       <div className="flex flex-col gap-10 overflow-y-auto custom-scrollbar p-6 h-full pb-20 select-none">
-        {ARCAEA_ROWS.map(row => {
-          // 只渲染当前数据里有曲子的包
-          const availableKeys = row.keys.filter(key => processedData[key]);
-          if (availableKeys.length === 0) return null;
-
-          // 为每一行实例化独立的拖拽引擎
-          const dragProps = useDragToScroll();
-
-          return (
-            <div key={row.title} className="flex flex-col gap-4">
-              <h3 className="text-xl md:text-2xl font-bold text-white/80 tracking-[0.2em] uppercase pl-2 border-l-4 border-purple-500/50" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                {row.title}
-              </h3>
-              
-              <div 
-                {...dragProps}
-                className="flex overflow-x-auto custom-scrollbar gap-6 md:gap-8 pb-6 pt-2 items-start cursor-grab active:cursor-grabbing"
-              >
-                {availableKeys.map(key => {
-                  const pack = processedData[key];
-                  return (
-                    <div key={key} className="flex flex-col gap-3 shrink-0 items-center w-36 md:w-44">
-                      
-                      {/* 💎 核心立绘呈现：无边框，完全保留 PNG 的透明六边形或不规则形，仅用高级泛光托底 */}
-                      <div className="relative group w-full flex flex-col items-center">
-                        <img 
-                          src={`/assets/arcaea/packs/${pack.id}.png`}
-                          onClick={() => !dragProps.isDragging && setSelectedPackId(pack.id)}
-                          alt={pack.name}
-                          className="w-full h-auto object-contain cursor-pointer drop-shadow-[0_15px_15px_rgba(0,0,0,0.6)] group-hover:drop-shadow-[0_0_25px_rgba(192,132,252,0.6)] group-hover:-translate-y-2 transition-all duration-300 z-10"
-                          draggable="false"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.nextElementSibling.style.display = 'flex';
-                          }}
-                        />
-                        {/* CSS 完美兜底：如果没找到图片，优雅地渲染毛玻璃卡片 */}
-                        <div 
-                          onClick={() => !dragProps.isDragging && setSelectedPackId(pack.id)} 
-                          className="hidden w-full aspect-[1/2] bg-white/5 border border-white/10 rounded-2xl flex-col items-center justify-center p-4 text-center cursor-pointer hover:bg-white/10 hover:-translate-y-2 transition-all duration-300 shadow-xl backdrop-blur-sm"
-                        >
-                           <span className="text-sm font-bold text-purple-300" style={{ fontFamily: "'Quicksand', sans-serif" }}>{pack.name}</span>
-                           <span className="text-[10px] text-gray-500 mt-2 font-mono">{pack.songs.length} Tracks</span>
-                        </div>
-                      </div>
-
-                      {/* 🎀 Append 追加包挂载：自然顺延在主包下方，展现横幅特质 */}
-                      {pack.appends.map(app => (
-                        <div key={app.id} className="relative group w-[110%] flex flex-col items-center mt-2">
-                           <img 
-                             src={`/assets/arcaea/packs/${app.id}.png`}
-                             onClick={() => !dragProps.isDragging && setSelectedPackId(app.id)}
-                             alt={app.name}
-                             className="w-full h-auto object-contain cursor-pointer drop-shadow-[0_10px_10px_rgba(0,0,0,0.6)] group-hover:drop-shadow-[0_0_20px_rgba(192,132,252,0.5)] group-hover:-translate-y-1 transition-all duration-300 z-10"
-                             draggable="false"
-                             onError={(e) => {
-                               e.target.style.display = 'none';
-                               e.target.nextElementSibling.style.display = 'flex';
-                             }}
-                           />
-                           <div 
-                             onClick={() => !dragProps.isDragging && setSelectedPackId(app.id)} 
-                             className="hidden w-full h-16 bg-white/5 border border-white/10 rounded-xl flex-col items-center justify-center p-2 text-center cursor-pointer hover:bg-white/10 hover:-translate-y-1 transition-all duration-300 shadow-lg backdrop-blur-sm"
-                           >
-                              <span className="text-[11px] font-bold text-cyan-300 leading-tight" style={{ fontFamily: "'Quicksand', sans-serif" }}>{app.name}</span>
-                           </div>
-                        </div>
-                      ))}
-
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+        {ARCAEA_ROWS.map(row => (
+          <ArcaeaPackRow 
+            key={row.title} 
+            row={row} 
+            processedData={processedData} 
+            setSelectedPackId={setSelectedPackId} 
+          />
+        ))}
       </div>
     );
   }
 
-  // =====================================
-  // 视图 2：沉浸式分屏选曲 (高度还原游戏)
-  // =====================================
   const findCurrentPack = () => {
     if (processedData[selectedPackId]) return processedData[selectedPackId];
     for (let key in processedData) {
@@ -441,7 +439,6 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
       </div>
 
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-        {/* 左侧：曲目纵向列表 */}
         <div className="md:w-1/3 min-w-[280px] overflow-y-auto custom-scrollbar border-r border-white/5 p-3 space-y-1.5 bg-black/20">
           {currentPack?.songs.map(s => {
             const isSelected = selectedSong?.id === s.id;
@@ -467,7 +464,6 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
           })}
         </div>
 
-        {/* 右侧：单曲详情核心注入 */}
         <div className="flex-1 overflow-hidden p-4 md:p-6 bg-[#0c0c11]">
           <ArcaeaSongDetail song={selectedSong} diffConfig={diffConfig} />
         </div>
@@ -478,7 +474,7 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
 
 
 // ==========================================
-// 🚀 核心主组件 (保持不变，已隔离逻辑)
+// 🚀 核心主组件
 // ==========================================
 export default function Songs() {
   const GAMES = [
@@ -764,7 +760,6 @@ export default function Songs() {
                     className={`w-full bg-[#15151e]/80 backdrop-blur-md border border-white/[0.05] text-zinc-200 pl-10 pr-4 py-2.5 rounded-xl focus:outline-none transition-colors shadow-sm text-sm placeholder-zinc-600 ${getThemeColorClass('input')}`}
                   />
                 </div>
-                {/* Arcaea 模式下由于曲包已经充当了分类，我们隐藏复杂的筛选按钮，保持 UI 清爽 */}
                 {activeGame !== 'arcaea' && (
                   <button 
                     onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -851,7 +846,6 @@ export default function Songs() {
                       <p className="text-sm font-medium">未找到符合条件的曲目</p>
                     </div>
                   ) : activeGame === 'arcaea' ? (
-                    // 🔥 Arcaea 专属全屏沉浸式面板
                     <ArcaeaPackExplorer songs={filteredSongs} diffConfig={ARCAEA_DIFF_CONFIG} />
                   ) : (
                     <Virtuoso
