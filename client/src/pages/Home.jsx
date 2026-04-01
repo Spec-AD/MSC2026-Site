@@ -8,7 +8,8 @@ import { useToast } from '../context/ToastContext';
 import { 
   FaCalendarCheck, FaSpinner, FaCommentDots, FaHeart, 
   FaChevronRight, FaTimes, FaUserCircle, FaBell, FaMedal,
-  FaDiscord, FaPoll, FaUserFriends, FaHistory, FaGamepad
+  FaDiscord, FaPoll, FaUserFriends, FaHistory, FaGamepad,
+  FaCrown
 } from 'react-icons/fa'; 
 
 const Home = () => {
