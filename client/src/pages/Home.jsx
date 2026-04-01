@@ -193,34 +193,30 @@ const Home = () => {
         <div className="absolute top-[10%] right-[-10%] w-[50vw] h-[50vw] bg-purple-900/10 rounded-full blur-[140px] mix-blend-screen opacity-70"></div>
       </div>
 
-      {/* 🔥 优化：沉浸式深层渐变 Banner */}
+      {/* 🔥 优化：沉浸式深层渐变 Banner，亮度稍微加强且混色更平滑 */}
       <div className="absolute top-0 left-0 w-full h-[55vh] pointer-events-none z-0">
         <div className="absolute inset-0">
           {userStats?.bannerUrl ? (
             <img 
               src={userStats.bannerUrl} 
               alt="User Banner"
-              className="w-full h-full object-cover opacity-20 mix-blend-lighten transition-opacity duration-1000"
+              className="w-full h-full object-cover opacity-35 mix-blend-screen transition-opacity duration-1000"
               onError={(e) => { e.target.style.display = 'none'; }} 
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-b from-indigo-900/20 to-transparent opacity-60"></div>
           )}
         </div>
-        {/* 多段渐变，让边缘彻底消失在背景色中 */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0c0c11]/80 to-[#0c0c11]"></div>
       </div>
 
       {/* Header */}
       <header className="w-full max-w-7xl mx-auto px-6 py-8 flex justify-between items-center z-50 relative">
         <div className="flex items-center shrink-0">
-          <img src="/assets/logos.png" alt="PUREBEAT Logo" className="h-8 md:h-10 object-contain drop-shadow-lg" />
-          <div className="hidden sm:flex flex-col ml-3">
-            <span className="text-sm font-bold text-zinc-100 tracking-wider">PUREBEAT</span>
-            <span className="text-[10px] text-indigo-400/80 font-bold uppercase tracking-widest">Community Hub</span>
-          </div>
+          {/* 🔥 优化：只显示单独的放大版 Logo，并保持时间在其右侧 */}
+          <img src="/assets/logos.png" alt="PUREBEAT Logo" className="h-10 md:h-14 object-contain drop-shadow-lg" />
           
-          <div className="hidden lg:flex flex-col justify-center ml-8 pl-8 border-l border-white/[0.08]">
+          <div className="hidden lg:flex flex-col justify-center ml-6 pl-6 border-l border-white/[0.08]">
             <span className="text-2xl font-bold text-zinc-200 tracking-wider drop-shadow-md leading-none" style={{ fontFamily: "'Quicksand', sans-serif" }}>
               {serverTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
@@ -381,7 +377,6 @@ const Home = () => {
                   </div>
                 </div>
 
-                {/* 🔥 优化：分段式游戏选择栏 (Segmented Controls) */}
                 <div className="bg-[#0c0c11]/80 p-1 rounded-xl border border-white/[0.04] flex mb-4 shadow-inner">
                   {[{id:'maimai', label:'Maimai'}, {id:'chunithm', label:'Chuni'}, {id:'osu', label:'osu!'}, {id:'decode', label:'Decode'}].map(game => (
                     <button 
@@ -405,15 +400,15 @@ const Home = () => {
                   )}
                 </AnimatePresence>
 
-                {/* 紧凑的数据展示区 */}
+                {/* 🔥 优化：强化的数据展示区 */}
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-white/[0.02] rounded-xl p-3 border border-white/[0.03] flex flex-col justify-center items-center text-center">
-                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">{displayData.scoreLabel}</span>
-                    <span className={`text-lg font-black tracking-tight ${displayData.scoreColor}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.scoreValue}</span>
+                  <div className="bg-[#0c0c11]/50 rounded-xl p-4 border border-white/[0.04] flex flex-col justify-center items-center text-center shadow-inner">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">{displayData.scoreLabel}</span>
+                    <span className={`text-2xl md:text-3xl font-black tracking-tight drop-shadow-md ${displayData.scoreColor}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.scoreValue}</span>
                   </div>
-                  <div className="bg-white/[0.02] rounded-xl p-3 border border-white/[0.03] flex flex-col justify-center items-center text-center">
-                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">{displayData.rankLabel}</span>
-                    <span className={`text-lg font-black tracking-tight ${getRankColor(displayData.rankValue.replace('#',''))}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.rankValue}</span>
+                  <div className="bg-[#0c0c11]/50 rounded-xl p-4 border border-white/[0.04] flex flex-col justify-center items-center text-center shadow-inner">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">{displayData.rankLabel}</span>
+                    <span className={`text-2xl md:text-3xl font-black tracking-tight drop-shadow-md ${getRankColor(displayData.rankValue.replace('#',''))}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.rankValue}</span>
                   </div>
                 </div>
 
