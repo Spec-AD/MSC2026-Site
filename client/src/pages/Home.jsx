@@ -30,9 +30,6 @@ const Home = () => {
   const [activeGame, setActiveGame] = useState('maimai'); 
   const [osuMode, setOsuMode] = useState('standard');
 
-  // ==========================================
-  // 🌟 v1.4.0 新增：每日推荐曲目状态
-  // ==========================================
   const [dailySong, setDailySong] = useState(null);
   const [isDailyLoading, setIsDailyLoading] = useState(true);
 
@@ -112,10 +109,7 @@ const Home = () => {
       const token = localStorage.getItem('token');
       const res = await axios.post('/api/users/check-in', {}, { headers: { Authorization: `Bearer ${token}` }});
       addToast(`${res.data.msg}\nLv.${res.data.level} | XP: ${res.data.xp}`, 'success');
-      
-      if (userStats) {
-        setUserStats(prev => ({ ...prev, xp: res.data.xp, level: res.data.level }));
-      }
+      if (userStats) setUserStats(prev => ({ ...prev, xp: res.data.xp, level: res.data.level }));
     } catch (err) {
       addToast(err.response?.data?.msg || '签到失败', 'error');
     } finally {
@@ -125,15 +119,12 @@ const Home = () => {
 
   const getRankColor = (rank) => {
     if (rank === '-' || !rank) return 'text-zinc-500';
-    
-    // 🔥 新增：支持百分比类型的颜色判定 (如 85.5%)
     if (typeof rank === 'string' && rank.includes('%')) {
       const val = parseFloat(rank);
       if (val >= 80) return 'text-emerald-400';
       if (val >= 50) return 'text-yellow-400';
       return 'text-rose-400';
     }
-
     const r = Number(rank);
     if (r >= 1 && r <= 10) return 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-amber-400 to-cyan-400';
     if (r >= 11 && r <= 100) return 'text-cyan-400';
@@ -156,7 +147,6 @@ const Home = () => {
       else if (rating >= 16.00) color = 'text-rose-400 font-bold';
       else if (rating >= 15.00) color = 'text-purple-400 font-bold';
       else if (rating > 0) color = 'text-yellow-400 font-bold';
-
       return {
         scoreLabel: 'Rating',
         scoreValue: rating ? rating.toFixed(2) : '0.00',
@@ -165,10 +155,8 @@ const Home = () => {
         rankValue: userStats?.chuniRank && userStats?.chuniRank !== '-' ? `#${userStats.chuniRank}` : '-'
       };
     } else if (activeGame === 'decode') {
-      // 🔥 v2.0.0 落地：开字母竞技场简略数据看板
       const ov = userStats?.letterGameStats?.totalOv || 0;
       const accuracy = userStats?.letterGameStats?.accuracy || 0;
-      
       return {
         scoreLabel: 'Total OV',
         scoreValue: ov > 0 ? ov.toFixed(2) : '0.00',
@@ -180,7 +168,6 @@ const Home = () => {
       const modeMatch = userStats?.osuMode?.toLowerCase() === osuMode.toLowerCase();
       const pp = userStats?.osuDetails?.[osuMode]?.pp || (modeMatch ? userStats?.osuPp : null);
       const rank = userStats?.osuDetails?.[osuMode]?.rank || (modeMatch ? userStats?.osuGlobalRank : null);
-      
       return {
         scoreLabel: 'Performance (PP)',
         scoreValue: pp ? Math.round(pp) : '--',
@@ -192,7 +179,6 @@ const Home = () => {
   };
 
   const displayData = getDisplayData();
-
   const fullPreviewNews = announcements.slice(0, 3); 
   const compactNews = showAllNews ? announcements.slice(3) : announcements.slice(3, 8); 
   const hasMoreNews = announcements.length > 8 && !showAllNews;
@@ -200,25 +186,31 @@ const Home = () => {
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans selection:bg-indigo-500/30 relative pb-20 overflow-x-hidden">
       
+      {/* 背景氛围光 */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
-        <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-cyan-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
-        <div className="absolute top-[10%] right-[-10%] w-[50vw] h-[50vw] bg-purple-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
+        <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-cyan-900/10 rounded-full blur-[140px] mix-blend-screen opacity-70"></div>
+        <div className="absolute top-[10%] right-[-10%] w-[50vw] h-[50vw] bg-purple-900/10 rounded-full blur-[140px] mix-blend-screen opacity-70"></div>
       </div>
 
-      <div className="absolute top-0 left-0 w-full h-[45vh] pointer-events-none z-0">
-        {userStats?.bannerUrl ? (
-          <img 
-            src={userStats.bannerUrl} 
-            alt="User Banner"
-            className="w-full h-full object-cover opacity-[0.12] transition-opacity duration-1000"
-            onError={(e) => { e.target.style.display = 'none'; }} 
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-b from-indigo-900/10 to-transparent opacity-50"></div>
-        )}
+      {/* 🔥 优化：沉浸式深层渐变 Banner */}
+      <div className="absolute top-0 left-0 w-full h-[55vh] pointer-events-none z-0">
+        <div className="absolute inset-0">
+          {userStats?.bannerUrl ? (
+            <img 
+              src={userStats.bannerUrl} 
+              alt="User Banner"
+              className="w-full h-full object-cover opacity-20 mix-blend-lighten transition-opacity duration-1000"
+              onError={(e) => { e.target.style.display = 'none'; }} 
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-b from-indigo-900/20 to-transparent opacity-60"></div>
+          )}
+        </div>
+        {/* 多段渐变，让边缘彻底消失在背景色中 */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0c0c11]/80 to-[#0c0c11]"></div>
       </div>
 
+      {/* Header */}
       <header className="w-full max-w-7xl mx-auto px-6 py-8 flex justify-between items-center z-50 relative">
         <div className="flex items-center shrink-0">
           <img src="/assets/logos.png" alt="PUREBEAT Logo" className="h-8 md:h-10 object-contain drop-shadow-lg" />
@@ -228,109 +220,63 @@ const Home = () => {
           </div>
           
           <div className="hidden lg:flex flex-col justify-center ml-8 pl-8 border-l border-white/[0.08]">
-            <span 
-              className="text-2xl font-bold text-zinc-200 tracking-wider drop-shadow-md leading-none" 
-              style={{ fontFamily: "'Quicksand', sans-serif" }}
-            >
+            <span className="text-2xl font-bold text-zinc-200 tracking-wider drop-shadow-md leading-none" style={{ fontFamily: "'Quicksand', sans-serif" }}>
               {serverTime.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
-            <span 
-              className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mt-1.5 leading-none"
-              style={{ fontFamily: "'Quicksand', sans-serif" }}
-            >
+            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mt-1.5 leading-none" style={{ fontFamily: "'Quicksand', sans-serif" }}>
               {serverTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">
-          
           {user && (
-            <button 
-              onClick={() => navigate('/inbox')}
-              className="flex items-center justify-center gap-1.5 min-w-[40px] px-2 h-10 bg-[#16161e] hover:bg-[#1d1d28] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 shadow-sm"
-              title="收件箱"
-            >
+            <button onClick={() => navigate('/inbox')} className="flex items-center justify-center gap-1.5 min-w-[40px] px-2 h-10 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 shadow-sm">
               <FaBell className="text-[16px]" />
-              {unreadCount > 0 && (
-                <span 
-                  className="text-[13px] font-bold text-rose-400 leading-none pt-0.5"
-                  style={{ fontFamily: "'Quicksand', sans-serif" }}
-                >
-                  {unreadCount}
-                </span>
-              )}
+              {unreadCount > 0 && <span className="text-[13px] font-bold text-rose-400 leading-none pt-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>{unreadCount}</span>}
             </button>
           )}
-
-          <button 
-            onClick={() => navigate('/voting')}
-            className="flex items-center justify-center w-10 h-10 bg-[#16161e] hover:bg-[#1d1d28] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 shadow-sm"
-            title="曲目投票箱"
-          >
+          <button onClick={() => navigate('/voting')} className="flex items-center justify-center w-10 h-10 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 shadow-sm">
             <FaPoll className="text-[16px]" />
           </button>
-
           {user && (
-            <button 
-              onClick={handleCheckIn}
-              disabled={isCheckingIn}
-              className="flex items-center justify-center w-10 h-10 bg-[#16161e] hover:bg-[#1d1d28] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 disabled:opacity-50 shadow-sm"
-              title="每日签到"
-            >
+            <button onClick={handleCheckIn} disabled={isCheckingIn} className="flex items-center justify-center w-10 h-10 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 disabled:opacity-50 shadow-sm">
               {isCheckingIn ? <FaSpinner className="animate-spin text-[16px]" /> : <FaCalendarCheck className="text-[16px]" />}
             </button>
           )}
-
-          <button 
-            onClick={() => navigate('/feedback')}
-            className="flex items-center justify-center w-10 h-10 bg-[#16161e] hover:bg-[#1d1d28] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 shadow-sm"
-            title="意见反馈"
-          >
+          <button onClick={() => navigate('/feedback')} className="flex items-center justify-center w-10 h-10 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] text-zinc-400 hover:text-zinc-100 rounded-xl transition-all active:scale-95 shadow-sm">
             <FaCommentDots className="text-[16px]" />
           </button>
-
-          <a 
-            href="https://discord.gg/EnYB5GeB58" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="flex items-center justify-center w-10 h-10 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 border border-[#5865F2]/20 text-[#5865F2] hover:text-white rounded-xl transition-all active:scale-95 shadow-sm"
-            title="加入 Discord 服务器"
-          >
+          <a href="https://discord.gg/EnYB5GeB58" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center w-10 h-10 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 border border-[#5865F2]/20 text-[#5865F2] hover:text-white rounded-xl transition-all active:scale-95 shadow-sm">
             <FaDiscord className="text-[18px]" />
           </a>
-
-          <a 
-            href="https://afdian.com/a/purebeat" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="hidden md:flex items-center justify-center w-10 h-10 bg-zinc-200 text-zinc-900 rounded-xl hover:bg-white transition-all shadow-sm active:scale-95"
-            title="支持我们"
-          >
+          <a href="https://afdian.com/a/purebeat" target="_blank" rel="noopener noreferrer" className="hidden md:flex items-center justify-center w-10 h-10 bg-zinc-200 text-zinc-900 rounded-xl hover:bg-white transition-all shadow-sm active:scale-95">
             <FaHeart className="text-[16px]" />
           </a>
         </div>
       </header>
 
-      <main className="w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 z-10 relative">
+      {/* Main Grid: 调整间距，布局更紧凑 */}
+      <main className="w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-6 z-10 relative">
         
-        <div className="lg:col-span-8 flex flex-col gap-8">
+        {/* 左侧区域：活动图与新闻 */}
+        <div className="lg:col-span-8 flex flex-col gap-6">
           
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <Link to="/tournaments" className="block group">
-              <div className="relative w-full aspect-[21/9] md:aspect-[21/7] rounded-3xl overflow-hidden border border-white/[0.05] bg-[#0a0a0c] shadow-sm transition-all duration-500 hover:border-indigo-500/30 hover:shadow-[0_8px_30px_rgba(99,102,241,0.1)]">
+              <div className="relative w-full aspect-[21/8] md:aspect-[21/6] rounded-3xl overflow-hidden border border-white/[0.05] bg-[#0a0a0c] shadow-lg transition-all duration-500 group-hover:border-indigo-500/40 group-hover:shadow-[0_8px_30px_rgba(99,102,241,0.15)]">
                 <img 
                   src="/assets/register_banner.png" 
                   alt="Tournament Banner"
-                  className="w-full h-full object-cover opacity-60 grayscale-[30%] group-hover:grayscale-0 group-hover:opacity-90 group-hover:scale-105 transition-all duration-700"
+                  className="w-full h-full object-cover opacity-50 grayscale-[40%] group-hover:grayscale-0 group-hover:opacity-90 group-hover:scale-105 transition-all duration-700"
                   onError={(e) => { e.target.style.display = 'none'; }} 
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-transparent to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11]/90 via-[#0c0c11]/20 to-transparent pointer-events-none" />
                 <div className="absolute bottom-5 md:bottom-6 left-6 md:left-8">
-                  <span className="bg-white/[0.08] backdrop-blur-md border border-white/[0.05] text-indigo-100 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-widest shadow-lg">
+                  <span className="bg-indigo-500 text-white px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest shadow-lg">
                     Official Event
                   </span>
-                  <h2 className="text-xl md:text-3xl font-bold text-white mt-2 drop-shadow-md">
+                  <h2 className="text-2xl md:text-3xl font-black text-white mt-2.5 drop-shadow-md tracking-tight group-hover:text-indigo-100 transition-colors">
                     探索社区最新赛事
                   </h2>
                 </div>
@@ -339,50 +285,38 @@ const Home = () => {
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
-            <div className="flex items-center gap-3 mb-6 px-1">
-              <div className="w-1 h-5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
-              <h2 className="text-xl font-bold text-zinc-100 tracking-tight">
-                新闻
-              </h2>
+            <div className="flex items-center gap-3 mb-5 px-1">
+              <div className="w-1.5 h-5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
+              <h2 className="text-xl font-bold text-zinc-100 tracking-tight">资讯枢纽</h2>
             </div>
 
-            <div className="flex flex-col gap-6">
-              
+            <div className="flex flex-col gap-4">
               {fullPreviewNews.map((news) => {
                 const d = new Date(news.createdAt);
                 return (
-                  <div 
-                    key={news._id}
-                    onClick={() => setSelectedNews(news)}
-                    className="bg-[#15151e] border border-white/[0.05] rounded-3xl cursor-pointer hover:bg-[#1a1a24] hover:border-white/[0.1] transition-all group overflow-hidden shadow-sm flex flex-col"
-                  >
-                    <div className="relative w-full aspect-[21/9] md:aspect-[21/8] bg-[#0a0a0c] border-b border-white/[0.05] overflow-hidden">
+                  <div key={news._id} onClick={() => setSelectedNews(news)} className="bg-[#15151e]/80 backdrop-blur-md border border-white/[0.05] rounded-3xl cursor-pointer hover:bg-[#1a1a24] hover:border-white/[0.1] transition-all group overflow-hidden shadow-sm flex flex-col md:flex-row h-auto md:h-44">
+                    <div className="relative w-full md:w-64 h-40 md:h-full bg-[#0a0a0c] overflow-hidden shrink-0">
                       {news.coverUrl ? (
-                         <img 
-                           src={news.coverUrl} 
-                           alt="News Cover" 
-                           className="w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
-                           onError={(e) => { e.target.style.display = 'none'; }}
-                         />
+                         <img src={news.coverUrl} alt="Cover" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" onError={(e) => { e.target.style.display = 'none'; }} />
                       ) : (
                          <div className="w-full h-full bg-gradient-to-br from-indigo-900/20 to-transparent group-hover:scale-105 transition-transform duration-700"></div>
                       )}
-                      <div className="absolute top-5 right-5 px-3 py-1 rounded-lg text-xs font-bold tracking-widest uppercase bg-indigo-500 text-white shadow-lg">
+                      <div className="absolute top-4 right-4 md:left-4 md:right-auto px-2 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase bg-black/60 backdrop-blur-md text-white border border-white/10">
                         {news.type || 'NEWS'}
                       </div>
                     </div>
                     
-                    <div className="p-6 md:p-8">
-                      <div className="flex items-center gap-3 mb-3">
-                        <span className="text-xs font-medium text-zinc-500" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                    <div className="p-5 md:p-6 flex flex-col justify-center flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                           {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       </div>
-                      <h3 className="text-xl md:text-2xl font-bold text-zinc-100 tracking-tight group-hover:text-indigo-400 transition-colors leading-snug">
+                      <h3 className="text-lg md:text-xl font-bold text-zinc-100 tracking-tight group-hover:text-indigo-400 transition-colors leading-snug truncate">
                         {news.title}
                       </h3>
-                      <p className="text-sm text-zinc-400 mt-3 leading-relaxed line-clamp-2">
-                        {news.subtitle || '这是一段占位的说明文字。在这里可以简要概括本篇新闻的核心内容、主要更新点或是活动前瞻，吸引读者点击阅读正文。'}
+                      <p className="text-sm text-zinc-400 mt-2 leading-relaxed line-clamp-2">
+                        {news.subtitle || '点击阅读全文，了解 PUREBEAT 社区的最新动态、更新公告及活动前瞻。'}
                       </p>
                     </div>
                   </div>
@@ -390,23 +324,16 @@ const Home = () => {
               })}
 
               {compactNews.length > 0 && (
-                <div className="flex flex-col gap-2 mt-2">
+                <div className="flex flex-col gap-2 mt-1">
                   {compactNews.map((news) => {
                     const d = new Date(news.createdAt);
                     return (
-                      <div 
-                        key={news._id}
-                        onClick={() => setSelectedNews(news)}
-                        className="flex items-center justify-between p-5 bg-[#15151e] border border-white/[0.05] rounded-2xl cursor-pointer hover:bg-[#1a1a24] hover:border-white/[0.1] transition-all group"
-                      >
-                        <div className="flex items-center gap-4 md:gap-6 min-w-0 flex-1">
-                          <span 
-                            className="text-xs font-bold text-zinc-500 w-12 shrink-0 text-center uppercase tracking-wider"
-                            style={{ fontFamily: "'Quicksand', sans-serif" }}
-                          >
+                      <div key={news._id} onClick={() => setSelectedNews(news)} className="flex items-center justify-between px-5 py-4 bg-[#15151e]/50 border border-white/[0.03] rounded-2xl cursor-pointer hover:bg-[#1a1a24] hover:border-white/[0.08] transition-all group">
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                          <span className="text-[11px] font-bold text-zinc-500 w-10 shrink-0 text-center uppercase tracking-wider" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                             {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </span>
-                          <span className="text-[15px] font-bold text-zinc-200 truncate group-hover:text-indigo-400 transition-colors">
+                          <span className="text-sm font-bold text-zinc-300 truncate group-hover:text-indigo-400 transition-colors">
                             {news.title}
                           </span>
                         </div>
@@ -418,188 +345,123 @@ const Home = () => {
               )}
 
               {hasMoreNews && (
-                <button 
-                  onClick={() => setShowAllNews(true)}
-                  className="w-full py-4 mt-2 bg-transparent border border-white/[0.05] hover:bg-white/[0.02] text-zinc-400 hover:text-zinc-200 text-sm font-bold rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-                >
-                  查看更多新闻 <FaChevronRight className="text-[10px]" />
+                <button onClick={() => setShowAllNews(true)} className="w-full py-3.5 mt-1 bg-white/[0.02] border border-white/[0.03] hover:bg-white/[0.05] text-zinc-400 hover:text-zinc-200 text-xs font-bold rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
+                  展开全部资讯 <FaChevronRight className="text-[10px]" />
                 </button>
               )}
-
-              {announcements.length === 0 && (
-                <div className="text-center py-16 bg-[#15151e] border border-white/[0.05] rounded-3xl text-zinc-500 text-sm font-medium">
-                  报社正在排版中，暂无新闻
-                </div>
-              )}
-
             </div>
           </motion.div>
         </div>
 
-        <div className="lg:col-span-4 flex flex-col gap-6">
+        {/* 右侧区域：个人档案与游戏入口 */}
+        <div className="lg:col-span-4 flex flex-col gap-5">
           
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-1 h-4 bg-zinc-400 rounded-full shadow-[0_0_6px_rgba(161,161,170,0.5)]"></div>
-                <h3 className="text-xs uppercase tracking-widest text-zinc-400 font-bold">
-                  个人信息
-                </h3>
+          {/* 个人档案卡片 - 紧凑大气版 */}
+          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="bg-[#15151e]/80 backdrop-blur-xl border border-white/[0.05] rounded-3xl p-5 md:p-6 shadow-xl relative overflow-hidden group">
+            <div className="absolute -top-16 -right-16 w-32 h-32 bg-cyan-500/10 blur-[40px] rounded-full pointer-events-none transition-all group-hover:bg-cyan-500/20"></div>
+
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-4 bg-cyan-400 rounded-full shadow-[0_0_6px_rgba(34,211,238,0.6)]"></div>
+                <h3 className="text-[11px] uppercase tracking-widest text-zinc-400 font-bold">Player Profile</h3>
               </div>
             </div>
             
             {user ? (
-              <div className="flex flex-col">
-                <div className="flex items-center gap-4 mb-4 pb-4 border-b border-white/[0.05]">
-                  <img 
-                    src={userStats?.avatarUrl || user.avatarUrl || '/assets/logos.png'} 
-                    alt="Avatar" 
-                    className="w-12 h-12 rounded-full object-cover bg-[#0c0c11] border border-white/[0.05] shrink-0 shadow-sm" 
-                  />
+              <div className="flex flex-col relative z-10">
+                <div className="flex items-center gap-4 mb-4">
+                  <img src={userStats?.avatarUrl || user.avatarUrl || '/assets/logos.png'} alt="Avatar" className="w-14 h-14 rounded-full object-cover bg-[#0c0c11] border-2 border-white/10 shrink-0 shadow-md" />
                   <div className="flex flex-col min-w-0">
-                    <span className="text-lg font-bold text-zinc-100 truncate">
-                      {userStats?.username || user.username}
-                    </span>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <img 
-                        src={`/assets/lv${userStats?.level || user.level || 1}_badge.png`} 
-                        alt={`Lv.${userStats?.level || user.level || 1} Badge`}
-                        className="h-4 object-contain drop-shadow-md"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
-                    <span 
-                      className="text-xs text-cyan-400 font-bold mt-0.5"
-                      style={{ fontFamily: "'Quicksand', sans-serif" }}
-                    >
-                      Lv.{userStats?.level || user.level || 1}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-                <div className="flex flex-col gap-2 mb-4">
-                  <div className="flex items-center gap-1.5 bg-[#0c0c11] p-1 rounded-xl border border-white/[0.02] w-fit flex-wrap">
-                    <button 
-                      onClick={() => setActiveGame('maimai')} 
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'maimai' ? 'bg-cyan-500/10 text-cyan-400' : 'text-zinc-600 hover:text-zinc-400'}`}
-                    >
-                      Maimai DX
-                    </button>
-                    <button 
-                      onClick={() => setActiveGame('chunithm')} 
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'chunithm' ? 'bg-yellow-500/10 text-yellow-400' : 'text-zinc-600 hover:text-zinc-400'}`}
-                    >
-                      CHUNITHM
-                    </button>
-                    <button 
-                      onClick={() => setActiveGame('osu')} 
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'osu' ? 'bg-pink-500/10 text-pink-400' : 'text-zinc-600 hover:text-zinc-400'}`}
-                    >
-                      osu!
-                    </button>
-                    {/* 🔥 引入竞技场 2.0 数据面板选项 */}
-                    <button 
-                      onClick={() => setActiveGame('decode')} 
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === 'decode' ? 'bg-purple-500/10 text-purple-400' : 'text-zinc-600 hover:text-zinc-400'}`}
-                    >
-                      Decode
-                    </button>
-                  </div>
-                  
-                  <AnimatePresence>
-                    {activeGame === 'osu' && (
-                      <motion.div 
-                        initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                        className="flex items-center gap-1 overflow-hidden"
-                      >
-                        {['standard', 'taiko', 'catch', 'mania'].map(m => (
-                          <button 
-                            key={m} 
-                            onClick={() => setOsuMode(m)} 
-                            className={`px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${osuMode === m ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30' : 'text-zinc-600 border border-transparent hover:text-zinc-400'}`}
-                          >
-                            {m}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-[#0c0c11] rounded-xl p-3 border border-white/[0.02] flex flex-col justify-center items-center text-center">
-                    <span className="text-[10px] text-zinc-500 font-bold mb-1">{displayData.scoreLabel}</span>
-                    <span 
-                      className={`text-lg font-bold tracking-tight ${displayData.scoreColor}`}
-                      style={{ fontFamily: "'Quicksand', sans-serif" }}
-                    >
-                      {displayData.scoreValue}
-                    </span>
-                  </div>
-                  <div className="bg-[#0c0c11] rounded-xl p-3 border border-white/[0.02] flex flex-col justify-center items-center text-center">
-                    <span className="text-[10px] text-zinc-500 font-bold mb-1">{displayData.rankLabel}</span>
-                    <span 
-                      className={`text-lg font-bold tracking-tight ${getRankColor(displayData.rankValue.replace('#',''))}`}
-                      style={{ fontFamily: "'Quicksand', sans-serif" }}
-                    >
-                      {displayData.rankValue}
-                    </span>
+                    <span className="text-xl font-bold text-zinc-100 truncate tracking-tight">{userStats?.username || user.username}</span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <img src={`/assets/lv${userStats?.level || user.level || 1}_badge.png`} alt="Lv" className="h-4 object-contain drop-shadow-sm" onError={(e) => { e.target.style.display = 'none'; }} />
+                      <span className="text-xs text-cyan-400 font-bold" style={{ fontFamily: "'Quicksand', sans-serif" }}>Lv.{userStats?.level || user.level || 1}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 mt-4">
-                  <Link to={`/profile/${user.username}`} className="flex-1 py-2.5 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] rounded-xl text-center text-xs font-semibold text-zinc-300 transition-colors active:scale-95">
+                {/* 🔥 优化：分段式游戏选择栏 (Segmented Controls) */}
+                <div className="bg-[#0c0c11]/80 p-1 rounded-xl border border-white/[0.04] flex mb-4 shadow-inner">
+                  {[{id:'maimai', label:'Maimai'}, {id:'chunithm', label:'Chuni'}, {id:'osu', label:'osu!'}, {id:'decode', label:'Decode'}].map(game => (
+                    <button 
+                      key={game.id} onClick={() => setActiveGame(game.id)} 
+                      className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all ${activeGame === game.id ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                      {game.label}
+                    </button>
+                  ))}
+                </div>
+
+                <AnimatePresence>
+                  {activeGame === 'osu' && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex gap-1 overflow-hidden mb-3">
+                      {['standard', 'taiko', 'catch', 'mania'].map(m => (
+                        <button key={m} onClick={() => setOsuMode(m)} className={`flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${osuMode === m ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30' : 'bg-[#0c0c11] border border-white/[0.02] text-zinc-500 hover:text-zinc-300'}`}>
+                          {m}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* 紧凑的数据展示区 */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-white/[0.02] rounded-xl p-3 border border-white/[0.03] flex flex-col justify-center items-center text-center">
+                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">{displayData.scoreLabel}</span>
+                    <span className={`text-lg font-black tracking-tight ${displayData.scoreColor}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.scoreValue}</span>
+                  </div>
+                  <div className="bg-white/[0.02] rounded-xl p-3 border border-white/[0.03] flex flex-col justify-center items-center text-center">
+                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-0.5">{displayData.rankLabel}</span>
+                    <span className={`text-lg font-black tracking-tight ${getRankColor(displayData.rankValue.replace('#',''))}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.rankValue}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Link to={`/profile/${user.username}`} className="flex-1 py-2.5 bg-[#0c0c11] hover:bg-zinc-800 border border-white/[0.05] rounded-xl text-center text-xs font-bold text-zinc-300 transition-colors active:scale-95 shadow-sm">
                     进入个人空间
                   </Link>
-                  <Link to="/friends" className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05] rounded-xl text-xs font-semibold text-zinc-300 transition-colors active:scale-95">
-                    <FaUserFriends /> 好友
+                  <Link to="/friends" className="w-12 py-2.5 bg-[#0c0c11] hover:bg-zinc-800 border border-white/[0.05] rounded-xl flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors active:scale-95 shadow-sm">
+                    <FaUserFriends />
                   </Link>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center text-center py-2">
-                <div className="w-14 h-14 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center mb-4">
-                  <FaUserCircle className="text-2xl text-zinc-600" />
-                </div>
-                <p className="text-xs font-medium text-zinc-400 mb-5 leading-relaxed px-2">登录系统，在此查阅您的战力档案与社交动态。</p>
-                <Link to="/login" className="w-full py-2.5 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95">
-                  立即登录
+              <div className="flex flex-col items-center text-center py-4 relative z-10">
+                <FaUserCircle className="text-5xl text-zinc-700 mb-3" />
+                <p className="text-xs font-medium text-zinc-400 mb-5 leading-relaxed px-2">登录系统，查阅您的专属战力档案与最新社交动态。</p>
+                <Link to="/login" className="w-full py-3 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl text-sm font-bold transition-all shadow-md active:scale-95">
+                  立即登录档案库
                 </Link>
               </div>
             )}
           </motion.div>
 
-          {/* ========================================== */}
-          {/* 🔥 v2.0.0 落地：开字母竞技场入口 */}
-          {/* ========================================== */}
+          {/* Letter Decode 入口 */}
           <motion.div 
             initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }} 
             onClick={() => navigate('/letter-game')}
-            className="bg-[#15151e] border border-cyan-500/30 rounded-3xl p-6 shadow-[0_0_20px_rgba(6,182,212,0.1)] relative overflow-hidden group hover:bg-[#1a1a24] hover:border-cyan-400/60 transition-all cursor-pointer active:scale-95"
+            className="bg-[#15151e]/80 backdrop-blur-xl border border-cyan-500/20 rounded-3xl p-5 md:p-6 shadow-[0_0_20px_rgba(6,182,212,0.1)] relative overflow-hidden group hover:border-cyan-400/50 transition-all cursor-pointer active:scale-95"
           >
-            {/* 动态渐变背景 */}
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-purple-500/5 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
             
             <div className="flex items-center justify-between mb-4 relative z-10">
-              <div className="flex items-center gap-2.5">
-                <div className="w-1 h-4 bg-cyan-400 rounded-full shadow-[0_0_6px_rgba(34,211,238,0.6)]"></div>
-                <h3 className="text-sm font-bold text-zinc-100 tracking-wide">开字母</h3>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-4 bg-cyan-400 rounded-full shadow-[0_0_6px_rgba(34,211,238,0.6)]"></div>
+                <h3 className="text-[11px] uppercase tracking-widest text-zinc-100 font-bold">Mini Game</h3>
               </div>
-              <span className="text-[10px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md bg-cyan-500 text-black shadow-lg animate-pulse">
-                NEW
-              </span>
+              <span className="text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded bg-cyan-500 text-black shadow-lg">V 2.0</span>
             </div>
 
             <div className="flex items-center gap-4 relative z-10">
-              <div className="w-16 h-16 rounded-xl bg-[#0c0c11] border border-cyan-500/30 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-110 transition-transform duration-500">
-                <FaGamepad className="text-3xl text-cyan-400 drop-shadow-md group-hover:text-cyan-300 transition-colors" />
+              <div className="w-14 h-14 rounded-xl bg-[#0c0c11] border border-cyan-500/30 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-110 group-hover:border-cyan-400/60 transition-all duration-500">
+                <FaGamepad className="text-2xl text-cyan-400 drop-shadow-md group-hover:text-cyan-300 transition-colors" />
               </div>
               <div className="flex flex-col min-w-0 flex-1 justify-center">
-                <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 truncate tracking-tight">
-                  LETTER DECODE
+                <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 truncate tracking-tight">
+                  开字母
                 </span>
-                <span className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                  挑战开字母的极限！
+                <span className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                  全新星级自选系统。<br/>挑战全球 OV 算力排位！
                 </span>
               </div>
             </div>
@@ -608,96 +470,67 @@ const Home = () => {
           <motion.div 
             initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} 
             onClick={() => navigate('/daily-history')}
-            className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-all cursor-pointer active:scale-95"
+            className="bg-[#15151e]/80 backdrop-blur-xl border border-white/[0.05] rounded-3xl p-5 md:p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] hover:border-white/10 transition-all cursor-pointer active:scale-95"
           >
-            <div className="flex items-center justify-between mb-5 relative z-10">
-              <div className="flex items-center gap-2.5">
-                <div className="w-1 h-4 bg-indigo-500 rounded-full shadow-[0_0_6px_rgba(99,102,241,0.5)]"></div>
-                <h3 className="text-sm font-bold text-zinc-100 tracking-wide">今日推荐曲目</h3>
+            <div className="flex items-center justify-between mb-4 relative z-10">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-4 bg-indigo-500 rounded-full shadow-[0_0_6px_rgba(99,102,241,0.5)]"></div>
+                <h3 className="text-[11px] uppercase tracking-widest text-zinc-100 font-bold">Daily Track</h3>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border text-indigo-400 border-indigo-500/20 flex items-center gap-1 group-hover:bg-indigo-500/10 transition-colors">
-                <FaHistory className="opacity-70" /> 往期回顾
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded text-indigo-400 flex items-center gap-1 group-hover:bg-indigo-500/10 transition-colors">
+                <FaHistory /> 往期回顾
               </span>
             </div>
 
             {isDailyLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <FaSpinner className="animate-spin text-2xl text-indigo-500/50" />
+              <div className="flex items-center justify-center py-2">
+                <FaSpinner className="animate-spin text-xl text-indigo-500/50" />
               </div>
             ) : dailySong && dailySong.title ? (
-              <div className="flex items-center gap-4 relative z-10">
+              <div className="flex items-center gap-3 relative z-10">
                 <img 
                   src={dailySong.coverUrl} 
-                  alt="Daily Recommend Cover" 
-                  className="w-16 h-16 rounded-xl object-cover border border-white/10 shrink-0 shadow-md group-hover:scale-105 transition-transform duration-500"
+                  alt="Cover" 
+                  className="w-14 h-14 rounded-xl object-cover border border-white/10 shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-500"
                   onError={(e) => { e.target.src = '/assets/bg.png'; }}
                 />
                 <div className="flex flex-col min-w-0 flex-1 justify-center">
-                  <span className="text-base font-bold truncate group-hover:text-indigo-400 text-zinc-100 transition-colors" title={dailySong.title}>
-                    {dailySong.title}
-                  </span>
-                  <span className="text-xs text-zinc-400 truncate mt-0.5">
-                    {dailySong.artist}
-                  </span>
-                  <span className="text-[10px] text-zinc-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md w-fit mt-1.5 truncate max-w-full">
-                    {dailySong.source}
-                  </span>
+                  <span className="text-sm font-bold truncate group-hover:text-indigo-400 text-zinc-100 transition-colors" title={dailySong.title}>{dailySong.title}</span>
+                  <span className="text-[11px] text-zinc-400 truncate mt-0.5">{dailySong.artist}</span>
+                  <span className="text-[9px] font-bold tracking-wider text-zinc-500 uppercase mt-1 truncate">{dailySong.source}</span>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-4 relative z-10 opacity-50">
-                <div className="w-16 h-16 rounded-xl bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center shrink-0">
-                  <span className="text-xl text-zinc-600 font-bold opacity-30">?</span>
+              <div className="flex items-center gap-3 relative z-10 opacity-50">
+                <div className="w-14 h-14 rounded-xl bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center shrink-0">
+                  <span className="text-lg text-zinc-600 font-bold opacity-30">?</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-base font-bold text-zinc-400">站长正在挑选...</span>
-                  <span className="text-xs text-zinc-500 mt-1">请稍后再来看看吧</span>
+                  <span className="text-sm font-bold text-zinc-400">正在挑选...</span>
+                  <span className="text-[11px] text-zinc-500 mt-0.5">请稍后再来看看吧</span>
                 </div>
               </div>
             )}
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
-            <div className="flex items-center justify-between mb-5 relative z-10">
-              <div className="flex items-center gap-2.5">
-                <div className="w-1 h-4 bg-purple-400 rounded-full shadow-[0_0_6px_rgba(192,132,252,0.5)]"></div>
-                <h3 className="text-sm font-bold text-zinc-100 tracking-wide">今日挑战</h3>
-              </div>
-              <span className="text-[10px] font-mono text-zinc-500 border border-white/[0.05] px-2 py-0.5 rounded-md">WIP</span>
-            </div>
-            <div className="flex flex-col gap-1.5 relative z-10">
-              <span className="text-base font-bold text-zinc-400">挑战任务生成中</span>
-              <span className="text-xs text-zinc-500">完成后可获取额外的社区经验</span>
-              <div className="mt-3 w-fit px-3 py-1 bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold rounded-lg opacity-50">
-                奖励: +?? XP
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="bg-[#15151e] border border-white/[0.05] rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:bg-[#1a1a24] transition-colors cursor-default">
-            <div className="flex items-center justify-between mb-5 relative z-10">
-              <div className="flex items-center gap-2.5">
-                <div className="w-1 h-4 bg-amber-400 rounded-full shadow-[0_0_6px_rgba(251,191,36,0.5)]"></div>
-                <h3 className="text-sm font-bold text-zinc-100 tracking-wide">段位与排行</h3>
-              </div>
-              <span className="text-[10px] font-mono text-zinc-500 border border-white/[0.05] px-2 py-0.5 rounded-md">WIP</span>
-            </div>
-            <div className="flex flex-col gap-3 relative z-10">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-xl bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center shrink-0">
-                  <FaMedal className="text-2xl text-zinc-600 opacity-30" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-base font-bold text-zinc-400">段位系统建设中</span>
-                  <span className="text-xs text-zinc-500 leading-relaxed">即将推出全新的竞技段位与专属排位赛面板...</span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+          <div className="grid grid-cols-2 gap-5">
+            <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="bg-[#15151e]/80 backdrop-blur-xl border border-white/[0.05] rounded-3xl p-5 shadow-sm relative overflow-hidden flex flex-col items-center justify-center text-center group">
+              <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center mb-2"><FaMedal className="text-purple-400 text-sm" /></div>
+              <h3 className="text-xs font-bold text-zinc-300">今日挑战</h3>
+              <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-widest font-bold">WIP</p>
+            </motion.div>
+            
+            <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="bg-[#15151e]/80 backdrop-blur-xl border border-white/[0.05] rounded-3xl p-5 shadow-sm relative overflow-hidden flex flex-col items-center justify-center text-center group">
+              <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center mb-2"><FaCrown className="text-amber-400 text-sm" /></div>
+              <h3 className="text-xs font-bold text-zinc-300">排位系统</h3>
+              <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-widest font-bold">WIP</p>
+            </motion.div>
+          </div>
           
         </div>
       </main>
 
+      {/* 新闻阅读 Modal 保持不变 */}
       <AnimatePresence>
         {selectedNews && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
