@@ -200,7 +200,7 @@ const Home = () => {
             <img 
               src={userStats.bannerUrl} 
               alt="User Banner"
-              className="w-full h-full object-cover opacity-35 mix-blend-screen transition-opacity duration-1000"
+              className="w-full h-full object-cover opacity-30 mix-blend-screen transition-opacity duration-1000"
               onError={(e) => { e.target.style.display = 'none'; }} 
             />
           ) : (
@@ -214,7 +214,7 @@ const Home = () => {
       <header className="w-full max-w-7xl mx-auto px-6 py-8 flex justify-between items-center z-50 relative">
         <div className="flex items-center shrink-0">
           {/* 🔥 优化：只显示单独的放大版 Logo，并保持时间在其右侧 */}
-          <img src="/assets/logos.png" alt="PUREBEAT Logo" className="h-10 md:h-14 object-contain drop-shadow-lg" />
+          <img src="/assets/logos.png" alt="PUREBEAT Logo" className="h-18 md:h-24 object-contain drop-shadow-lg" />
           
           <div className="hidden lg:flex flex-col justify-center ml-6 pl-6 border-l border-white/[0.08]">
             <span className="text-2xl font-bold text-zinc-200 tracking-wider drop-shadow-md leading-none" style={{ fontFamily: "'Quicksand', sans-serif" }}>
@@ -404,7 +404,7 @@ const Home = () => {
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <div className="bg-[#0c0c11]/50 rounded-xl p-4 border border-white/[0.04] flex flex-col justify-center items-center text-center shadow-inner">
                     <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">{displayData.scoreLabel}</span>
-                    <span className={`text-2xl md:text-3xl font-black tracking-tight drop-shadow-md ${displayData.scoreColor}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.scoreValue}</span>
+                    <span className={`text-2xl md:text-2xl font-black tracking-tight drop-shadow-md ${displayData.scoreColor}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.scoreValue}</span>
                   </div>
                   <div className="bg-[#0c0c11]/50 rounded-xl p-4 border border-white/[0.04] flex flex-col justify-center items-center text-center shadow-inner">
                     <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">{displayData.rankLabel}</span>
