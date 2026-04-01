@@ -214,7 +214,7 @@ const Home = () => {
       <header className="w-full max-w-7xl mx-auto px-6 py-8 flex justify-between items-center z-50 relative">
         <div className="flex items-center shrink-0">
           {/* 🔥 优化：只显示单独的放大版 Logo，并保持时间在其右侧 */}
-          <img src="/assets/logos.png" alt="PUREBEAT Logo" className="h-18 md:h-24 object-contain drop-shadow-lg" />
+          <img src="/assets/logos.png" alt="PUREBEAT Logo" className="h-12 md:h-15 object-contain drop-shadow-lg" />
           
           <div className="hidden lg:flex flex-col justify-center ml-6 pl-6 border-l border-white/[0.08]">
             <span className="text-2xl font-bold text-zinc-200 tracking-wider drop-shadow-md leading-none" style={{ fontFamily: "'Quicksand', sans-serif" }}>
