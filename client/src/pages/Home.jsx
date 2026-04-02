@@ -166,13 +166,13 @@ const Home = () => {
   const compactNews = showAllNews ? announcements.slice(3) : announcements.slice(3, 8); 
   const hasMoreNews = announcements.length > 8 && !showAllNews;
 
-  return (
-    <div className="w-full min-h-screen bg-gray-50 dark:bg-[#0c0c11] text-zinc-900 dark:text-zinc-200 font-sans selection:bg-indigo-500/30 relative pb-20 overflow-x-hidden transition-colors duration-300">
+    return (
+    <div className="w-full min-h-screen bg-gray-50 dark:bg-[#0c0c11] text-zinc-900 dark:text-zinc-200 selection:bg-indigo-500/30 relative pb-20 overflow-x-hidden transition-colors duration-300" style={{ fontFamily: "'Quicksand', 'NotoSansSC', sans-serif" }}>
       
-      {/* 悬浮主题切换按钮 */}
+            {/* 悬浮主题切换按钮 */}
       <button
         onClick={toggleTheme}
-        className="fixed bottom-8 right-8 w-12 h-12 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 z-[100] active:scale-90 bg-white dark:bg-[#15151e] border border-zinc-200 dark:border-white/5 text-indigo-500 dark:text-yellow-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+        className="fixed bottom-8 right-8 w-11 h-11 rounded-md flex items-center justify-center shadow-lg transition-all duration-300 z-[100] active:scale-90 bg-white dark:bg-[#15151e] border border-zinc-200 dark:border-white/10 text-indigo-500 dark:text-yellow-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
         title="切换色彩主题"
       >
         {isDark ? <FaSun className="text-xl" /> : <FaMoon className="text-xl" />}
@@ -225,26 +225,26 @@ const Home = () => {
 
         <div className="flex items-center gap-2 md:gap-3">
           {user && (
-            <button onClick={() => navigate('/inbox')} className="flex items-center justify-center gap-1.5 min-w-[40px] px-2 h-10 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-white rounded-xl transition-all active:scale-95 shadow-sm">
+            <button onClick={() => navigate('/inbox')} className="flex items-center justify-center gap-1.5 min-w-[40px] px-2 h-10 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-white rounded-md transition-all active:scale-95">
               <FaBell className="text-[16px]" />
               {unreadCount > 0 && <span className="text-[13px] font-bold text-rose-500 leading-none pt-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>{unreadCount}</span>}
             </button>
           )}
-          <button onClick={() => navigate('/voting')} className="flex items-center justify-center w-10 h-10 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-white rounded-xl transition-all active:scale-95 shadow-sm">
+          <button onClick={() => navigate('/voting')} className="flex items-center justify-center w-10 h-10 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-white rounded-md transition-all active:scale-95">
             <FaPoll className="text-[16px]" />
           </button>
           {user && (
-            <button onClick={handleCheckIn} disabled={isCheckingIn} className="flex items-center justify-center w-10 h-10 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-white rounded-xl transition-all active:scale-95 disabled:opacity-50 shadow-sm">
+            <button onClick={handleCheckIn} disabled={isCheckingIn} className="flex items-center justify-center w-10 h-10 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-white rounded-md transition-all active:scale-95 disabled:opacity-50">
               {isCheckingIn ? <FaSpinner className="animate-spin text-[16px]" /> : <FaCalendarCheck className="text-[16px]" />}
             </button>
           )}
-          <button onClick={() => navigate('/feedback')} className="flex items-center justify-center w-10 h-10 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-white rounded-xl transition-all active:scale-95 shadow-sm">
+          <button onClick={() => navigate('/feedback')} className="flex items-center justify-center w-10 h-10 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-white rounded-md transition-all active:scale-95">
             <FaCommentDots className="text-[16px]" />
           </button>
-          <a href="https://discord.gg/EnYB5GeB58" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center w-10 h-10 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-xl transition-all active:scale-95 shadow-sm">
+          <a href="https://discord.gg/EnYB5GeB58" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center w-10 h-10 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-md transition-all active:scale-95">
             <FaDiscord className="text-[18px]" />
           </a>
-          <a href="https://afdian.com/a/purebeat" target="_blank" rel="noopener noreferrer" className="hidden md:flex items-center justify-center w-10 h-10 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl transition-all shadow-sm active:scale-95">
+          <a href="https://afdian.com/a/purebeat" target="_blank" rel="noopener noreferrer" className="hidden md:flex items-center justify-center w-10 h-10 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md transition-all active:scale-95">
             <FaHeart className="text-[16px]" />
           </a>
         </div>
@@ -257,7 +257,7 @@ const Home = () => {
           
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <Link to="/tournaments" className="block group">
-              <div className="relative w-full aspect-[21/8] md:aspect-[21/6] rounded-3xl overflow-hidden border border-zinc-200 dark:border-white/5 bg-white dark:bg-[#15151e] shadow-lg transition-all duration-500 group-hover:border-indigo-400 dark:group-hover:border-indigo-500/40 group-hover:shadow-[0_8px_30px_rgba(99,102,241,0.15)]">
+                <div className="relative w-full aspect-[21/8] md:aspect-[21/6] overflow-hidden border-l-4 border-l-indigo-500 bg-white dark:bg-[#15151e] transition-all duration-500 group-hover:border-l-indigo-400 dark:group-hover:border-l-indigo-400">
                 <img 
                   src="/assets/register_banner.png" 
                   alt="Tournament Banner"
@@ -266,7 +266,7 @@ const Home = () => {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/90 via-zinc-900/20 dark:from-[#0c0c11]/90 dark:via-[#0c0c11]/20 to-transparent pointer-events-none" />
                 <div className="absolute bottom-5 md:bottom-6 left-6 md:left-8">
-                  <span className="bg-indigo-500 text-white px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest shadow-lg">
+                  <span className="bg-indigo-500 text-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest">
                     Official Event
                   </span>
                   <h2 className="text-2xl md:text-3xl font-black text-white mt-2.5 drop-shadow-md tracking-tight group-hover:text-indigo-200 transition-colors">
@@ -278,8 +278,8 @@ const Home = () => {
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
-            <div className="flex items-center gap-3 mb-5 px-1">
-              <div className="w-1.5 h-5 bg-indigo-500 rounded-full shadow-sm"></div>
+                        <div className="flex items-center gap-3 mb-5 px-1 border-b border-zinc-200 dark:border-white/5 pb-4">
+              <div className="w-1 h-5 bg-indigo-500"></div>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">资讯枢纽</h2>
             </div>
 
@@ -287,8 +287,8 @@ const Home = () => {
               {fullPreviewNews.map((news) => {
                 const d = new Date(news.createdAt);
                 return (
-                  <div key={news._id} onClick={() => setSelectedNews(news)} className="bg-white dark:bg-[#15151e] border border-zinc-200 dark:border-white/5 rounded-3xl cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-500/50 hover:shadow-md transition-all group overflow-hidden shadow-sm flex flex-col md:flex-row h-auto md:h-44">
-                    <div className="relative w-full md:w-64 h-40 md:h-full bg-gray-100 dark:bg-[#0a0a0c] overflow-hidden shrink-0 flex items-center justify-center">
+                  <div key={news._id} onClick={() => setSelectedNews(news)} className="bg-white dark:bg-[#15151e] border-l-4 border-l-transparent hover:border-l-indigo-500 border-b border-zinc-100 dark:border-white/5 cursor-pointer transition-all duration-200 group flex flex-col md:flex-row h-auto md:h-44">
+                    <div className="relative w-full md:w-64 h-40 md:h-full bg-gray-100 dark:bg-[#0a0a0c] overflow-hidden shrink-0 flex items-center justify-center rounded-none">
                       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent group-hover:scale-105 transition-transform duration-700 z-0"></div>
                       <span className="text-4xl text-zinc-300 dark:text-zinc-800 font-bold opacity-50 z-0 relative tracking-widest">NEWS</span>
                       
@@ -327,7 +327,7 @@ const Home = () => {
                   {compactNews.map((news) => {
                     const d = new Date(news.createdAt);
                     return (
-                      <div key={news._id} onClick={() => setSelectedNews(news)} className="flex items-center justify-between px-5 py-4 bg-white dark:bg-[#15151e] border border-zinc-200 dark:border-white/5 rounded-2xl cursor-pointer hover:bg-gray-50 dark:hover:bg-[#1a1a24] transition-all group">
+                      <div key={news._id} onClick={() => setSelectedNews(news)} className="flex items-center justify-between px-2 py-3.5 border-b border-zinc-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-all group border-l-4 border-l-transparent hover:border-l-indigo-500">
                         <div className="flex items-center gap-4 min-w-0 flex-1">
                           <span className="text-[11px] font-bold text-zinc-500 w-10 shrink-0 text-center uppercase tracking-wider" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                             {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -343,8 +343,8 @@ const Home = () => {
                 </div>
               )}
 
-              {hasMoreNews && (
-                <button onClick={() => setShowAllNews(true)} className="w-full py-3.5 mt-1 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 text-xs font-bold rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
+                            {hasMoreNews && (
+                <button onClick={() => setShowAllNews(true)} className="w-full py-3.5 mt-1 bg-transparent border-b-2 border-zinc-200 dark:border-white/5 text-zinc-500 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
                   展开全部资讯 <FaChevronRight className="text-[10px]" />
                 </button>
               )}
@@ -355,12 +355,11 @@ const Home = () => {
         {/* 右侧区域：个人档案与游戏入口 */}
         <div className="lg:col-span-4 flex flex-col gap-5">
           
-          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="bg-white dark:bg-[#15151e] border border-zinc-200 dark:border-white/5 rounded-3xl p-5 md:p-6 shadow-lg relative overflow-hidden group">
+                    <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="bg-white dark:bg-[#15151e] border-l-4 border-l-cyan-500 border-b border-zinc-100 dark:border-white/5 p-5 md:p-6 relative overflow-hidden group">
             <div className="absolute -top-16 -right-16 w-32 h-32 bg-cyan-500/10 dark:bg-cyan-500/20 blur-[40px] rounded-full pointer-events-none transition-all group-hover:scale-125"></div>
 
-            <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-4 bg-cyan-500 rounded-full shadow-sm"></div>
                 <h3 className="text-[11px] uppercase tracking-widest text-zinc-500 dark:text-zinc-400 font-bold">Player Profile</h3>
               </div>
             </div>
@@ -368,7 +367,7 @@ const Home = () => {
             {user ? (
               <div className="flex flex-col relative z-10">
                 <div className="flex items-center gap-4 mb-4">
-                  <img src={userStats?.avatarUrl || user.avatarUrl || '/assets/logos.png'} alt="Avatar" className="w-14 h-14 rounded-full object-cover bg-gray-50 dark:bg-[#0c0c11] border border-zinc-200 dark:border-white/10 shrink-0 shadow-sm" />
+                  <img src={userStats?.avatarUrl || user.avatarUrl || '/assets/logos.png'} alt="Avatar" className="w-14 h-14 rounded-full object-cover bg-gray-50 dark:bg-[#0c0c11] border border-zinc-200 dark:border-white/10 shrink-0" />
                   <div className="flex flex-col min-w-0">
                     <span className="text-xl font-bold text-zinc-900 dark:text-white truncate tracking-tight">{userStats?.username || user.username}</span>
                     <div className="flex items-center gap-1.5 mt-0.5">
@@ -378,11 +377,11 @@ const Home = () => {
                   </div>
                 </div>
 
-                <div className="bg-gray-100 dark:bg-[#0c0c11]/80 p-1 rounded-xl border border-zinc-200 dark:border-white/5 flex mb-4 shadow-inner">
+                <div className="bg-gray-100 dark:bg-[#0c0c11]/80 p-0.5 border-b-2 border-zinc-200 dark:border-white/5 flex mb-4">
                   {[{id:'maimai', label:'Maimai'}, {id:'chunithm', label:'Chuni'}, {id:'osu', label:'osu!'}, {id:'decode', label:'Decode'}].map(game => (
                     <button 
                       key={game.id} onClick={() => setActiveGame(game.id)} 
-                      className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all ${activeGame === game.id ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm border border-zinc-200 dark:border-transparent' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300'}`}
+                      className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${activeGame === game.id ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-b-2 border-indigo-500' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300'}`}
                     >
                       {game.label}
                     </button>
@@ -392,8 +391,8 @@ const Home = () => {
                 <AnimatePresence>
                   {activeGame === 'osu' && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex gap-1 overflow-hidden mb-3">
-                      {['standard', 'taiko', 'catch', 'mania'].map(m => (
-                        <button key={m} onClick={() => setOsuMode(m)} className={`flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-all ${osuMode === m ? 'bg-pink-500 text-white shadow-sm' : 'bg-gray-50 dark:bg-white/5 border border-zinc-200 dark:border-white/5 text-zinc-500'}`}>
+                                            {['standard', 'taiko', 'catch', 'mania'].map(m => (
+                        <button key={m} onClick={() => setOsuMode(m)} className={`flex-1 py-1 text-[9px] font-bold uppercase tracking-widest transition-all ${osuMode === m ? 'bg-pink-500 text-white border-b-2 border-pink-700' : 'bg-gray-50 dark:bg-white/5 border-b-2 border-transparent text-zinc-500'}`}>
                           {m}
                         </button>
                       ))}
@@ -401,54 +400,53 @@ const Home = () => {
                   )}
                 </AnimatePresence>
 
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-gray-50 dark:bg-[#0c0c11]/50 rounded-xl p-4 border border-zinc-200 dark:border-white/5 flex flex-col justify-center items-center text-center shadow-inner">
+                                <div className="grid grid-cols-2 gap-0 mb-4 border border-zinc-100 dark:border-white/5">
+                  <div className="p-4 border-r border-zinc-100 dark:border-white/5 flex flex-col justify-center items-center text-center bg-gray-50 dark:bg-[#0c0c11]/50">
                     <span className="text-[10px] text-zinc-500 dark:text-zinc-500 font-bold uppercase tracking-widest mb-1.5">{displayData.scoreLabel}</span>
-                    <span className={`text-2xl md:text-3xl font-black tracking-tight drop-shadow-md ${displayData.scoreColor}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.scoreValue}</span>
+                    <span className={`text-2xl md:text-3xl font-black tracking-tight ${displayData.scoreColor}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.scoreValue}</span>
                   </div>
-                  <div className="bg-gray-50 dark:bg-[#0c0c11]/50 rounded-xl p-4 border border-zinc-200 dark:border-white/5 flex flex-col justify-center items-center text-center shadow-inner">
+                  <div className="p-4 flex flex-col justify-center items-center text-center bg-gray-50 dark:bg-[#0c0c11]/50">
                     <span className="text-[10px] text-zinc-500 dark:text-zinc-500 font-bold uppercase tracking-widest mb-1.5">{displayData.rankLabel}</span>
-                    <span className={`text-2xl md:text-3xl font-black tracking-tight drop-shadow-md ${getRankColor(displayData.rankValue.replace('#',''))}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.rankValue}</span>
+                    <span className={`text-2xl md:text-3xl font-black tracking-tight ${getRankColor(displayData.rankValue.replace('#',''))}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayData.rankValue}</span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Link to={`/profile/${user.username}`} className="flex-1 py-2.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-zinc-200 dark:border-white/5 rounded-xl text-center text-xs font-bold text-zinc-700 dark:text-zinc-300 transition-colors active:scale-95 shadow-sm">
+                                <div className="flex items-center gap-2">
+                  <Link to={`/profile/${user.username}`} className="flex-1 py-2.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border-b-2 border-zinc-200 dark:border-white/10 text-center text-xs font-bold text-zinc-700 dark:text-zinc-300 transition-colors active:scale-95">
                     进入个人空间
                   </Link>
-                  <Link to="/friends" className="w-12 py-2.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/5 rounded-xl flex items-center justify-center hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors active:scale-95 shadow-sm">
+                  <Link to="/friends" className="w-12 py-2.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 border-b-2 border-zinc-200 dark:border-white/10 flex items-center justify-center hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors active:scale-95">
                     <FaUserFriends />
                   </Link>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center text-center py-4 relative z-10">
+                            <div className="flex flex-col items-center text-center py-4 relative z-10">
                 <FaUserCircle className="text-5xl text-zinc-300 dark:text-zinc-700 mb-3" />
                 <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-5 leading-relaxed px-2">登录系统，查阅您的专属战力档案与最新社交动态。</p>
-                <Link to="/login" className="w-full py-3 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white rounded-xl text-sm font-bold transition-all shadow-md active:scale-95">
+                <Link to="/login" className="w-full py-3 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white text-sm font-bold transition-all active:scale-95">
                   立即登录档案库
                 </Link>
               </div>
             )}
           </motion.div>
 
-          <motion.div 
+                    <motion.div 
             initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }} 
             onClick={() => navigate('/letter-game')}
-            className="bg-white dark:bg-[#15151e] border border-cyan-300 dark:border-cyan-500/30 rounded-3xl p-5 md:p-6 shadow-lg relative overflow-hidden group hover:border-cyan-400 dark:hover:border-cyan-400/80 transition-all cursor-pointer active:scale-95"
+            className="bg-white dark:bg-[#15151e] border-l-4 border-l-cyan-500 border-b border-zinc-100 dark:border-white/5 p-5 md:p-6 relative overflow-hidden group hover:border-l-cyan-400 transition-all cursor-pointer active:scale-95"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-purple-500/5 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
             
-            <div className="flex items-center justify-between mb-4 relative z-10">
+                        <div className="flex items-center justify-between mb-4 relative z-10">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-4 bg-cyan-500 rounded-full shadow-sm"></div>
                 <h3 className="text-[11px] uppercase tracking-widest text-zinc-800 dark:text-zinc-100 font-bold">Mini Game</h3>
               </div>
-              <span className="text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded bg-cyan-500 text-white shadow-md">V 2.0</span>
+              <span className="text-[9px] font-black tracking-widest uppercase px-2 py-0.5 bg-cyan-500 text-white">V 2.0</span>
             </div>
 
             <div className="flex items-center gap-4 relative z-10">
-              <div className="w-14 h-14 rounded-xl bg-cyan-50 dark:bg-[#0c0c11] border border-cyan-200 dark:border-cyan-500/30 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-110 group-hover:border-cyan-400 transition-all duration-500">
+              <div className="w-14 h-14 bg-cyan-50 dark:bg-[#0c0c11] border-l-2 border-cyan-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-all duration-500">
                 <FaGamepad className="text-2xl text-cyan-500 dark:text-cyan-400 drop-shadow-md transition-colors" />
               </div>
               <div className="flex flex-col min-w-0 flex-1 justify-center">
@@ -462,17 +460,16 @@ const Home = () => {
             </div>
           </motion.div>
 
-          <motion.div 
+                    <motion.div 
             initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} 
             onClick={() => navigate('/daily-history')}
-            className="bg-white dark:bg-[#15151e] border border-zinc-200 dark:border-white/5 rounded-3xl p-5 md:p-6 shadow-sm relative overflow-hidden group hover:bg-gray-50 dark:hover:bg-[#1a1a24] transition-all cursor-pointer active:scale-95"
+            className="bg-white dark:bg-[#15151e] border-l-4 border-l-indigo-500 border-b border-zinc-100 dark:border-white/5 p-5 md:p-6 relative overflow-hidden group hover:bg-gray-50 dark:hover:bg-[#1a1a24] transition-all cursor-pointer active:scale-95"
           >
-            <div className="flex items-center justify-between mb-4 relative z-10">
+                        <div className="flex items-center justify-between mb-4 relative z-10">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-4 bg-indigo-500 rounded-full shadow-sm"></div>
                 <h3 className="text-[11px] uppercase tracking-widest text-zinc-800 dark:text-zinc-100 font-bold">Daily Track</h3>
               </div>
-              <span className="text-[9px] font-bold px-2 py-0.5 rounded text-indigo-600 dark:text-indigo-400 flex items-center gap-1 bg-indigo-50 dark:bg-indigo-500/10 transition-colors">
+              <span className="text-[9px] font-bold px-2 py-0.5 text-indigo-600 dark:text-indigo-400 flex items-center gap-1 border border-indigo-200 dark:border-indigo-500/20 transition-colors">
                 <FaHistory /> 往期回顾
               </span>
             </div>
@@ -483,7 +480,7 @@ const Home = () => {
               </div>
             ) : dailySong && dailySong.title ? (
               <div className="flex items-center gap-3 relative z-10">
-                <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-[#0a0a0c] border border-zinc-200 dark:border-white/5 shrink-0 shadow-sm overflow-hidden relative group-hover:scale-105 transition-transform duration-500 flex items-center justify-center">
+                <div className="w-14 h-14 bg-gray-100 dark:bg-[#0a0a0c] border-l-2 border-zinc-300 dark:border-white/10 shrink-0 overflow-hidden relative group-hover:scale-105 transition-transform duration-500 flex items-center justify-center">
                    <FaMusic className="text-zinc-400 dark:text-zinc-600 opacity-30 text-xl absolute z-0" />
                    {dailySong.coverUrl && !dailySong.coverUrl.includes('bg.png') && (
                      <img 
@@ -500,8 +497,8 @@ const Home = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3 relative z-10 opacity-50">
-                <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-white/5 border border-zinc-200 dark:border-white/5 flex items-center justify-center shrink-0">
+                            <div className="flex items-center gap-3 relative z-10 opacity-50">
+                <div className="w-14 h-14 bg-gray-100 dark:bg-white/5 border-l-2 border-zinc-300 dark:border-white/10 flex items-center justify-center shrink-0">
                   <FaMusic className="text-lg text-zinc-400 dark:text-zinc-600 opacity-50" />
                 </div>
                 <div className="flex flex-col">
@@ -512,15 +509,15 @@ const Home = () => {
             )}
           </motion.div>
 
-          <div className="grid grid-cols-2 gap-5">
-            <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="bg-white dark:bg-[#15151e] border border-zinc-200 dark:border-white/5 rounded-3xl p-5 shadow-sm relative overflow-hidden flex flex-col items-center justify-center text-center group">
-              <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-500/10 flex items-center justify-center mb-2"><FaMedal className="text-purple-600 dark:text-purple-500 text-sm" /></div>
+                    <div className="grid grid-cols-2 gap-3">
+            <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="bg-white dark:bg-[#15151e] border-l-4 border-l-purple-500 border-b border-zinc-100 dark:border-white/5 p-5 relative overflow-hidden flex flex-col items-center justify-center text-center group">
+              <div className="w-8 h-8 bg-purple-100 dark:bg-purple-500/10 flex items-center justify-center mb-2"><FaMedal className="text-purple-600 dark:text-purple-500 text-sm" /></div>
               <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-300">今日挑战</h3>
               <p className="text-[9px] text-zinc-400 dark:text-zinc-500 mt-1 uppercase tracking-widest font-bold">WIP</p>
             </motion.div>
             
-            <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="bg-white dark:bg-[#15151e] border border-zinc-200 dark:border-white/5 rounded-3xl p-5 shadow-sm relative overflow-hidden flex flex-col items-center justify-center text-center group">
-              <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/10 flex items-center justify-center mb-2"><FaCrown className="text-amber-600 dark:text-amber-500 text-sm" /></div>
+            <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="bg-white dark:bg-[#15151e] border-l-4 border-l-amber-500 border-b border-zinc-100 dark:border-white/5 p-5 relative overflow-hidden flex flex-col items-center justify-center text-center group">
+              <div className="w-8 h-8 bg-amber-100 dark:bg-amber-500/10 flex items-center justify-center mb-2"><FaCrown className="text-amber-600 dark:text-amber-500 text-sm" /></div>
               <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-300">排位系统</h3>
               <p className="text-[9px] text-zinc-400 dark:text-zinc-500 mt-1 uppercase tracking-widest font-bold">WIP</p>
             </motion.div>
@@ -539,14 +536,14 @@ const Home = () => {
               className="absolute inset-0 bg-black/40 dark:bg-black/80 backdrop-blur-sm"
             />
             
-            <motion.div 
+                        <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="relative w-full max-w-3xl bg-white dark:bg-[#15151e] border border-zinc-200 dark:border-white/5 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+              className="relative w-full max-w-3xl bg-white dark:bg-[#15151e] border border-zinc-200 dark:border-white/5 border-t-4 border-t-indigo-500 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
             >
-              <div className="p-6 md:p-8 border-b border-zinc-200 dark:border-white/5 bg-gray-50 dark:bg-[#1a1a24] shrink-0 flex justify-between items-start">
+              <div className="p-6 md:p-8 border-b border-zinc-200 dark:border-white/5 bg-gray-50 dark:bg-[#1a1a24] shrink-0 flex justify-between items-start rounded-none">
                 <div className="pr-8">
                   <div className="flex items-center gap-3 mb-3">
-                    <span className="px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest uppercase bg-indigo-500 text-white">
+                    <span className="px-2.5 py-1 text-[10px] font-bold tracking-widest uppercase bg-indigo-500 text-white">
                       {selectedNews.type || 'NEWS'}
                     </span>
                     <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
@@ -561,9 +558,9 @@ const Home = () => {
                   </div>
                 </div>
                 
-                <button 
+                                <button 
                   onClick={() => setSelectedNews(null)}
-                  className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-zinc-200 dark:border-white/5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white flex items-center justify-center transition-all active:scale-90"
+                  className="absolute top-6 right-6 w-10 h-10 bg-white dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-zinc-200 dark:border-white/5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white flex items-center justify-center transition-all active:scale-90"
                 >
                   <FaTimes />
                 </button>

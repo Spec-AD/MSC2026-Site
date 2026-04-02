@@ -7,6 +7,7 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+  font-family: 'Quicksand', 'NotoSansSC', 'MPLUS1p', sans-serif;
   @apply bg-gray-50 text-zinc-900 dark:bg-[#0c0c11] dark:text-zinc-200 transition-colors duration-300;
   -webkit-font-smoothing: antialiased;
 }
