@@ -82,8 +82,12 @@ const MaimaiProfile = () => {
   const [detailDiff, setDetailDiff] = useState(3); 
 
   const [selectedLevelDetail, setSelectedLevelDetail] = useState(null);
-  const [plateDetailLevel, setPlateDetailLevel] = useState(null); // 牌子模态框内展开的等级
-  const [levelDetailDs, setLevelDetailDs] = useState(null);   // 等级模态框内展开的定数组
+  const [plateDetailLevel, setPlateDetailLevel] = useState(null);
+  const [levelDetailDs, setLevelDetailDs] = useState(null);
+  const [levelBgCache] = useState(() => {
+    const seed = Date.now();
+    return { cache: new Map(), seed };
+  });
 
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
 
@@ -291,7 +295,7 @@ const MaimaiProfile = () => {
     if (!musicData || musicData.length === 0 || !userScoreMap) return null;
 
     const data = LEVEL_LIST.map(lvl => ({
-        level: lvl, total: 0, clear: 0, sss: 0, sssp: 0, fc: 0, fcp: 0, ap: 0, app: 0
+        level: lvl, total: 0, clear: 0, sss: 0, sssp: 0, fc: 0, fcp: 0, ap: 0, app: 0, songs: []
     }));
     const levelMap = {};
     data.forEach(d => levelMap[d.level] = d);
@@ -302,6 +306,7 @@ const MaimaiProfile = () => {
         song.level.forEach((lvlStr, idx) => {
             if (levelMap[lvlStr]) {
                 levelMap[lvlStr].total++;
+                levelMap[lvlStr].songs.push(song.id);
                 const score = userScoreMap.get(`${song.id}_${idx}`) || userScoreMap.get(`${Number(song.id)}_${idx}`);
                 if (score) {
                     const ach = score.achievement || score.achievementRate || 0;
@@ -500,6 +505,19 @@ const MaimaiProfile = () => {
     return null;
   };
 
+  const getDxStarIcon = (dxRatio) => {
+    if (!dxRatio) return null;
+    const pct = dxRatio * 100;
+    let stars = 0;
+    if (pct >= 97) stars = 5;
+    else if (pct >= 95) stars = 4;
+    else if (pct >= 93) stars = 3;
+    else if (pct >= 90) stars = 2;
+    else if (pct >= 85) stars = 1;
+    if (stars === 0) return null;
+    return <img src={`/assets/${stars}dxstar.png`} alt={`${stars}★`} className="w-4 h-4 object-contain shrink-0" />;
+  };
+
   const renderScoreCard = (score, index, prefix) => {
     const diff = getDiffConfig(score);
     const realLevel = getLevelString(score);
@@ -680,15 +698,20 @@ const MaimaiProfile = () => {
                       const offset = circ - (Math.min(pct, 100) / 100) * circ;
                       const isCompleted = plate.count === plate.total && plate.total > 0;
                       const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
+                      const bgImg = plate.customImg ? `/assets/${plate.customImg}.png` : `/assets/${plate.imgPrefix}_${plate.imgSuffix}.png`;
                       return (
                         <div
                           key={idx}
                           onClick={() => { setSelectedPlateDetail({ versionGroup: targetGroup, plateType: plate.type, plateName: plate.name }); setDetailDiff(3); }}
-                          className={`bg-[#15151e] border border-white/[0.05] p-5 flex flex-col items-center gap-3 cursor-pointer hover:bg-[#1a1a24] hover:border-amber-500/20 transition-all group ${
+                          className={`relative bg-[#15151e] border border-white/[0.05] p-5 flex flex-col items-center gap-3 cursor-pointer hover:bg-[#1a1a24] hover:border-amber-500/20 transition-all group overflow-hidden ${
                             isCompleted ? 'ring-1 ring-amber-400/40' : ''
                           }`}
                         >
-                          <div className="relative w-24 h-24 flex items-center justify-center">
+                          <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                            <img src={bgImg} alt="" className="h-full w-auto max-w-none object-contain opacity-[0.15] group-hover:opacity-[0.22] transition-opacity" loading="eager" onError={(e) => { e.target.parentElement.style.display = 'none'; }} />
+                          </div>
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/80 to-[#0c0c11]/40 pointer-events-none"></div>
+                          <div className="relative w-24 h-24 flex items-center justify-center z-10">
                             <svg className="-rotate-90 w-full h-full" viewBox="0 0 96 96">
                               <circle cx="48" cy="48" r={r} strokeWidth="7" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
                               <motion.circle
@@ -708,11 +731,11 @@ const MaimaiProfile = () => {
                               </span>
                             </div>
                           </div>
-                          <div className="text-center">
+                          <div className="text-center z-10">
                             <div className={`text-sm font-bold tracking-widest ${plate.color.split(' ')[0]}`}>{plate.name}</div>
                             <div className="text-xs text-zinc-600 mt-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>{plate.count} / {plate.total}</div>
                           </div>
-                          <div className="text-[10px] text-zinc-600 group-hover:text-amber-400 transition-colors">点击查看详情 →</div>
+                          <div className="text-[10px] text-zinc-600 group-hover:text-amber-400 transition-colors z-10">点击查看详情 →</div>
                         </div>
                       );
                     })}
@@ -822,12 +845,22 @@ const MaimaiProfile = () => {
                     const circ = 2 * Math.PI * r;
                     const offset = circ - (Math.min(displayPct, 100) / 100) * circ;
 
+                    const bgKey = lvl.level;
+                    if (!levelBgCache.cache.has(bgKey)) {
+                      const rawRng = Math.sin(levelBgCache.seed + lvl.level.split('').reduce((a,c) => a + c.charCodeAt(0), 0)) * 10000;
+                      const idx = Math.floor((rawRng - Math.floor(rawRng)) * lvl.songs.length);
+                      const pickedId = lvl.songs[Math.max(0, Math.min(idx, lvl.songs.length - 1))];
+                      levelBgCache.cache.set(bgKey, `https://www.diving-fish.com/covers/${String(pickedId).padStart(5, '0')}.png`);
+                    }
+
                     return (
                         <div
                           key={lvl.level}
                           onClick={() => setSelectedLevelDetail(lvl.level)}
-                          className={`relative p-5 border transition-all cursor-pointer group flex flex-col items-center gap-4 ${baseClass} ${glowClass}`}
+                          className={`relative p-5 border transition-all cursor-pointer group flex flex-col items-center gap-4 overflow-hidden ${baseClass} ${glowClass}`}
                         >
+                            <img src={levelBgCache.cache.get(bgKey)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:opacity-30 transition-opacity" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/60 to-transparent pointer-events-none"></div>
                             {isAllAPP && <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 animate-pulse pointer-events-none"></div>}
                             
                             <div className="relative w-20 h-20 flex items-center justify-center z-10">
@@ -1181,7 +1214,7 @@ const MaimaiProfile = () => {
                   </div>
 
                   {/* 按等级分组可展开 */}
-                  <div className="flex-1 overflow-y-auto bg-[#0c0c11] p-6 flex flex-col gap-3">
+                  <div className="flex-1 overflow-y-auto bg-[#0c0c11] p-6 flex flex-col gap-4">
                     {lvlGroups.map(([lvlStr, songs]) => {
                       const compSongs = songs.filter(s => {
                         const sc = userScoreMap.get(`${s.id}_${detailDiff}`) || userScoreMap.get(`${Number(s.id)}_${detailDiff}`);
@@ -1192,10 +1225,10 @@ const MaimaiProfile = () => {
                       const offset = circ - (pct / 100) * circ;
                       const isOpen = plateDetailLevel === lvlStr;
                       return (
-                        <div key={lvlStr} className="border border-white/[0.05] bg-[#15151e] overflow-hidden">
+                        <div key={lvlStr} className="border border-white/[0.05] bg-[#15151e] overflow-hidden rounded-lg">
                           <button
                             onClick={() => setPlateDetailLevel(isOpen ? null : lvlStr)}
-                            className="w-full flex items-center gap-4 p-4 hover:bg-[#1a1a24] transition-colors"
+                            className="w-full flex items-center gap-4 p-5 hover:bg-[#1a1a24] transition-colors"
                           >
                             <div className="relative w-10 h-10 shrink-0">
                               <svg className="-rotate-90 w-full h-full" viewBox="0 0 40 40">
@@ -1215,31 +1248,32 @@ const MaimaiProfile = () => {
                             <span className="text-zinc-600 text-sm">{isOpen ? '▲' : '▼'}</span>
                           </button>
                           {isOpen && (
-                            <div className="px-4 pb-4 bg-[#0c0c11] grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                            <div className="px-4 pb-4 bg-[#0c0c11] grid grid-cols-2 gap-3">
                               {songs.sort((a,b) => (b.ds[detailDiff]||0)-(a.ds[detailDiff]||0)).map(song => {
                                 const score = userScoreMap.get(`${song.id}_${detailDiff}`) || userScoreMap.get(`${Number(song.id)}_${detailDiff}`);
                                 const isCompleted = checkPlateCondition(score, selectedPlateDetail.plateType);
+                                const ach = score ? (score.achievement || score.achievementRate || 0) : 0;
                                 return (
-                                  <div key={song.id} className="flex flex-col gap-1.5 group">
-                                    <div className={`relative aspect-square overflow-hidden border ${
-                                      isCompleted ? 'border-amber-400/40' : 'border-white/[0.05] opacity-40 grayscale-[60%]'
-                                    } transition-all`}>
-                                      <img src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5,'0')}.png`}
-                                        alt="cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                        onError={e => { e.target.src = '/assets/bg.png'; }} />
-                                      {!isCompleted && (
-                                        <div className="absolute inset-0 bg-[#0c0c11]/60 flex items-center justify-center">
-                                          <span className="text-[9px] font-bold text-zinc-500 uppercase">Not Cleared</span>
-                                        </div>
-                                      )}
-                                      {score && isCompleted && (
-                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-1.5 pt-3 flex justify-between items-end">
-                                          <span className="text-[9px] font-bold text-white font-mono">{(score.achievement||score.achievementRate).toFixed(1)}%</span>
-                                          {getFcBadge(score)}
-                                        </div>
-                                      )}
+                                  <div key={song.id} className={`flex items-center gap-3 p-3 border transition-all ${
+                                    isCompleted ? 'border-amber-400/40 bg-[#15151e]' : 'border-white/[0.05] bg-[#15151e] opacity-50'
+                                  }`}>
+                                    <img src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5,'0')}.png`}
+                                      alt="" className="w-16 h-16 object-cover shrink-0" loading="lazy" onError={e => { e.target.src = '/assets/bg.png'; }} />
+                                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                      <div className={`text-sm font-bold truncate ${isCompleted ? 'text-zinc-100' : 'text-zinc-600'}`}>{song.title}</div>
+                                      <div className="text-xs text-zinc-500 truncate">{song.basic_info?.artist || ''}</div>
+                                      <div className="flex items-center justify-between mt-0.5">
+                                        <div className="flex items-center gap-1">{getFcBadge(score)}</div>
+                                        {isCompleted && score ? (
+                                          <div className="flex items-center gap-1.5">
+                                            {getDxStarIcon(score.dxRatio)}
+                                            <span className="text-xs font-bold text-amber-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>{ach.toFixed(4)}%</span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-[11px] text-zinc-600">未完成</span>
+                                        )}
+                                      </div>
                                     </div>
-                                    <span className={`text-[10px] font-bold truncate ${isCompleted ? 'text-zinc-300' : 'text-zinc-600'}`}>{song.title}</span>
                                   </div>
                                 );
                               })}
@@ -1309,7 +1343,7 @@ const MaimaiProfile = () => {
                     )}
 
                     {/* 按定数分组，可展开 */}
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-4">
                       {levelDsGroups.map(({ ds, charts }) => {
                         const cleared = charts.filter(c => c.score && (c.score.achievement || c.score.achievementRate || 0) >= 80).length;
                         const fcC = charts.filter(c => c.score && ['fc','fcp','ap','app'].includes(getFc(c.score))).length;
@@ -1319,10 +1353,10 @@ const MaimaiProfile = () => {
                         const offset = circ - (pct / 100) * circ;
                         const isOpen = levelDetailDs === ds.toFixed(1);
                         return (
-                          <div key={ds} className="border border-white/[0.05] bg-[#15151e] overflow-hidden">
+                          <div key={ds} className="border border-white/[0.05] bg-[#15151e] overflow-hidden rounded-lg">
                             <button
                               onClick={() => setLevelDetailDs(isOpen ? null : ds.toFixed(1))}
-                              className="w-full flex items-center gap-4 p-4 hover:bg-[#1a1a24] transition-colors"
+                              className="w-full flex items-center gap-4 p-5 hover:bg-[#1a1a24] transition-colors"
                             >
                               {/* 小圆环 */}
                               <div className="relative w-10 h-10 shrink-0">
@@ -1349,34 +1383,35 @@ const MaimaiProfile = () => {
                             </button>
 
                             {isOpen && (
-                              <div className="px-4 pb-4 bg-[#0c0c11] grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                              <div className="px-4 pb-4 bg-[#0c0c11] grid grid-cols-2 gap-3">
                                 {charts.map(({ song, diffIndex, ds: chartDs, score }) => {
                                   const isCompleted = score && (score.achievement || score.achievementRate || 0) >= 80;
                                   const diffConf = { name: DIFF_NAMES[diffIndex], color: DIFF_COLORS[diffIndex] };
+                                  const ach = score ? (score.achievement || score.achievementRate || 0) : 0;
                                   return (
-                                    <div key={`${song.id}_${diffIndex}`} className="flex flex-col gap-1.5 group">
-                                      <div className={`relative aspect-square overflow-hidden border ${
-                                        isCompleted ? 'border-pink-400/40' : 'border-white/[0.05] opacity-40 grayscale-[60%]'
-                                      } transition-all`}>
-                                        <img src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5,'0')}.png`}
-                                          alt="cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                          onError={e => { e.target.src = '/assets/bg.png'; }} />
-                                        <div className="absolute top-1 left-1">
-                                          <span className={`px-1 py-0.5 text-[8px] font-bold border ${diffConf.color}`}>{diffConf.name}</span>
-                                        </div>
-                                        {!isCompleted && (
-                                          <div className="absolute inset-0 bg-[#0c0c11]/60 flex items-center justify-center">
-                                            <span className="text-[9px] font-bold text-zinc-500 uppercase">Not Cleared</span>
-                                          </div>
-                                        )}
-                                        {score && isCompleted && (
-                                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-1.5 pt-3 flex justify-between items-end">
-                                            <span className="text-[9px] font-bold text-white font-mono">{(score.achievement || score.achievementRate).toFixed(1)}%</span>
+                                    <div key={`${song.id}_${diffIndex}`} className={`flex items-center gap-3 p-3 border transition-all ${
+                                      isCompleted ? 'border-pink-400/40 bg-[#15151e]' : 'border-white/[0.05] bg-[#15151e] opacity-50'
+                                    }`}>
+                                      <img src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5,'0')}.png`}
+                                        alt="" className="w-16 h-16 object-cover shrink-0" loading="lazy" onError={e => { e.target.src = '/assets/bg.png'; }} />
+                                      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                        <div className={`text-sm font-bold truncate ${isCompleted ? 'text-zinc-100' : 'text-zinc-600'}`}>{song.title}</div>
+                                        <div className="text-xs text-zinc-500 truncate">{song.basic_info?.artist || ''}</div>
+                                        <div className="flex items-center justify-between mt-0.5">
+                                          <div className="flex items-center gap-1">
+                                            <span className={`px-1 py-0.5 text-[8px] font-bold border ${diffConf.color}`}>{diffConf.name}</span>
                                             {getFcBadge(score)}
                                           </div>
-                                        )}
+                                          {isCompleted && score ? (
+                                            <div className="flex items-center gap-1.5">
+                                              {getDxStarIcon(score.dxRatio)}
+                                              <span className="text-xs font-bold text-pink-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>{ach.toFixed(4)}%</span>
+                                            </div>
+                                          ) : (
+                                            <span className="text-[11px] text-zinc-600">未通关</span>
+                                          )}
+                                        </div>
                                       </div>
-                                      <span className={`text-[10px] font-bold truncate px-0.5 ${isCompleted ? 'text-zinc-300' : 'text-zinc-600'}`}>{song.title}</span>
                                     </div>
                                   );
                                 })}
