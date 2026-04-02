@@ -456,5 +456,4 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame = 'maimai
       </div>
     </>
   );
-
-export default SongDrawer;
+}

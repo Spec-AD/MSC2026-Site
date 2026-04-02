@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 {
   "rewrites": [
     {
@@ -14,21 +13,4 @@
       "destination": "/index.html"
     }
   ]
-=======
-{
-  "rewrites": [
-    {
-      "source": "/proxy/diving-fish/:path*",
-      "destination": "https://www.diving-fish.com/api/maimaidxprober/:path*"
-    },
-    {
-      "source": "/api/:path*",
-      "destination": "https://magix.zeabur.app/api/:path*"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
->>>>>>> e56fccf0a8d274e3e32451f60dda3b05c8c75016
 }
