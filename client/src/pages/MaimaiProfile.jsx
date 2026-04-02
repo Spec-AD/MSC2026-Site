@@ -82,6 +82,8 @@ const MaimaiProfile = () => {
   const [detailDiff, setDetailDiff] = useState(3); 
 
   const [selectedLevelDetail, setSelectedLevelDetail] = useState(null);
+  const [plateDetailLevel, setPlateDetailLevel] = useState(null); // 牌子模态框内展开的等级
+  const [levelDetailDs, setLevelDetailDs] = useState(null);   // 等级模态框内展开的定数组
 
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
 
@@ -335,6 +337,95 @@ const MaimaiProfile = () => {
     return charts.sort((a, b) => b.ds - a.ds || Number(b.song.id) - Number(a.song.id));
   }, [selectedLevelDetail, musicData]);
 
+  // 跨版本牌子总收集统计
+  const globalPlateStats = useMemo(() => {
+    if (!musicData || musicData.length === 0 || !profile?.allScores) return null;
+    const stats = { 将: 0, 极: 0, 神: 0, 舞舞: 0, total: PLATE_VERSIONS.length * 2 };
+    let totalPlates = 0;
+    PLATE_VERSIONS.forEach(group => {
+      const validSongs = musicData.filter(s =>
+        s.type !== 'UTAGE' && s.basic_info.genre !== '宴会場' && s.basic_info.genre !== '宴会场' &&
+        group.versions.includes(s.basic_info.from)
+      );
+      const isMai = group.id === '舞';
+      group.plates.forEach(p => {
+        totalPlates++;
+        const levelsToCheck = isMai ? [0,1,2,3,4] : (p.name === '真' ? [0,1,2,3] : [0,1,2,3]);
+        let ji = 0, shen = 0, mai = 0, jiang = 0, total = 0;
+        validSongs.forEach(song => {
+          const lvls = levelsToCheck.filter(l => song.level.length > l);
+          total += lvls.length;
+          lvls.forEach(l => {
+            const sc = userScoreMap.get(`${song.id}_${l}`);
+            if (!sc) return;
+            const ach = sc.achievement || sc.achievementRate || 0;
+            const fc = getFc(sc);
+            const fs = getFs(sc);
+            if (ach >= 100) jiang++;
+            if (['fc','fcp','ap','app'].includes(fc)) ji++;
+            if (['ap','app'].includes(fc)) shen++;
+            if (['fsd','fsdp'].includes(fs)) mai++;
+          });
+        });
+        if (p.name !== '真' && jiang === total && total > 0) stats['将']++;
+        if (ji === total && total > 0) stats['极']++;
+        if (shen === total && total > 0) stats['神']++;
+        if (mai === total && total > 0) stats['舞舞']++;
+      });
+    });
+    stats.total = totalPlates;
+    return stats;
+  }, [musicData, profile, userScoreMap]);
+
+  // 等级详情：按定数分组统计
+  const levelDsGroups = useMemo(() => {
+    if (!selectedLevelDetail || !musicData) return [];
+    const dsMap = new Map();
+    chartsInSelectedLevel.forEach(({ song, diffIndex, ds }) => {
+      const key = ds.toFixed(1);
+      if (!dsMap.has(key)) dsMap.set(key, { ds: parseFloat(key), charts: [] });
+      const score = userScoreMap.get(`${song.id}_${diffIndex}`) || userScoreMap.get(`${Number(song.id)}_${diffIndex}`);
+      dsMap.get(key).charts.push({ song, diffIndex, ds, score });
+    });
+    return Array.from(dsMap.values()).sort((a, b) => b.ds - a.ds);
+  }, [selectedLevelDetail, chartsInSelectedLevel, userScoreMap, musicData]);
+
+  // 等级统计数据（均值、DX占比、FC率等）
+  const levelStats = useMemo(() => {
+    if (!selectedLevelDetail || chartsInSelectedLevel.length === 0) return null;
+    let totalAch = 0, clearedAch = 0, totalDx = 0, clearedDx = 0;
+    let cleared = 0, fcCount = 0, fcpCount = 0, apCount = 0, appCount = 0;
+    const total = chartsInSelectedLevel.length;
+    chartsInSelectedLevel.forEach(({ song, diffIndex }) => {
+      const score = userScoreMap.get(`${song.id}_${diffIndex}`) || userScoreMap.get(`${Number(song.id)}_${diffIndex}`);
+      const ach = score ? (score.achievement || score.achievementRate || 0) : 0;
+      const dx = score ? (score.dxRatio || 0) : 0;
+      const fc = score ? getFc(score) : '';
+      totalAch += ach;
+      totalDx += dx;
+      if (ach >= 80) {
+        cleared++;
+        clearedAch += ach;
+        clearedDx += dx;
+      }
+      if (['fc','fcp','ap','app'].includes(fc)) fcCount++;
+      if (['fcp','ap','app'].includes(fc)) fcpCount++;
+      if (['ap','app'].includes(fc)) apCount++;
+      if (fc === 'app') appCount++;
+    });
+    return {
+      avgAch: total > 0 ? totalAch / total : 0,
+      avgClearedAch: cleared > 0 ? clearedAch / cleared : 0,
+      avgDx: total > 0 ? totalDx / total * 100 : 0,
+      avgClearedDx: cleared > 0 ? clearedDx / cleared * 100 : 0,
+      fcRate: total > 0 ? fcCount / total * 100 : 0,
+      fcpRate: total > 0 ? fcpCount / total * 100 : 0,
+      apRate: total > 0 ? apCount / total * 100 : 0,
+      appRate: total > 0 ? appCount / total * 100 : 0,
+      cleared, total
+    };
+  }, [selectedLevelDetail, chartsInSelectedLevel, userScoreMap]);
+
   const b50Data = useMemo(() => {
     if (!profile || !profile.allScores) return { b35: [], r15: [], rating: 0 };
     let scores = [...profile.allScores];
@@ -557,16 +648,15 @@ const MaimaiProfile = () => {
                   <div className="w-1 h-6 bg-amber-400 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.6)]"></div>
                   <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">牌子进度追踪</h2>
                 </div>
-                
-                <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2">
+                <div className="flex items-center gap-2 overflow-x-auto pb-2">
                   {PLATE_VERSIONS.map(v => (
                     <button
                       key={v.id}
                       onClick={() => setSelectedPlateVersion(v.id)}
-                      className={`px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
+                      className={`px-3 py-1.5 text-xs font-bold whitespace-nowrap transition-all active:scale-95 border-b-2 ${
                         selectedPlateVersion === v.id
-                          ? 'bg-zinc-200 text-zinc-900 shadow-sm'
-                          : 'bg-[#15151e] border border-white/[0.05] text-zinc-400 hover:text-zinc-200 hover:bg-[#1a1a24]'
+                          ? 'border-amber-400 text-amber-300'
+                          : 'border-transparent text-zinc-500 hover:text-zinc-300'
                       }`}
                     >
                       {v.label}
@@ -575,81 +665,108 @@ const MaimaiProfile = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {plateProgress ? plateProgress.map((plate, idx) => {
-                  const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
-                  const isCompleted = plate.total > 0 && plate.count === plate.total;
-                  
-                  const imgSrc = plate.customImg 
-                                ? `/assets/${plate.customImg}.png` 
-                                : `/assets/${plate.imgPrefix}_${plate.imgSuffix}.png`;
+              {!plateProgress ? (
+                <div className="py-8 text-zinc-500 text-sm font-medium flex items-center gap-3">
+                  <FaSpinner className="animate-spin text-xl" /> 正在拉取云端曲库数据...
+                </div>
+              ) : (
+                <div className="flex flex-col gap-6">
+                  {/* 圆环进度总览 */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {plateProgress.filter(p => ['将','极','神','舞舞'].some(t => p.type === t)).map((plate, idx) => {
+                      const pct = plate.total > 0 ? (plate.count / plate.total) * 100 : 0;
+                      const r = 38;
+                      const circ = 2 * Math.PI * r;
+                      const offset = circ - (Math.min(pct, 100) / 100) * circ;
+                      const isCompleted = plate.count === plate.total && plate.total > 0;
+                      const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => { setSelectedPlateDetail({ versionGroup: targetGroup, plateType: plate.type, plateName: plate.name }); setDetailDiff(3); }}
+                          className={`bg-[#15151e] border border-white/[0.05] p-5 flex flex-col items-center gap-3 cursor-pointer hover:bg-[#1a1a24] hover:border-amber-500/20 transition-all group ${
+                            isCompleted ? 'ring-1 ring-amber-400/40' : ''
+                          }`}
+                        >
+                          <div className="relative w-24 h-24 flex items-center justify-center">
+                            <svg className="-rotate-90 w-full h-full" viewBox="0 0 96 96">
+                              <circle cx="48" cy="48" r={r} strokeWidth="7" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
+                              <motion.circle
+                                cx="48" cy="48" r={r} strokeWidth="7" fill="transparent"
+                                stroke="currentColor"
+                                className={plate.color.split(' ')[0]}
+                                strokeDasharray={circ}
+                                initial={{ strokeDashoffset: circ }}
+                                animate={{ strokeDashoffset: offset }}
+                                transition={{ duration: 1.2, ease: 'easeOut' }}
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                            <div className="absolute flex flex-col items-center">
+                              <span className={`text-xl font-black ${plate.color.split(' ')[0]}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                {pct.toFixed(0)}<span className="text-xs">%</span>
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className={`text-sm font-bold tracking-widest ${plate.color.split(' ')[0]}`}>{plate.name}</div>
+                            <div className="text-xs text-zinc-600 mt-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>{plate.count} / {plate.total}</div>
+                          </div>
+                          <div className="text-[10px] text-zinc-600 group-hover:text-amber-400 transition-colors">点击查看详情 →</div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                  return (
-                    <div 
-                      key={idx} 
-                      onClick={() => {
-                        setSelectedPlateDetail({ versionGroup: targetGroup, plateType: plate.type, plateName: plate.name });
-                        setDetailDiff(3);
-                      }}
-                      className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:bg-[#1a1a24] hover:border-cyan-500/30 transition-all cursor-pointer group"
-                    >
-                      <div className="relative w-full aspect-[3/1] bg-[#0c0c11] rounded-xl flex items-center justify-center overflow-hidden border border-white/[0.02]">
-                        <img 
-                          key={imgSrc} 
-                          src={imgSrc}
-                          alt={plate.name}
-                          className={`w-full h-full object-contain p-2 transition-all duration-500 ${isCompleted ? 'opacity-100 scale-105 drop-shadow-[0_0_12px_rgba(255,255,255,0.25)]' : 'opacity-20 grayscale brightness-50'}`}
-                          onLoad={(e) => {
-                            e.target.style.display = 'block'; 
-                            if (e.target.nextSibling) e.target.nextSibling.style.opacity = '0';
-                          }}
-                          onError={(e) => { 
-                            e.target.style.display = 'none'; 
-                            if (e.target.nextSibling) e.target.nextSibling.style.opacity = '1';
-                          }}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 transition-opacity">
-                          <span className={`font-black text-xl tracking-widest ${isCompleted ? plate.color : 'text-zinc-600'}`}>
-                            {plate.name}
-                          </span>
+                  {/* 次要牌子（霸者）横条 */}
+                  {plateProgress.filter(p => p.type === '霸者').map((plate, idx) => {
+                    const pct = plate.total > 0 ? (plate.count / plate.total) * 100 : 0;
+                    const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
+                    return (
+                      <div key={idx} className="bg-[#15151e] border border-white/[0.05] p-4 flex items-center gap-6">
+                        <div className="flex flex-col w-20 shrink-0">
+                          <span className="text-xs font-bold text-zinc-400 tracking-widest">{plate.name}</span>
+                          <span className="text-lg font-bold text-zinc-300" style={{ fontFamily: "'Quicksand', sans-serif" }}>{pct.toFixed(1)}%</span>
+                        </div>
+                        <div className="flex-1 flex flex-col gap-1.5">
+                          <div className="h-2 w-full bg-[#0c0c11] rounded-full overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${pct}%` }}
+                              transition={{ duration: 1, ease: 'easeOut' }}
+                              className={`h-full ${plate.bar}`}
+                            />
+                          </div>
+                          <div className="text-xs text-zinc-600" style={{ fontFamily: "'Quicksand', sans-serif" }}>{plate.count} / {plate.total} 谱面已通关</div>
                         </div>
                       </div>
+                    );
+                  })}
 
-                      <div className="flex justify-between items-center px-1">
-                        <div className="text-zinc-300 font-bold text-sm tracking-widest">{plate.name}</div>
-                        <div className="text-xs text-zinc-600 group-hover:text-cyan-400 transition-colors">↗</div>
-                      </div>
-                      
-                      <div className="flex items-baseline gap-2 px-1">
-                        <span className={`text-2xl font-bold tracking-tight ${isCompleted ? plate.color : 'text-zinc-400'}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                          {plate.count}
-                        </span>
-                        <span className="text-xs font-bold text-zinc-600" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                          / {plate.total}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col gap-1 mt-auto px-1">
-                        <div className="h-1.5 w-full bg-[#0c0c11] border border-white/[0.02] rounded-full overflow-hidden shadow-inner">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${plate.total > 0 ? (plate.count / plate.total) * 100 : 0}%` }}
-                            transition={{ duration: 1, ease: "easeOut" }}
-                            className={`h-full ${plate.bar}`} 
-                          />
-                        </div>
-                        <div className="text-[10px] font-bold text-zinc-500 text-right tracking-widest" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                          {plate.total > 0 ? ((plate.count / plate.total) * 100).toFixed(1) : 0}%
-                        </div>
+                  {/* 跨版本牌子总收集统计 */}
+                  {globalPlateStats && (
+                    <div className="bg-[#15151e] border border-white/[0.05] p-5">
+                      <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">跨版本牌子收集统计</div>
+                      <div className="grid grid-cols-4 gap-4">
+                        {[{ type: '将', color: 'text-emerald-400', bg: 'bg-emerald-400' },
+                          { type: '极', color: 'text-amber-400', bg: 'bg-amber-400' },
+                          { type: '神', color: 'text-cyan-400', bg: 'bg-cyan-400' },
+                          { type: '舞舞', color: 'text-pink-400', bg: 'bg-pink-400' }].map(({ type, color, bg }) => (
+                          <div key={type} className="flex flex-col items-center gap-2">
+                            <span className={`text-2xl font-black ${color}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                              {globalPlateStats[type]}
+                            </span>
+                            <span className="text-xs font-bold text-zinc-500">{type}牌</span>
+                            <div className="w-full h-1 bg-[#0c0c11] rounded-full overflow-hidden">
+                              <div className={`h-full ${bg}`} style={{ width: `${globalPlateStats.total > 0 ? (globalPlateStats[type] / globalPlateStats.total) * 100 : 0}%` }} />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  );
-                }) : (
-                  <div className="col-span-full py-8 text-zinc-500 text-sm font-medium flex items-center gap-3">
-                    <FaSpinner className="animate-spin text-xl" /> 正在拉取云端曲库数据...
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mb-14 border-b border-white/[0.05] pb-10">
@@ -660,7 +777,7 @@ const MaimaiProfile = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {levelProgress && levelProgress.map((lvl) => {
                     const isAllAPP = lvl.app === lvl.total;
                     const isAllAP = lvl.ap === lvl.total;
@@ -671,49 +788,81 @@ const MaimaiProfile = () => {
 
                     let baseClass = 'border-white/[0.05] bg-[#15151e] hover:bg-[#1a1a24]';
                     let glowClass = '';
+                    let ringColor = 'text-zinc-600';
+                    let displayPct = (lvl.clear / lvl.total) * 100;
 
                     if (isAllAPP) {
                         baseClass = 'border-transparent bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-cyan-500/20';
                         glowClass = 'ring-2 ring-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)]';
-                    } else {
-                        if (isAllAP) baseClass = 'border-white/[0.05] bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-pink-500/20 hover:brightness-110';
-                        else if (isAllFCp) baseClass = 'border-white/[0.05] bg-emerald-500/20 hover:bg-emerald-500/30';
-                        else if (isAllFC) baseClass = 'border-white/[0.05] bg-emerald-500/10 hover:bg-emerald-500/20';
-
-                        if (isAllSSSp) glowClass = 'border-amber-500 ring-1 ring-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]';
-                        else if (isAllSSS) glowClass = 'border-amber-300/60 ring-1 ring-amber-300/50 shadow-[0_0_8px_rgba(252,211,77,0.2)]';
+                        ringColor = 'text-purple-400';
+                        displayPct = 100;
+                    } else if (isAllAP) {
+                        baseClass = 'border-white/[0.05] bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-pink-500/20 hover:brightness-110';
+                        ringColor = 'text-cyan-400';
+                        displayPct = (lvl.ap / lvl.total) * 100;
+                    } else if (isAllFCp) {
+                        baseClass = 'border-white/[0.05] bg-emerald-500/20 hover:bg-emerald-500/30';
+                        ringColor = 'text-emerald-400';
+                        displayPct = (lvl.fcp / lvl.total) * 100;
+                    } else if (isAllFC) {
+                        baseClass = 'border-white/[0.05] bg-emerald-500/10 hover:bg-emerald-500/20';
+                        ringColor = 'text-emerald-400';
+                        displayPct = (lvl.fc / lvl.total) * 100;
+                    } else if (isAllSSSp) {
+                        glowClass = 'border-amber-500 ring-1 ring-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]';
+                        ringColor = 'text-amber-400';
+                        displayPct = (lvl.sssp / lvl.total) * 100;
+                    } else if (isAllSSS) {
+                        glowClass = 'border-amber-300/60 ring-1 ring-amber-300/50 shadow-[0_0_8px_rgba(252,211,77,0.2)]';
+                        ringColor = 'text-amber-300';
+                        displayPct = (lvl.sss / lvl.total) * 100;
                     }
+
+                    const r = 32;
+                    const circ = 2 * Math.PI * r;
+                    const offset = circ - (Math.min(displayPct, 100) / 100) * circ;
 
                     return (
                         <div
                           key={lvl.level}
                           onClick={() => setSelectedLevelDetail(lvl.level)}
-                          className={`relative rounded-xl p-3 border transition-all cursor-pointer group flex flex-col gap-1.5 ${baseClass} ${glowClass}`}
+                          className={`relative p-5 border transition-all cursor-pointer group flex flex-col items-center gap-4 ${baseClass} ${glowClass}`}
                         >
-                            {isAllAPP && <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 animate-pulse pointer-events-none rounded-xl"></div>}
+                            {isAllAPP && <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 animate-pulse pointer-events-none"></div>}
                             
-                            <div className="flex justify-between items-baseline relative z-10">
-                                <span className="text-xl font-bold text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                                    {lvl.level}
-                                </span>
-                                <span className="text-[11px] font-bold text-zinc-500 group-hover:text-zinc-300 transition-colors" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                                    {lvl.clear} / {lvl.total}
-                                </span>
-                            </div>
-                            
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] font-semibold tracking-wide relative z-10">
-                                <span className={lvl.sss === lvl.total ? 'text-amber-400' : 'text-zinc-500'}>SSS:{lvl.sss}</span>
-                                <span className={lvl.fc === lvl.total ? 'text-emerald-400' : 'text-zinc-500'}>FC:{lvl.fc}</span>
-                                {lvl.ap > 0 && <span className={lvl.ap === lvl.total ? 'text-cyan-400' : 'text-zinc-500'}>AP:{lvl.ap}</span>}
-                            </div>
-                            
-                            <div className="h-1 w-full bg-[#0c0c11] rounded-full mt-auto overflow-hidden border border-white/[0.02] relative z-10">
-                                <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${lvl.total > 0 ? (lvl.clear / lvl.total) * 100 : 0}%` }}
-                                    transition={{ duration: 1, ease: "easeOut" }}
-                                    className="h-full bg-pink-400"
+                            <div className="relative w-20 h-20 flex items-center justify-center z-10">
+                              <svg className="-rotate-90 w-full h-full" viewBox="0 0 80 80">
+                                <circle cx="40" cy="40" r={r} strokeWidth="6" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
+                                <motion.circle
+                                  cx="40" cy="40" r={r} strokeWidth="6" fill="transparent"
+                                  stroke="currentColor"
+                                  className={ringColor}
+                                  strokeDasharray={circ}
+                                  initial={{ strokeDashoffset: circ }}
+                                  animate={{ strokeDashoffset: offset }}
+                                  transition={{ duration: 1, ease: 'easeOut' }}
+                                  strokeLinecap="round"
                                 />
+                              </svg>
+                              <div className="absolute flex flex-col items-center">
+                                <span className="text-xl font-black text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                  {lvl.level}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-col items-center gap-0.5 z-10">
+                              <span className="text-xs font-bold text-zinc-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                {lvl.clear} / {lvl.total}
+                              </span>
+                              <div className="flex gap-1.5 text-[9px] font-semibold">
+                                {isAllAPP && <span className="text-purple-400">APP</span>}
+                                {!isAllAPP && isAllAP && <span className="text-cyan-400">AP</span>}
+                                {!isAllAPP && !isAllAP && isAllFCp && <span className="text-emerald-400">FC+</span>}
+                                {!isAllAPP && !isAllAP && !isAllFCp && isAllFC && <span className="text-emerald-400">FC</span>}
+                                {!isAllAPP && !isAllAP && !isAllFCp && !isAllFC && isAllSSSp && <span className="text-amber-400">SSS+</span>}
+                                {!isAllAPP && !isAllAP && !isAllFCp && !isAllFC && !isAllSSSp && isAllSSS && <span className="text-amber-300">SSS</span>}
+                              </div>
                             </div>
                         </div>
                     )
@@ -955,129 +1104,150 @@ const MaimaiProfile = () => {
           )}
         </AnimatePresence>
 
-        {/* 牌子详情曲目墙模态窗 */}
+        {/* 牌子详情模态窗（按难度 → 按等级展开） */}
         <AnimatePresence>
           {selectedPlateDetail && (() => {
             const validSongs = musicData.filter(s =>
               s.type !== 'UTAGE' && s.basic_info.genre !== '宴会場' && s.basic_info.genre !== '宴会场' &&
               selectedPlateDetail.versionGroup.versions.includes(s.basic_info.from)
             );
-
             const maxDiff = selectedPlateDetail.versionGroup.id === '舞' ? 4 : 3;
             const availableDiffs = Array.from({ length: maxDiff + 1 }, (_, i) => i);
-            
             const songsInDiff = validSongs.filter(s => s.level.length > detailDiff);
+
+            // 按等级分组
+            const lvlGroupMap = new Map();
+            songsInDiff.forEach(song => {
+              const lvlStr = song.level[detailDiff] || '?';
+              if (!lvlGroupMap.has(lvlStr)) lvlGroupMap.set(lvlStr, []);
+              lvlGroupMap.get(lvlStr).push(song);
+            });
+            const lvlGroups = Array.from(lvlGroupMap.entries())
+              .sort((a, b) => {
+                const pa = parseFloat(a[0].replace('+', '.7')); 
+                const pb = parseFloat(b[0].replace('+', '.7'));
+                return pb - pa;
+              });
 
             return (
               <div 
                 className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-8"
-                onClick={() => setSelectedPlateDetail(null)}
+                onClick={() => { setSelectedPlateDetail(null); setPlateDetailLevel(null); }}
               >
-                <motion.div 
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-[#0c0c11]/90 backdrop-blur-md"
-                />
-                
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="absolute inset-0 bg-[#0c0c11]/90 backdrop-blur-md" />
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                  className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl relative z-10 overflow-hidden"
+                  className="bg-[#15151e] border border-white/[0.05] w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl relative z-10 overflow-hidden"
                   onClick={e => e.stopPropagation()}
                 >
-                  <div className="p-6 md:p-8 border-b border-white/[0.05] shrink-0 bg-[#15151e] flex flex-col gap-6 relative z-20">
+                  {/* 标题 + 难度切换 */}
+                  <div className="p-6 border-b border-white/[0.05] shrink-0 flex flex-col gap-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="w-1.5 h-8 bg-amber-400 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.6)]"></div>
+                        <div className="w-1.5 h-8 bg-amber-400"></div>
                         <div>
-                          <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">
-                            {selectedPlateDetail.versionGroup.label} - {selectedPlateDetail.plateName}
-                          </h2>
-                          <p className="text-xs text-zinc-500 font-medium mt-1">点击难度分类查看具体曲目完成情况</p>
+                          <h2 className="text-2xl font-bold text-zinc-100">{selectedPlateDetail.versionGroup.label} — {selectedPlateDetail.plateName}</h2>
+                          <p className="text-xs text-zinc-500 mt-0.5">选择难度，展开等级查看具体曲目</p>
                         </div>
                       </div>
-                      <button onClick={() => setSelectedPlateDetail(null)} className="text-zinc-500 hover:text-white transition-colors bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-full active:scale-90">
+                      <button onClick={() => { setSelectedPlateDetail(null); setPlateDetailLevel(null); }}
+                        className="text-zinc-500 hover:text-white p-2.5 bg-white/[0.02] hover:bg-white/[0.06] active:scale-90 transition-all">
                         <FaTimes />
                       </button>
                     </div>
-
-                    <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
                       {availableDiffs.map(diff => {
-                        const sInThisDiff = validSongs.filter(s => s.level.length > diff);
-                        const compInThisDiff = sInThisDiff.filter(s => {
+                        const sIn = validSongs.filter(s => s.level.length > diff);
+                        const comp = sIn.filter(s => {
                           const sc = userScoreMap.get(`${s.id}_${diff}`) || userScoreMap.get(`${Number(s.id)}_${diff}`);
                           return checkPlateCondition(sc, selectedPlateDetail.plateType);
                         });
-                        const isAllCleared = compInThisDiff.length === sInThisDiff.length && sInThisDiff.length > 0;
-                        const conf = { name: DIFF_NAMES[diff], color: DIFF_COLORS[diff] };
-
+                        const allDone = comp.length === sIn.length && sIn.length > 0;
+                        const conf = DIFF_COLORS[diff];
                         return (
-                          <button
-                            key={diff}
-                            onClick={() => setDetailDiff(diff)}
-                            className={`px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${
-                              detailDiff === diff
-                                ? `${conf.color} ring-1 ring-white/10`
-                                : 'bg-[#0c0c11] border-white/[0.05] text-zinc-500 hover:bg-[#1a1a24] hover:text-zinc-300'
-                            }`}
-                          >
-                            <span>{conf.name}</span>
-                            <span className={`text-[11px] font-mono px-1.5 py-0.5 rounded bg-black/20 ${isAllCleared ? 'text-emerald-400' : 'text-current'}`}>
-                              {compInThisDiff.length}/{sInThisDiff.length}
-                            </span>
+                          <button key={diff} onClick={() => { setDetailDiff(diff); setPlateDetailLevel(null); }}
+                            className={`px-4 py-2 text-sm font-bold whitespace-nowrap transition-all border-b-2 flex items-center gap-2 ${
+                              detailDiff === diff ? `${DIFF_COLORS[diff].split(' ')[0]} border-current` : 'text-zinc-500 border-transparent hover:text-zinc-300'
+                            }`}>
+                            <span>{DIFF_NAMES[diff]}</span>
+                            <span className={`text-[11px] font-mono ${allDone ? 'text-emerald-400' : 'text-zinc-600'}`}>{comp.length}/{sIn.length}</span>
                           </button>
                         );
                       })}
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 bg-[#0c0c11]">
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-4">
-                      {songsInDiff.map(song => {
-                        const score = userScoreMap.get(`${song.id}_${detailDiff}`) || userScoreMap.get(`${Number(song.id)}_${detailDiff}`);
-                        const isCompleted = checkPlateCondition(score, selectedPlateDetail.plateType);
-                        const diffConf = { color: DIFF_COLORS[detailDiff] };
-
-                        return (
-                          <div key={song.id} className="flex flex-col gap-2 group">
-                            <div className={`relative aspect-square rounded-xl overflow-hidden border ${isCompleted ? 'border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.15)]' : 'border-white/[0.05] opacity-40 grayscale-[60%]'} transition-all`}>
-                              <img 
-                                src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`} 
-                                alt="cover" 
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                onError={(e) => { e.target.src = '/assets/bg.png'; }}
-                              />
-                              {!isCompleted && (
-                                <div className="absolute inset-0 bg-[#0c0c11]/60 flex items-center justify-center pointer-events-none">
-                                  <div className="bg-black/80 px-2 py-1 rounded text-[9px] font-bold text-zinc-400 uppercase tracking-widest border border-white/10">
-                                    Not Cleared
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {score && isCompleted && (
-                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-4 flex justify-between items-end">
-                                  <span className="text-[10px] font-bold text-white font-mono">{(score.achievement || score.achievementRate).toFixed(2)}%</span>
-                                  {getFcBadge(score) || getFsBadge(score)}
-                                </div>
-                              )}
-                            </div>
-                            
-                            <div className="flex flex-col px-1">
-                              <span className={`text-[11px] font-bold truncate ${isCompleted ? 'text-zinc-200' : 'text-zinc-500'}`}>
-                                {song.title}
+                  {/* 按等级分组可展开 */}
+                  <div className="flex-1 overflow-y-auto bg-[#0c0c11] p-6 flex flex-col gap-3">
+                    {lvlGroups.map(([lvlStr, songs]) => {
+                      const compSongs = songs.filter(s => {
+                        const sc = userScoreMap.get(`${s.id}_${detailDiff}`) || userScoreMap.get(`${Number(s.id)}_${detailDiff}`);
+                        return checkPlateCondition(sc, selectedPlateDetail.plateType);
+                      });
+                      const pct = songs.length > 0 ? compSongs.length / songs.length * 100 : 0;
+                      const r = 18; const circ = 2 * Math.PI * r;
+                      const offset = circ - (pct / 100) * circ;
+                      const isOpen = plateDetailLevel === lvlStr;
+                      return (
+                        <div key={lvlStr} className="border border-white/[0.05] bg-[#15151e] overflow-hidden">
+                          <button
+                            onClick={() => setPlateDetailLevel(isOpen ? null : lvlStr)}
+                            className="w-full flex items-center gap-4 p-4 hover:bg-[#1a1a24] transition-colors"
+                          >
+                            <div className="relative w-10 h-10 shrink-0">
+                              <svg className="-rotate-90 w-full h-full" viewBox="0 0 40 40">
+                                <circle cx="20" cy="20" r={r} strokeWidth="3" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
+                                <circle cx="20" cy="20" r={r} strokeWidth="3" fill="transparent"
+                                  stroke="currentColor" className="text-amber-400"
+                                  strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
+                              </svg>
+                              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-zinc-300" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                {pct.toFixed(0)}%
                               </span>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className={`w-2 h-2 rounded-full ${diffConf.color.split(' ')[0].replace('text-', 'bg-')}`}></span>
-                                <span className="text-[10px] font-bold text-zinc-500 font-mono">
-                                  DS: {song.ds[detailDiff]?.toFixed(1) || '0.0'}
-                                </span>
-                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                            <div className="flex flex-col items-start gap-0.5 flex-1">
+                              <span className="text-base font-black text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>Lv.{lvlStr}</span>
+                              <span className="text-[11px] font-bold text-zinc-500">{compSongs.length} / {songs.length} 完成</span>
+                            </div>
+                            <span className="text-zinc-600 text-sm">{isOpen ? '▲' : '▼'}</span>
+                          </button>
+                          {isOpen && (
+                            <div className="px-4 pb-4 bg-[#0c0c11] grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                              {songs.sort((a,b) => (b.ds[detailDiff]||0)-(a.ds[detailDiff]||0)).map(song => {
+                                const score = userScoreMap.get(`${song.id}_${detailDiff}`) || userScoreMap.get(`${Number(song.id)}_${detailDiff}`);
+                                const isCompleted = checkPlateCondition(score, selectedPlateDetail.plateType);
+                                return (
+                                  <div key={song.id} className="flex flex-col gap-1.5 group">
+                                    <div className={`relative aspect-square overflow-hidden border ${
+                                      isCompleted ? 'border-amber-400/40' : 'border-white/[0.05] opacity-40 grayscale-[60%]'
+                                    } transition-all`}>
+                                      <img src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5,'0')}.png`}
+                                        alt="cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                        onError={e => { e.target.src = '/assets/bg.png'; }} />
+                                      {!isCompleted && (
+                                        <div className="absolute inset-0 bg-[#0c0c11]/60 flex items-center justify-center">
+                                          <span className="text-[9px] font-bold text-zinc-500 uppercase">Not Cleared</span>
+                                        </div>
+                                      )}
+                                      {score && isCompleted && (
+                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-1.5 pt-3 flex justify-between items-end">
+                                          <span className="text-[9px] font-bold text-white font-mono">{(score.achievement||score.achievementRate).toFixed(1)}%</span>
+                                          {getFcBadge(score)}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <span className={`text-[10px] font-bold truncate ${isCompleted ? 'text-zinc-300' : 'text-zinc-600'}`}>{song.title}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </motion.div>
               </div>
@@ -1085,94 +1255,133 @@ const MaimaiProfile = () => {
           })()}
         </AnimatePresence>
 
-        {/* 🔥 等级详情曲目墙模态窗 */}
+        {/* 等级详情模态窗（多级展开 + 统计数据） */}
         <AnimatePresence>
           {selectedLevelDetail && (() => {
             return (
               <div 
                 className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-8"
-                onClick={() => setSelectedLevelDetail(null)}
+                onClick={() => { setSelectedLevelDetail(null); setLevelDetailDs(null); }}
               >
-                <motion.div 
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-[#0c0c11]/90 backdrop-blur-md"
-                />
-                
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="absolute inset-0 bg-[#0c0c11]/90 backdrop-blur-md" />
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                  className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl relative z-10 overflow-hidden"
+                  className="bg-[#15151e] border border-white/[0.05] w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl relative z-10 overflow-hidden"
                   onClick={e => e.stopPropagation()}
                 >
-                  <div className="p-6 md:p-8 border-b border-white/[0.05] shrink-0 bg-[#15151e] flex flex-col gap-6 relative z-20">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-1.5 h-8 bg-pink-400 rounded-full shadow-[0_0_8px_rgba(244,114,182,0.6)]"></div>
-                        <div>
-                          <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">
-                            等级 Lv.{selectedLevelDetail} 完成情况
-                          </h2>
-                          <p className="text-xs text-zinc-500 font-medium mt-1">该等级下包含的所有谱面</p>
-                        </div>
+                  {/* 标题栏 */}
+                  <div className="p-6 border-b border-white/[0.05] shrink-0 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-1.5 h-8 bg-pink-400"></div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-zinc-100">Lv.{selectedLevelDetail} 完成情况</h2>
+                        <p className="text-xs text-zinc-500 mt-0.5">共 {chartsInSelectedLevel.length} 张谱面 · 点击定数组展开曲目</p>
                       </div>
-                      <button onClick={() => setSelectedLevelDetail(null)} className="text-zinc-500 hover:text-white transition-colors bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-full active:scale-90">
-                        <FaTimes />
-                      </button>
                     </div>
+                    <button onClick={() => { setSelectedLevelDetail(null); setLevelDetailDs(null); }}
+                      className="text-zinc-500 hover:text-white p-2.5 bg-white/[0.02] hover:bg-white/[0.06] active:scale-90 transition-all">
+                      <FaTimes />
+                    </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 bg-[#0c0c11]">
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-4">
-                      {chartsInSelectedLevel.map(({ song, diffIndex, ds }, idx) => {
-                        const score = userScoreMap.get(`${song.id}_${diffIndex}`) || userScoreMap.get(`${Number(song.id)}_${diffIndex}`);
-                        const isCompleted = score && (score.achievement || score.achievementRate) >= 80;
-                        const diffConf = { name: DIFF_NAMES[diffIndex], color: DIFF_COLORS[diffIndex] };
+                  <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-[#0c0c11] flex flex-col gap-6">
+                    {/* 统计数据面板 */}
+                    {levelStats && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {[{ label: '全谱均达成率', value: levelStats.avgAch.toFixed(2) + '%', color: 'text-zinc-300' },
+                          { label: '通关谱均达成率', value: levelStats.avgClearedAch.toFixed(2) + '%', color: 'text-emerald-400' },
+                          { label: '全谱均DX占比', value: levelStats.avgDx.toFixed(1) + '%', color: 'text-zinc-300' },
+                          { label: '通关谱均DX占比', value: levelStats.avgClearedDx.toFixed(1) + '%', color: 'text-cyan-400' },
+                          { label: 'FC 率', value: levelStats.fcRate.toFixed(1) + '%', color: 'text-pink-400' },
+                          { label: 'FC+ 率', value: levelStats.fcpRate.toFixed(1) + '%', color: 'text-pink-300' },
+                          { label: 'AP 率', value: levelStats.apRate.toFixed(1) + '%', color: 'text-amber-400' },
+                          { label: 'AP+ 率', value: levelStats.appRate.toFixed(1) + '%', color: 'text-amber-300' },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} className="bg-[#15151e] border border-white/[0.05] p-3 flex flex-col gap-1">
+                            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{label}</span>
+                            <span className={`text-lg font-black ${color}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
+                    {/* 按定数分组，可展开 */}
+                    <div className="flex flex-col gap-3">
+                      {levelDsGroups.map(({ ds, charts }) => {
+                        const cleared = charts.filter(c => c.score && (c.score.achievement || c.score.achievementRate || 0) >= 80).length;
+                        const fcC = charts.filter(c => c.score && ['fc','fcp','ap','app'].includes(getFc(c.score))).length;
+                        const apC = charts.filter(c => c.score && ['ap','app'].includes(getFc(c.score))).length;
+                        const pct = charts.length > 0 ? cleared / charts.length * 100 : 0;
+                        const r = 18; const circ = 2 * Math.PI * r;
+                        const offset = circ - (pct / 100) * circ;
+                        const isOpen = levelDetailDs === ds.toFixed(1);
                         return (
-                          <div key={`${song.id}_${diffIndex}_${idx}`} className="flex flex-col gap-2 group">
-                            <div className={`relative aspect-square rounded-xl overflow-hidden border ${isCompleted ? 'border-pink-400/50 shadow-[0_0_15px_rgba(244,114,182,0.15)]' : 'border-white/[0.05] opacity-40 grayscale-[60%]'} transition-all`}>
-                              <img 
-                                src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`} 
-                                alt="cover" 
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                onError={(e) => { e.target.src = '/assets/bg.png'; }}
-                              />
-
-                              {/* 难度角标 (如红谱、紫谱) */}
-                              <div className="absolute top-1.5 left-1.5 flex gap-1 z-10 shadow-sm">
-                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border ${diffConf.color}`}>
-                                  {diffConf.name}
+                          <div key={ds} className="border border-white/[0.05] bg-[#15151e] overflow-hidden">
+                            <button
+                              onClick={() => setLevelDetailDs(isOpen ? null : ds.toFixed(1))}
+                              className="w-full flex items-center gap-4 p-4 hover:bg-[#1a1a24] transition-colors"
+                            >
+                              {/* 小圆环 */}
+                              <div className="relative w-10 h-10 shrink-0">
+                                <svg className="-rotate-90 w-full h-full" viewBox="0 0 40 40">
+                                  <circle cx="20" cy="20" r={r} strokeWidth="3" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
+                                  <circle cx="20" cy="20" r={r} strokeWidth="3" fill="transparent"
+                                    stroke="currentColor" className="text-pink-400"
+                                    strokeDasharray={circ} strokeDashoffset={offset}
+                                    strokeLinecap="round" />
+                                </svg>
+                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-zinc-300" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                  {pct.toFixed(0)}%
                                 </span>
                               </div>
-
-                              {!isCompleted && (
-                                <div className="absolute inset-0 bg-[#0c0c11]/60 flex items-center justify-center pointer-events-none">
-                                  <div className="bg-black/80 px-2 py-1 rounded text-[9px] font-bold text-zinc-400 uppercase tracking-widest border border-white/10">
-                                    Not Cleared
-                                  </div>
+                              <div className="flex flex-col items-start gap-0.5 flex-1 min-w-0">
+                                <span className="text-base font-black text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>DS {ds.toFixed(1)}</span>
+                                <div className="flex gap-3 text-[11px] font-bold">
+                                  <span className="text-zinc-500">{cleared}/{charts.length} 通关</span>
+                                  {fcC > 0 && <span className="text-pink-400">FC×{fcC}</span>}
+                                  {apC > 0 && <span className="text-amber-400">AP×{apC}</span>}
                                 </div>
-                              )}
-                              
-                              {score && isCompleted && (
-                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-4 flex justify-between items-end">
-                                  <span className="text-[10px] font-bold text-white font-mono">{(score.achievement || score.achievementRate).toFixed(2)}%</span>
-                                  {getFcBadge(score) || getFsBadge(score)}
-                                </div>
-                              )}
-                            </div>
-                            
-                            <div className="flex flex-col px-1">
-                              <span className={`text-[11px] font-bold truncate ${isCompleted ? 'text-zinc-200' : 'text-zinc-500'}`}>
-                                {song.title}
-                              </span>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className={`w-2 h-2 rounded-full ${diffConf.color.split(' ')[0].replace('text-', 'bg-')}`}></span>
-                                <span className="text-[10px] font-bold text-zinc-500 font-mono">
-                                  DS: {ds?.toFixed(1) || '0.0'}
-                                </span>
                               </div>
-                            </div>
+                              <span className="text-zinc-600 text-sm">{isOpen ? '▲' : '▼'}</span>
+                            </button>
+
+                            {isOpen && (
+                              <div className="px-4 pb-4 bg-[#0c0c11] grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                                {charts.map(({ song, diffIndex, ds: chartDs, score }) => {
+                                  const isCompleted = score && (score.achievement || score.achievementRate || 0) >= 80;
+                                  const diffConf = { name: DIFF_NAMES[diffIndex], color: DIFF_COLORS[diffIndex] };
+                                  return (
+                                    <div key={`${song.id}_${diffIndex}`} className="flex flex-col gap-1.5 group">
+                                      <div className={`relative aspect-square overflow-hidden border ${
+                                        isCompleted ? 'border-pink-400/40' : 'border-white/[0.05] opacity-40 grayscale-[60%]'
+                                      } transition-all`}>
+                                        <img src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5,'0')}.png`}
+                                          alt="cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                          onError={e => { e.target.src = '/assets/bg.png'; }} />
+                                        <div className="absolute top-1 left-1">
+                                          <span className={`px-1 py-0.5 text-[8px] font-bold border ${diffConf.color}`}>{diffConf.name}</span>
+                                        </div>
+                                        {!isCompleted && (
+                                          <div className="absolute inset-0 bg-[#0c0c11]/60 flex items-center justify-center">
+                                            <span className="text-[9px] font-bold text-zinc-500 uppercase">Not Cleared</span>
+                                          </div>
+                                        )}
+                                        {score && isCompleted && (
+                                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-1.5 pt-3 flex justify-between items-end">
+                                            <span className="text-[9px] font-bold text-white font-mono">{(score.achievement || score.achievementRate).toFixed(1)}%</span>
+                                            {getFcBadge(score)}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <span className={`text-[10px] font-bold truncate px-0.5 ${isCompleted ? 'text-zinc-300' : 'text-zinc-600'}`}>{song.title}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

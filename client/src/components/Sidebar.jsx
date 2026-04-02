@@ -79,7 +79,7 @@ const Sidebar = () => {
     <>
       {/* ===================== 侧边栏/底边栏主体 ===================== */}
       {/* 采用深灰色系，极其轻微的毛玻璃和描边 */}
-      <div className="fixed bottom-0 md:bottom-auto md:left-0 md:top-0 w-full md:w-20 h-16 md:h-full bg-[#18181c]/95 md:bg-[#18181c] backdrop-blur-xl border-t border-white/[0.05] md:border-t-0 md:border-r flex flex-row md:flex-col items-center justify-between px-2 md:py-8 z-[100] shadow-2xl">
+      <div className="fixed bottom-0 md:bottom-auto md:left-0 md:top-0 w-full md:w-24 h-16 md:h-full bg-[#18181c]/95 md:bg-[#18181c] backdrop-blur-xl border-t border-white/[0.05] md:border-t-0 md:border-r flex flex-row md:flex-col items-center justify-between px-2 md:py-8 z-[100] shadow-2xl">
         
         {/* 导航图标区域 */}
         <div className="flex flex-row md:flex-col justify-around md:justify-start md:gap-4 flex-1 w-full md:w-auto">
@@ -91,7 +91,7 @@ const Sidebar = () => {
               <Link 
                 key={item.path} 
                 to={item.path} 
-                className="group relative flex flex-col items-center justify-center w-full h-full md:w-14 md:h-14 rounded-xl hover:bg-white/[0.04] transition-all duration-200 active:scale-95"
+                className="group relative flex flex-col items-center justify-center w-full h-full md:w-16 md:h-14 rounded-xl hover:bg-white/[0.04] transition-all duration-200 active:scale-95"
               >
                 {/* 桌面端活跃指示条 */}
                 {isActive && (
@@ -111,7 +111,7 @@ const Sidebar = () => {
                 </span>
 
                 {/* 桌面端悬浮 Tooltip */}
-                <span className="hidden md:block absolute left-16 opacity-0 group-hover:opacity-100 transition-opacity bg-[#222228] px-3 py-1.5 rounded-lg text-xs font-medium border border-white/[0.05] text-zinc-200 shadow-lg pointer-events-none z-50">
+                <span className="hidden md:block absolute left-20 opacity-0 group-hover:opacity-100 transition-opacity bg-[#222228] px-3 py-1.5 rounded-lg text-xs font-medium border border-white/[0.05] text-zinc-200 shadow-lg pointer-events-none z-50">
                   {item.label}
                 </span>
               </Link>
@@ -121,7 +121,7 @@ const Sidebar = () => {
           {/* 唤出搜索面板的按钮 */}
           <button 
             onClick={() => setIsSearchOpen(true)}
-            className="group relative flex flex-col items-center justify-center w-full h-full md:w-14 md:h-14 rounded-xl hover:bg-white/[0.04] transition-all duration-200 active:scale-95 md:mt-2"
+            className="group relative flex flex-col items-center justify-center w-full h-full md:w-16 md:h-14 rounded-xl hover:bg-white/[0.04] transition-all duration-200 active:scale-95 md:mt-2"
           >
             <div className="text-xl md:text-[22px] text-zinc-500 group-hover:text-zinc-300 transition-colors duration-200">
               <FaSearch />
@@ -129,7 +129,7 @@ const Sidebar = () => {
             <span className="mt-1 md:hidden text-[10px] font-medium text-zinc-500">
               搜索
             </span>
-            <span className="hidden md:block absolute left-16 opacity-0 group-hover:opacity-100 transition-opacity bg-[#222228] px-3 py-1.5 rounded-lg text-xs font-medium border border-white/[0.05] text-zinc-200 shadow-lg pointer-events-none z-50">
+            <span className="hidden md:block absolute left-20 opacity-0 group-hover:opacity-100 transition-opacity bg-[#222228] px-3 py-1.5 rounded-lg text-xs font-medium border border-white/[0.05] text-zinc-200 shadow-lg pointer-events-none z-50">
               搜索玩家
             </span>
           </button>
@@ -138,7 +138,7 @@ const Sidebar = () => {
         {/* 底部/右侧用户入口 */}
         <Link 
           to={user ? `/profile/${user.username}` : '/login'} 
-          className="flex flex-col items-center justify-center w-16 h-full md:w-14 md:h-14 rounded-xl hover:bg-white/[0.04] transition-all duration-200 active:scale-95 group relative"
+          className="flex flex-col items-center justify-center w-16 h-full md:w-16 md:h-14 rounded-xl hover:bg-white/[0.04] transition-all duration-200 active:scale-95 group relative"
         >
           <div className={`text-[22px] md:text-2xl transition-colors duration-200 ${user ? 'text-zinc-200' : 'text-zinc-500 group-hover:text-zinc-300'}`}>
             <FaUserCircle />
@@ -146,7 +146,7 @@ const Sidebar = () => {
           <span className="mt-1 md:hidden text-[10px] font-medium text-zinc-500">
             {user ? '我的' : '登录'}
           </span>
-          <span className="hidden md:block absolute left-16 opacity-0 group-hover:opacity-100 transition-opacity bg-[#222228] px-3 py-1.5 rounded-lg text-xs font-medium border border-white/[0.05] text-zinc-200 shadow-lg pointer-events-none whitespace-nowrap z-50">
+          <span className="hidden md:block absolute left-20 opacity-0 group-hover:opacity-100 transition-opacity bg-[#222228] px-3 py-1.5 rounded-lg text-xs font-medium border border-white/[0.05] text-zinc-200 shadow-lg pointer-events-none whitespace-nowrap z-50">
               {user ? (user.nickname || user.username) : '点击登录'}
           </span>
         </Link>
