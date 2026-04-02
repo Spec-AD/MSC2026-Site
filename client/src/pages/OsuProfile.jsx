@@ -230,8 +230,8 @@ export default function OsuProfile() {
                 <span className="text-2xl font-bold text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                   {modeStats?.playCount ? modeStats.playCount.toLocaleString() : '-'}
                 </span>
+              </div>
             </div>
-          </div>
 
             <div className="mb-16">
               <div className="flex items-center gap-3 border-b border-white/[0.05] pb-4 mb-6">
@@ -277,7 +277,7 @@ export default function OsuProfile() {
                                                     {score.mods && score.mods.length > 0 && (
                             <span className="text-[10px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1.5 py-0.5">+{score.mods.join('')}</span>
                           )}
-                       </div>
+                        </div>
                       </div>
 
                       <div className="flex flex-col items-end shrink-0 pl-4 border-l border-white/[0.05] z-10">
