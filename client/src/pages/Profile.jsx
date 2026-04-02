@@ -190,7 +190,7 @@ const Profile = () => {
       <div className="text-6xl mb-6 opacity-20"><FaLock /></div>
       <h2 className="text-2xl font-bold mb-2">未找到该玩家档案</h2>
       <p className="text-zinc-500 mb-8">{error}</p>
-      <button onClick={() => navigate('/')} className="px-6 py-3 bg-zinc-200 text-zinc-900 rounded-xl font-bold transition-all active:scale-95 shadow-sm">
+      <button onClick={() => navigate('/')} className="px-6 py-3 bg-zinc-200 text-zinc-900 font-bold transition-all active:scale-95">
         返回主页
       </button>
     </div>
@@ -247,7 +247,7 @@ const Profile = () => {
       {/* 2. 身份铭牌区 */}
       <div className="max-w-5xl mx-auto px-6 -mt-20 md:-mt-24 relative z-20">
         
-        <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6 md:gap-8 bg-[#15151e]/60 backdrop-blur-xl border border-white/[0.05] p-6 md:p-8 rounded-[2rem] shadow-xl">
+        <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6 md:gap-8 bg-[#15151e]/60 backdrop-blur-xl border border-white/[0.05] border-t-4 border-t-cyan-500/40 p-6 md:p-8">
           
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 text-center md:text-left w-full md:w-auto">
             <div className="relative group shrink-0 -mt-16 md:-mt-20">
@@ -331,37 +331,37 @@ const Profile = () => {
               !isEditing ? (
                 <>
                   <button 
-                    onClick={() => navigate('/friends')}
-                    className="px-4 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 rounded-xl font-bold flex items-center gap-2 text-sm shadow-sm active:scale-95 transition-all"
-                  >
+                        onClick={() => navigate('/friends')}
+                        className="px-4 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 font-bold flex items-center gap-2 text-sm active:scale-95 transition-all"
+                      >
                     <FaUserFriends /> <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{profile.friendsCount || profile.friends?.length || 0}</span>
                   </button>
-                  <button 
+                                    <button 
                     onClick={() => setIsEditing(true)} 
-                    className="px-4 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 rounded-xl font-bold transition-all flex items-center gap-2 text-sm shadow-sm active:scale-95"
+                    className="px-4 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-200 font-bold transition-all flex items-center gap-2 text-sm active:scale-95"
                   >
                     <FaUserEdit /> 编辑外观
                   </button>
-                  <button 
+                                    <button 
                     onClick={() => navigate('/settings')} 
-                    className="px-4 py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-900 rounded-xl font-bold transition-all flex items-center gap-2 text-sm shadow-sm active:scale-95"
+                    className="px-4 py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-900 font-bold transition-all flex items-center gap-2 text-sm active:scale-95"
                   >
                     <FaCog /> 设置
                   </button>
                 </>
               ) : (
                 <div className="flex gap-2 w-full md:w-auto">
-                  <button 
+                                    <button 
                     onClick={handleSaveProfile} 
                     disabled={isSaving} 
-                    className="flex-1 md:flex-none px-6 py-3 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl flex items-center justify-center gap-2 transition-all font-bold disabled:opacity-50 active:scale-95"
+                    className="flex-1 md:flex-none px-6 py-3 bg-zinc-200 hover:bg-white text-zinc-900 flex items-center justify-center gap-2 transition-all font-bold disabled:opacity-50 active:scale-95"
                   >
                     {isSaving ? <FaSpinner className="animate-spin" /> : <FaSave />} 保存
                   </button>
                   <button 
                     onClick={handleCancelEdit} 
                     disabled={isSaving}
-                    className="px-4 py-3 bg-[#1a1a24] hover:bg-rose-500/10 border border-white/[0.05] hover:border-rose-500/20 text-zinc-400 hover:text-rose-400 rounded-xl flex items-center justify-center transition-all disabled:opacity-50 active:scale-95"
+                    className="px-4 py-3 bg-[#1a1a24] hover:bg-rose-500/10 border border-white/[0.05] hover:border-rose-500/20 text-zinc-400 hover:text-rose-400 flex items-center justify-center transition-all disabled:opacity-50 active:scale-95"
                   >
                     <FaTimes />
                   </button>
@@ -375,8 +375,8 @@ const Profile = () => {
                 const friendCount = profile.friends?.length || 0;
 
                 if (isFriend) {
-                  return (
-                    <button className="px-5 py-3 bg-pink-500/10 text-pink-400 border border-pink-500/20 rounded-xl font-bold flex items-center gap-2 text-sm cursor-default">
+                                    return (
+                    <button className="px-5 py-3 bg-pink-500/10 text-pink-400 border border-pink-500/20 font-bold flex items-center gap-2 text-sm cursor-default">
                       <FaUserFriends /> <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{friendCount}</span>
                     </button>
                   );
@@ -384,7 +384,7 @@ const Profile = () => {
 
                 if (isPending) {
                   return (
-                    <button className="px-5 py-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl font-bold flex items-center gap-2 text-sm cursor-default">
+                    <button className="px-5 py-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold flex items-center gap-2 text-sm cursor-default">
                       <FaUserFriends /> 等待回复
                     </button>
                   );
@@ -393,7 +393,7 @@ const Profile = () => {
                 return (
                   <button 
                     onClick={handleAddFriend}
-                    className="px-5 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-400 hover:text-zinc-200 rounded-xl font-bold transition-all flex items-center gap-2 text-sm w-full md:w-auto active:scale-95 shadow-sm"
+                    className="px-5 py-3 bg-[#1a1a24] hover:bg-white/[0.08] border border-white/[0.05] text-zinc-400 hover:text-zinc-200 font-bold transition-all flex items-center gap-2 text-sm w-full md:w-auto active:scale-95"
                   >
                     <FaUserFriends /> <span style={{ fontFamily: "'Quicksand', sans-serif" }}>{friendCount}</span>
                   </button>
@@ -405,7 +405,7 @@ const Profile = () => {
 
         {/* 3. 核心内容区 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-          <div className="lg:col-span-2 bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-10 shadow-sm flex flex-col">
+          <div className="lg:col-span-2 bg-[#15151e] border border-white/[0.05] border-l-4 border-l-cyan-500/50 p-6 md:p-10 flex flex-col">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-1 h-5 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
               <h3 className="text-lg font-bold text-zinc-100 tracking-tight">自我介绍</h3>
@@ -417,7 +417,7 @@ const Profile = () => {
                   value={editData.bio}
                   onChange={(e) => setEditData({...editData, bio: e.target.value})}
                   placeholder="自我介绍一下吧"
-                  className="w-full h-40 bg-[#0c0c11] border border-white/[0.05] rounded-xl p-4 text-zinc-200 outline-none focus:border-cyan-500/50 transition-colors text-sm resize-none whitespace-pre-wrap leading-relaxed"
+                  className="w-full h-40 bg-[#0c0c11] border border-white/[0.05] border-l-2 border-l-cyan-500/30 p-4 text-zinc-200 outline-none focus:border-l-cyan-500 transition-colors text-sm resize-none whitespace-pre-wrap leading-relaxed"
                 />
               ) : (
                 <div className="text-[15px] leading-loose text-zinc-300 bbcode-content break-words whitespace-pre-wrap">
@@ -428,7 +428,7 @@ const Profile = () => {
           </div>
 
           <div className="flex flex-col gap-6">
-            <div className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 shadow-sm flex flex-col items-center">
+            <div className="bg-[#15151e] border border-white/[0.05] border-l-4 border-l-cyan-500/30 p-6 flex flex-col items-center">
               
               <div className="flex justify-between items-center w-full mb-6 px-2">
                 <span className="text-zinc-400 font-bold text-xs uppercase tracking-widest">Community Level</span>
@@ -479,7 +479,7 @@ const Profile = () => {
               </div>
             </div>
 
-            <div className="bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 shadow-sm flex flex-col items-center relative overflow-hidden group flex-1 justify-center min-h-[160px]">
+            <div className="bg-[#15151e] border border-white/[0.05] border-l-4 border-l-amber-500/30 p-6 flex flex-col items-center relative overflow-hidden group flex-1 justify-center min-h-[160px]">
               <div className="absolute top-4 right-5 text-[10px] font-bold text-zinc-600 uppercase tracking-widest border border-white/[0.05] px-2 py-0.5 rounded">WIP</div>
               <div className="w-16 h-16 mb-4">
                 <div className="w-full h-full rounded-full border-4 border-dashed border-amber-500/20 flex items-center justify-center group-hover:rotate-180 transition-transform duration-1000 ease-in-out">
@@ -501,8 +501,8 @@ const Profile = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             
-            {/* Maimai DX */}
-            <div onClick={() => navigate(`/profile/${profile.username}/maimai`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-cyan-500/30">
+                        {/* Maimai DX */}
+            <div onClick={() => navigate(`/profile/${profile.username}/maimai`)} className="group relative bg-[#15151e] border border-white/[0.05] border-l-4 border-l-transparent hover:border-l-cyan-500 p-6 md:p-8 cursor-pointer overflow-hidden transition-all duration-300 hover:bg-[#1a1a24]">
               <div className="absolute -right-10 -bottom-10 opacity-5 text-9xl text-cyan-400 transform -rotate-12 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
               <div className="relative z-10 flex flex-col h-full">
                 <h3 className="text-xl font-bold text-cyan-400 mb-1">Maimai DX</h3>
@@ -512,13 +512,13 @@ const Profile = () => {
                     <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Total PF</span>
                     <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{profile.totalPf ? profile.totalPf.toFixed(1) : '--'}</span>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-cyan-500 group-hover:text-white transition-colors"><FaChevronRight className="text-sm" /></div>
+                  <div className="w-10 h-10 bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-cyan-500 group-hover:text-white transition-colors duration-300"><FaChevronRight className="text-sm" /></div>
                 </div>
               </div>
             </div>
 
-            {/* CHUNITHM */}
-            <div onClick={() => navigate(`/profile/${profile.username}/chunithm`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-yellow-500/30">
+                        {/* CHUNITHM */}
+            <div onClick={() => navigate(`/profile/${profile.username}/chunithm`)} className="group relative bg-[#15151e] border border-white/[0.05] border-l-4 border-l-transparent hover:border-l-yellow-500 p-6 md:p-8 cursor-pointer overflow-hidden transition-all duration-300 hover:bg-[#1a1a24]">
               <div className="absolute -right-6 -bottom-6 opacity-5 text-9xl text-yellow-400 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
               <div className="relative z-10 flex flex-col h-full">
                 <h3 className="text-xl font-bold text-yellow-400 mb-1">CHUNITHM</h3>
@@ -528,34 +528,45 @@ const Profile = () => {
                     <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Rating</span>
                     <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{profile.chuniRating ? profile.chuniRating.toFixed(2) : '--'}</span>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-yellow-500 group-hover:text-white transition-colors"><FaChevronRight className="text-sm" /></div>
+                  <div className="w-10 h-10 bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-yellow-500 group-hover:text-white transition-colors duration-300"><FaChevronRight className="text-sm" /></div>
                 </div>
               </div>
             </div>
 
-            {/* osu! */}
-            <div onClick={() => navigate(`/profile/${profile.username}/osu`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-pink-500/30">
+                        {/* osu! */}
+            <div onClick={() => navigate(`/profile/${profile.username}/osu`)} className="group relative bg-[#15151e] border border-white/[0.05] border-l-4 border-l-transparent hover:border-l-pink-500 p-6 md:p-8 cursor-pointer overflow-hidden transition-all duration-300 hover:bg-[#1a1a24]">
               <div className="absolute -right-6 -bottom-6 opacity-5 text-9xl text-pink-400 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
               <div className="relative z-10 flex flex-col h-full">
-                <h3 className="text-xl font-bold text-pink-400 mb-1">osu!</h3>
-                <p className="text-xs text-zinc-500 font-medium mb-8">查看全球排名与 Best Performance 记录</p>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-xl font-bold text-pink-400">osu!</h3>
+                  {!profile.osuId && isOwnProfile && (
+                    <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 bg-pink-500/10 text-pink-400 border border-pink-500/20">未绑定</span>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-500 font-medium mb-8">
+                  {!profile.osuId && isOwnProfile ? '点击进入绑定 osu! 官方账号' : '查看全球排名与 Best Performance 记录'}
+                </p>
                 <div className="mt-auto flex items-center justify-between">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Performance (PP)</span>
-                    <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{profile.osuPp ? Math.round(profile.osuPp) : '--'}</span>
+                    <span className="text-2xl font-bold text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                      {profile.osuPp ? Math.round(profile.osuPp) : (!profile.osuId && isOwnProfile ? '点击绑定' : '--')}
+                    </span>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-pink-500 group-hover:text-white transition-colors"><FaChevronRight className="text-sm" /></div>
+                  <div className="w-10 h-10 bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-pink-500 group-hover:text-white transition-colors duration-300">
+                    {!profile.osuId && isOwnProfile ? <FaLock className="text-sm text-pink-400 group-hover:text-white" /> : <FaChevronRight className="text-sm" />}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* 🔥 v2.0.0 新增: Letter Decode (竞技场) */}
-            <div onClick={() => navigate(`/profile/${profile.username}/decode`)} className="group relative bg-[#15151e] border border-white/[0.05] rounded-[2rem] p-6 md:p-8 cursor-pointer overflow-hidden transition-all hover:bg-[#1a1a24] hover:border-purple-500/30">
+                        {/* Letter Decode */}
+            <div onClick={() => navigate(`/profile/${profile.username}/decode`)} className="group relative bg-[#15151e] border border-white/[0.05] border-l-4 border-l-transparent hover:border-l-purple-500 p-6 md:p-8 cursor-pointer overflow-hidden transition-all duration-300 hover:bg-[#1a1a24]">
               <div className="absolute -right-6 -bottom-6 opacity-5 text-9xl text-purple-400 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
               <div className="relative z-10 flex flex-col h-full">
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="text-xl font-bold text-purple-400">Letter Decode</h3>
-                  <span className="bg-purple-500/20 text-purple-300 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest border border-purple-500/30">V2.0</span>
+                  <span className="bg-purple-500/20 text-purple-300 text-[9px] font-bold px-1.5 py-0.5 uppercase tracking-widest border border-purple-500/30">V2.0</span>
                 </div>
                 <p className="text-xs text-zinc-500 font-medium mb-8">查看 OV100 算力衰减记录与个人流派画像</p>
                 <div className="mt-auto flex items-center justify-between">
@@ -565,7 +576,7 @@ const Profile = () => {
                       {profile.letterGameStats?.totalOv ? profile.letterGameStats.totalOv.toFixed(2) : '0.00'}
                     </span>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-purple-500 group-hover:text-white transition-colors"><FaChevronRight className="text-sm" /></div>
+                  <div className="w-10 h-10 bg-[#0c0c11] border border-white/[0.05] flex items-center justify-center group-hover:bg-purple-500 group-hover:text-white transition-colors duration-300"><FaChevronRight className="text-sm" /></div>
                 </div>
               </div>
             </div>

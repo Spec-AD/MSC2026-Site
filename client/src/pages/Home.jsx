@@ -208,8 +208,8 @@ const Home = () => {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-50/80 to-gray-50 dark:via-[#0c0c11]/80 dark:to-[#0c0c11]"></div>
       </div>
 
-      {/* Header */}
-      <header className="w-full max-w-7xl mx-auto px-6 py-8 flex justify-between items-center z-50 relative">
+            {/* Header */}
+      <header className="w-full max-w-7xl mx-auto px-6 pt-6 pb-4 flex justify-between items-center z-50 relative">
         <div className="flex items-center shrink-0">
           <img src={isDark ? "/assets/logos.png" : "/assets/logos_dark.png"} alt="PUREBEAT Logo" className="h-10 md:h-14 object-contain drop-shadow-lg transition-all" />
           
@@ -250,12 +250,112 @@ const Home = () => {
         </div>
       </header>
 
-      <main className="w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-6 z-10 relative">
+            {/* Daily Track Hero Section - Full Width, split 70/30 */}
+            <section className="w-full max-w-7xl mx-auto px-6 z-10 relative">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full bg-white dark:bg-[#15151e] border-l-4 border-l-indigo-500 border-b border-zinc-100 dark:border-white/5 relative overflow-hidden flex flex-col md:flex-row"
+        >
+          {/* 左侧：今日歌曲详情 (70%) */}
+          <div
+            onClick={() => { if (dailySong && dailySong.title) navigate(`/daily-song/${dailySong._id || 'today'}`); }}
+            className={`flex-[7] p-8 relative overflow-hidden transition-all duration-300 ${
+              dailySong && dailySong.title
+                ? 'cursor-pointer group hover:bg-gray-50 dark:hover:bg-[#1a1a24]'
+                : 'cursor-default'
+            }`}
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-purple-500/3 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+
+            <div className="flex items-center gap-2 mb-5 relative z-10">
+              <h3 className="text-sm uppercase tracking-widest text-zinc-800 dark:text-zinc-100 font-bold">Daily Track</h3>
+              <span className="text-[9px] font-bold px-2 py-0.5 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20">
+                {serverTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+            </div>
+
+            {isDailyLoading ? (
+              <div className="flex items-center justify-center py-10 relative z-10">
+                <FaSpinner className="animate-spin text-3xl text-indigo-500/40" />
+              </div>
+            ) : dailySong && dailySong.title ? (
+              <div className="flex items-center gap-6 relative z-10">
+                <div className="w-28 h-28 md:w-32 md:h-32 bg-gray-100 dark:bg-[#0a0a0c] border-l-2 border-indigo-300 dark:border-indigo-500/30 shrink-0 overflow-hidden relative group-hover:scale-105 transition-transform duration-500 flex items-center justify-center">
+                  <FaMusic className="text-zinc-400 dark:text-zinc-600 opacity-20 text-4xl absolute z-0" />
+                  {dailySong.coverUrl && !dailySong.coverUrl.includes('bg.png') && (
+                    <img
+                      src={dailySong.coverUrl}
+                      alt="Cover"
+                      className="w-full h-full object-cover relative z-10"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  )}
+                </div>
+                <div className="flex flex-col justify-center flex-1 min-w-0">
+                  <h2
+                    className="text-2xl md:text-3xl font-black text-zinc-900 dark:text-zinc-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors"
+                    title={dailySong.title}
+                  >
+                    {dailySong.title}
+                  </h2>
+                  <p className="text-base text-zinc-500 dark:text-zinc-400 truncate mt-1.5">{dailySong.artist}</p>
+                  <span className="text-[11px] font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase mt-2 inline-block">{dailySong.source}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-6 relative z-10 opacity-40 py-4">
+                <div className="w-28 h-28 md:w-32 md:h-32 bg-gray-100 dark:bg-white/5 border-l-2 border-zinc-300 dark:border-white/10 flex items-center justify-center shrink-0">
+                  <FaMusic className="text-3xl text-zinc-400 dark:text-zinc-600" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-xl font-bold text-zinc-500 dark:text-zinc-400">正在挑选今日曲目...</h2>
+                  <p className="text-sm text-zinc-400 dark:text-zinc-500">请稍后再来看看吧</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 竖向分割线 */}
+          <div className="hidden md:block w-px bg-zinc-100 dark:bg-white/5 self-stretch"></div>
+          {/* 横向分割线（移动端） */}
+          <div className="block md:hidden h-px bg-zinc-100 dark:bg-white/5 w-full"></div>
+
+                    {/* 右侧：往期推荐 (30%) */}
+          <div
+            onClick={() => navigate('/daily-history')}
+            className="flex-[3] bg-gray-50/80 dark:bg-[#0c0c11]/40 p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-[#0c0c11]/70 transition-all duration-300 group relative overflow-hidden"
+          >
+            {/* 背景图片 */}
+            <div className="absolute inset-0 opacity-30 dark:opacity-20 group-hover:opacity-40 dark:group-hover:opacity-30 transition-opacity duration-500">
+              <img 
+                src="/assets/View_history.png" 
+                alt="History Background" 
+                className="w-full h-full object-cover"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-50/60 via-transparent to-indigo-500/5 dark:from-[#0c0c11]/60 dark:to-indigo-500/10 group-hover:from-gray-100/70 dark:group-hover:from-[#0c0c11]/70 transition-all duration-500 pointer-events-none"></div>
+            <div className="relative z-10 flex flex-col items-center gap-3">
+              <div className="w-12 h-12 bg-white dark:bg-[#15151e] border-l-2 border-indigo-400 dark:border-indigo-500/50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <FaHistory className="text-xl text-indigo-500 dark:text-indigo-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-zinc-700 dark:text-zinc-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">往期推荐</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mt-0.5">View History</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </section>
+
+      <main className="w-full max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-8 z-10 relative mt-8">
         
-        {/* 左侧：新闻与活动 */}
-        <div className="lg:col-span-8 flex flex-col gap-6">
+                {/* 左侧：新闻与活动 */}
+        <div className="lg:col-span-7 flex flex-col gap-8">
           
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <Link to="/tournaments" className="block group">
                 <div className="relative w-full aspect-[21/8] md:aspect-[21/6] overflow-hidden border-l-4 border-l-indigo-500 bg-white dark:bg-[#15151e] transition-all duration-500 group-hover:border-l-indigo-400 dark:group-hover:border-l-indigo-400">
                 <img 
@@ -277,7 +377,7 @@ const Home = () => {
             </Link>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }}>
                         <div className="flex items-center gap-3 mb-5 px-1 border-b border-zinc-200 dark:border-white/5 pb-4">
               <div className="w-1 h-5 bg-indigo-500"></div>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">资讯枢纽</h2>
@@ -287,7 +387,7 @@ const Home = () => {
               {fullPreviewNews.map((news) => {
                 const d = new Date(news.createdAt);
                 return (
-                  <div key={news._id} onClick={() => setSelectedNews(news)} className="bg-white dark:bg-[#15151e] border-l-4 border-l-transparent hover:border-l-indigo-500 border-b border-zinc-100 dark:border-white/5 cursor-pointer transition-all duration-200 group flex flex-col md:flex-row h-auto md:h-44">
+                  <div key={news._id} onClick={() => setSelectedNews(news)} className="bg-white dark:bg-[#15151e] border-l-4 border-l-transparent hover:border-l-indigo-500 border-b border-zinc-100 dark:border-white/5 cursor-pointer transition-all duration-300 group flex flex-col md:flex-row h-auto md:h-44">
                     <div className="relative w-full md:w-64 h-40 md:h-full bg-gray-100 dark:bg-[#0a0a0c] overflow-hidden shrink-0 flex items-center justify-center rounded-none">
                       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent group-hover:scale-105 transition-transform duration-700 z-0"></div>
                       <span className="text-4xl text-zinc-300 dark:text-zinc-800 font-bold opacity-50 z-0 relative tracking-widest">NEWS</span>
@@ -327,7 +427,7 @@ const Home = () => {
                   {compactNews.map((news) => {
                     const d = new Date(news.createdAt);
                     return (
-                      <div key={news._id} onClick={() => setSelectedNews(news)} className="flex items-center justify-between px-2 py-3.5 border-b border-zinc-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-all group border-l-4 border-l-transparent hover:border-l-indigo-500">
+                      <div key={news._id} onClick={() => setSelectedNews(news)} className="flex items-center justify-between px-2 py-4 border-b border-zinc-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-all duration-300 group border-l-4 border-l-transparent hover:border-l-indigo-500">
                         <div className="flex items-center gap-4 min-w-0 flex-1">
                           <span className="text-[11px] font-bold text-zinc-500 w-10 shrink-0 text-center uppercase tracking-wider" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                             {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -352,10 +452,10 @@ const Home = () => {
           </motion.div>
         </div>
 
-        {/* 右侧区域：个人档案与游戏入口 */}
-        <div className="lg:col-span-4 flex flex-col gap-5">
+                {/* 右侧区域：个人档案与游戏入口 */}
+        <div className="lg:col-span-5 flex flex-col gap-6">
           
-                    <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="bg-white dark:bg-[#15151e] border-l-4 border-l-cyan-500 border-b border-zinc-100 dark:border-white/5 p-5 md:p-6 relative overflow-hidden group">
+          <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="bg-white dark:bg-[#15151e] border-l-4 border-l-cyan-500 border-b border-zinc-100 dark:border-white/5 p-6 relative overflow-hidden group">
             <div className="absolute -top-16 -right-16 w-32 h-32 bg-cyan-500/10 dark:bg-cyan-500/20 blur-[40px] rounded-full pointer-events-none transition-all group-hover:scale-125"></div>
 
                         <div className="flex items-center justify-between mb-4">
@@ -431,10 +531,10 @@ const Home = () => {
             )}
           </motion.div>
 
-                    <motion.div 
+                              <motion.div 
             initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }} 
             onClick={() => navigate('/letter-game')}
-            className="bg-white dark:bg-[#15151e] border-l-4 border-l-cyan-500 border-b border-zinc-100 dark:border-white/5 p-5 md:p-6 relative overflow-hidden group hover:border-l-cyan-400 transition-all cursor-pointer active:scale-95"
+            className="bg-white dark:bg-[#15151e] border-l-4 border-l-cyan-500 border-b border-zinc-100 dark:border-white/5 p-6 relative overflow-hidden group hover:border-l-cyan-400 transition-all duration-300 cursor-pointer active:scale-95"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-purple-500/5 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
             
@@ -460,54 +560,7 @@ const Home = () => {
             </div>
           </motion.div>
 
-                    <motion.div 
-            initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} 
-            onClick={() => navigate('/daily-history')}
-            className="bg-white dark:bg-[#15151e] border-l-4 border-l-indigo-500 border-b border-zinc-100 dark:border-white/5 p-5 md:p-6 relative overflow-hidden group hover:bg-gray-50 dark:hover:bg-[#1a1a24] transition-all cursor-pointer active:scale-95"
-          >
-                        <div className="flex items-center justify-between mb-4 relative z-10">
-              <div className="flex items-center gap-2">
-                <h3 className="text-[11px] uppercase tracking-widest text-zinc-800 dark:text-zinc-100 font-bold">Daily Track</h3>
-              </div>
-              <span className="text-[9px] font-bold px-2 py-0.5 text-indigo-600 dark:text-indigo-400 flex items-center gap-1 border border-indigo-200 dark:border-indigo-500/20 transition-colors">
-                <FaHistory /> 往期回顾
-              </span>
-            </div>
-
-            {isDailyLoading ? (
-              <div className="flex items-center justify-center py-2">
-                <FaSpinner className="animate-spin text-xl text-indigo-500/50" />
-              </div>
-            ) : dailySong && dailySong.title ? (
-              <div className="flex items-center gap-3 relative z-10">
-                <div className="w-14 h-14 bg-gray-100 dark:bg-[#0a0a0c] border-l-2 border-zinc-300 dark:border-white/10 shrink-0 overflow-hidden relative group-hover:scale-105 transition-transform duration-500 flex items-center justify-center">
-                   <FaMusic className="text-zinc-400 dark:text-zinc-600 opacity-30 text-xl absolute z-0" />
-                   {dailySong.coverUrl && !dailySong.coverUrl.includes('bg.png') && (
-                     <img 
-                       src={dailySong.coverUrl} alt="Cover" 
-                       className="w-full h-full object-cover relative z-10"
-                       onError={(e) => { e.target.style.display = 'none'; }}
-                     />
-                   )}
-                </div>
-                <div className="flex flex-col min-w-0 flex-1 justify-center">
-                  <span className="text-sm font-bold truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 text-zinc-900 dark:text-zinc-100 transition-colors" title={dailySong.title}>{dailySong.title}</span>
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">{dailySong.artist}</span>
-                  <span className="text-[9px] font-bold tracking-wider text-zinc-400 dark:text-zinc-500 uppercase mt-1 truncate">{dailySong.source}</span>
-                </div>
-              </div>
-            ) : (
-                            <div className="flex items-center gap-3 relative z-10 opacity-50">
-                <div className="w-14 h-14 bg-gray-100 dark:bg-white/5 border-l-2 border-zinc-300 dark:border-white/10 flex items-center justify-center shrink-0">
-                  <FaMusic className="text-lg text-zinc-400 dark:text-zinc-600 opacity-50" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-zinc-500 dark:text-zinc-400">正在挑选...</span>
-                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">请稍后再来看看吧</span>
-                </div>
-              </div>
-            )}
-          </motion.div>
+                              
 
                     <div className="grid grid-cols-2 gap-3">
             <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="bg-white dark:bg-[#15151e] border-l-4 border-l-purple-500 border-b border-zinc-100 dark:border-white/5 p-5 relative overflow-hidden flex flex-col items-center justify-center text-center group">

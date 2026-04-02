@@ -150,77 +150,106 @@ export default function OsuProfile() {
                 <button 
                   key={mode.id}
                   onClick={() => setActiveMode(mode.id)}
-                  style={{ fontFamily: "'Quicksand', sans-serif" }}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeMode === mode.id ? 'bg-pink-500/20 text-pink-400 shadow-sm border border-pink-500/30' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5 border border-transparent'}`}
+                                    style={{ fontFamily: "'Quicksand', sans-serif" }}
+                  className={`px-4 py-1.5 text-xs font-bold transition-all border-b-2 ${activeMode === mode.id ? 'bg-pink-500/20 text-pink-400 border-pink-500' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5 border-transparent'}`}
                 >
                   {mode.label}
                 </button>
               ))}
             </div>
 
-            {isOwnProfile && profile.osuId && (
-              <button 
-                onClick={handleSyncScores}
-                disabled={isSyncing}
-                className="w-full bg-pink-600 hover:bg-pink-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-pink-900/20"
-              >
-                {isSyncing ? <FaSpinner className="animate-spin" /> : <><FaSyncAlt /> 同步当前 {MODES.find(m=>m.id===activeMode).label} 数据</>}
-              </button>
+                        {isOwnProfile && (
+              profile.osuId ? (
+                <button 
+                  onClick={handleSyncScores}
+                  disabled={isSyncing}
+                  className="w-full bg-pink-600 hover:bg-pink-500 text-white px-5 py-2.5 text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
+                >
+                  {isSyncing ? <FaSpinner className="animate-spin" /> : <><FaSyncAlt /> 同步当前 {MODES.find(m=>m.id===activeMode).label} 数据</>}
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    const clientId = '38062';
+                    const redirectUri = encodeURIComponent(`${window.location.origin}/profile/${profile.username}/osu`);
+                    const state = `${profile.username}_osu`;
+                    window.location.href = `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify+public&state=${state}`;
+                  }}
+                  className="w-full bg-pink-600 hover:bg-pink-500 text-white px-5 py-2.5 text-sm font-bold transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <FaLock /> 绑定 osu! 账号
+                </button>
+              )
             )}
           </div>
         </div>
 
-        {!profile.osuId ? (
-          <div className="py-24 flex flex-col items-center justify-center bg-[#15151e]/40 border border-white/[0.05] rounded-[3rem] mt-10">
+                        {!profile.osuId ? (
+          <div className="py-24 flex flex-col items-center justify-center bg-[#15151e]/40 border border-white/[0.05] border-l-4 border-l-pink-500 mt-10">
             <img src="/assets/logos.png" alt="osu Logo" className="w-20 h-20 opacity-30 mb-6 grayscale" />
-            <p className="text-zinc-400 font-medium tracking-wide mb-6">该玩家尚未绑定 osu! 官方账号</p>
+            <p className="text-zinc-400 font-medium tracking-wide mb-6">
+              {isOwnProfile ? '你尚未绑定 osu! 官方账号' : '该玩家尚未绑定 osu! 官方账号'}
+            </p>
+            {isOwnProfile && (
+              <button
+                onClick={() => {
+                  const clientId = '38062';
+                  const redirectUri = encodeURIComponent(`${window.location.origin}/profile/${profile.username}/osu`);
+                  const state = `${profile.username}_osu`;
+                  window.location.href = `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify+public&state=${state}`;
+                }}
+                className="px-6 py-3 bg-pink-600 hover:bg-pink-500 text-white font-bold transition-all active:scale-95 flex items-center gap-2"
+              >
+                <FaLock /> 立即绑定 osu! 账号
+              </button>
+            )}
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-              <div className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-5 flex flex-col justify-center shadow-sm">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+              <div className="bg-[#15151e] border border-white/[0.05] border-l-2 border-l-pink-500/50 p-5 flex flex-col justify-center">
                 <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 flex items-center gap-1.5"><FaGlobe /> 全球排名</span>
                 <span className="text-2xl font-bold text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                   {modeStats?.rank ? `#${modeStats.rank.toLocaleString()}` : '-'}
                 </span>
-              </div>
-              <div className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-5 flex flex-col justify-center shadow-sm">
+                            </div>
+              <div className="bg-[#15151e] border border-white/[0.05] border-l-2 border-l-pink-500/50 p-5 flex flex-col justify-center">
                 <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 flex items-center gap-1.5"><FaMapMarkerAlt /> 地区排名</span>
                 <span className="text-2xl font-bold text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                   {modeStats?.countryRank ? `#${modeStats.countryRank.toLocaleString()}` : '-'}
                 </span>
-              </div>
-              <div className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-5 flex flex-col justify-center shadow-sm">
+                            </div>
+              <div className="bg-[#15151e] border border-white/[0.05] border-l-2 border-l-pink-500/50 p-5 flex flex-col justify-center">
                 <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Performance</span>
                 <span className="text-2xl font-bold text-pink-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                   {modeStats?.pp ? Math.round(modeStats.pp).toLocaleString() : '-'} <span className="text-sm text-pink-500/50">pp</span>
                 </span>
-              </div>
-              <div className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-5 flex flex-col justify-center shadow-sm">
+                            </div>
+              <div className="bg-[#15151e] border border-white/[0.05] border-l-2 border-l-pink-500/50 p-5 flex flex-col justify-center">
                 <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 flex items-center gap-1.5"><FaPlay /> 游玩次数</span>
                 <span className="text-2xl font-bold text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                   {modeStats?.playCount ? modeStats.playCount.toLocaleString() : '-'}
                 </span>
-              </div>
             </div>
+                          </div>
 
             <div className="mb-16">
               <div className="flex items-center gap-3 border-b border-white/[0.05] pb-4 mb-6">
-                <div className="w-1 h-6 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]"></div>
+                <div className="w-1 h-6 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]">              </div>
                 <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Best Performance (BP 100)</h2>
               </div>
 
               {currentModeScores.length === 0 ? (
-                <div className="py-16 text-center text-zinc-600 font-medium bg-[#15151e]/40 rounded-2xl border border-white/5">
+                <div className="py-16 text-center text-zinc-600 font-medium bg-[#15151e]/40 border-l-4 border-l-pink-500/30 border-t border-b border-r border-white/5">
                   该模式下暂无成绩记录，请先在游戏中打出成绩后点击同步
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   {currentModeScores.map((score, index) => (
                     <motion.div 
                       key={score._id || index}
                       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.01 > 0.5 ? 0 : index * 0.01 }}
-                      className="relative flex items-center bg-[#15151e] border border-white/[0.05] hover:border-pink-500/30 rounded-2xl p-3 overflow-hidden group transition-colors shadow-sm"
+                      className="relative flex items-center bg-[#15151e] border border-white/[0.05] border-l-4 border-l-transparent hover:border-l-pink-500 p-4 overflow-hidden group transition-colors duration-300"
                     >
                       <div className="w-10 shrink-0 text-center font-bold text-lg text-zinc-600 font-mono z-10">
                         #{index + 1}
@@ -228,9 +257,9 @@ export default function OsuProfile() {
 
                       {/* 🔥 封面原图缩略图显示 */}
                       <img 
-                        src={score.coverUrl} 
+                                                src={score.coverUrl} 
                         alt="cover" 
-                        className="w-16 h-11 object-cover rounded-md border border-white/5 shrink-0 mr-3 shadow-sm group-hover:scale-105 transition-transform" 
+                        className="w-16 h-11 object-cover border border-white/5 shrink-0 mr-3 group-hover:scale-105 transition-transform" 
                         onError={(e) => e.target.style.display='none'} 
                       />
 
@@ -243,16 +272,14 @@ export default function OsuProfile() {
                           {score.title}
                         </div>
                         <div className="flex items-center gap-2 mt-1 truncate">
-                          <span className="text-[11px] font-bold text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-md truncate max-w-[150px]" title={score.version}>
+                          <span className="text-[11px] font-bold text-yellow-500 bg-yellow-500/10 px-2 py-0.5 truncate max-w-[150px]" title={score.version}>
                             {score.version}
                           </span>
-                          {score.mods && score.mods.length > 0 && (
-                            <span className="text-[10px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1.5 py-0.5 rounded-md">
-                              +{score.mods.join('')}
-                            </span>
+                                                    {score.mods && score.mods.length > 0 && (
+                            <span className="text-[10px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1.5 py-0.5">+{score.mods.join('')}</span>
                           )}
-                        </div>
                       </div>
+                                    </div>
 
                       <div className="flex flex-col items-end shrink-0 pl-4 border-l border-white/[0.05] z-10">
                         <div className="flex items-baseline gap-1">
@@ -272,7 +299,7 @@ export default function OsuProfile() {
             </div>
           </>
         )}
-      </div>
     </div>
+                  </div>
   );
 }
