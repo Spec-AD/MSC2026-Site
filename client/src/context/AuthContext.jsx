@@ -9,9 +9,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null); // 存储当前用户信息
   const [loading, setLoading] = useState(true); // 是否正在检查登录状态
 
-  // 配置 Axios 默认地址 (根据你的后端端口，如果是5000)
-  axios.defaults.baseURL = 'http://localhost:5000';
-
   // 3. 核心逻辑：应用启动时，检查本地 Token 实现自动登录
   useEffect(() => {
     const checkLoggedIn = async () => {
