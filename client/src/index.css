@@ -2,11 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+<<<<<<< HEAD
 /* 极简全局重置，由 Tailwind 的 dark: 接管颜色 */
+=======
+/* 全局重置 */
+>>>>>>> e56fccf0a8d274e3e32451f60dda3b05c8c75016
 body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+<<<<<<< HEAD
   font-family: 'Quicksand', 'NotoSansSC', 'MPLUS1p', sans-serif;
   @apply bg-gray-50 text-zinc-900 dark:bg-[#0c0c11] dark:text-zinc-200 transition-colors duration-300;
   -webkit-font-smoothing: antialiased;
@@ -37,3 +42,135 @@ body {
 ::-webkit-scrollbar-thumb { @apply bg-zinc-300 dark:bg-white/10 rounded-full; }
 ::-webkit-scrollbar-thumb:hover { @apply bg-zinc-400 dark:bg-white/20; }
 input:focus, textarea:focus, select:focus { outline: none; }
+=======
+  background-color: #111115; /* 已同步为现代社区风格底色 */
+  color: #e4e4e7; /* text-zinc-200 */
+  -webkit-font-smoothing: antialiased;
+}
+
+/* =======================================================
+   1. 英文字体 (Quicksand - 可变字体 Variable Font)
+   圆润现代无衬线体，支持字重平滑过渡
+======================================================= */
+@font-face {
+  font-family: 'Quicksand';
+  src: url('/fonts/Quicksand-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900; /* 声明可变字重范围 */
+  font-style: normal;
+  font-display: swap;
+}
+
+/* =======================================================
+   2. 中文字体 (Noto Sans SC 思源黑体 - 可变字体 Variable Font)
+   原生支持字重平滑过渡，极其清晰
+======================================================= */
+@font-face {
+  font-family: 'NotoSansSC';
+  src: url('/fonts/NotoSansSC-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900; /* 声明可变字重范围 */
+  font-style: normal;
+  font-display: swap;
+}
+
+/* =======================================================
+   3. 日文字体 (M PLUS 1p - 静态多字重)
+   对应 Tailwind 的固定字重断点
+======================================================= */
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Thin.ttf') format('truetype');
+  font-weight: 100; /* font-thin */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Light.ttf') format('truetype');
+  font-weight: 300; /* font-light */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Regular.ttf') format('truetype');
+  font-weight: 400; /* font-normal */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Medium.ttf') format('truetype');
+  font-weight: 500; /* font-medium */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Bold.ttf') format('truetype');
+  font-weight: 700; /* font-bold */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-ExtraBold.ttf') format('truetype');
+  font-weight: 800; /* font-extrabold */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MPLUS1p';
+  src: url('/fonts/MPLUS1p-Black.ttf') format('truetype');
+  font-weight: 900; /* font-black */
+  font-style: normal;
+  font-display: swap;
+}
+
+/* =======================================================
+   全局默认字体回退链 (Fallback Chain) 
+   排位逻辑：英文 (Quicksand) -> 中文 (NotoSansSC) -> 日文 (M PLUS) -> 系统后备
+======================================================= */
+body {
+  font-family: 'Quicksand', 'NotoSansSC', 'MPLUS1p', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-weight: 500; /* 现代深色模式社区通常用 500 作为正文基准字重，看起来更清晰 */
+}
+
+/* 核心背景设置 */
+#root {
+  min-height: 100vh;
+  background-color: #111115;
+}
+
+/* 自定义滚动条 (内敛现代化) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 添加扫光动画 */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* 去除输入框默认聚焦轮廓 */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+}
+>>>>>>> e56fccf0a8d274e3e32451f60dda3b05c8c75016

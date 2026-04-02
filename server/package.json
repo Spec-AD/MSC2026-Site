@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "name": "msc-2026-server",
   "version": "1.0.0",
@@ -33,3 +34,40 @@
     "nodemon": "^3.1.0"
   }
 }
+=======
+{
+  "name": "msc-2026-server",
+  "version": "1.0.0",
+  "description": "Backend API for MSC 2026 Rhythm Game Tournament",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "maimai",
+    "tournament",
+    "nodejs",
+    "express",
+    "mongodb"
+  ],
+  "author": "Wolong",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.13.5",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.9.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.3.0",
+    "multer": "^2.0.2",
+    "multer-storage-cloudinary": "^4.0.0",
+    "nodemailer": "^8.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
+>>>>>>> e56fccf0a8d274e3e32451f60dda3b05c8c75016
