@@ -8,6 +8,8 @@ import Leaderboard from './pages/Leaderboard';
 import OsuCallback from './pages/OsuCallback';
 import Friends from './pages/Friends';
 import MaimaiProfile from './pages/MaimaiProfile';
+import MaimaiPlateDetail from './pages/MaimaiPlateDetail';
+import MaimaiLevelDetail from './pages/MaimaiLevelDetail';
 import Settings from './pages/Settings';
 import ChunithmProfile from './pages/ChunithmProfile';
 import OsuProfile from './pages/OsuProfile';
@@ -56,6 +58,8 @@ function App() {
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/friends" element={<Friends />} />
               <Route path="/profile/:username/maimai" element={<MaimaiProfile />} />
+              <Route path="/profile/:username/maimai/plate/:plateId" element={<MaimaiPlateDetail />} />
+              <Route path="/profile/:username/maimai/level/:level" element={<MaimaiLevelDetail />} />
               <Route path="/profile/:username/chunithm" element={<ChunithmProfile />} />
               <Route path="/profile/:username/osu" element={<OsuProfile />} />
               <Route path="/daily-history" element={<DailyHistory />} />

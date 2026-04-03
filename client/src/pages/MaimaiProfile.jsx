@@ -78,12 +78,8 @@ const MaimaiProfile = () => {
   const [selectedPfScore, setSelectedPfScore] = useState(null);
   
   const [selectedPlateVersion, setSelectedPlateVersion] = useState('舞');
-  const [selectedPlateDetail, setSelectedPlateDetail] = useState(null); 
-  const [detailDiff, setDetailDiff] = useState(3); 
 
-  const [selectedLevelDetail, setSelectedLevelDetail] = useState(null);
-  const [plateDetailLevel, setPlateDetailLevel] = useState(null);
-  const [levelDetailDs, setLevelDetailDs] = useState(null);
+
   const [levelBgCache] = useState(() => {
     const seed = Date.now();
     return { cache: new Map(), seed };
@@ -328,19 +324,53 @@ const MaimaiProfile = () => {
     return data.filter(d => d.total > 0);
   }, [musicData, userScoreMap]);
 
-  const chartsInSelectedLevel = useMemo(() => {
-    if (!selectedLevelDetail || !musicData) return [];
-    const charts = [];
+  // 全版本全难度统计数据
+  const globalStats = useMemo(() => {
+    if (!musicData || musicData.length === 0 || !profile?.allScores) return null;
+    let total = 0, clear = 0, s = 0, sp = 0, ss = 0, ssp = 0, sss = 0, sssp = 0;
+    let fc = 0, fcp = 0, ap = 0, app = 0;
+    let sync = 0, fs = 0, fsd = 0, fsdp = 0;
+    let dx1 = 0, dx2 = 0, dx3 = 0, dx4 = 0, dx5 = 0;
+    
     musicData.forEach(song => {
-        if (song.type === 'UTAGE' || song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场') return;
-        song.level.forEach((lvlStr, idx) => {
-            if (lvlStr === selectedLevelDetail) {
-                charts.push({ song, diffIndex: idx, ds: song.ds[idx] || 0 });
-            }
-        });
+      if (song.type === 'UTAGE' || song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场') return;
+      song.level.forEach((lvl, idx) => {
+        total++;
+        const score = userScoreMap.get(`${song.id}_${idx}`) || userScoreMap.get(`${Number(song.id)}_${idx}`);
+        if (!score) return;
+        const ach = score.achievement || score.achievementRate || 0;
+        const fcVal = getFc(score);
+        const fsVal = getFs(score);
+        const dxRatio = (score.dxRatio || 0) * 100;
+        
+        if (ach >= 80) clear++;
+        if (ach >= 90) s++;
+        if (ach >= 94) sp++;
+        if (ach >= 97) ss++;
+        if (ach >= 98) ssp++;
+        if (ach >= 100) sss++;
+        if (ach >= 100.5) sssp++;
+        
+        if (['fc','fcp','ap','app'].includes(fcVal)) fc++;
+        if (['fcp','ap','app'].includes(fcVal)) fcp++;
+        if (['ap','app'].includes(fcVal)) ap++;
+        if (fcVal === 'app') app++;
+        
+        if (['sync','fs','fsd','fsdp'].includes(fsVal)) sync++;
+        if (['fs','fsd','fsdp'].includes(fsVal)) fs++;
+        if (['fsd','fsdp'].includes(fsVal)) fsd++;
+        if (fsVal === 'fsdp') fsdp++;
+        
+        if (dxRatio >= 97) dx5++;
+        else if (dxRatio >= 95) dx4++;
+        else if (dxRatio >= 93) dx3++;
+        else if (dxRatio >= 90) dx2++;
+        else if (dxRatio >= 85) dx1++;
+      });
     });
-    return charts.sort((a, b) => b.ds - a.ds || Number(b.song.id) - Number(a.song.id));
-  }, [selectedLevelDetail, musicData]);
+    
+    return { total, clear, s, sp, ss, ssp, sss, sssp, fc, fcp, ap, app, sync, fs, fsd, fsdp, dx1, dx2, dx3, dx4, dx5 };
+  }, [musicData, profile, userScoreMap]);
 
   // 跨版本牌子总收集统计
   const globalPlateStats = useMemo(() => {
@@ -381,55 +411,6 @@ const MaimaiProfile = () => {
     stats.total = totalPlates;
     return stats;
   }, [musicData, profile, userScoreMap]);
-
-  // 等级详情：按定数分组统计
-  const levelDsGroups = useMemo(() => {
-    if (!selectedLevelDetail || !musicData) return [];
-    const dsMap = new Map();
-    chartsInSelectedLevel.forEach(({ song, diffIndex, ds }) => {
-      const key = ds.toFixed(1);
-      if (!dsMap.has(key)) dsMap.set(key, { ds: parseFloat(key), charts: [] });
-      const score = userScoreMap.get(`${song.id}_${diffIndex}`) || userScoreMap.get(`${Number(song.id)}_${diffIndex}`);
-      dsMap.get(key).charts.push({ song, diffIndex, ds, score });
-    });
-    return Array.from(dsMap.values()).sort((a, b) => b.ds - a.ds);
-  }, [selectedLevelDetail, chartsInSelectedLevel, userScoreMap, musicData]);
-
-  // 等级统计数据（均值、DX占比、FC率等）
-  const levelStats = useMemo(() => {
-    if (!selectedLevelDetail || chartsInSelectedLevel.length === 0) return null;
-    let totalAch = 0, clearedAch = 0, totalDx = 0, clearedDx = 0;
-    let cleared = 0, fcCount = 0, fcpCount = 0, apCount = 0, appCount = 0;
-    const total = chartsInSelectedLevel.length;
-    chartsInSelectedLevel.forEach(({ song, diffIndex }) => {
-      const score = userScoreMap.get(`${song.id}_${diffIndex}`) || userScoreMap.get(`${Number(song.id)}_${diffIndex}`);
-      const ach = score ? (score.achievement || score.achievementRate || 0) : 0;
-      const dx = score ? (score.dxRatio || 0) : 0;
-      const fc = score ? getFc(score) : '';
-      totalAch += ach;
-      totalDx += dx;
-      if (ach >= 80) {
-        cleared++;
-        clearedAch += ach;
-        clearedDx += dx;
-      }
-      if (['fc','fcp','ap','app'].includes(fc)) fcCount++;
-      if (['fcp','ap','app'].includes(fc)) fcpCount++;
-      if (['ap','app'].includes(fc)) apCount++;
-      if (fc === 'app') appCount++;
-    });
-    return {
-      avgAch: total > 0 ? totalAch / total : 0,
-      avgClearedAch: cleared > 0 ? clearedAch / cleared : 0,
-      avgDx: total > 0 ? totalDx / total * 100 : 0,
-      avgClearedDx: cleared > 0 ? clearedDx / cleared * 100 : 0,
-      fcRate: total > 0 ? fcCount / total * 100 : 0,
-      fcpRate: total > 0 ? fcpCount / total * 100 : 0,
-      apRate: total > 0 ? apCount / total * 100 : 0,
-      appRate: total > 0 ? appCount / total * 100 : 0,
-      cleared, total
-    };
-  }, [selectedLevelDetail, chartsInSelectedLevel, userScoreMap]);
 
   const b50Data = useMemo(() => {
     if (!profile || !profile.allScores) return { b35: [], r15: [], rating: 0 };
@@ -585,25 +566,58 @@ const MaimaiProfile = () => {
 
       <div className="max-w-7xl mx-auto px-6 pt-24 relative z-10">
         
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
-          <div className="flex flex-col gap-4">
-            <button 
-              onClick={() => navigate(`/profile/${profile.username}`)}
-              className="flex items-center gap-2 text-zinc-500 hover:text-zinc-200 transition-colors font-bold text-sm w-fit active:scale-95"
-            >
-              <FaArrowLeft /> 返回个人主页
-            </button>
-            <div className="flex items-center gap-3">
-              <div className="w-1 h-8 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div>
-              <div>
-                <h1 className="text-3xl font-bold text-zinc-100 tracking-tight flex items-center gap-3">
-                  <FaGamepad className="text-cyan-400 text-2xl" /> Maimai DX 数据档案
+        <button 
+          onClick={() => navigate(`/profile/${profile.username}`)}
+          className="flex items-center gap-2 text-zinc-500 hover:text-zinc-200 transition-colors font-bold text-sm w-fit active:scale-95 mb-6"
+        >
+          <FaArrowLeft /> 返回个人主页
+        </button>
+
+        {/* New Header with Avatar + Username + Rank */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 bg-gradient-to-r from-[#15151e] to-transparent border border-white/[0.05] p-6 rounded-2xl">
+          <div className="flex items-center gap-6">
+            {/* Avatar */}
+            <div className="relative shrink-0">
+              <img 
+                src={profile.avatarUrl || '/assets/logos.png'} 
+                alt={profile.username}
+                className="w-20 h-20 rounded-full object-cover border-2 border-cyan-400/30 shadow-lg"
+                onError={(e) => { e.target.src = '/assets/logos.png'; }}
+              />
+              {profile.maimaiRank && profile.maimaiRank <= 200 && (
+                <div className="absolute -top-2 -right-2 w-10 h-10 bg-gradient-to-br from-amber-400 via-pink-400 to-purple-400 rounded-lg flex items-center justify-center shadow-[0_0_20px_rgba(251,191,36,0.6)] animate-pulse">
+                  <span className="text-xs font-black text-white" style={{ fontFamily: "'Quicksand', sans-serif" }}>#{profile.maimaiRank}</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Username + Title */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-black text-zinc-100 tracking-tight" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                  {profile.username}
                 </h1>
-                <span className="text-sm font-medium text-zinc-500 mt-1 block">Player: {profile.username}</span>
+                {profile.maimaiRank && profile.maimaiRank <= 200 && (
+                  <div className="px-3 py-1 bg-gradient-to-r from-amber-500/20 to-pink-500/20 border border-amber-400/40 rounded-full flex items-center gap-1.5 shadow-[0_0_12px_rgba(251,191,36,0.3)]">
+                    <FaTrophy className="text-amber-400 text-sm" />
+                    <span className="text-xs font-bold text-amber-300">TOP 200</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <FaGamepad className="text-cyan-400" />
+                <span className="text-zinc-400 font-medium">Maimai DX 数据档案</span>
+                {profile.rating && (
+                  <>
+                    <span className="text-zinc-600">·</span>
+                    <span className="text-cyan-400 font-bold" style={{ fontFamily: "'Quicksand', sans-serif" }}>Rating {profile.rating}</span>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
+          {/* Sync controls */}
           {isOwnProfile && (
             <div className="flex flex-col gap-3 w-full md:w-auto">
               <div className="flex items-center gap-2 bg-[#15151e]/80 p-1 rounded-xl border border-white/[0.05] w-fit">
@@ -683,13 +697,77 @@ const MaimaiProfile = () => {
                 </div>
               </div>
 
-              {!plateProgress ? (
+              {!plateProgress || !globalStats ? (
                 <div className="py-8 text-zinc-500 text-sm font-medium flex items-center gap-3">
                   <FaSpinner className="animate-spin text-xl" /> 正在拉取云端曲库数据...
                 </div>
               ) : (
-                <div className="flex flex-col gap-6">
-                  {/* 圆环进度总览 */}
+                <div className="flex flex-col lg:flex-row gap-6">
+                  {/* Left: Big ring + stats dashboard (40%) */}
+                  <div className="lg:w-[40%] flex flex-col gap-4">
+                    {/* Big ring */}
+                    <div className="bg-[#15151e] border border-white/[0.05] p-8 flex flex-col items-center">
+                      <div className="relative w-48 h-48 flex items-center justify-center mb-6">
+                        <svg className="-rotate-90 w-full h-full" viewBox="0 0 200 200">
+                          <circle cx="100" cy="100" r="85" strokeWidth="14" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
+                          <motion.circle
+                            cx="100" cy="100" r="85" strokeWidth="14" fill="transparent"
+                            stroke="currentColor" className="text-cyan-400"
+                            strokeDasharray={2 * Math.PI * 85}
+                            initial={{ strokeDashoffset: 2 * Math.PI * 85 }}
+                            animate={{ strokeDashoffset: 2 * Math.PI * 85 * (1 - globalStats.clear / globalStats.total) }}
+                            transition={{ duration: 1.5, ease: 'easeOut' }}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div className="absolute flex flex-col items-center">
+                          <span className="text-5xl font-black text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                            {((globalStats.clear / globalStats.total) * 100).toFixed(0)}<span className="text-2xl">%</span>
+                          </span>
+                          <span className="text-sm text-zinc-500 mt-2 font-bold">全谱通关率</span>
+                        </div>
+                      </div>
+                      <div className="text-center text-xs text-zinc-500 font-bold">
+                        {globalStats.clear} / {globalStats.total} 谱面已通关
+                      </div>
+                    </div>
+                    
+                    {/* Stats dashboard */}
+                    <div className="bg-[#15151e] border border-white/[0.05] p-5">
+                      <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">全版本全难度统计</div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { label: 'S', value: globalStats.s, color: 'text-zinc-400' },
+                          { label: 'S+', value: globalStats.sp, color: 'text-zinc-300' },
+                          { label: 'SS', value: globalStats.ss, color: 'text-emerald-400' },
+                          { label: 'SS+', value: globalStats.ssp, color: 'text-emerald-300' },
+                          { label: 'SSS', value: globalStats.sss, color: 'text-amber-400' },
+                          { label: 'SSS+', value: globalStats.sssp, color: 'text-amber-300' },
+                          { label: 'FC', value: globalStats.fc, color: 'text-pink-400' },
+                          { label: 'FC+', value: globalStats.fcp, color: 'text-pink-300' },
+                          { label: 'AP', value: globalStats.ap, color: 'text-purple-400' },
+                          { label: 'AP+', value: globalStats.app, color: 'text-purple-300' },
+                          { label: 'SYNC', value: globalStats.sync, color: 'text-cyan-400' },
+                          { label: 'FS', value: globalStats.fs, color: 'text-cyan-300' },
+                          { label: 'FDX', value: globalStats.fsd, color: 'text-indigo-400' },
+                          { label: 'FDX+', value: globalStats.fsdp, color: 'text-indigo-300' },
+                          { label: '⭐', value: globalStats.dx1, color: 'text-zinc-500' },
+                          { label: '⭐⭐', value: globalStats.dx2, color: 'text-zinc-400' },
+                          { label: '⭐⭐⭐', value: globalStats.dx3, color: 'text-amber-500' },
+                          { label: '⭐⭐⭐⭐', value: globalStats.dx4, color: 'text-amber-400' },
+                          { label: '⭐⭐⭐⭐⭐', value: globalStats.dx5, color: 'text-amber-300' },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} className="bg-[#0c0c11] border border-white/[0.05] p-2 flex flex-col items-center gap-0.5">
+                            <span className="text-[9px] font-bold text-zinc-600 uppercase">{label}</span>
+                            <span className={`text-lg font-black ${color}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Right: Plate progress (60%) */}
+                  <div className="lg:w-[60%] flex flex-col gap-6">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {plateProgress.filter(p => ['将','极','神','舞舞'].some(t => p.type === t)).map((plate, idx) => {
                       const pct = plate.total > 0 ? (plate.count / plate.total) * 100 : 0;
@@ -702,7 +780,7 @@ const MaimaiProfile = () => {
                       return (
                         <div
                           key={idx}
-                          onClick={() => { setSelectedPlateDetail({ versionGroup: targetGroup, plateType: plate.type, plateName: plate.name }); setDetailDiff(3); }}
+                          onClick={() => navigate(`/profile/${username}/maimai/plate/${encodeURIComponent(selectedPlateVersion)}_${encodeURIComponent(plate.type)}`)}
                           className={`relative bg-[#15151e] border border-white/[0.05] p-5 flex flex-col items-center gap-3 cursor-pointer hover:bg-[#1a1a24] hover:border-amber-500/20 transition-all group overflow-hidden ${
                             isCompleted ? 'ring-1 ring-amber-400/40' : ''
                           }`}
@@ -788,6 +866,7 @@ const MaimaiProfile = () => {
                       </div>
                     </div>
                   )}
+                  </div>
                 </div>
               )}
             </div>
@@ -856,7 +935,7 @@ const MaimaiProfile = () => {
                     return (
                         <div
                           key={lvl.level}
-                          onClick={() => setSelectedLevelDetail(lvl.level)}
+                          onClick={() => navigate(`/profile/${username}/maimai/level/${encodeURIComponent(lvl.level)}`)}
                           className={`relative p-5 border transition-all cursor-pointer group flex flex-col items-center gap-4 overflow-hidden ${baseClass} ${glowClass}`}
                         >
                             <img src={levelBgCache.cache.get(bgKey)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:opacity-30 transition-opacity" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
@@ -959,6 +1038,42 @@ const MaimaiProfile = () => {
             {/* PF 100 成绩列表模块 */}
             {/* ========================================== */}
             <div>
+              {/* PF50 Analysis */}
+              {pf100Data.length > 0 && (() => {
+                const pf50 = pf100Data.slice(0, 50);
+                const avgPf = pf50.reduce((sum, s) => sum + (s.pf || 0), 0) / 50;
+                const levelDist = pf50.reduce((acc, s) => {
+                  const lv = getLevelString(s);
+                  acc[lv] = (acc[lv] || 0) + 1;
+                  return acc;
+                }, {});
+                return (
+                  <div className="mb-14 border-b border-white/[0.05] pb-10">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-1 h-6 bg-purple-400 rounded-full shadow-[0_0_8px_rgba(192,132,252,0.5)]"></div>
+                      <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">PF50 分析</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-[#15151e] border border-white/[0.05] p-5 rounded-2xl">
+                        <div className="text-sm text-zinc-500 mb-2">平均 PF 值</div>
+                        <div className="text-3xl font-black text-purple-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>{avgPf.toFixed(2)}</div>
+                      </div>
+                      <div className="bg-[#15151e] border border-white/[0.05] p-5 rounded-2xl">
+                        <div className="text-sm text-zinc-500 mb-3">等级分布</div>
+                        <div className="grid grid-cols-4 gap-2">
+                          {Object.entries(levelDist).sort((a,b) => parseFloat(b[0]) - parseFloat(a[0])).map(([lv, cnt]) => (
+                            <div key={lv} className="text-center">
+                              <div className="text-xs text-zinc-600 mb-1">{lv}</div>
+                              <div className="text-lg font-bold text-zinc-300" style={{ fontFamily: "'Quicksand', sans-serif" }}>{cnt}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="flex items-center gap-3 mb-6 border-b border-white/[0.05] pb-4">
                 <div className="w-1 h-6 bg-indigo-400 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.5)]"></div>
                 <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Performance Top 100</h2>
@@ -1137,296 +1252,7 @@ const MaimaiProfile = () => {
           )}
         </AnimatePresence>
 
-        {/* 牌子详情模态窗（按难度 → 按等级展开） */}
-        <AnimatePresence>
-          {selectedPlateDetail && (() => {
-            const validSongs = musicData.filter(s =>
-              s.type !== 'UTAGE' && s.basic_info.genre !== '宴会場' && s.basic_info.genre !== '宴会场' &&
-              selectedPlateDetail.versionGroup.versions.includes(s.basic_info.from)
-            );
-            const maxDiff = selectedPlateDetail.versionGroup.id === '舞' ? 4 : 3;
-            const availableDiffs = Array.from({ length: maxDiff + 1 }, (_, i) => i);
-            const songsInDiff = validSongs.filter(s => s.level.length > detailDiff);
 
-            // 按等级分组
-            const lvlGroupMap = new Map();
-            songsInDiff.forEach(song => {
-              const lvlStr = song.level[detailDiff] || '?';
-              if (!lvlGroupMap.has(lvlStr)) lvlGroupMap.set(lvlStr, []);
-              lvlGroupMap.get(lvlStr).push(song);
-            });
-            const lvlGroups = Array.from(lvlGroupMap.entries())
-              .sort((a, b) => {
-                const pa = parseFloat(a[0].replace('+', '.7')); 
-                const pb = parseFloat(b[0].replace('+', '.7'));
-                return pb - pa;
-              });
-
-            return (
-              <div 
-                className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-8"
-                onClick={() => { setSelectedPlateDetail(null); setPlateDetailLevel(null); }}
-              >
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-[#0c0c11]/90 backdrop-blur-md" />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                  className="bg-[#15151e] border border-white/[0.05] w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl relative z-10 overflow-hidden"
-                  onClick={e => e.stopPropagation()}
-                >
-                  {/* 标题 + 难度切换 */}
-                  <div className="p-6 border-b border-white/[0.05] shrink-0 flex flex-col gap-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-1.5 h-8 bg-amber-400"></div>
-                        <div>
-                          <h2 className="text-2xl font-bold text-zinc-100">{selectedPlateDetail.versionGroup.label} — {selectedPlateDetail.plateName}</h2>
-                          <p className="text-xs text-zinc-500 mt-0.5">选择难度，展开等级查看具体曲目</p>
-                        </div>
-                      </div>
-                      <button onClick={() => { setSelectedPlateDetail(null); setPlateDetailLevel(null); }}
-                        className="text-zinc-500 hover:text-white p-2.5 bg-white/[0.02] hover:bg-white/[0.06] active:scale-90 transition-all">
-                        <FaTimes />
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                      {availableDiffs.map(diff => {
-                        const sIn = validSongs.filter(s => s.level.length > diff);
-                        const comp = sIn.filter(s => {
-                          const sc = userScoreMap.get(`${s.id}_${diff}`) || userScoreMap.get(`${Number(s.id)}_${diff}`);
-                          return checkPlateCondition(sc, selectedPlateDetail.plateType);
-                        });
-                        const allDone = comp.length === sIn.length && sIn.length > 0;
-                        const conf = DIFF_COLORS[diff];
-                        return (
-                          <button key={diff} onClick={() => { setDetailDiff(diff); setPlateDetailLevel(null); }}
-                            className={`px-4 py-2 text-sm font-bold whitespace-nowrap transition-all border-b-2 flex items-center gap-2 ${
-                              detailDiff === diff ? `${DIFF_COLORS[diff].split(' ')[0]} border-current` : 'text-zinc-500 border-transparent hover:text-zinc-300'
-                            }`}>
-                            <span>{DIFF_NAMES[diff]}</span>
-                            <span className={`text-[11px] font-mono ${allDone ? 'text-emerald-400' : 'text-zinc-600'}`}>{comp.length}/{sIn.length}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* 按等级分组可展开 */}
-                  <div className="flex-1 overflow-y-auto bg-[#0c0c11] p-6 flex flex-col gap-4">
-                    {lvlGroups.map(([lvlStr, songs]) => {
-                      const compSongs = songs.filter(s => {
-                        const sc = userScoreMap.get(`${s.id}_${detailDiff}`) || userScoreMap.get(`${Number(s.id)}_${detailDiff}`);
-                        return checkPlateCondition(sc, selectedPlateDetail.plateType);
-                      });
-                      const pct = songs.length > 0 ? compSongs.length / songs.length * 100 : 0;
-                      const r = 18; const circ = 2 * Math.PI * r;
-                      const offset = circ - (pct / 100) * circ;
-                      const isOpen = plateDetailLevel === lvlStr;
-                      return (
-                        <div key={lvlStr} className="border border-white/[0.05] bg-[#15151e] overflow-hidden rounded-lg">
-                          <button
-                            onClick={() => setPlateDetailLevel(isOpen ? null : lvlStr)}
-                            className="w-full flex items-center gap-4 p-5 hover:bg-[#1a1a24] transition-colors"
-                          >
-                            <div className="relative w-10 h-10 shrink-0">
-                              <svg className="-rotate-90 w-full h-full" viewBox="0 0 40 40">
-                                <circle cx="20" cy="20" r={r} strokeWidth="3" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
-                                <circle cx="20" cy="20" r={r} strokeWidth="3" fill="transparent"
-                                  stroke="currentColor" className="text-amber-400"
-                                  strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
-                              </svg>
-                              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-zinc-300" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                                {pct.toFixed(0)}%
-                              </span>
-                            </div>
-                            <div className="flex flex-col items-start gap-0.5 flex-1">
-                              <span className="text-base font-black text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>Lv.{lvlStr}</span>
-                              <span className="text-[11px] font-bold text-zinc-500">{compSongs.length} / {songs.length} 完成</span>
-                            </div>
-                            <span className="text-zinc-600 text-sm">{isOpen ? '▲' : '▼'}</span>
-                          </button>
-                          {isOpen && (
-                            <div className="px-4 pb-4 bg-[#0c0c11] grid grid-cols-2 gap-3">
-                              {songs.sort((a,b) => (b.ds[detailDiff]||0)-(a.ds[detailDiff]||0)).map(song => {
-                                const score = userScoreMap.get(`${song.id}_${detailDiff}`) || userScoreMap.get(`${Number(song.id)}_${detailDiff}`);
-                                const isCompleted = checkPlateCondition(score, selectedPlateDetail.plateType);
-                                const ach = score ? (score.achievement || score.achievementRate || 0) : 0;
-                                return (
-                                  <div key={song.id} className={`flex items-center gap-3 p-3 border transition-all ${
-                                    isCompleted ? 'border-amber-400/40 bg-[#15151e]' : 'border-white/[0.05] bg-[#15151e] opacity-50'
-                                  }`}>
-                                    <img src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5,'0')}.png`}
-                                      alt="" className="w-16 h-16 object-cover shrink-0" loading="lazy" onError={e => { e.target.src = '/assets/bg.png'; }} />
-                                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                      <div className={`text-sm font-bold truncate ${isCompleted ? 'text-zinc-100' : 'text-zinc-600'}`}>{song.title}</div>
-                                      <div className="text-xs text-zinc-500 truncate">{song.basic_info?.artist || ''}</div>
-                                      <div className="flex items-center justify-between mt-0.5">
-                                        <div className="flex items-center gap-1">{getFcBadge(score)}</div>
-                                        {isCompleted && score ? (
-                                          <div className="flex items-center gap-1.5">
-                                            {getDxStarIcon(score.dxRatio)}
-                                            <span className="text-xs font-bold text-amber-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>{ach.toFixed(4)}%</span>
-                                          </div>
-                                        ) : (
-                                          <span className="text-[11px] text-zinc-600">未完成</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              </div>
-            );
-          })()}
-        </AnimatePresence>
-
-        {/* 等级详情模态窗（多级展开 + 统计数据） */}
-        <AnimatePresence>
-          {selectedLevelDetail && (() => {
-            return (
-              <div 
-                className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-8"
-                onClick={() => { setSelectedLevelDetail(null); setLevelDetailDs(null); }}
-              >
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-[#0c0c11]/90 backdrop-blur-md" />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                  className="bg-[#15151e] border border-white/[0.05] w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl relative z-10 overflow-hidden"
-                  onClick={e => e.stopPropagation()}
-                >
-                  {/* 标题栏 */}
-                  <div className="p-6 border-b border-white/[0.05] shrink-0 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-1.5 h-8 bg-pink-400"></div>
-                      <div>
-                        <h2 className="text-2xl font-bold text-zinc-100">Lv.{selectedLevelDetail} 完成情况</h2>
-                        <p className="text-xs text-zinc-500 mt-0.5">共 {chartsInSelectedLevel.length} 张谱面 · 点击定数组展开曲目</p>
-                      </div>
-                    </div>
-                    <button onClick={() => { setSelectedLevelDetail(null); setLevelDetailDs(null); }}
-                      className="text-zinc-500 hover:text-white p-2.5 bg-white/[0.02] hover:bg-white/[0.06] active:scale-90 transition-all">
-                      <FaTimes />
-                    </button>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-[#0c0c11] flex flex-col gap-6">
-                    {/* 统计数据面板 */}
-                    {levelStats && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {[{ label: '全谱均达成率', value: levelStats.avgAch.toFixed(2) + '%', color: 'text-zinc-300' },
-                          { label: '通关谱均达成率', value: levelStats.avgClearedAch.toFixed(2) + '%', color: 'text-emerald-400' },
-                          { label: '全谱均DX占比', value: levelStats.avgDx.toFixed(1) + '%', color: 'text-zinc-300' },
-                          { label: '通关谱均DX占比', value: levelStats.avgClearedDx.toFixed(1) + '%', color: 'text-cyan-400' },
-                          { label: 'FC 率', value: levelStats.fcRate.toFixed(1) + '%', color: 'text-pink-400' },
-                          { label: 'FC+ 率', value: levelStats.fcpRate.toFixed(1) + '%', color: 'text-pink-300' },
-                          { label: 'AP 率', value: levelStats.apRate.toFixed(1) + '%', color: 'text-amber-400' },
-                          { label: 'AP+ 率', value: levelStats.appRate.toFixed(1) + '%', color: 'text-amber-300' },
-                        ].map(({ label, value, color }) => (
-                          <div key={label} className="bg-[#15151e] border border-white/[0.05] p-3 flex flex-col gap-1">
-                            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{label}</span>
-                            <span className={`text-lg font-black ${color}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* 按定数分组，可展开 */}
-                    <div className="flex flex-col gap-4">
-                      {levelDsGroups.map(({ ds, charts }) => {
-                        const cleared = charts.filter(c => c.score && (c.score.achievement || c.score.achievementRate || 0) >= 80).length;
-                        const fcC = charts.filter(c => c.score && ['fc','fcp','ap','app'].includes(getFc(c.score))).length;
-                        const apC = charts.filter(c => c.score && ['ap','app'].includes(getFc(c.score))).length;
-                        const pct = charts.length > 0 ? cleared / charts.length * 100 : 0;
-                        const r = 18; const circ = 2 * Math.PI * r;
-                        const offset = circ - (pct / 100) * circ;
-                        const isOpen = levelDetailDs === ds.toFixed(1);
-                        return (
-                          <div key={ds} className="border border-white/[0.05] bg-[#15151e] overflow-hidden rounded-lg">
-                            <button
-                              onClick={() => setLevelDetailDs(isOpen ? null : ds.toFixed(1))}
-                              className="w-full flex items-center gap-4 p-5 hover:bg-[#1a1a24] transition-colors"
-                            >
-                              {/* 小圆环 */}
-                              <div className="relative w-10 h-10 shrink-0">
-                                <svg className="-rotate-90 w-full h-full" viewBox="0 0 40 40">
-                                  <circle cx="20" cy="20" r={r} strokeWidth="3" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
-                                  <circle cx="20" cy="20" r={r} strokeWidth="3" fill="transparent"
-                                    stroke="currentColor" className="text-pink-400"
-                                    strokeDasharray={circ} strokeDashoffset={offset}
-                                    strokeLinecap="round" />
-                                </svg>
-                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-zinc-300" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                                  {pct.toFixed(0)}%
-                                </span>
-                              </div>
-                              <div className="flex flex-col items-start gap-0.5 flex-1 min-w-0">
-                                <span className="text-base font-black text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>DS {ds.toFixed(1)}</span>
-                                <div className="flex gap-3 text-[11px] font-bold">
-                                  <span className="text-zinc-500">{cleared}/{charts.length} 通关</span>
-                                  {fcC > 0 && <span className="text-pink-400">FC×{fcC}</span>}
-                                  {apC > 0 && <span className="text-amber-400">AP×{apC}</span>}
-                                </div>
-                              </div>
-                              <span className="text-zinc-600 text-sm">{isOpen ? '▲' : '▼'}</span>
-                            </button>
-
-                            {isOpen && (
-                              <div className="px-4 pb-4 bg-[#0c0c11] grid grid-cols-2 gap-3">
-                                {charts.map(({ song, diffIndex, ds: chartDs, score }) => {
-                                  const isCompleted = score && (score.achievement || score.achievementRate || 0) >= 80;
-                                  const diffConf = { name: DIFF_NAMES[diffIndex], color: DIFF_COLORS[diffIndex] };
-                                  const ach = score ? (score.achievement || score.achievementRate || 0) : 0;
-                                  return (
-                                    <div key={`${song.id}_${diffIndex}`} className={`flex items-center gap-3 p-3 border transition-all ${
-                                      isCompleted ? 'border-pink-400/40 bg-[#15151e]' : 'border-white/[0.05] bg-[#15151e] opacity-50'
-                                    }`}>
-                                      <img src={`https://www.diving-fish.com/covers/${String(song.id).padStart(5,'0')}.png`}
-                                        alt="" className="w-16 h-16 object-cover shrink-0" loading="lazy" onError={e => { e.target.src = '/assets/bg.png'; }} />
-                                      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                        <div className={`text-sm font-bold truncate ${isCompleted ? 'text-zinc-100' : 'text-zinc-600'}`}>{song.title}</div>
-                                        <div className="text-xs text-zinc-500 truncate">{song.basic_info?.artist || ''}</div>
-                                        <div className="flex items-center justify-between mt-0.5">
-                                          <div className="flex items-center gap-1">
-                                            <span className={`px-1 py-0.5 text-[8px] font-bold border ${diffConf.color}`}>{diffConf.name}</span>
-                                            {getFcBadge(score)}
-                                          </div>
-                                          {isCompleted && score ? (
-                                            <div className="flex items-center gap-1.5">
-                                              {getDxStarIcon(score.dxRatio)}
-                                              <span className="text-xs font-bold text-pink-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>{ach.toFixed(4)}%</span>
-                                            </div>
-                                          ) : (
-                                            <span className="text-[11px] text-zinc-600">未通关</span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
-            );
-          })()}
-        </AnimatePresence>
 
       </div>
     </div>
