@@ -486,6 +486,34 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
 };
 
 // ==========================================
+// 🖼️ 背景图组件：每个游戏独立渲染，切换时淡入淡出
+// ==========================================
+const BgImage = ({ src, visible }) => {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div
+      className={`fixed inset-0 pointer-events-none z-0 transition-opacity duration-700 ${
+        visible ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      <img
+        src={src}
+        alt="background"
+        className={`w-full h-full object-cover transition-opacity duration-700 ${
+          loaded ? 'opacity-100' : 'opacity-0'
+        }`}
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(false)}
+        style={{
+          maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.05) 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.05) 100%)'
+        }}
+      />
+    </div>
+  );
+};
+
+// ==========================================
 // 🚀 核心主组件
 // ==========================================
 export default function Songs() {
@@ -777,22 +805,6 @@ export default function Songs() {
 
   return (
     <div className="w-full h-screen bg-[#0c0c11] text-zinc-200 flex flex-col font-sans selection:bg-indigo-500/30 relative">
-      {/* 游戏背景图层 */}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
       {/* 背景图：每个游戏只渲染一次，切换时淡入淡出 */}
       {GAMES.map(game => (
         <BgImage
