@@ -499,20 +499,48 @@ const BgImage = ({ src, visible }) => {
       <img
         src={src}
         alt="background"
-        loading="lazy"
-        className={`w-full h-full object-cover transition-opacity duration-700 ${
+        loading="eager"
+        className={`w-full h-full object-cover object-center transition-opacity duration-700 ${
           loaded ? 'opacity-100' : 'opacity-0'
         }`}
         onLoad={() => setLoaded(true)}
         onError={() => setLoaded(false)}
         style={{
-          maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.05) 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.05) 100%)'
+          transform: 'scale(1.08)',
+          transformOrigin: 'center center',
+          filter: 'brightness(0.55) saturate(1.2)'
         }}
       />
     </div>
   );
 };
+
+// ==========================================
+// 🚀 Arcaea 曲包图片预加载（静态挂载）
+// ==========================================
+const ALL_ARCAEA_PACK_IDS = [
+  'base','single','extend_4','extend_3','extend_2','extend',
+  'core','yugamu','rei','prelude','vs','finale','epilogue',
+  'eden','eden_append_1','eden_append_2','nihil','lephon','eclipse',
+  'shiawase','mirai','nijuusei','nijuusei_append_1','zettai','yugure',
+  'alice','alice_append_1','dividedheart','observer','observer_append_1',
+  'observer_append_2','anima','anima_append_1',
+  'dynamix','lanota','lanota_append_1','tonesphere',
+  'groovecoaster','groovecoaster_append_1',
+  'chunithm','chunithm_append_1','chunithm_append_2','chunithm_append_3',
+  'ongeki','ongeki_append_1','ongeki_append_2',
+  'maimai','maimai_append_1','maimai_append_2',
+  'wacca','wacca_append_1','musedash',
+  'cytusii','cytusii_append_1','rotaeno','undertale',
+  'djmax','djmax_append_1','nextstage','megarex',
+];
+
+if (typeof window !== 'undefined') {
+  ALL_ARCAEA_PACK_IDS.forEach(id => {
+    const img = new Image();
+    img.src = `/assets/arcaea/packs/${id}.png`;
+  });
+}
 
 // ==========================================
 // 🚀 核心主组件
@@ -999,7 +1027,7 @@ export default function Songs() {
                   </div>
                 )}
 
-                <div className="flex-1 bg-[#15151e]/80 backdrop-blur-md rounded-2xl border border-white/[0.05] overflow-hidden shadow-sm flex flex-col relative">
+                <div className="flex-1 bg-[#15151e]/50 backdrop-blur-xl rounded-2xl border border-white/[0.08] overflow-hidden shadow-sm flex flex-col relative">
                   {isLoading && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c0c11]/50 backdrop-blur-sm z-10">
                       <FaSpinner className={`animate-spin text-4xl mb-4 ${getThemeColorClass('spinner')}`} />
