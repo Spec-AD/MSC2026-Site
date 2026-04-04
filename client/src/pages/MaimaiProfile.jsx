@@ -646,7 +646,7 @@ const MaimaiProfile = () => {
             {/* Username + Title and Rating with dynamic color */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
-                <h1 className="text-4xl font-extrabold text-zinc-100 tracking-tight" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                <h1 className="text-5xl font-extrabold text-zinc-100 tracking-tight" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                   {profile.username}
                 </h1>
                 {profile.maimaiRank && profile.maimaiRank <= 200 && (
@@ -656,26 +656,21 @@ const MaimaiProfile = () => {
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2 text-sm">
-                <FaGamepad className="text-cyan-400" />
-                <span className="text-zinc-400 font-medium">Maimai DX 数据档案</span>
-                {profile.rating && (
-                  <>
-                    <span className="text-zinc-600">·</span>
-                    {(() => {
-                      const rs = getRatingStyle(profile.rating);
-                      return (
-                        <span
-                          className={`${rs.className} font-bold ml-1`}
-                          style={{ fontFamily: "'Quicksand', sans-serif", fontSize: '1.25rem', ...rs.inline }}
-                        >
-                          Rating {profile.rating}
-                        </span>
-                      );
-                    })()}
-                  </>
-                )}
-              </div>
+              {profile.rating && (
+                <div className="flex items-center gap-2 text-sm">
+                  {(() => {
+                    const rs = getRatingStyle(profile.rating);
+                    return (
+                      <span
+                        className={`${rs.className} font-bold`}
+                        style={{ fontFamily: "'Quicksand', sans-serif", fontSize: '1.5rem', ...rs.inline }}
+                      >
+                        Rating {profile.rating}
+                      </span>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           </div>
 
@@ -802,19 +797,19 @@ const MaimaiProfile = () => {
                       <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">全版本全难度统计</div>
                       <div className="grid grid-cols-3 gap-2">
                         {[
-                          { label: 'S',    value: globalStats.s,    bar: '#a1a1aa', text: 'text-zinc-900' },
-                          { label: 'S+',   value: globalStats.sp,   bar: '#d4d4d8', text: 'text-zinc-900' },
-                          { label: 'SS',   value: globalStats.ss,   bar: '#34d399', text: 'text-emerald-950' },
-                          { label: 'SS+',  value: globalStats.ssp,  bar: '#6ee7b7', text: 'text-emerald-950' },
-                          { label: 'SSS',  value: globalStats.sss,  bar: '#fbbf24', text: 'text-amber-950' },
-                          { label: 'SSS+', value: globalStats.sssp, bar: '#fde68a', text: 'text-amber-950' },
-                          { label: 'FC',   value: globalStats.fc,   bar: '#f472b6', text: 'text-pink-950' },
-                          { label: 'FC+',  value: globalStats.fcp,  bar: '#f9a8d4', text: 'text-pink-950' },
-                          { label: 'AP',   value: globalStats.ap,   bar: '#c084fc', text: 'text-purple-950' },
-                          { label: 'AP+',  value: globalStats.app,  bar: '#e879f9', text: 'text-purple-950' },
-                          { label: 'FDX',  value: globalStats.fsd,  bar: '#818cf8', text: 'text-indigo-950' },
-                          { label: 'FDX+', value: globalStats.fsdp, bar: '#a5b4fc', text: 'text-indigo-950' },
-                        ].map(({ label, value, bar, text }) => {
+                          { label: 'S',    value: globalStats.s,    bar: '#a1a1aa', lightText: 'text-zinc-100', darkText: 'text-zinc-900' },
+                          { label: 'S+',   value: globalStats.sp,   bar: '#d4d4d8', lightText: 'text-zinc-100', darkText: 'text-zinc-900' },
+                          { label: 'SS',   value: globalStats.ss,   bar: '#34d399', lightText: 'text-emerald-100', darkText: 'text-emerald-950' },
+                          { label: 'SS+',  value: globalStats.ssp,  bar: '#6ee7b7', lightText: 'text-emerald-100', darkText: 'text-emerald-950' },
+                          { label: 'SSS',  value: globalStats.sss,  bar: '#fbbf24', lightText: 'text-amber-100', darkText: 'text-amber-950' },
+                          { label: 'SSS+', value: globalStats.sssp, bar: '#fde68a', lightText: 'text-amber-100', darkText: 'text-amber-950' },
+                          { label: 'FC',   value: globalStats.fc,   bar: '#f472b6', lightText: 'text-pink-100', darkText: 'text-pink-950' },
+                          { label: 'FC+',  value: globalStats.fcp,  bar: '#f9a8d4', lightText: 'text-pink-100', darkText: 'text-pink-950' },
+                          { label: 'AP',   value: globalStats.ap,   bar: '#c084fc', lightText: 'text-purple-100', darkText: 'text-purple-950' },
+                          { label: 'AP+',  value: globalStats.app,  bar: '#e879f9', lightText: 'text-purple-100', darkText: 'text-purple-950' },
+                          { label: 'FDX',  value: globalStats.fsd,  bar: '#818cf8', lightText: 'text-indigo-100', darkText: 'text-indigo-950' },
+                          { label: 'FDX+', value: globalStats.fsdp, bar: '#a5b4fc', lightText: 'text-indigo-100', darkText: 'text-indigo-950' },
+                        ].map(({ label, value, bar, lightText, darkText }) => {
                           const pct = globalStats.total > 0 ? Math.min((value / globalStats.total) * 100, 100) : 0;
                           const isFull = value >= globalStats.total && globalStats.total > 0;
                           return (
@@ -832,20 +827,22 @@ const MaimaiProfile = () => {
                               )}
                               {/* 标签和数字 */}
                               <div className="absolute inset-0 flex flex-col items-end justify-center pr-2 z-10">
-                                <span className={`text-xl font-black leading-none ${isFull ? 'text-white drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]' : text}`}
+                                <span className={`text-2xl font-black leading-none ${isFull ? 'text-white drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]' : (pct > 70 ? darkText : lightText)}`}
                                   style={{ fontFamily: "'Quicksand', sans-serif",
-                                    textShadow: isFull ? '0 0 8px rgba(0,0,0,0.6)' : 'none'
+                                    textShadow: isFull ? '0 0 8px rgba(0,0,0,0.6)' : (pct > 70 ? 'none' : '0 2px 8px rgba(0,0,0,0.8)')
                                   }}>
                                   {value}
                                 </span>
-                                <span className={`text-[10px] font-bold leading-none mt-0.5 ${isFull ? 'text-white/80' : text} opacity-80`}
-                                  style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                <span className={`text-[11px] font-bold leading-none mt-0.5 ${isFull ? 'text-white/80' : (pct > 70 ? darkText : lightText)} ${pct > 70 ? 'opacity-80' : 'opacity-90'}`}
+                                  style={{ fontFamily: "'Quicksand', sans-serif",
+                                    textShadow: pct > 70 ? 'none' : '0 1px 4px rgba(0,0,0,0.8)'
+                                  }}>
                                   {pct.toFixed(2)}%
                                 </span>
                               </div>
                               {/* 左侧 label */}
                               <div className="absolute left-2 top-1/2 -translate-y-1/2 z-10">
-                                <span className="text-[10px] font-black text-white/60 uppercase tracking-wider">{label}</span>
+                                <span className="text-[10px] font-black text-white/60 uppercase tracking-wider" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>{label}</span>
                               </div>
                             </div>
                           );
@@ -930,9 +927,9 @@ const MaimaiProfile = () => {
                           <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/80 to-[#0c0c11]/40 pointer-events-none"></div>
 
                           {/* 圆环 */}
-                          <div className="relative w-28 h-28 flex items-center justify-center z-10">
-                            <svg className="-rotate-90 w-full h-full" viewBox="0 0 112 112">
-                              <circle cx="56" cy="56" r={r} strokeWidth="8" fill="transparent" stroke="#0c0c11" />
+                          <div className="relative w-32 h-32 flex items-center justify-center z-10">
+                            <svg className="-rotate-90 w-full h-full" viewBox="0 0 128 128">
+                              <circle cx="64" cy="64" r="44" strokeWidth="9" fill="transparent" stroke="#0c0c11" />
                               {isCompleted ? (
                                 <>
                                   <defs>
@@ -944,10 +941,10 @@ const MaimaiProfile = () => {
                                     </linearGradient>
                                   </defs>
                                   <motion.circle
-                                    cx="56" cy="56" r={r} strokeWidth="8" fill="transparent"
+                                    cx="64" cy="64" r="44" strokeWidth="9" fill="transparent"
                                     stroke={`url(#plate-grad-${idx})`}
-                                    strokeDasharray={circ}
-                                    initial={{ strokeDashoffset: circ }}
+                                    strokeDasharray={2 * Math.PI * 44}
+                                    initial={{ strokeDashoffset: 2 * Math.PI * 44 }}
                                     animate={{ strokeDashoffset: 0 }}
                                     transition={{ duration: 1.2, ease: 'easeOut' }}
                                     strokeLinecap="round"
@@ -955,12 +952,12 @@ const MaimaiProfile = () => {
                                 </>
                               ) : (
                                 <motion.circle
-                                  cx="56" cy="56" r={r} strokeWidth="8" fill="transparent"
+                                  cx="64" cy="64" r="44" strokeWidth="9" fill="transparent"
                                   stroke="currentColor"
                                   className={plateColorBase}
-                                  strokeDasharray={circ}
-                                  initial={{ strokeDashoffset: circ }}
-                                  animate={{ strokeDashoffset: offset }}
+                                  strokeDasharray={2 * Math.PI * 44}
+                                  initial={{ strokeDashoffset: 2 * Math.PI * 44 }}
+                                  animate={{ strokeDashoffset: 2 * Math.PI * 44 * (1 - pct / 100) }}
                                   transition={{ duration: 1.2, ease: 'easeOut' }}
                                   strokeLinecap="round"
                                 />
@@ -1146,7 +1143,7 @@ const MaimaiProfile = () => {
                         { key: 'potential',label: '潜力',  value: profile?.ability?.potential?? 0 },
                       ];
                       const MAX = 10.0;
-                      const cx = 110, cy = 110, outerR = 90;
+                      const cx = 140, cy = 140, outerR = 115;
                       const total = dims.length;
                       const angleStep = (2 * Math.PI) / total;
                       const getPoint = (i, r) => ({
@@ -1174,7 +1171,7 @@ const MaimaiProfile = () => {
 
                       return (
                         <div className="flex flex-col items-center gap-4">
-                          <svg width="220" height="220" viewBox="0 0 220 220">
+                          <svg width="280" height="280" viewBox="0 0 280 280">
                             {/* 蛛网格线 */}
                             {gridPolygons.map(({ pts, lv }) => (
                               <polygon key={lv} points={pts}
@@ -1199,19 +1196,19 @@ const MaimaiProfile = () => {
                             ))}
                             {/* 轴线标签 */}
                             {dims.map((d, i) => {
-                              const labelPt = getPoint(i, outerR + 18);
+                              const labelPt = getPoint(i, outerR + 22);
                               return (
                                 <g key={d.key}>
                                   <text
                                     x={labelPt.x} y={labelPt.y}
                                     textAnchor="middle" dominantBaseline="middle"
-                                    fill="#a1a1aa" fontSize="11" fontWeight="700"
+                                    fill="#a1a1aa" fontSize="13" fontWeight="700"
                                     fontFamily="'Quicksand', sans-serif"
                                   >{d.label}</text>
                                   <text
-                                    x={labelPt.x} y={labelPt.y + 14}
+                                    x={labelPt.x} y={labelPt.y + 16}
                                     textAnchor="middle" dominantBaseline="middle"
-                                    fill="#818cf8" fontSize="10" fontWeight="900"
+                                    fill="#818cf8" fontSize="12" fontWeight="900"
                                     fontFamily="'Quicksand', sans-serif"
                                   >{d.value.toFixed(1)}</text>
                                 </g>
