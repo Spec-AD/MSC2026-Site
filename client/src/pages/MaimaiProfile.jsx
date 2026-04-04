@@ -6,6 +6,74 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, FaLock, FaTimes } from 'react-icons/fa';
 
+// ==========================================
+// 🌟 内联雷达图（Profile 专用，无需外部依赖）
+// ==========================================
+function RadarChartInline({ values, size = 260 }) {
+  const DIMS = [
+    { key: 'stamina',   label: '耐力',  color: '#f472b6' },
+    { key: 'star',      label: '星星',  color: '#fbbf24' },
+    { key: 'stable',    label: '稳定',  color: '#34d399' },
+    { key: 'accuracy',  label: '准度',  color: '#38bdf8' },
+    { key: 'potential', label: '潜力',  color: '#a78bfa' },
+  ];
+  const MAX = 10;
+  const cx = size / 2, cy = size / 2;
+  const outerR = size / 2 - 34;
+  const n = DIMS.length;
+  const step = (2 * Math.PI) / n;
+  const getP = (i, r) => ({ x: cx + r * Math.sin(i * step), y: cy - r * Math.cos(i * step) });
+  const gridLevels = [2, 4, 6, 8, 10];
+
+  const dataPoints = DIMS.map((d, i) => {
+    const val = Math.min(Math.max(values?.[d.key] ?? 0, 0), MAX);
+    return getP(i, (val / MAX) * outerR);
+  });
+
+  // 渐变填充多边形路径
+  const polyPts = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
+      <defs>
+        <radialGradient id="ability-grad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#818cf8" stopOpacity="0.05" />
+        </radialGradient>
+      </defs>
+
+      {/* 网格 */}
+      {gridLevels.map(lv => {
+        const pts = DIMS.map((_, i) => { const p = getP(i, (lv / MAX) * outerR); return `${p.x},${p.y}`; }).join(' ');
+        return <polygon key={lv} points={pts} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />;
+      })}
+
+      {/* 轴线 */}
+      {DIMS.map((_, i) => { const p = getP(i, outerR); return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />; })}
+
+      {/* 数据面 */}
+      <polygon points={polyPts} fill="url(#ability-grad)" stroke="#818cf8" strokeWidth="2" strokeLinejoin="round" />
+
+      {/* 顶点 */}
+      {dataPoints.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r="4" fill={DIMS[i].color} stroke="#0c0c11" strokeWidth="2" />
+      ))}
+
+      {/* 标签 */}
+      {DIMS.map((d, i) => {
+        const lp = getP(i, outerR + 20);
+        const val = values?.[d.key] ?? 0;
+        return (
+          <g key={d.key}>
+            <text x={lp.x} y={lp.y - 5} textAnchor="middle" dominantBaseline="middle" fill="#a1a1aa" fontSize="12" fontWeight="700" fontFamily="'Quicksand', sans-serif">{d.label}</text>
+            <text x={lp.x} y={lp.y + 11} textAnchor="middle" dominantBaseline="middle" fill={d.color} fontSize="12" fontWeight="900" fontFamily="'Quicksand', sans-serif">{Number(val).toFixed(1)}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 const B50_FILTERS = [
   { value: 'DEFAULT', label: '默认 B50' }, { value: 'IDEAL', label: '理想 B50' },
   { value: 'AP50', label: 'AP 50' }, { value: 'FC50', label: 'FC 50' },
@@ -107,6 +175,10 @@ const MaimaiProfile = () => {
   const [selectedPfScore, setSelectedPfScore] = useState(null);
   
   const [selectedPlateVersion, setSelectedPlateVersion] = useState('舞');
+
+  // 🌟 玩家五维能力数据
+  const [playerAbility, setPlayerAbility] = useState(null);
+  const [abilityLoading, setAbilityLoading] = useState(false);
 
 
   const [levelBgCache] = useState(() => {
@@ -440,6 +512,79 @@ const MaimaiProfile = () => {
     stats.total = totalPlates;
     return stats;
   }, [musicData, profile, userScoreMap]);
+
+  // ==========================================
+  // 🌟 玩家五维能力计算引擎
+  // 基于 Top50 成绩与各谱面雷达数据的加权聚合
+  // ==========================================
+  useEffect(() => {
+    if (!profile?.allScores || profile.allScores.length === 0) return;
+
+    const computeAbility = async () => {
+      setAbilityLoading(true);
+      try {
+        // 取 Top50 成绩（按 rating 排序）
+        const top50 = [...profile.allScores]
+          .sort((a, b) => b.rating - a.rating)
+          .slice(0, 50);
+
+        const DIMS = ['stamina', 'star', 'stable', 'accuracy', 'potential'];
+        const dimAccum = { stamina: 0, star: 0, stable: 0, accuracy: 0, potential: 0 };
+        const dimWeight = { stamina: 0, star: 0, stable: 0, accuracy: 0, potential: 0 };
+
+        // 批量拉取这 50 首歌的雷达数据
+        const radarPromises = top50.map((score, idx) =>
+          axios.get(`/api/songs/${score.songId}/radar`)
+            .then(res => ({ idx, score, radar: res.data?.finalRadar?.[score.level] ?? null }))
+            .catch(() => ({ idx, score, radar: null }))
+        );
+
+        const results = await Promise.all(radarPromises);
+
+        results.forEach(({ idx, score, radar }) => {
+          if (!radar) return;
+          // 衰减权重：第 1 名权重 1.0，每增加一名乘以 0.95
+          const decayWeight = Math.pow(0.95, idx);
+          // 成绩质量系数：基于达成率
+          const ach = score.achievement || 0;
+          let achFactor = 0.5;
+          if (ach >= 100.5) achFactor = 1.0;
+          else if (ach >= 100.0) achFactor = 0.85;
+          else if (ach >= 99.0) achFactor = 0.7;
+          else if (ach >= 97.0) achFactor = 0.6;
+
+          const w = decayWeight * achFactor;
+
+          DIMS.forEach(dim => {
+            const dimVal = radar[dim] ?? 5;
+            // 玩家在这个维度的表现 = 谱面该维度难度 × 成绩质量
+            // 高难度谱面打高分 → 能力值高
+            dimAccum[dim] += dimVal * achFactor * w;
+            dimWeight[dim] += w;
+          });
+        });
+
+        const ability = {};
+        DIMS.forEach(dim => {
+          if (dimWeight[dim] === 0) {
+            ability[dim] = 0;
+          } else {
+            // 归一化到 0~10，以全谱 10.0 × achFactor 期望值校准
+            const raw = dimAccum[dim] / dimWeight[dim];
+            ability[dim] = Math.min(10, Math.round(raw * 10) / 10);
+          }
+        });
+
+        setPlayerAbility(ability);
+      } catch (err) {
+        console.warn('玩家能力计算失败:', err);
+      } finally {
+        setAbilityLoading(false);
+      }
+    };
+
+    computeAbility();
+  }, [profile?.allScores]);
 
   const b50Data = useMemo(() => {
     if (!profile || !profile.allScores) return { b35: [], r15: [], rating: 0 };
@@ -1127,98 +1272,60 @@ const MaimaiProfile = () => {
                     </div>
                   )}
 
-                  {/* ====== 3-4 玩家能力雷达图 ====== */}
+                  {/* ====== 3-4 玩家能力雷达图（基于谱面评价数据实时计算）====== */}
                   <div className="bg-[#15151e] border border-white/[0.05] p-5">
-                    <div className="flex items-center gap-3 mb-5">
-                      <div className="w-1 h-5 bg-indigo-400 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.6)]"></div>
-                      <span className="text-sm font-bold text-zinc-300 uppercase tracking-widest">玩家能力</span>
-                    </div>
-                    {(() => {
-                      // 五维数据（前端占位，后端接入后替换）
-                      const dims = [
-                        { key: 'stamina',  label: '耐力',  value: profile?.ability?.stamina  ?? 0 },
-                        { key: 'star',     label: '星星',  value: profile?.ability?.star     ?? 0 },
-                        { key: 'stable',   label: '稳定',  value: profile?.ability?.stable   ?? 0 },
-                        { key: 'accuracy', label: '准度',  value: profile?.ability?.accuracy ?? 0 },
-                        { key: 'potential',label: '潜力',  value: profile?.ability?.potential?? 0 },
-                      ];
-                      const MAX = 10.0;
-                      const cx = 140, cy = 140, outerR = 115;
-                      const total = dims.length;
-                      const angleStep = (2 * Math.PI) / total;
-                      const getPoint = (i, r) => ({
-                        x: cx + r * Math.sin(i * angleStep),
-                        y: cy - r * Math.cos(i * angleStep),
-                      });
-                      // 背景蛛网格线（5层）
-                      const gridLevels = [2, 4, 6, 8, 10];
-                      const gridPolygons = gridLevels.map(lv => {
-                        const pts = dims.map((_, i) => {
-                          const p = getPoint(i, (lv / MAX) * outerR);
-                          return `${p.x},${p.y}`;
-                        }).join(' ');
-                        return { pts, lv };
-                      });
-                      // 玩家数据多边形
-                      const dataPoints = dims.map((d, i) => {
-                        const p = getPoint(i, (Math.min(d.value, MAX) / MAX) * outerR);
-                        return `${p.x},${p.y}`;
-                      }).join(' ');
-                      // 轴线端点
-                      const axisPoints = dims.map((_, i) => getPoint(i, outerR));
-                      // 数据顶点坐标（用于标注小圆点）
-                      const dataCoords = dims.map((d, i) => getPoint(i, (Math.min(d.value, MAX) / MAX) * outerR));
-
-                      return (
-                        <div className="flex flex-col items-center gap-4">
-                          <svg width="280" height="280" viewBox="0 0 280 280">
-                            {/* 蛛网格线 */}
-                            {gridPolygons.map(({ pts, lv }) => (
-                              <polygon key={lv} points={pts}
-                                fill="none" stroke="#ffffff10" strokeWidth="1" />
-                            ))}
-                            {/* 轴线 */}
-                            {axisPoints.map((p, i) => (
-                              <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#ffffff15" strokeWidth="1" />
-                            ))}
-                            {/* 数据填充区域 */}
-                            <polygon
-                              points={dataPoints}
-                              fill="rgba(129,140,248,0.18)"
-                              stroke="#818cf8"
-                              strokeWidth="2"
-                              strokeLinejoin="round"
-                            />
-                            {/* 数据顶点小圆 */}
-                            {dataCoords.map((p, i) => (
-                              <circle key={i} cx={p.x} cy={p.y} r="4"
-                                fill="#818cf8" stroke="#0c0c11" strokeWidth="2" />
-                            ))}
-                            {/* 轴线标签 */}
-                            {dims.map((d, i) => {
-                              const labelPt = getPoint(i, outerR + 22);
-                              return (
-                                <g key={d.key}>
-                                  <text
-                                    x={labelPt.x} y={labelPt.y}
-                                    textAnchor="middle" dominantBaseline="middle"
-                                    fill="#a1a1aa" fontSize="13" fontWeight="700"
-                                    fontFamily="'Quicksand', sans-serif"
-                                  >{d.label}</text>
-                                  <text
-                                    x={labelPt.x} y={labelPt.y + 16}
-                                    textAnchor="middle" dominantBaseline="middle"
-                                    fill="#818cf8" fontSize="12" fontWeight="900"
-                                    fontFamily="'Quicksand', sans-serif"
-                                  >{d.value.toFixed(1)}</text>
-                                </g>
-                              );
-                            })}
-                          </svg>
-                          <p className="text-[10px] text-zinc-600 text-center">后端数据接入后实时更新 · 满分 10.0</p>
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-1 h-5 bg-indigo-400 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.6)]"></div>
+                        <span className="text-sm font-bold text-zinc-300 uppercase tracking-widest">玩家能力</span>
+                      </div>
+                      {abilityLoading && (
+                        <div className="flex items-center gap-2 text-xs text-zinc-500">
+                          <FaSpinner className="animate-spin text-indigo-400" />
+                          计算中...
                         </div>
-                      );
-                    })()}
+                      )}
+                    </div>
+
+                    {playerAbility ? (
+                      <div className="flex flex-col items-center gap-4">
+                        {/* 使用公共 RadarChart 组件 */}
+                        <RadarChartInline
+                          values={playerAbility}
+                          size={260}
+                        />
+
+                        {/* 数值列表 */}
+                        <div className="grid grid-cols-5 gap-2 w-full">
+                          {[
+                            ['耐力', 'stamina',   '#f472b6'],
+                            ['星星', 'star',      '#fbbf24'],
+                            ['稳定', 'stable',    '#34d399'],
+                            ['准度', 'accuracy',  '#38bdf8'],
+                            ['潜力', 'potential', '#a78bfa'],
+                          ].map(([label, key, color]) => (
+                            <div key={key} className="flex flex-col items-center gap-1 p-2 bg-[#0c0c11] rounded-lg border border-white/[0.04]">
+                              <span className="text-[9px] font-bold" style={{ color }}>{label}</span>
+                              <span className="text-base font-black" style={{ fontFamily: "'Quicksand', sans-serif", color }}>
+                                {Number(playerAbility[key] ?? 0).toFixed(1)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <p className="text-[10px] text-zinc-600 text-center">
+                          基于 Top 50 成绩 × 谱面五维评价数据 · 衰减加权聚合 · 满分 10.0
+                        </p>
+                      </div>
+                    ) : !abilityLoading ? (
+                      <div className="flex flex-col items-center gap-3 py-8 text-center">
+                        <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                          <span className="text-xl text-indigo-400">◆</span>
+                        </div>
+                        <p className="text-xs text-zinc-500">暂无能力数据</p>
+                        <p className="text-[10px] text-zinc-600">需要更多谱面五维评价数据才能计算</p>
+                      </div>
+                    ) : null}
                   </div>
                   </div>
                 </div>
