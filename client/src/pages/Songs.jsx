@@ -499,6 +499,7 @@ const BgImage = ({ src, visible }) => {
       <img
         src={src}
         alt="background"
+        loading="lazy"
         className={`w-full h-full object-cover transition-opacity duration-700 ${
           loaded ? 'opacity-100' : 'opacity-0'
         }`}
@@ -552,7 +553,6 @@ export default function Songs() {
   const [sortMode, setSortMode] = useState('ds'); // 'ds' | 'stamina' | 'tech' | 'stable' | 'accuracy' | 'burst'
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' | 'desc'
   const [secondarySortMode, setSecondarySortMode] = useState(null); // null | 'stamina' | 'tech' | 'stable' | 'accuracy' | 'burst'
-
 
   useEffect(() => {
     const fetchMaimai = async () => {
