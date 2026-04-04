@@ -57,6 +57,35 @@ const getFs = (s) => (s?.fsStatus || s?.fs || '').toLowerCase();
 
 const LXNS_CLIENT_ID = "eef52117-75ed-4283-b861-245375750e62";
 
+
+const getRatingStyle = (rating) => {
+  if (!rating) return { className: 'text-white', inline: {} };
+  if (rating >= 16000) return {
+    className: 'font-bold animate-pulse',
+    inline: {
+      background: 'linear-gradient(90deg, #f472b6, #a78bfa, #38bdf8, #34d399, #fbbf24, #f472b6)',
+      backgroundSize: '300% 100%',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      backgroundClip: 'text',
+      filter: 'drop-shadow(0 0 10px rgba(168,85,247,0.8))'
+    }
+  };
+  if (rating >= 15000) return {
+    className: '',
+    inline: {
+      background: 'linear-gradient(90deg, #f472b6, #a78bfa, #38bdf8)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      backgroundClip: 'text'
+    }
+  };
+  if (rating >= 14000) return { className: 'text-yellow-400', inline: {} };
+  if (rating >= 13000) return { className: 'text-blue-400', inline: {} };
+  if (rating >= 12000) return { className: 'text-orange-400', inline: {} };
+  return { className: 'text-white', inline: {} };
+}
+
 const MaimaiProfile = () => {
   const { username } = useParams();
   const { user: currentUser } = useAuth();
@@ -449,8 +478,14 @@ const MaimaiProfile = () => {
     else if (b50Filter === 'RED') scores = scores.filter(s => s.level === 2);
     else if (b50Filter === 'PURPLE') scores = scores.filter(s => s.level === 3);
     else if (b50Filter === 'WHITE') scores = scores.filter(s => s.level === 4);
-    else if (b50Filter === 'LOCK50') scores = scores.filter(s => s.achievement >= 100.0000 && s.achievement <= 100.1000);
-    else if (b50Filter === 'CUN50') scores = scores.filter(s => s.achievement >= 99.8000 && s.achievement <= 99.9999);
+    else if (b50Filter === 'LOCK50') scores = scores.filter(s =>
+      (s.achievement >= 100.0000 && s.achievement <= 100.0500) ||
+      (s.achievement >= 100.5000 && s.achievement <= 100.5500)
+    );
+    else if (b50Filter === 'CUN50') scores = scores.filter(s =>
+      (s.achievement >= 99.9000 && s.achievement <= 99.9999) ||
+      (s.achievement >= 100.4500 && s.achievement <= 100.4999)
+    );
     else if (b50Filter === 'YUE50') scores = scores.filter(s => s.achievement < 97.0000);
 
     scores.sort((a, b) => b.rating - a.rating || b.achievement - a.achievement);
@@ -573,15 +608,32 @@ const MaimaiProfile = () => {
           <FaArrowLeft /> 返回个人主页
         </button>
 
-        {/* New Header with Avatar + Username + Rank */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 bg-gradient-to-r from-[#15151e] to-transparent border border-white/[0.05] p-6 rounded-2xl">
-          <div className="flex items-center gap-6">
+        {/* New Header with Banner background, Avatar + Username + Rank with rating color */}
+        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 border border-white/[0.05] p-6 rounded-2xl">
+          {/* Banner background with overlay */}
+          {profile.bannerUrl ? (
+            <div className="absolute inset-0 rounded-2xl overflow-hidden" style={{ zIndex: 0 }}>
+              <div
+                className="absolute inset-0 bg-cover bg-center"
+                style={{
+                  backgroundImage: `url(${profile.bannerUrl})`,
+                  filter: 'brightness(0.35) saturate(0.7) blur(1px)'
+                }}
+              />
+              <div className="absolute inset-0 bg-black/60" />
+            </div>
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-r from-[#15151e] to-transparent rounded-2xl" style={{ zIndex: 0 }} />
+          )}
+          <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ zIndex: 1 }} />
+
+          <div className="relative flex items-center gap-6 z-10">
             {/* Avatar */}
             <div className="relative shrink-0">
               <img 
                 src={profile.avatarUrl || '/assets/logos.png'} 
                 alt={profile.username}
-                className="w-20 h-20 rounded-full object-cover border-2 border-cyan-400/30 shadow-lg"
+                className="w-24 h-24 rounded-full object-cover border-2 border-cyan-400/30 shadow-lg"
                 onError={(e) => { e.target.src = '/assets/logos.png'; }}
               />
               {profile.maimaiRank && profile.maimaiRank <= 200 && (
@@ -591,10 +643,10 @@ const MaimaiProfile = () => {
               )}
             </div>
             
-            {/* Username + Title */}
+            {/* Username + Title and Rating with dynamic color */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-black text-zinc-100 tracking-tight" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                <h1 className="text-4xl font-extrabold text-zinc-100 tracking-tight" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                   {profile.username}
                 </h1>
                 {profile.maimaiRank && profile.maimaiRank <= 200 && (
@@ -610,7 +662,17 @@ const MaimaiProfile = () => {
                 {profile.rating && (
                   <>
                     <span className="text-zinc-600">·</span>
-                    <span className="text-cyan-400 font-bold" style={{ fontFamily: "'Quicksand', sans-serif" }}>Rating {profile.rating}</span>
+                    {(() => {
+                      const rs = getRatingStyle(profile.rating);
+                      return (
+                        <span
+                          className={`${rs.className} font-bold ml-1`}
+                          style={{ fontFamily: "'Quicksand', sans-serif", fontSize: '1.25rem', ...rs.inline }}
+                        >
+                          Rating {profile.rating}
+                        </span>
+                      );
+                    })()}
                   </>
                 )}
               </div>
@@ -619,7 +681,7 @@ const MaimaiProfile = () => {
 
           {/* Sync controls */}
           {isOwnProfile && (
-            <div className="flex flex-col gap-3 w-full md:w-auto">
+            <div className="relative z-10 flex flex-col gap-3 w-full md:w-auto">
               <div className="flex items-center gap-2 bg-[#15151e]/80 p-1 rounded-xl border border-white/[0.05] w-fit">
                 <button 
                   onClick={() => setSyncSource('df')}
@@ -706,13 +768,16 @@ const MaimaiProfile = () => {
                   {/* Left: Big ring + stats dashboard (40%) */}
                   <div className="lg:w-[40%] flex flex-col gap-4">
                     {/* Big ring */}
-                    <div className="bg-[#15151e] border border-white/[0.05] p-8 flex flex-col items-center">
+                    <div className={`bg-[#15151e] border p-8 flex flex-col items-center ${globalStats.clear === globalStats.total && globalStats.total > 0 ? 'border-gradient shadow-[0_0_12px_rgba(21,247,255,0.4)]' : 'border-white/[0.05]'}`}>
                       <div className="relative w-48 h-48 flex items-center justify-center mb-6">
                         <svg className="-rotate-90 w-full h-full" viewBox="0 0 200 200">
                           <circle cx="100" cy="100" r="85" strokeWidth="14" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
                           <motion.circle
                             cx="100" cy="100" r="85" strokeWidth="14" fill="transparent"
-                            stroke="currentColor" className="text-cyan-400"
+                            stroke="currentColor" className={
+                              globalStats.clear === globalStats.total && globalStats.total > 0
+                                ? 'text-gradient animate-gradient-x'
+                                : 'text-cyan-400'}
                             strokeDasharray={2 * Math.PI * 85}
                             initial={{ strokeDashoffset: 2 * Math.PI * 85 }}
                             animate={{ strokeDashoffset: 2 * Math.PI * 85 * (1 - globalStats.clear / globalStats.total) }}
@@ -722,46 +787,110 @@ const MaimaiProfile = () => {
                         </svg>
                         <div className="absolute flex flex-col items-center">
                           <span className="text-5xl font-black text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                            {((globalStats.clear / globalStats.total) * 100).toFixed(0)}<span className="text-2xl">%</span>
+                            {((globalStats.clear / globalStats.total) * 100).toFixed(2)}<span className="text-2xl">%</span>
                           </span>
                           <span className="text-sm text-zinc-500 mt-2 font-bold">全谱通关率</span>
                         </div>
                       </div>
-                      <div className="text-center text-xs text-zinc-500 font-bold">
+                      <div className={`text-center text-xs font-bold ${globalStats.clear === globalStats.total && globalStats.total > 0 ? 'text-cyan-400' : 'text-zinc-500'}`}>
                         {globalStats.clear} / {globalStats.total} 谱面已通关
                       </div>
                     </div>
                     
-                    {/* Stats dashboard */}
+                    {/* Stats dashboard - progress bar style */}
                     <div className="bg-[#15151e] border border-white/[0.05] p-5">
                       <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">全版本全难度统计</div>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-3 gap-2">
                         {[
-                          { label: 'S', value: globalStats.s, color: 'text-zinc-400' },
-                          { label: 'S+', value: globalStats.sp, color: 'text-zinc-300' },
-                          { label: 'SS', value: globalStats.ss, color: 'text-emerald-400' },
-                          { label: 'SS+', value: globalStats.ssp, color: 'text-emerald-300' },
-                          { label: 'SSS', value: globalStats.sss, color: 'text-amber-400' },
-                          { label: 'SSS+', value: globalStats.sssp, color: 'text-amber-300' },
-                          { label: 'FC', value: globalStats.fc, color: 'text-pink-400' },
-                          { label: 'FC+', value: globalStats.fcp, color: 'text-pink-300' },
-                          { label: 'AP', value: globalStats.ap, color: 'text-purple-400' },
-                          { label: 'AP+', value: globalStats.app, color: 'text-purple-300' },
-                          { label: 'SYNC', value: globalStats.sync, color: 'text-cyan-400' },
-                          { label: 'FS', value: globalStats.fs, color: 'text-cyan-300' },
-                          { label: 'FDX', value: globalStats.fsd, color: 'text-indigo-400' },
-                          { label: 'FDX+', value: globalStats.fsdp, color: 'text-indigo-300' },
-                          { label: '⭐', value: globalStats.dx1, color: 'text-zinc-500' },
-                          { label: '⭐⭐', value: globalStats.dx2, color: 'text-zinc-400' },
-                          { label: '⭐⭐⭐', value: globalStats.dx3, color: 'text-amber-500' },
-                          { label: '⭐⭐⭐⭐', value: globalStats.dx4, color: 'text-amber-400' },
-                          { label: '⭐⭐⭐⭐⭐', value: globalStats.dx5, color: 'text-amber-300' },
-                        ].map(({ label, value, color }) => (
-                          <div key={label} className="bg-[#0c0c11] border border-white/[0.05] p-2 flex flex-col items-center gap-0.5">
-                            <span className="text-[9px] font-bold text-zinc-600 uppercase">{label}</span>
-                            <span className={`text-lg font-black ${color}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{value}</span>
-                          </div>
-                        ))}
+                          { label: 'S',    value: globalStats.s,    bar: '#a1a1aa', text: 'text-zinc-900' },
+                          { label: 'S+',   value: globalStats.sp,   bar: '#d4d4d8', text: 'text-zinc-900' },
+                          { label: 'SS',   value: globalStats.ss,   bar: '#34d399', text: 'text-emerald-950' },
+                          { label: 'SS+',  value: globalStats.ssp,  bar: '#6ee7b7', text: 'text-emerald-950' },
+                          { label: 'SSS',  value: globalStats.sss,  bar: '#fbbf24', text: 'text-amber-950' },
+                          { label: 'SSS+', value: globalStats.sssp, bar: '#fde68a', text: 'text-amber-950' },
+                          { label: 'FC',   value: globalStats.fc,   bar: '#f472b6', text: 'text-pink-950' },
+                          { label: 'FC+',  value: globalStats.fcp,  bar: '#f9a8d4', text: 'text-pink-950' },
+                          { label: 'AP',   value: globalStats.ap,   bar: '#c084fc', text: 'text-purple-950' },
+                          { label: 'AP+',  value: globalStats.app,  bar: '#e879f9', text: 'text-purple-950' },
+                          { label: 'FDX',  value: globalStats.fsd,  bar: '#818cf8', text: 'text-indigo-950' },
+                          { label: 'FDX+', value: globalStats.fsdp, bar: '#a5b4fc', text: 'text-indigo-950' },
+                        ].map(({ label, value, bar, text }) => {
+                          const pct = globalStats.total > 0 ? Math.min((value / globalStats.total) * 100, 100) : 0;
+                          const isFull = value >= globalStats.total && globalStats.total > 0;
+                          return (
+                            <div key={label} className="relative h-14 rounded overflow-hidden bg-[#0c0c11] border border-white/[0.05]">
+                              {/* 进度条背景 */}
+                              {isFull ? (
+                                <div className="absolute inset-0 animate-pulse" style={{
+                                  background: 'linear-gradient(90deg,#f472b6,#a78bfa,#38bdf8,#34d399,#fbbf24)'
+                                }} />
+                              ) : (
+                                <div
+                                  className="absolute left-0 top-0 h-full transition-all duration-1000"
+                                  style={{ width: `${pct}%`, background: bar, opacity: 0.85 }}
+                                />
+                              )}
+                              {/* 标签和数字 */}
+                              <div className="absolute inset-0 flex flex-col items-end justify-center pr-2 z-10">
+                                <span className={`text-xl font-black leading-none ${isFull ? 'text-white drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]' : text}`}
+                                  style={{ fontFamily: "'Quicksand', sans-serif",
+                                    textShadow: isFull ? '0 0 8px rgba(0,0,0,0.6)' : 'none'
+                                  }}>
+                                  {value}
+                                </span>
+                                <span className={`text-[10px] font-bold leading-none mt-0.5 ${isFull ? 'text-white/80' : text} opacity-80`}
+                                  style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                  {pct.toFixed(2)}%
+                                </span>
+                              </div>
+                              {/* 左侧 label */}
+                              <div className="absolute left-2 top-1/2 -translate-y-1/2 z-10">
+                                <span className="text-[10px] font-black text-white/60 uppercase tracking-wider">{label}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* DX 星星行 - 使用图片图标 */}
+                      <div className="grid grid-cols-5 gap-2 mt-2">
+                        {[
+                          { stars: 1, value: globalStats.dx1, bar: '#71717a' },
+                          { stars: 2, value: globalStats.dx2, bar: '#a1a1aa' },
+                          { stars: 3, value: globalStats.dx3, bar: '#f59e0b' },
+                          { stars: 4, value: globalStats.dx4, bar: '#fbbf24' },
+                          { stars: 5, value: globalStats.dx5, bar: '#fde68a' },
+                        ].map(({ stars, value, bar }) => {
+                          const pct = globalStats.total > 0 ? Math.min((value / globalStats.total) * 100, 100) : 0;
+                          const isFull = value >= globalStats.total && globalStats.total > 0;
+                          return (
+                            <div key={stars} className="relative h-16 rounded overflow-hidden bg-[#0c0c11] border border-white/[0.05] flex flex-col">
+                              {isFull ? (
+                                <div className="absolute inset-0 animate-pulse" style={{
+                                  background: 'linear-gradient(90deg,#f472b6,#a78bfa,#38bdf8,#34d399,#fbbf24)'
+                                }} />
+                              ) : (
+                                <div
+                                  className="absolute left-0 bottom-0 w-full transition-all duration-1000"
+                                  style={{ height: `${pct}%`, background: bar, opacity: 0.7 }}
+                                />
+                              )}
+                              <div className="relative z-10 flex flex-col items-center justify-center h-full gap-0.5 px-1">
+                                <img
+                                  src={`/assets/${stars}dxstar.png`}
+                                  alt={`${stars}star`}
+                                  className="w-5 h-5 object-contain"
+                                />
+                                <span className="text-base font-black text-white leading-none" style={{ fontFamily: "'Quicksand', sans-serif",
+                                  textShadow: '0 0 6px rgba(0,0,0,0.8)'
+                                }}>{value}</span>
+                                <span className="text-[9px] font-bold text-white/70" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                  {pct.toFixed(1)}%
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -775,43 +904,98 @@ const MaimaiProfile = () => {
                       const circ = 2 * Math.PI * r;
                       const offset = circ - (Math.min(pct, 100) / 100) * circ;
                       const isCompleted = plate.count === plate.total && plate.total > 0;
-                      const targetGroup = PLATE_VERSIONS.find(v => v.id === selectedPlateVersion);
                       const bgImg = plate.customImg ? `/assets/${plate.customImg}.png` : `/assets/${plate.imgPrefix}_${plate.imgSuffix}.png`;
+                      const plateColorBase = plate.color.split(' ')[0];
                       return (
                         <div
                           key={idx}
                           onClick={() => navigate(`/profile/${username}/maimai/plate/${encodeURIComponent(selectedPlateVersion)}_${encodeURIComponent(plate.type)}`)}
-                          className={`relative bg-[#15151e] border border-white/[0.05] p-5 flex flex-col items-center gap-3 cursor-pointer hover:bg-[#1a1a24] hover:border-amber-500/20 transition-all group overflow-hidden ${
-                            isCompleted ? 'ring-1 ring-amber-400/40' : ''
+                          className={`relative bg-[#15151e] border p-5 flex flex-col items-center gap-3 cursor-pointer transition-all group overflow-hidden ${
+                            isCompleted
+                              ? 'border-transparent ring-2 ring-offset-1 ring-offset-[#0c0c11] ring-fuchsia-400 shadow-[0_0_18px_rgba(240,100,255,0.5)]'
+                              : 'border-white/[0.05] hover:bg-[#1a1a24] hover:border-amber-500/20'
                           }`}
                         >
+                          {/* 满进度流光动画叠层 */}
+                          {isCompleted && (
+                            <div className="absolute inset-0 pointer-events-none z-0 animate-pulse"
+                              style={{
+                                background: 'linear-gradient(120deg, rgba(244,114,182,0.12), rgba(167,139,250,0.12), rgba(56,189,248,0.12), rgba(52,211,153,0.12))',
+                              }}
+                            />
+                          )}
                           <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                             <img src={bgImg} alt="" className="h-full w-auto max-w-none object-contain opacity-[0.15] group-hover:opacity-[0.22] transition-opacity" loading="eager" onError={(e) => { e.target.parentElement.style.display = 'none'; }} />
                           </div>
                           <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/80 to-[#0c0c11]/40 pointer-events-none"></div>
-                          <div className="relative w-24 h-24 flex items-center justify-center z-10">
-                            <svg className="-rotate-90 w-full h-full" viewBox="0 0 96 96">
-                              <circle cx="48" cy="48" r={r} strokeWidth="7" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
-                              <motion.circle
-                                cx="48" cy="48" r={r} strokeWidth="7" fill="transparent"
-                                stroke="currentColor"
-                                className={plate.color.split(' ')[0]}
-                                strokeDasharray={circ}
-                                initial={{ strokeDashoffset: circ }}
-                                animate={{ strokeDashoffset: offset }}
-                                transition={{ duration: 1.2, ease: 'easeOut' }}
-                                strokeLinecap="round"
-                              />
+
+                          {/* 圆环 */}
+                          <div className="relative w-28 h-28 flex items-center justify-center z-10">
+                            <svg className="-rotate-90 w-full h-full" viewBox="0 0 112 112">
+                              <circle cx="56" cy="56" r={r} strokeWidth="8" fill="transparent" stroke="#0c0c11" />
+                              {isCompleted ? (
+                                <>
+                                  <defs>
+                                    <linearGradient id={`plate-grad-${idx}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                                      <stop offset="0%" stopColor="#f472b6" />
+                                      <stop offset="33%" stopColor="#a78bfa" />
+                                      <stop offset="66%" stopColor="#38bdf8" />
+                                      <stop offset="100%" stopColor="#34d399" />
+                                    </linearGradient>
+                                  </defs>
+                                  <motion.circle
+                                    cx="56" cy="56" r={r} strokeWidth="8" fill="transparent"
+                                    stroke={`url(#plate-grad-${idx})`}
+                                    strokeDasharray={circ}
+                                    initial={{ strokeDashoffset: circ }}
+                                    animate={{ strokeDashoffset: 0 }}
+                                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                                    strokeLinecap="round"
+                                  />
+                                </>
+                              ) : (
+                                <motion.circle
+                                  cx="56" cy="56" r={r} strokeWidth="8" fill="transparent"
+                                  stroke="currentColor"
+                                  className={plateColorBase}
+                                  strokeDasharray={circ}
+                                  initial={{ strokeDashoffset: circ }}
+                                  animate={{ strokeDashoffset: offset }}
+                                  transition={{ duration: 1.2, ease: 'easeOut' }}
+                                  strokeLinecap="round"
+                                />
+                              )}
                             </svg>
                             <div className="absolute flex flex-col items-center">
-                              <span className={`text-xl font-black ${plate.color.split(' ')[0]}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                                {pct.toFixed(0)}<span className="text-xs">%</span>
-                              </span>
+                              {isCompleted ? (
+                                <span className="text-2xl font-black" style={{
+                                  fontFamily: "'Quicksand', sans-serif",
+                                  background: 'linear-gradient(90deg,#f472b6,#a78bfa,#38bdf8,#34d399)',
+                                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'
+                                }}>
+                                  100.00<span className="text-sm">%</span>
+                                </span>
+                              ) : (
+                                <span className={`text-2xl font-black ${plateColorBase}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                  {pct.toFixed(2)}<span className="text-sm">%</span>
+                                </span>
+                              )}
                             </div>
                           </div>
+
+                          {/* 名称和进度数字 */}
                           <div className="text-center z-10">
-                            <div className={`text-sm font-bold tracking-widest ${plate.color.split(' ')[0]}`}>{plate.name}</div>
-                            <div className="text-xs text-zinc-600 mt-0.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>{plate.count} / {plate.total}</div>
+                            {isCompleted ? (
+                              <div className="text-base font-black tracking-widest" style={{
+                                background: 'linear-gradient(90deg,#f472b6,#a78bfa,#38bdf8)',
+                                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'
+                              }}>{plate.name}</div>
+                            ) : (
+                              <div className={`text-sm font-bold tracking-widest ${plateColorBase}`}>{plate.name}</div>
+                            )}
+                            <div className={`text-sm font-bold mt-0.5 ${isCompleted ? 'text-fuchsia-300' : 'text-zinc-400'}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                              {plate.count} <span className="text-zinc-600">/</span> {plate.total}
+                            </div>
                           </div>
                           <div className="text-[10px] text-zinc-600 group-hover:text-amber-400 transition-colors z-10">点击查看详情 →</div>
                         </div>
@@ -847,25 +1031,198 @@ const MaimaiProfile = () => {
                   {/* 跨版本牌子总收集统计 */}
                   {globalPlateStats && (
                     <div className="bg-[#15151e] border border-white/[0.05] p-5">
-                      <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">跨版本牌子收集统计</div>
+                      <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-5">跨版本牌子收集统计</div>
                       <div className="grid grid-cols-4 gap-4">
-                        {[{ type: '将', color: 'text-emerald-400', bg: 'bg-emerald-400' },
-                          { type: '极', color: 'text-amber-400', bg: 'bg-amber-400' },
-                          { type: '神', color: 'text-cyan-400', bg: 'bg-cyan-400' },
-                          { type: '舞舞', color: 'text-pink-400', bg: 'bg-pink-400' }].map(({ type, color, bg }) => (
-                          <div key={type} className="flex flex-col items-center gap-2">
-                            <span className={`text-2xl font-black ${color}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                              {globalPlateStats[type]}
-                            </span>
-                            <span className="text-xs font-bold text-zinc-500">{type}牌</span>
-                            <div className="w-full h-1 bg-[#0c0c11] rounded-full overflow-hidden">
-                              <div className={`h-full ${bg}`} style={{ width: `${globalPlateStats.total > 0 ? (globalPlateStats[type] / globalPlateStats.total) * 100 : 0}%` }} />
+                        {[
+                          { type: '将', solidColor: '#34d399', gradStart: '#34d399', gradEnd: '#6ee7b7', textColor: 'text-emerald-300' },
+                          { type: '极', solidColor: '#fbbf24', gradStart: '#f59e0b', gradEnd: '#fde68a', textColor: 'text-amber-300' },
+                          { type: '神', solidColor: '#38bdf8', gradStart: '#0ea5e9', gradEnd: '#7dd3fc', textColor: 'text-sky-300' },
+                          { type: '舞舞', solidColor: '#f472b6', gradStart: '#ec4899', gradEnd: '#f9a8d4', textColor: 'text-pink-300' },
+                        ].map(({ type, solidColor, gradStart, gradEnd, textColor }) => {
+                          const val = globalPlateStats[type];
+                          const total = globalPlateStats.total;
+                          const pct = total > 0 ? (val / total) * 100 : 0;
+                          const isFull = val >= total && total > 0;
+                          const r = 36;
+                          const circ = 2 * Math.PI * r;
+                          const offset = circ - (Math.min(pct, 100) / 100) * circ;
+                          const gradId = `gplate-${type}`;
+                          return (
+                            <div key={type} className={`flex flex-col items-center gap-3 p-3 rounded-xl border transition-all ${
+                              isFull
+                                ? 'border-fuchsia-400/50 shadow-[0_0_14px_rgba(240,100,255,0.4)] bg-[#1a1a2e]'
+                                : 'border-white/[0.05] bg-[#0c0c11]'
+                            }`}>
+                              {/* 圆环 */}
+                              <div className="relative w-24 h-24 flex items-center justify-center">
+                                <svg className="-rotate-90 w-full h-full" viewBox="0 0 96 96">
+                                  <defs>
+                                    <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+                                      <stop offset="0%" stopColor={gradStart} />
+                                      <stop offset="100%" stopColor={gradEnd} />
+                                    </linearGradient>
+                                    {isFull && (
+                                      <linearGradient id={`${gradId}-full`} x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stopColor="#f472b6" />
+                                        <stop offset="33%" stopColor="#a78bfa" />
+                                        <stop offset="66%" stopColor="#38bdf8" />
+                                        <stop offset="100%" stopColor="#34d399" />
+                                      </linearGradient>
+                                    )}
+                                  </defs>
+                                  <circle cx="48" cy="48" r={r} strokeWidth="7" fill="transparent" stroke="#1a1a2e" />
+                                  <motion.circle
+                                    cx="48" cy="48" r={r} strokeWidth="7" fill="transparent"
+                                    stroke={isFull ? `url(#${gradId}-full)` : `url(#${gradId})`}
+                                    strokeDasharray={circ}
+                                    initial={{ strokeDashoffset: circ }}
+                                    animate={{ strokeDashoffset: isFull ? 0 : offset }}
+                                    transition={{ duration: 1.3, ease: 'easeOut' }}
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                                <div className="absolute flex flex-col items-center">
+                                  {isFull ? (
+                                    <span className="text-2xl font-black" style={{
+                                      fontFamily: "'Quicksand', sans-serif",
+                                      background: 'linear-gradient(90deg,#f472b6,#a78bfa,#38bdf8)',
+                                      WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'
+                                    }}>{val}</span>
+                                  ) : (
+                                    <span className={`text-2xl font-black ${textColor}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>{val}</span>
+                                  )}
+                                  <span className="text-[10px] text-zinc-500 font-bold" style={{ fontFamily: "'Quicksand', sans-serif" }}>/ {total}</span>
+                                </div>
+                              </div>
+                              {/* 类型名称 */}
+                              {isFull ? (
+                                <span className="text-sm font-black tracking-widest" style={{
+                                  background: 'linear-gradient(90deg,#f472b6,#a78bfa,#38bdf8)',
+                                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'
+                                }}>{type}牌</span>
+                              ) : (
+                                <span className={`text-sm font-bold tracking-widest ${textColor}`}>{type}牌</span>
+                              )}
+                              {/* 底部进度条 */}
+                              <div className="w-full h-1.5 bg-[#1a1a2e] rounded-full overflow-hidden">
+                                {isFull ? (
+                                  <div className="h-full w-full animate-pulse" style={{
+                                    background: 'linear-gradient(90deg,#f472b6,#a78bfa,#38bdf8,#34d399)'
+                                  }} />
+                                ) : (
+                                  <motion.div
+                                    className="h-full rounded-full"
+                                    style={{ background: solidColor }}
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${pct}%` }}
+                                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                                  />
+                                )}
+                              </div>
+                              {/* 百分比 */}
+                              <span className={`text-xs font-bold ${isFull ? 'text-fuchsia-300' : 'text-zinc-500'}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                {pct.toFixed(1)}%
+                              </span>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
+
+                  {/* ====== 3-4 玩家能力雷达图 ====== */}
+                  <div className="bg-[#15151e] border border-white/[0.05] p-5">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="w-1 h-5 bg-indigo-400 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.6)]"></div>
+                      <span className="text-sm font-bold text-zinc-300 uppercase tracking-widest">玩家能力</span>
+                    </div>
+                    {(() => {
+                      // 五维数据（前端占位，后端接入后替换）
+                      const dims = [
+                        { key: 'stamina',  label: '耐力',  value: profile?.ability?.stamina  ?? 0 },
+                        { key: 'star',     label: '星星',  value: profile?.ability?.star     ?? 0 },
+                        { key: 'stable',   label: '稳定',  value: profile?.ability?.stable   ?? 0 },
+                        { key: 'accuracy', label: '准度',  value: profile?.ability?.accuracy ?? 0 },
+                        { key: 'potential',label: '潜力',  value: profile?.ability?.potential?? 0 },
+                      ];
+                      const MAX = 10.0;
+                      const cx = 110, cy = 110, outerR = 90;
+                      const total = dims.length;
+                      const angleStep = (2 * Math.PI) / total;
+                      const getPoint = (i, r) => ({
+                        x: cx + r * Math.sin(i * angleStep),
+                        y: cy - r * Math.cos(i * angleStep),
+                      });
+                      // 背景蛛网格线（5层）
+                      const gridLevels = [2, 4, 6, 8, 10];
+                      const gridPolygons = gridLevels.map(lv => {
+                        const pts = dims.map((_, i) => {
+                          const p = getPoint(i, (lv / MAX) * outerR);
+                          return `${p.x},${p.y}`;
+                        }).join(' ');
+                        return { pts, lv };
+                      });
+                      // 玩家数据多边形
+                      const dataPoints = dims.map((d, i) => {
+                        const p = getPoint(i, (Math.min(d.value, MAX) / MAX) * outerR);
+                        return `${p.x},${p.y}`;
+                      }).join(' ');
+                      // 轴线端点
+                      const axisPoints = dims.map((_, i) => getPoint(i, outerR));
+                      // 数据顶点坐标（用于标注小圆点）
+                      const dataCoords = dims.map((d, i) => getPoint(i, (Math.min(d.value, MAX) / MAX) * outerR));
+
+                      return (
+                        <div className="flex flex-col items-center gap-4">
+                          <svg width="220" height="220" viewBox="0 0 220 220">
+                            {/* 蛛网格线 */}
+                            {gridPolygons.map(({ pts, lv }) => (
+                              <polygon key={lv} points={pts}
+                                fill="none" stroke="#ffffff10" strokeWidth="1" />
+                            ))}
+                            {/* 轴线 */}
+                            {axisPoints.map((p, i) => (
+                              <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#ffffff15" strokeWidth="1" />
+                            ))}
+                            {/* 数据填充区域 */}
+                            <polygon
+                              points={dataPoints}
+                              fill="rgba(129,140,248,0.18)"
+                              stroke="#818cf8"
+                              strokeWidth="2"
+                              strokeLinejoin="round"
+                            />
+                            {/* 数据顶点小圆 */}
+                            {dataCoords.map((p, i) => (
+                              <circle key={i} cx={p.x} cy={p.y} r="4"
+                                fill="#818cf8" stroke="#0c0c11" strokeWidth="2" />
+                            ))}
+                            {/* 轴线标签 */}
+                            {dims.map((d, i) => {
+                              const labelPt = getPoint(i, outerR + 18);
+                              return (
+                                <g key={d.key}>
+                                  <text
+                                    x={labelPt.x} y={labelPt.y}
+                                    textAnchor="middle" dominantBaseline="middle"
+                                    fill="#a1a1aa" fontSize="11" fontWeight="700"
+                                    fontFamily="'Quicksand', sans-serif"
+                                  >{d.label}</text>
+                                  <text
+                                    x={labelPt.x} y={labelPt.y + 14}
+                                    textAnchor="middle" dominantBaseline="middle"
+                                    fill="#818cf8" fontSize="10" fontWeight="900"
+                                    fontFamily="'Quicksand', sans-serif"
+                                  >{d.value.toFixed(1)}</text>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                          <p className="text-[10px] text-zinc-600 text-center">后端数据接入后实时更新 · 满分 10.0</p>
+                        </div>
+                      );
+                    })()}
+                  </div>
                   </div>
                 </div>
               )}
@@ -932,49 +1289,96 @@ const MaimaiProfile = () => {
                       levelBgCache.cache.set(bgKey, `https://www.diving-fish.com/covers/${String(pickedId).padStart(5, '0')}.png`);
                     }
 
+                    // 角标可叠加显示（优先级：AP+>AP>FC+>FC>SSS+>SSS，同时出现时一起显示）
+                    const badges = [];
+                    if (isAllAPP) badges.push({ label: 'AP+', cls: 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-[0_0_6px_rgba(168,85,247,0.7)]' });
+                    else if (isAllAP) badges.push({ label: 'AP', cls: 'bg-indigo-500 text-white shadow-[0_0_6px_rgba(99,102,241,0.6)]' });
+                    else if (isAllFCp) badges.push({ label: 'FC+', cls: 'bg-emerald-500 text-white shadow-[0_0_6px_rgba(16,185,129,0.6)]' });
+                    else if (isAllFC) badges.push({ label: 'FC', cls: 'bg-emerald-700 text-white' });
+                    if (isAllSSSp) badges.push({ label: 'SSS+', cls: 'bg-amber-400 text-amber-950' });
+                    else if (isAllSSS) badges.push({ label: 'SSS', cls: 'bg-amber-300 text-amber-950' });
+
+                    // 边框优先级: 绿<金<流动深绿<彩色<流动彩色
+                    let borderStyle = {};
+                    let extraOverlay = null;
+                    if (isAllAPP) {
+                      borderStyle = { border: '2px solid transparent', backgroundClip: 'padding-box',
+                        boxShadow: '0 0 0 2px #a78bfa, 0 0 20px rgba(167,139,250,0.5), 0 0 40px rgba(244,114,182,0.3)' };
+                      extraOverlay = <div className="absolute inset-0 pointer-events-none z-0 animate-pulse" style={{ background: 'linear-gradient(120deg,rgba(244,114,182,0.15),rgba(167,139,250,0.15),rgba(56,189,248,0.15),rgba(52,211,153,0.15))' }} />;
+                    } else if (isAllAP) {
+                      borderStyle = { boxShadow: '0 0 0 2px #818cf8, 0 0 14px rgba(129,140,248,0.5)' };
+                    } else if (isAllFCp) {
+                      borderStyle = { boxShadow: '0 0 0 2px #10b981, 0 0 12px rgba(16,185,129,0.5)' };
+                    } else if (isAllFC) {
+                      borderStyle = { boxShadow: '0 0 0 1.5px #059669' };
+                    } else if (isAllSSSp) {
+                      borderStyle = { boxShadow: '0 0 0 1.5px #f59e0b, 0 0 10px rgba(245,158,11,0.4)' };
+                    } else if (isAllSSS) {
+                      borderStyle = { boxShadow: '0 0 0 1.5px #fcd34d, 0 0 8px rgba(252,211,77,0.3)' };
+                    }
+
                     return (
                         <div
                           key={lvl.level}
                           onClick={() => navigate(`/profile/${username}/maimai/level/${encodeURIComponent(lvl.level)}`)}
-                          className={`relative p-5 border transition-all cursor-pointer group flex flex-col items-center gap-4 overflow-hidden ${baseClass} ${glowClass}`}
+                          className={`relative p-5 border-0 transition-all cursor-pointer group flex flex-col items-center gap-3 overflow-hidden rounded-xl ${baseClass}`}
+                          style={borderStyle}
                         >
+                            {extraOverlay}
                             <img src={levelBgCache.cache.get(bgKey)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:opacity-30 transition-opacity" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-[#0c0c11]/60 to-transparent pointer-events-none"></div>
-                            {isAllAPP && <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 animate-pulse pointer-events-none"></div>}
-                            
-                            <div className="relative w-20 h-20 flex items-center justify-center z-10">
-                              <svg className="-rotate-90 w-full h-full" viewBox="0 0 80 80">
-                                <circle cx="40" cy="40" r={r} strokeWidth="6" fill="transparent" className="text-[#0c0c11]" stroke="currentColor" />
-                                <motion.circle
-                                  cx="40" cy="40" r={r} strokeWidth="6" fill="transparent"
-                                  stroke="currentColor"
-                                  className={ringColor}
-                                  strokeDasharray={circ}
-                                  initial={{ strokeDashoffset: circ }}
-                                  animate={{ strokeDashoffset: offset }}
-                                  transition={{ duration: 1, ease: 'easeOut' }}
-                                  strokeLinecap="round"
-                                />
+
+                            {/* 圆环（更大更粗） */}
+                            <div className="relative w-24 h-24 flex items-center justify-center z-10">
+                              <svg className="-rotate-90 w-full h-full" viewBox="0 0 96 96">
+                                <circle cx="48" cy="48" r={r} strokeWidth="7" fill="transparent" stroke="#0c0c11" />
+                                {isAllAPP ? (
+                                  <>
+                                    <defs>
+                                      <linearGradient id={`lvl-grad-${lvl.level}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stopColor="#f472b6" />
+                                        <stop offset="33%" stopColor="#a78bfa" />
+                                        <stop offset="66%" stopColor="#38bdf8" />
+                                        <stop offset="100%" stopColor="#34d399" />
+                                      </linearGradient>
+                                    </defs>
+                                    <motion.circle cx="48" cy="48" r={r} strokeWidth="7" fill="transparent"
+                                      stroke={`url(#lvl-grad-${lvl.level})`}
+                                      strokeDasharray={circ} initial={{ strokeDashoffset: circ }}
+                                      animate={{ strokeDashoffset: 0 }}
+                                      transition={{ duration: 1, ease: 'easeOut' }} strokeLinecap="round" />
+                                  </>
+                                ) : (
+                                  <motion.circle cx="48" cy="48" r={r} strokeWidth="7" fill="transparent"
+                                    stroke="currentColor" className={ringColor}
+                                    strokeDasharray={circ} initial={{ strokeDashoffset: circ }}
+                                    animate={{ strokeDashoffset: offset }}
+                                    transition={{ duration: 1, ease: 'easeOut' }} strokeLinecap="round" />
+                                )}
                               </svg>
                               <div className="absolute flex flex-col items-center">
-                                <span className="text-xl font-black text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                <span className="text-2xl font-black text-zinc-100" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                                   {lvl.level}
                                 </span>
                               </div>
                             </div>
-                            
-                            <div className="flex flex-col items-center gap-0.5 z-10">
-                              <span className="text-xs font-bold text-zinc-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                                {lvl.clear} / {lvl.total}
+
+                            {/* 统计数字强调 */}
+                            <div className="flex flex-col items-center gap-1 z-10">
+                              <span className={`text-base font-black ${
+                                isAllAPP ? 'text-fuchsia-300' : isAllAP ? 'text-indigo-300' : isAllFCp || isAllFC ? 'text-emerald-300' : isAllSSSp ? 'text-amber-300' : isAllSSS ? 'text-amber-200' : 'text-zinc-300'
+                              }`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                                {lvl.clear} <span className="text-zinc-600 font-bold text-sm">/</span> {lvl.total}
                               </span>
-                              <div className="flex gap-1.5 text-[9px] font-semibold">
-                                {isAllAPP && <span className="text-purple-400">APP</span>}
-                                {!isAllAPP && isAllAP && <span className="text-cyan-400">AP</span>}
-                                {!isAllAPP && !isAllAP && isAllFCp && <span className="text-emerald-400">FC+</span>}
-                                {!isAllAPP && !isAllAP && !isAllFCp && isAllFC && <span className="text-emerald-400">FC</span>}
-                                {!isAllAPP && !isAllAP && !isAllFCp && !isAllFC && isAllSSSp && <span className="text-amber-400">SSS+</span>}
-                                {!isAllAPP && !isAllAP && !isAllFCp && !isAllFC && !isAllSSSp && isAllSSS && <span className="text-amber-300">SSS</span>}
-                              </div>
+
+                              {/* 可叠加角标 */}
+                              {badges.length > 0 && (
+                                <div className="flex gap-1 flex-wrap justify-center">
+                                  {badges.map(b => (
+                                    <span key={b.label} className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${b.cls}`}>{b.label}</span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                         </div>
                     )
