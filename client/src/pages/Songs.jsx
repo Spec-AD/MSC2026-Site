@@ -482,11 +482,11 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
 // ==========================================
 export default function Songs() {
   const GAMES = [
-    { id: 'maimai', label: '舞萌 DX' },
-    { id: 'chunithm', label: 'CHUNITHM' },
-    { id: 'arcaea', label: 'Arcaea' },
-    { id: 'phigros', label: 'Phigros' },
-    { id: 'pjsekai', label: 'Project SEKAI' },
+    { id: 'maimai', label: '舞萌 DX', bgImage: '/assets/maimaidx_songs_bg.png' },
+    { id: 'chunithm', label: 'CHUNITHM', bgImage: '/assets/chunithm_songs_bg.png' },
+    { id: 'arcaea', label: 'Arcaea', bgImage: '/assets/arcaea_songs_bg.png' },
+    { id: 'phigros', label: 'Phigros', bgImage: '/assets/phigros_songs_bg.png' },
+    { id: 'pjsekai', label: 'Project SEKAI', bgImage: '/assets/pjsk_songs_bg.png' },
   ];
   
   const [activeGame, setActiveGame] = useState('maimai');
@@ -513,6 +513,10 @@ export default function Songs() {
   const [bpmMax, setBpmMax] = useState("400");
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedVersions, setSelectedVersions] = useState([]);
+  const [sortMode, setSortMode] = useState('ds'); // 'ds' | 'stamina' | 'tech' | 'stable' | 'accuracy' | 'burst'
+  const [sortOrder, setSortOrder] = useState('desc'); // 'asc' | 'desc'
+  const [secondarySortMode, setSecondarySortMode] = useState(null); // null | 'stamina' | 'tech' | 'stable' | 'accuracy' | 'burst'
+  const [bgImageLoaded, setBgImageLoaded] = useState({});
 
   useEffect(() => {
     const fetchMaimai = async () => {
@@ -639,11 +643,11 @@ export default function Songs() {
     setBpmMin(min.toString()); setBpmMax(max.toString());
   };
 
-  const filteredSongs = useMemo(() => {
+  const filteredAndSortedSongs = useMemo(() => {
     const numDsMin = parseFloat(dsMin) || 0.0; const numDsMax = parseFloat(dsMax) || 15.7;
     const numBpmMin = parseInt(bpmMin) || 0; const numBpmMax = parseInt(bpmMax) || 400;
 
-    return currentSongs.filter(song => {
+    let filtered = currentSongs.filter(song => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const titleMatch = song.title?.toLowerCase().includes(query) || song.basic_info?.title?.toLowerCase().includes(query);
@@ -671,11 +675,61 @@ export default function Songs() {
       if (!hasMatchingDs) return false;
       return true; 
     });
-  }, [currentSongs, activeGame, searchQuery, isNewOnly, selectedCategories, selectedVersions, dsMin, dsMax, bpmMin, bpmMax, selectedDiffs, maxDiffIndex]);
+
+    // 排序逻辑（仅 maimai）
+    if (activeGame === 'maimai' && filtered.length > 0) {
+      filtered = [...filtered].sort((a, b) => {
+        const getMaxValue = (song, mode) => {
+          if (mode === 'ds') {
+            const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: maxDiffIndex + 1 }, (_, i) => i);
+            let maxDs = -Infinity;
+            diffsToCheck.forEach(i => {
+              const constant = song.ds?.[i];
+              if (constant !== undefined && constant !== null && constant >= numDsMin && constant <= numDsMax) {
+                maxDs = Math.max(maxDs, constant);
+              }
+            });
+            return maxDs === -Infinity ? 0 : maxDs;
+          }
+          // 五维数据
+          const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: maxDiffIndex + 1 }, (_, i) => i);
+          let maxVal = -Infinity;
+          diffsToCheck.forEach(i => {
+            const radarData = song.radarStats?.[i];
+            if (radarData && radarData[mode] !== undefined) {
+              maxVal = Math.max(maxVal, radarData[mode]);
+            }
+          });
+          return maxVal === -Infinity ? 0 : maxVal;
+        };
+
+        const aVal = getMaxValue(a, sortMode);
+        const bVal = getMaxValue(b, sortMode);
+        
+        if (aVal !== bVal) {
+          return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+        }
+        
+        // 次要排序
+        if (secondarySortMode && secondarySortMode !== sortMode) {
+          const aSecondary = getMaxValue(a, secondarySortMode);
+          const bSecondary = getMaxValue(b, secondarySortMode);
+          if (aSecondary !== bSecondary) {
+            return sortOrder === 'desc' ? bSecondary - aSecondary : aSecondary - bSecondary;
+          }
+        }
+        
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [currentSongs, activeGame, searchQuery, isNewOnly, selectedCategories, selectedVersions, dsMin, dsMax, bpmMin, bpmMax, selectedDiffs, maxDiffIndex, sortMode, sortOrder, secondarySortMode]);
 
   const resetFilters = () => {
     setIsNewOnly(false); setSelectedDiffs([]); setDsMin("1.0"); setDsMax("15.7");
     setBpmMin("0"); setBpmMax("400"); setSelectedCategories([]); setSelectedVersions([]);
+    setSortMode('ds'); setSortOrder('desc'); setSecondarySortMode(null);
   };
 
   const toggleArrayItem = (array, setArray, item) => {
@@ -710,9 +764,33 @@ export default function Songs() {
     return '';
   };
 
+  const currentGameBg = GAMES.find(g => g.id === activeGame)?.bgImage;
+
   return (
     <div className="w-full h-screen bg-[#0c0c11] text-zinc-200 flex flex-col font-sans selection:bg-indigo-500/30 relative">
-      <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden transition-colors duration-1000">
+      {/* 游戏背景图层 */}
+      {currentGameBg && (
+        <div className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-700">
+          <img 
+            src={currentGameBg}
+            alt="background"
+            className={`w-full h-full object-cover transition-opacity duration-700 ${
+              bgImageLoaded[activeGame] ? 'opacity-100' : 'opacity-0'
+            }`}
+            onLoad={() => setBgImageLoaded(prev => ({ ...prev, [activeGame]: true }))}
+            onError={() => setBgImageLoaded(prev => ({ ...prev, [activeGame]: false }))}
+            style={{
+              maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.05) 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.05) 100%)'
+            }}
+          />
+        </div>
+      )}
+      
+      {/* 默认渐变背景（背景图加载失败时显示）*/}
+      <div className={`fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden transition-opacity duration-700 ${
+        currentGameBg && bgImageLoaded[activeGame] ? 'opacity-0' : 'opacity-100'
+      }`}>
         <div className={`absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full blur-[140px] mix-blend-screen transition-colors duration-1000 ${
           activeGame === 'chunithm' ? 'bg-yellow-900/10' : (activeGame === 'arcaea' ? 'bg-purple-900/10' : 'bg-cyan-900/10')
         }`}></div>
@@ -728,7 +806,7 @@ export default function Songs() {
               曲目图鉴 
               {['maimai', 'chunithm', 'arcaea'].includes(activeGame) && !isLoading && (
                 <span className={`text-xs border px-2.5 py-1 rounded-lg font-bold bg-[#15151e] ${getThemeColorClass('text')}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
-                  {filteredSongs.length} TRACKS
+                  {filteredAndSortedSongs.length} TRACKS
                 </span>
               )}
             </h1>
@@ -764,13 +842,57 @@ export default function Songs() {
                     className={`w-full bg-[#15151e]/80 backdrop-blur-md border border-white/[0.05] text-zinc-200 pl-10 pr-4 py-2.5 rounded-xl focus:outline-none transition-colors shadow-sm text-sm placeholder-zinc-600 ${getThemeColorClass('input')}`}
                   />
                 </div>
-                {/* 🔥 恢复 Arcaea 下的高级筛选按钮 */}
-                <button 
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all border active:scale-95 ${isFilterOpen ? `${getThemeColorClass('btn')} border-transparent shadow-md` : 'bg-[#15151e]/80 backdrop-blur-md text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}
-                >
-                  {isFilterOpen ? <FaTimes /> : <FaFilter />} 高级筛选
-                </button>
+                <div className="flex items-center gap-3">
+                  {/* 舞萌 DX 排序选择器 */}
+                  {activeGame === 'maimai' && (
+                    <div className="flex items-center gap-2 bg-[#15151e]/80 backdrop-blur-md border border-white/[0.05] rounded-xl px-4 py-2.5">
+                      <span className="text-xs text-zinc-500 font-bold uppercase tracking-widest shrink-0">排序</span>
+                      <select 
+                        value={sortMode} 
+                        onChange={(e) => setSortMode(e.target.value)}
+                        className="bg-transparent text-zinc-200 text-sm font-bold outline-none cursor-pointer"
+                      >
+                        <option value="ds">定数</option>
+                        <option value="stamina">耐力</option>
+                        <option value="tech">技巧</option>
+                        <option value="stable">稳定</option>
+                        <option value="accuracy">准度</option>
+                        <option value="burst">爆发</option>
+                      </select>
+                      <button 
+                        onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                        className="text-zinc-400 hover:text-zinc-200 transition-colors ml-1"
+                        title={sortOrder === 'desc' ? '降序' : '升序'}
+                      >
+                        {sortOrder === 'desc' ? '↓' : '↑'}
+                      </button>
+                      {sortMode !== 'ds' && (
+                        <>
+                          <span className="text-zinc-600 mx-1">+</span>
+                          <select 
+                            value={secondarySortMode || ''} 
+                            onChange={(e) => setSecondarySortMode(e.target.value || null)}
+                            className="bg-transparent text-zinc-400 text-xs font-bold outline-none cursor-pointer"
+                          >
+                            <option value="">无</option>
+                            <option value="ds">定数</option>
+                            <option value="stamina" disabled={sortMode === 'stamina'}>耐力</option>
+                            <option value="tech" disabled={sortMode === 'tech'}>技巧</option>
+                            <option value="stable" disabled={sortMode === 'stable'}>稳定</option>
+                            <option value="accuracy" disabled={sortMode === 'accuracy'}>准度</option>
+                            <option value="burst" disabled={sortMode === 'burst'}>爆发</option>
+                          </select>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <button 
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all border active:scale-95 ${isFilterOpen ? `${getThemeColorClass('btn')} border-transparent shadow-md` : 'bg-[#15151e]/80 backdrop-blur-md text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}
+                  >
+                    {isFilterOpen ? <FaTimes /> : <FaFilter />} 高级筛选
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col md:flex-row flex-1 gap-5 overflow-hidden">
@@ -836,6 +958,19 @@ export default function Songs() {
                         </div>
                       </div>
                     )}
+
+                    {/* 版本筛选（所有游戏通用，但 Arcaea 除外）*/}
+                    {activeGame !== 'arcaea' && filterOptions.versions.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Versions</label>
+                        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+                          {filterOptions.versions.map(ver => {
+                            const isActive = selectedVersions.includes(ver);
+                            return <button key={ver} onClick={() => toggleArrayItem(selectedVersions, setSelectedVersions, ver)} className={`text-xs px-2.5 py-1.5 rounded-lg transition-all border active:scale-95 ${isActive ? 'bg-zinc-200 text-zinc-900 border-transparent font-bold' : 'bg-[#0c0c11] text-zinc-400 border-white/[0.05] hover:text-zinc-200'}`}>{ver}</button>;
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -846,17 +981,17 @@ export default function Songs() {
                     </div>
                   )}
 
-                  {filteredSongs.length === 0 && !isLoading ? (
+                  {filteredAndSortedSongs.length === 0 && !isLoading ? (
                     <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500">
                       <FaSearch className="text-4xl mb-3 opacity-20" />
                       <p className="text-sm font-medium">未找到符合条件的曲目</p>
                     </div>
                   ) : activeGame === 'arcaea' ? (
-                    <ArcaeaPackExplorer songs={filteredSongs} diffConfig={ARCAEA_DIFF_CONFIG} />
+                    <ArcaeaPackExplorer songs={filteredAndSortedSongs} diffConfig={ARCAEA_DIFF_CONFIG} />
                   ) : (
                     <Virtuoso
                       className="h-full custom-scrollbar"
-                      data={filteredSongs}
+                      data={filteredAndSortedSongs}
                       itemContent={(index, song) => {
                         const isMaimai = activeGame === 'maimai';
                         let displayDs = 0; 
