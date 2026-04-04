@@ -145,6 +145,7 @@ const ArcaeaSongDetail = ({ song, diffConfig }) => {
           key={currentCoverUrl}
           src={currentCoverUrl} 
           alt="cover" 
+          loading="lazy"
           className="w-36 h-36 rounded-2xl object-cover shadow-2xl border border-white/10 shrink-0 transition-all duration-300" 
           onError={() => {
             if (coverIndex < coverPaths.length - 1) {
@@ -290,6 +291,7 @@ const ArcaeaPackRow = ({ row, processedData, setSelectedPackId }) => {
                   src={`/assets/arcaea/packs/${pack.id}.png`}
                   onClick={() => !dragProps.isDragging && setSelectedPackId(pack.id)}
                   alt={pack.name}
+                  loading="lazy"
                   className="w-full h-auto object-contain cursor-pointer drop-shadow-[0_15px_15px_rgba(0,0,0,0.6)] group-hover:drop-shadow-[0_0_25px_rgba(192,132,252,0.6)] group-hover:-translate-y-2 transition-all duration-300 z-10"
                   draggable="false"
                   onError={(e) => {
@@ -312,6 +314,7 @@ const ArcaeaPackRow = ({ row, processedData, setSelectedPackId }) => {
                      src={`/assets/arcaea/packs/${app.id}.png`}
                      onClick={() => !dragProps.isDragging && setSelectedPackId(app.id)}
                      alt={app.name}
+                     loading="lazy"
                      className="w-full h-auto object-contain cursor-pointer drop-shadow-[0_10px_10px_rgba(0,0,0,0.6)] group-hover:drop-shadow-[0_0_20px_rgba(192,132,252,0.5)] group-hover:-translate-y-1 transition-all duration-300 z-10"
                      draggable="false"
                      onError={(e) => {
@@ -521,7 +524,7 @@ export default function Songs() {
   const [sortMode, setSortMode] = useState('ds'); // 'ds' | 'stamina' | 'tech' | 'stable' | 'accuracy' | 'burst'
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' | 'desc'
   const [secondarySortMode, setSecondarySortMode] = useState(null); // null | 'stamina' | 'tech' | 'stable' | 'accuracy' | 'burst'
-  const [bgImageLoaded, setBgImageLoaded] = useState({});
+
 
   useEffect(() => {
     const fetchMaimai = async () => {
@@ -772,33 +775,35 @@ export default function Songs() {
     return '';
   };
 
-  const currentGameBg = GAMES.find(g => g.id === activeGame)?.bgImage;
-
   return (
     <div className="w-full h-screen bg-[#0c0c11] text-zinc-200 flex flex-col font-sans selection:bg-indigo-500/30 relative">
       {/* 游戏背景图层 */}
-      {currentGameBg && (
-        <div className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-700">
-          <img 
-            src={currentGameBg}
-            alt="background"
-            className={`w-full h-full object-cover transition-opacity duration-700 ${
-              bgImageLoaded[activeGame] ? 'opacity-100' : 'opacity-0'
-            }`}
-            onLoad={() => setBgImageLoaded(prev => ({ ...prev, [activeGame]: true }))}
-            onError={() => setBgImageLoaded(prev => ({ ...prev, [activeGame]: false }))}
-            style={{
-              maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.05) 100%)',
-              WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.05) 100%)'
-            }}
-          />
-        </div>
-      )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      {/* 背景图：每个游戏只渲染一次，切换时淡入淡出 */}
+      {GAMES.map(game => (
+        <BgImage
+          key={game.id}
+          src={game.bgImage}
+          visible={activeGame === game.id}
+        />
+      ))}
       
-      {/* 默认渐变背景（背景图加载失败时显示）*/}
-      <div className={`fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden transition-opacity duration-700 ${
-        currentGameBg && bgImageLoaded[activeGame] ? 'opacity-0' : 'opacity-100'
-      }`}>
+      {/* 默认渐变背景 */}
+      <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className={`absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full blur-[140px] mix-blend-screen transition-colors duration-1000 ${
           activeGame === 'chunithm' ? 'bg-yellow-900/10' : (activeGame === 'arcaea' ? 'bg-purple-900/10' : 'bg-cyan-900/10')
         }`}></div>
