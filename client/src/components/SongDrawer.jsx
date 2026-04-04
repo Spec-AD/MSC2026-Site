@@ -210,11 +210,11 @@ function RadarPanel({ songId, diffIndex, song, onOpenEditor }) {
             {/* 数值小卡片行 */}
             <div className="grid grid-cols-5 gap-2 w-full">
               {[
-                ['耐力', 'stamina',   '#f472b6'],
-                ['星星', 'star',      '#fbbf24'],
-                ['稳定', 'stable',    '#34d399'],
-                ['准度', 'accuracy',  '#38bdf8'],
-                ['潜力', 'potential', '#a78bfa'],
+                ['耐力', 'stamina',  '#f472b6'],
+                ['技巧', 'tech',     '#fbbf24'],
+                ['稳定', 'stable',   '#34d399'],
+                ['准度', 'accuracy', '#38bdf8'],
+                ['爆发', 'burst',    '#a78bfa'],
               ].map(([label, key, color]) => (
                 <div key={key} className="flex flex-col items-center gap-1 p-2 bg-[#0c0c11] rounded-lg border border-white/[0.04]">
                   <span className="text-[9px] font-bold" style={{ color }}>{label}</span>

@@ -7,14 +7,14 @@ import { useToast } from '../context/ToastContext';
 import { FaTimes, FaSpinner, FaSave, FaGlobeAsia, FaUser, FaLock } from 'react-icons/fa';
 
 const DIMS = [
-  { key: 'stamina',   label: '耐力',  desc: '谱面对体力和连续输入的考验',      color: '#f472b6' },
-  { key: 'star',      label: '星星',  desc: 'DX 分数目标所需技巧难度',          color: '#fbbf24' },
-  { key: 'stable',    label: '稳定',  desc: '保持高准度输出的稳定性难度',        color: '#34d399' },
-  { key: 'accuracy',  label: '准度',  desc: '判定严格度与Critical窗口的考验',    color: '#38bdf8' },
-  { key: 'potential', label: '潜力',  desc: '该谱面对玩家能力提升的潜力上限',    color: '#a78bfa' },
+  { key: 'stamina',   label: '耐力',  desc: '谱面对体力的考验',      color: '#f472b6' },
+  { key: 'tech',      label: '技巧',  desc: '谱面对技巧和熟练度的考验',          color: '#fbbf24' },
+  { key: 'stable',    label: '稳定',  desc: '谱面对稳定性的考验',        color: '#34d399' },
+  { key: 'accuracy',  label: '准度',  desc: '谱面对节奏和抓准的考验',    color: '#38bdf8' },
+  { key: 'burst', label: '爆发',  desc: '谱面对短时间爆发能力的考验',    color: '#a78bfa' },
 ];
 
-const DEFAULT_VALUES = { stamina: 5, star: 5, stable: 5, accuracy: 5, potential: 5 };
+const DEFAULT_VALUES = { stamina: 5, tech: 5, stable: 5, accuracy: 5, burst: 5 };
 
 function DimSlider({ dimKey, label, desc, color, value, onChange, disabled }) {
   return (
@@ -132,13 +132,13 @@ export default function RadarEditor({ songId, diffIndex, diffName, globalRadar, 
           diffIndex,
           values: adminValues
         }, { headers: { Authorization: `Bearer ${token}` } });
-        addToast('基础雷达锚点已更新！', 'success');
+        addToast('你的投票已更新！', 'success');
       } else {
         await axios.post(`/api/songs/${songId}/radar/vote`, {
           diffIndex,
           values: localValues
         }, { headers: { Authorization: `Bearer ${token}` } });
-        addToast('你的评价已提交！感谢贡献社区数据 🎉', 'success');
+        addToast('你的评价已提交！感谢贡献社区数据', 'success');
       }
       onSaved?.();
     } catch (err) {
@@ -295,7 +295,7 @@ export default function RadarEditor({ songId, diffIndex, diffName, globalRadar, 
                 )}
                 {mode === 'personal' && (
                   <p className="text-[10px] text-zinc-600 mt-2">
-                    你的权重由成绩和 Rating 综合决定 · 全站截尾均值聚合 · 贝叶斯平滑保护数据稳定性
+                    你的权重由成绩和 Rating 综合决定
                   </p>
                 )}
 

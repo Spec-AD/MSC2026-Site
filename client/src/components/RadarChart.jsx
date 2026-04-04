@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 
 /**
  * 🌟 五维雷达图通用组件
- * @param {Object[]} datasets - [ { values: {stamina,star,stable,accuracy,potential}, color, fillColor, label, dashed } ]
+ * @param {Object[]} datasets - [ { values: {stamina,tech,stable,accuracy,burst}, color, fillColor, label, dashed } ]
  * @param {number} size - SVG 尺寸 (默认 240)
  * @param {boolean} showLabels - 是否显示轴标签
  * @param {boolean} showGrid - 是否显示网格
@@ -18,11 +18,11 @@ export default function RadarChart({
   className = ''
 }) {
   const DIMS = [
-    { key: 'stamina',   label: '耐力' },
-    { key: 'star',      label: '星星' },
-    { key: 'stable',    label: '稳定' },
-    { key: 'accuracy',  label: '准度' },
-    { key: 'potential', label: '潜力' },
+    { key: 'stamina',  label: '耐力' },
+    { key: 'tech',     label: '技巧' },
+    { key: 'stable',   label: '稳定' },
+    { key: 'accuracy', label: '准度' },
+    { key: 'burst',    label: '爆发' },
   ];
   const MAX = 10.0;
   const GRID_LEVELS = [2, 4, 6, 8, 10];

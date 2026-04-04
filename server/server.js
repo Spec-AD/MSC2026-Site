@@ -1883,8 +1883,7 @@ app.get('/api/songs/:songId/radar', async (req, res) => {
 
     // 贝叶斯平滑系数 C（相当于 C 个高权重玩家的分量）
     const BAYESIAN_C = 10;
-    const DIMS = ['stamina', 'star', 'stable', 'accuracy', 'potential'];
-
+    const DIMS = ['stamina', 'tech', 'stable', 'accuracy', 'burst'];
     // 计算每个难度的最终展示数值
     const finalRadar = {};
     const diffCount = song.level ? song.level.length : 5;
@@ -1898,7 +1897,7 @@ app.get('/api/songs/:songId/radar', async (req, res) => {
         continue;
       }
 
-      const baseValues = base || { stamina: 5, star: 5, stable: 5, accuracy: 5, potential: 5 };
+      const baseValues = base || { stamina: 5, tech: 5, stable: 5, accuracy: 5, burst: 5 };
 
       // 如果没有玩家投票，直接使用 base 值
       if (votes.length === 0) {
@@ -1957,9 +1956,8 @@ app.put('/api/songs/:songId/radar/base', authMiddleware, async (req, res) => {
     if (!adminUser || adminUser.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
 
     const { diffIndex, values } = req.body;
-    // values: { stamina, star, stable, accuracy, potential } 每项 0~10
-
-    const DIMS = ['stamina', 'star', 'stable', 'accuracy', 'potential'];
+    // values: { stamina, tech, stable, accuracy, burst } 每项 0~10
+    const DIMS = ['stamina', 'tech', 'stable', 'accuracy', 'burst'];
     const validated = {};
     DIMS.forEach(dim => {
       const v = parseFloat(values[dim]);
@@ -2013,7 +2011,7 @@ app.post('/api/songs/:songId/radar/vote', authMiddleware, async (req, res) => {
     const ratingMultiplier = Math.min(1.0, Math.max(0.1, (user.rating || 1000) / 16000));
     const weight = parseFloat((scoreMultiplier * (0.5 + 0.5 * ratingMultiplier)).toFixed(4));
 
-    const DIMS = ['stamina', 'star', 'stable', 'accuracy', 'potential'];
+    const DIMS = ['stamina', 'tech', 'stable', 'accuracy', 'burst'];
     const validated = {};
     DIMS.forEach(dim => {
       const v = parseFloat(values[dim]);

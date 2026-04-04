@@ -11,11 +11,11 @@ import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, Fa
 // ==========================================
 function RadarChartInline({ values, size = 260 }) {
   const DIMS = [
-    { key: 'stamina',   label: '耐力',  color: '#f472b6' },
-    { key: 'star',      label: '星星',  color: '#fbbf24' },
-    { key: 'stable',    label: '稳定',  color: '#34d399' },
-    { key: 'accuracy',  label: '准度',  color: '#38bdf8' },
-    { key: 'potential', label: '潜力',  color: '#a78bfa' },
+    { key: 'stamina',  label: '耐力',  color: '#f472b6' },
+    { key: 'tech',     label: '技巧',  color: '#fbbf24' },
+    { key: 'stable',   label: '稳定',  color: '#34d399' },
+    { key: 'accuracy', label: '准度',  color: '#38bdf8' },
+    { key: 'burst',    label: '爆发',  color: '#a78bfa' },
   ];
   const MAX = 10;
   const cx = size / 2, cy = size / 2;
@@ -528,9 +528,9 @@ const MaimaiProfile = () => {
           .sort((a, b) => b.rating - a.rating)
           .slice(0, 50);
 
-        const DIMS = ['stamina', 'star', 'stable', 'accuracy', 'potential'];
-        const dimAccum = { stamina: 0, star: 0, stable: 0, accuracy: 0, potential: 0 };
-        const dimWeight = { stamina: 0, star: 0, stable: 0, accuracy: 0, potential: 0 };
+        const DIMS = ['stamina', 'tech', 'stable', 'accuracy', 'burst'];
+        const dimAccum = { stamina: 0, tech: 0, stable: 0, accuracy: 0, burst: 0 };
+        const dimWeight = { stamina: 0, tech: 0, stable: 0, accuracy: 0, burst: 0 };
 
         // 批量拉取这 50 首歌的雷达数据
         const radarPromises = top50.map((score, idx) =>
@@ -1298,11 +1298,11 @@ const MaimaiProfile = () => {
                         {/* 数值列表 */}
                         <div className="grid grid-cols-5 gap-2 w-full">
                           {[
-                            ['耐力', 'stamina',   '#f472b6'],
-                            ['星星', 'star',      '#fbbf24'],
-                            ['稳定', 'stable',    '#34d399'],
-                            ['准度', 'accuracy',  '#38bdf8'],
-                            ['潜力', 'potential', '#a78bfa'],
+                            ['耐力', 'stamina',  '#f472b6'],
+                            ['技巧', 'tech',     '#fbbf24'],
+                            ['稳定', 'stable',   '#34d399'],
+                            ['准度', 'accuracy', '#38bdf8'],
+                            ['爆发', 'burst',    '#a78bfa'],
                           ].map(([label, key, color]) => (
                             <div key={key} className="flex flex-col items-center gap-1 p-2 bg-[#0c0c11] rounded-lg border border-white/[0.04]">
                               <span className="text-[9px] font-bold" style={{ color }}>{label}</span>
