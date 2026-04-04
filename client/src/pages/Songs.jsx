@@ -643,10 +643,12 @@ export default function Songs() {
     setBpmMin(min.toString()); setBpmMax(max.toString());
   };
 
-  const filteredAndSortedSongs = useMemo(() => {
-    const numDsMin = parseFloat(dsMin) || 0.0; const numDsMax = parseFloat(dsMax) || 15.7;
-    const numBpmMin = parseInt(bpmMin) || 0; const numBpmMax = parseInt(bpmMax) || 400;
+  const numDsMin = useMemo(() => parseFloat(dsMin) || 0.0, [dsMin]);
+  const numDsMax = useMemo(() => parseFloat(dsMax) || 15.7, [dsMax]);
+  const numBpmMin = useMemo(() => parseInt(bpmMin) || 0, [bpmMin]);
+  const numBpmMax = useMemo(() => parseInt(bpmMax) || 400, [bpmMax]);
 
+  const filteredAndSortedSongs = useMemo(() => {
     let filtered = currentSongs.filter(song => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -667,7 +669,8 @@ export default function Songs() {
       } else { bpm = song.basic_info?.bpm || 0; }
       if (bpm < numBpmMin || bpm > numBpmMax) return false;
 
-      const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: maxDiffIndex + 1 }, (_, i) => i);
+      const maxIdx = activeGame === 'chunithm' ? 5 : 4;
+      const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: maxIdx + 1 }, (_, i) => i);
       const hasMatchingDs = diffsToCheck.some(diffIndex => {
         const constant = song.ds ? song.ds[diffIndex] : undefined;
         return constant !== undefined && constant !== null && constant >= numDsMin && constant <= numDsMax;
@@ -678,28 +681,28 @@ export default function Songs() {
 
     // 排序逻辑（仅 maimai）
     if (activeGame === 'maimai' && filtered.length > 0) {
+      const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: 5 }, (_, i) => i);
+      
       filtered = [...filtered].sort((a, b) => {
         const getMaxValue = (song, mode) => {
           if (mode === 'ds') {
-            const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: maxDiffIndex + 1 }, (_, i) => i);
             let maxDs = -Infinity;
-            diffsToCheck.forEach(i => {
+            for (const i of diffsToCheck) {
               const constant = song.ds?.[i];
               if (constant !== undefined && constant !== null && constant >= numDsMin && constant <= numDsMax) {
                 maxDs = Math.max(maxDs, constant);
               }
-            });
+            }
             return maxDs === -Infinity ? 0 : maxDs;
           }
           // 五维数据
-          const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: maxDiffIndex + 1 }, (_, i) => i);
           let maxVal = -Infinity;
-          diffsToCheck.forEach(i => {
+          for (const i of diffsToCheck) {
             const radarData = song.radarStats?.[i];
-            if (radarData && radarData[mode] !== undefined) {
+            if (radarData && radarData[mode] !== undefined && radarData[mode] > 0) {
               maxVal = Math.max(maxVal, radarData[mode]);
             }
-          });
+          }
           return maxVal === -Infinity ? 0 : maxVal;
         };
 
@@ -724,7 +727,7 @@ export default function Songs() {
     }
 
     return filtered;
-  }, [currentSongs, activeGame, searchQuery, isNewOnly, selectedCategories, selectedVersions, dsMin, dsMax, bpmMin, bpmMax, selectedDiffs, maxDiffIndex, sortMode, sortOrder, secondarySortMode]);
+  }, [currentSongs, activeGame, searchQuery, isNewOnly, selectedCategories, selectedVersions, numDsMin, numDsMax, numBpmMin, numBpmMax, selectedDiffs, sortMode, sortOrder, secondarySortMode]);
 
   const resetFilters = () => {
     setIsNewOnly(false); setSelectedDiffs([]); setDsMin("1.0"); setDsMax("15.7");
