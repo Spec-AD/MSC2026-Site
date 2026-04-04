@@ -374,17 +374,20 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
     return mainPacks;
   }, [songs]);
 
-  // 🔥 容错保护：如果在包外筛选导致当前选中的包消失，自动退回主界面
+  // 🔥 容错保护：合并两个 effect，避免循环触发
   useEffect(() => {
-    if (selectedPackId && !processedData[selectedPackId] && !Object.values(processedData).some(p => p.appends.find(a => a.id === selectedPackId))) {
-      setSelectedPackId(null);
-      setSelectedSong(null);
-    }
-  }, [processedData, selectedPackId]);
-
-  // 🔥 容错保护：如果在包内筛选导致当前选中的歌消失，自动选中列表里的第一首歌
-  useEffect(() => {
+    // 检查包是否存在
     if (selectedPackId) {
+      const packExists = processedData[selectedPackId] || Object.values(processedData).some(p => p.appends.find(a => a.id === selectedPackId));
+      
+      if (!packExists) {
+        // 包不存在，退回主界面
+        setSelectedPackId(null);
+        setSelectedSong(null);
+        return;
+      }
+      
+      // 包存在，检查歌曲
       const findPack = () => {
         if (processedData[selectedPackId]) return processedData[selectedPackId];
         for (let key in processedData) {
@@ -393,11 +396,13 @@ const ArcaeaPackExplorer = ({ songs, diffConfig }) => {
         }
         return null;
       };
+      
       const pack = findPack();
-      if (pack) {
+      if (pack && pack.songs.length > 0) {
         setSelectedSong(prev => {
+          // 如果当前歌曲不在列表中，选择第一首
           if (!prev || !pack.songs.some(s => s.id === prev.id)) {
-            return pack.songs.length > 0 ? pack.songs[0] : null;
+            return pack.songs[0];
           }
           return prev;
         });
@@ -1000,13 +1005,11 @@ export default function Songs() {
                         let displayDs = 0; 
                         let dsTagClass = currentDiffConfig[maxDiffIndex].tagClass; 
                         
-                        const numDsMin = parseFloat(dsMin) || 0.0;
-                        const numDsMax = parseFloat(dsMax) || 15.7;
                         const diffsToCheck = selectedDiffs.length > 0 ? selectedDiffs : Array.from({ length: maxDiffIndex + 1 }, (_, i) => i);
                         
                         for (let i = maxDiffIndex; i >= 0; i--) {
                           const constant = song.ds ? song.ds[i] : undefined;
-                          if (constant !== undefined && constant !== null && diffsToCheck.includes(i) && constant >= numDsMin && constant <= numDsMax) {
+                          if (constant !== undefined && constant !== null && diffsToCheck.includes(i)) {
                             displayDs = constant; dsTagClass = currentDiffConfig[i].tagClass; break;
                           }
                         }
