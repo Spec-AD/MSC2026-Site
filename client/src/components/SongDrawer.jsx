@@ -1,10 +1,42 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaTimes, FaMusic, FaTrophy, FaUsers, FaChartLine, FaSpinner, FaEdit } from 'react-icons/fa';
+import { FaTimes, FaMusic, FaTrophy, FaUsers, FaChartLine, FaSpinner, FaEdit, FaCopy, FaCheck } from 'react-icons/fa';
 import axios from 'axios';
 import RadarChart from './RadarChart';
 import RadarEditor from './RadarEditor';
 import { useAuth } from '../context/AuthContext';
+
+// ==========================================
+// 🌟 舞萌DX封面URL工具 (落雪CDN)
+// ==========================================
+const getMaimaiCoverUrl = (songId) => {
+  // 同一首曲目的标准/DX谱面ID一致，不存在大于10000的ID需取余
+  // 宴会场曲目 ID > 100000，不做取余处理
+  const numId = Number(songId);
+  if (numId > 100000) {
+    // 宴会场曲目，直接使用原ID
+    return `https://assets2.lxns.net/maimai/jacket/${numId}.png`;
+  }
+  // 普通曲目：若ID >= 10000，对10000取余
+  const lxId = numId >= 10000 ? numId % 10000 : numId;
+  return `https://assets2.lxns.net/maimai/jacket/${lxId}.png`;
+};
+
+// ==========================================
+// 🌟 DX星标图标工具
+// ==========================================
+const getDxStarIcon = (dxRatio) => {
+  if (!dxRatio && dxRatio !== 0) return null;
+  const pct = typeof dxRatio === 'number' && dxRatio <= 1 ? dxRatio * 100 : dxRatio;
+  let stars = 0;
+  if (pct >= 97) stars = 5;
+  else if (pct >= 95) stars = 4;
+  else if (pct >= 93) stars = 3;
+  else if (pct >= 90) stars = 2;
+  else if (pct >= 85) stars = 1;
+  if (stars === 0) return null;
+  return <img src={`/assets/${stars}dxstar.png`} alt={`${stars}★`} className="w-5 h-5 object-contain shrink-0" />;
+};
 
 // ==========================================
 // 🎨 舞萌 / CHUNITHM 曲目详情抽屉
@@ -20,6 +52,14 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame }) {
   const [loadingRadar, setLoadingRadar] = useState(false);
   const [showRadarEditor, setShowRadarEditor] = useState(false);
   const [coverIndex, setCoverIndex] = useState(0);
+  const [copiedText, setCopiedText] = useState(null);
+
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedText(text);
+      setTimeout(() => setCopiedText(null), 1800);
+    }).catch(() => {});
+  };
 
   const MAIMAI_DIFF_CONFIG = [
     { label: 'BASIC',     color: 'text-emerald-400', activeBg: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' },
@@ -56,6 +96,9 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame }) {
     if (!song) return [null];
     const paths = [];
     if (activeGame === 'maimai') {
+      // 🔥 优先使用落雪CDN封面（已处理10000取余逻辑）
+      paths.push(getMaimaiCoverUrl(song.id));
+      // 本地备用
       const paddedId = String(song.id).padStart(5, '0');
       paths.push(`/assets/maimai/jacket/${paddedId}.png`);
       paths.push(`/assets/maimai/jacket/${song.id}.png`);
@@ -144,7 +187,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame }) {
   const renderInfoTab = () => (
     <>
       <div className="flex gap-5 items-start">
-        <div className="w-24 h-24 shrink-0 rounded-2xl overflow-hidden bg-[#1a1a24] border border-white/[0.06] shadow-xl">
+        <div className="w-28 h-28 shrink-0 rounded-2xl overflow-hidden bg-[#1a1a24] border border-white/[0.06] shadow-xl">
           {currentCoverUrl ? (
             <img
               src={currentCoverUrl}
@@ -172,7 +215,40 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame }) {
             )}
             {isNew && <span className="text-[10px] font-black px-1.5 py-0.5 rounded border text-rose-400 border-rose-500/30 bg-rose-500/10">NEW</span>}
           </div>
-          <h2 className="text-lg font-bold text-white leading-tight" style={{ fontFamily: "'Quicksand', sans-serif" }}>{displayTitle}</h2>
+          {/* 🔥 曲名 - 可点击复制 */}
+          <button
+            onClick={() => handleCopy(displayTitle)}
+            className="text-left text-lg font-bold text-white leading-tight hover:text-cyan-300 transition-colors flex items-center gap-2 group"
+            style={{ fontFamily: "'Quicksand', sans-serif" }}
+            title="点击复制曲名"
+          >
+            <span>{displayTitle}</span>
+            <span className="opacity-0 group-hover:opacity-60 transition-opacity text-xs">
+              {copiedText === displayTitle ? <FaCheck className="text-emerald-400" /> : <FaCopy />}
+            </span>
+          </button>
+          {/* 🔥 别名列表 */}
+          {song.aliases && song.aliases.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {song.aliases.slice(0, 4).map((alias, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleCopy(alias)}
+                  className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 transition-all flex items-center gap-1 group"
+                  title="点击复制别名"
+                >
+                  {alias}
+                  {copiedText === alias
+                    ? <FaCheck className="text-emerald-400 text-[8px]" />
+                    : <FaCopy className="opacity-0 group-hover:opacity-60 transition-opacity text-[8px]" />
+                  }
+                </button>
+              ))}
+              {song.aliases.length > 4 && (
+                <span className="text-[10px] text-zinc-600 px-1 self-center">+{song.aliases.length - 4}</span>
+              )}
+            </div>
+          )}
           <p className="text-sm text-zinc-400 truncate">{displayArtist}</p>
         </div>
       </div>
@@ -229,38 +305,84 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame }) {
       );
     }
 
+    const RankEntry = ({ entry, idx, accentColor = 'text-amber-400' }) => {
+      const rankColors = [
+        'text-amber-400',
+        'text-zinc-300',
+        'text-orange-500',
+      ];
+      const rankBg = [
+        'bg-amber-500/10 border-amber-500/20',
+        'bg-zinc-500/10 border-zinc-500/20',
+        'bg-orange-500/10 border-orange-500/20',
+      ];
+      const isTop3 = idx < 3;
+      const fcBadgeMap = {
+        app: 'bg-amber-400/20 text-amber-300 border border-amber-400/30',
+        ap:  'bg-amber-400/10 text-amber-400 border border-amber-400/20',
+        fcp: 'bg-pink-400/20 text-pink-300 border border-pink-400/30',
+        fc:  'bg-pink-400/10 text-pink-400 border border-pink-400/20',
+      };
+      const fcStatus = (entry.fcStatus || '').toLowerCase();
+      const fcClass = fcBadgeMap[fcStatus] || 'bg-zinc-700/20 text-zinc-500 border border-zinc-700/20';
+
+      return (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all hover:brightness-110 ${
+          isTop3 ? rankBg[idx] : 'bg-[#1a1a24] border-white/[0.04] hover:border-white/10'
+        }`}>
+          {/* 排名 */}
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs font-black ${
+            isTop3 ? `${rankColors[idx]} bg-black/30` : 'text-zinc-600'
+          }`}>
+            {idx + 1}
+          </div>
+          {/* 头像 */}
+          <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#0c0c11] border border-white/[0.06] shrink-0">
+            {entry.avatarUrl ? (
+              <img src={entry.avatarUrl} alt={entry.username} className="w-full h-full object-cover" onError={(e) => { e.target.style.display='none'; }} />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-zinc-700 text-xs font-bold">
+                {(entry.username || '?')[0].toUpperCase()}
+              </div>
+            )}
+          </div>
+          {/* 用户名 */}
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-zinc-200 truncate" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+              {entry.username}
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {getDxStarIcon(entry.dxRatio)}
+              <span className="text-[11px] text-zinc-500 font-mono">{entry.achievement?.toFixed(4)}%</span>
+            </div>
+          </div>
+          {/* FC标签 */}
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${fcClass}`}>
+            {fcStatus ? fcStatus.toUpperCase() : '-'}
+          </span>
+        </div>
+      );
+    };
+
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         {/* 全站排行 */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <FaTrophy className="text-amber-400" />
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-1 h-4 bg-amber-400 rounded-full"></div>
+            <FaTrophy className="text-amber-400 text-sm" />
             <h3 className="text-sm font-bold text-zinc-200">全站排行榜</h3>
-            <span className="text-xs text-zinc-600">({globalRankings.length})</span>
+            <span className="text-xs text-zinc-600 ml-auto bg-[#1a1a24] px-2 py-0.5 rounded-lg">{globalRankings.length} 人上榜</span>
           </div>
           {globalRankings.length === 0 ? (
-            <div className="text-xs text-zinc-600 text-center py-6 bg-[#1a1a24] rounded-xl border border-white/[0.04]">
-              暂无排行数据
+            <div className="flex flex-col items-center gap-2 py-10 bg-[#1a1a24] rounded-2xl border border-white/[0.04] text-zinc-600">
+              <FaTrophy className="text-3xl opacity-20" />
+              <p className="text-xs">暂无排行数据</p>
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {globalRankings.slice(0, 10).map((entry, idx) => (
-                <div key={idx} className="flex items-center justify-between px-4 py-2.5 bg-[#1a1a24] rounded-xl border border-white/[0.04] hover:border-white/10 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <span className={`text-xs font-black w-6 text-center ${
-                      idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-zinc-400' : idx === 2 ? 'text-orange-600' : 'text-zinc-600'
-                    }`}>#{idx + 1}</span>
-                    <span className="text-sm font-bold text-zinc-200">{entry.username}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">{entry.achievement?.toFixed(4)}%</span>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                      entry.fcStatus === 'app' ? 'bg-amber-500/20 text-amber-300' :
-                      entry.fcStatus === 'fcp' ? 'bg-green-500/20 text-green-300' :
-                      entry.fcStatus === 'fc' ? 'bg-blue-500/20 text-blue-300' : 'bg-zinc-700/20 text-zinc-500'
-                    }`}>{entry.fcStatus?.toUpperCase() || '-'}</span>
-                  </div>
-                </div>
+                <RankEntry key={idx} entry={entry} idx={idx} />
               ))}
             </div>
           )}
@@ -269,32 +391,21 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame }) {
         {/* 好友排行 */}
         {user && (
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <FaUsers className="text-cyan-400" />
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1 h-4 bg-cyan-400 rounded-full"></div>
+              <FaUsers className="text-cyan-400 text-sm" />
               <h3 className="text-sm font-bold text-zinc-200">好友排行榜</h3>
-              <span className="text-xs text-zinc-600">({friendRankings.length})</span>
+              <span className="text-xs text-zinc-600 ml-auto bg-[#1a1a24] px-2 py-0.5 rounded-lg">{friendRankings.length} 人</span>
             </div>
             {friendRankings.length === 0 ? (
-              <div className="text-xs text-zinc-600 text-center py-6 bg-[#1a1a24] rounded-xl border border-white/[0.04]">
-                暂无好友数据
+              <div className="flex flex-col items-center gap-2 py-10 bg-[#1a1a24] rounded-2xl border border-white/[0.04] text-zinc-600">
+                <FaUsers className="text-3xl opacity-20" />
+                <p className="text-xs">暂无好友数据</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {friendRankings.slice(0, 10).map((entry, idx) => (
-                  <div key={idx} className="flex items-center justify-between px-4 py-2.5 bg-[#1a1a24] rounded-xl border border-white/[0.04] hover:border-white/10 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-black w-6 text-center text-cyan-400">#{idx + 1}</span>
-                      <span className="text-sm font-bold text-zinc-200">{entry.username}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-500">{entry.achievement?.toFixed(4)}%</span>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                        entry.fcStatus === 'app' ? 'bg-amber-500/20 text-amber-300' :
-                        entry.fcStatus === 'fcp' ? 'bg-green-500/20 text-green-300' :
-                        entry.fcStatus === 'fc' ? 'bg-blue-500/20 text-blue-300' : 'bg-zinc-700/20 text-zinc-500'
-                      }`}>{entry.fcStatus?.toUpperCase() || '-'}</span>
-                    </div>
-                  </div>
+                  <RankEntry key={idx} entry={entry} idx={idx} accentColor="text-cyan-400" />
                 ))}
               </div>
             )}
@@ -383,7 +494,7 @@ export default function SongDrawer({ isOpen, onClose, song, activeGame }) {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-            className="fixed right-0 top-0 h-full w-full md:max-w-2xl bg-[#111118] border-l border-white/[0.06] shadow-2xl z-50 flex flex-col overflow-hidden"
+            className="fixed right-0 top-0 h-full w-full md:max-w-3xl xl:max-w-4xl bg-[#111118] border-l border-white/[0.06] shadow-2xl z-50 flex flex-col overflow-hidden"
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.05] shrink-0 bg-[#0c0c11]/80 backdrop-blur-md">
               <div className="flex items-center gap-2">

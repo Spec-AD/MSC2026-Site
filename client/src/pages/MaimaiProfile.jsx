@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, FaLock, FaTimes } from 'react-icons/fa';
+import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaChartLine, FaTrophy, FaLock, FaTimes, FaBoxOpen } from 'react-icons/fa';
 
 // ==========================================
 // 🌟 内联雷达图（Profile 专用，无需外部依赖）
@@ -746,12 +746,22 @@ const MaimaiProfile = () => {
 
       <div className="max-w-7xl mx-auto px-6 pt-24 relative z-10">
         
-        <button 
-          onClick={() => navigate(`/profile/${profile.username}`)}
-          className="flex items-center gap-2 text-zinc-500 hover:text-zinc-200 transition-colors font-bold text-sm w-fit active:scale-95 mb-6"
-        >
-          <FaArrowLeft /> 返回个人主页
-        </button>
+        <div className="flex items-center justify-between mb-6">
+          <button 
+            onClick={() => navigate(`/profile/${profile.username}`)}
+            className="flex items-center gap-2 text-zinc-500 hover:text-zinc-200 transition-colors font-bold text-sm w-fit active:scale-95"
+          >
+            <FaArrowLeft /> 返回个人主页
+          </button>
+          {/* 🔥 收藏品统计入口 */}
+          <button
+            onClick={() => navigate(`/profile/${profile.username}/maimai/collections`)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#15151e] border border-white/[0.05] hover:bg-[#1a1a24] hover:border-cyan-500/30 text-zinc-400 hover:text-cyan-300 rounded-xl text-sm font-bold transition-all active:scale-95 group"
+          >
+            <FaBoxOpen className="group-hover:scale-110 transition-transform" />
+            收藏品图鉴
+          </button>
+        </div>
 
         {/* New Header with Banner background, Avatar + Username + Rank with rating color */}
         <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 border border-white/[0.05] p-6 rounded-2xl">
@@ -1638,8 +1648,6 @@ const MaimaiProfile = () => {
                 )}
               </div>
             </div>
-          </>
-        )}
 
         {/* ========================================== */}
         {/* PF 详情模态窗 (重写并对齐 pfCalculator.js 逻辑) */}
@@ -1740,32 +1748,51 @@ const MaimaiProfile = () => {
                            <span className="text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{dxScore} <span className="text-zinc-600 text-xs">/ {maxDxScore}</span></span>
                          </div>
                          <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
+                           <span className="text-zinc-500">DX 占比 <span className="text-[10px] font-medium opacity-50">/ 40%</span></span>
+                           <span className="text-indigo-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>{(dxRatio * 100).toFixed(2)}%</span>
+                         </div>
+                         <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
                            <span className="text-zinc-500">DX 乘区 <span className="text-[10px] font-medium opacity-50">/ 0.4</span></span>
                            <span className="text-indigo-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>{dxMultiplier.toFixed(4)}</span>
                          </div>
                          <div className="flex justify-between items-center border-b border-white/[0.05] pb-2.5">
-                           <span className="text-zinc-300">总乘数 <span className="text-[10px] font-medium opacity-50">/ 1.0</span></span>
-                           <span className="text-amber-400 text-base" style={{ fontFamily: "'Quicksand', sans-serif" }}>{totalMultiplier.toFixed(4)}</span>
+                           <span className="text-zinc-500">定数</span>
+                           <span className="text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{constant.toFixed(1)}</span>
                          </div>
-                         <div className="flex justify-between items-center pt-1">
-                           <span className="text-zinc-500">难度基数 </span>
-                           <span className="text-pink-400 text-base" style={{ fontFamily: "'Quicksand', sans-serif" }}>{baseDiff.toFixed(2)}</span>
+                         <div className="flex justify-between items-center">
+                           <span className="text-zinc-500">难度基数 <span className="text-[10px] font-medium opacity-50">(c-5)^3</span></span>
+                           <span className="text-zinc-200" style={{ fontFamily: "'Quicksand', sans-serif" }}>{baseDiff.toFixed(2)}</span>
                          </div>
+                      </div>
+
+                      <div className="w-full bg-[#0c0c11] border border-white/[0.05] rounded-2xl p-4 mt-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-zinc-500 text-sm font-bold">PF 值</span>
+                          <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                            {selectedPfScore.pf ? selectedPfScore.pf.toFixed(2) : '0.00'}
+                          </span>
+                        </div>
                       </div>
                     </>
                   );
-                })()}
-              </motion.div>
-            </div>
+                })()
+              }
+
+              <button
+                onClick={() => setSelectedPfScore(null)}
+                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+              >
+                <FaTimes />
+              </button>
+            </motion.div>
+          </div>
           )}
         </AnimatePresence>
-
-
-
+          </>
+        )}
       </div>
     </div>
   );
 };
 
-
-export default MaimaiProfile;
+export default MaimaiProfile; 
