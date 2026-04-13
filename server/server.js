@@ -976,23 +976,6 @@ app.get('/api/leaderboard/decode', async (req, res) => {
   }
 });
 
-app.post('/api/letter-game/abort', authMiddleware, async (req, res) => {
-  try {
-    const { sessionId } = req.body;
-    const session = await ActiveSession.findById(sessionId);
-    if (!session) return res.status(404).json({ msg: '对局不存在' });
-
-    // 强制标记所有未完成的歌曲为 DEAD
-    session.songs.forEach(s => { if (s.status === 'PLAYING') s.status = 'DEAD'; });
-    
-    const result = await finishGameSession(session, true); // true 表示是 Abort
-    res.json({ gameOver: true, ...result, msg: '对局已强行终止' });
-  } catch (err) {
-    res.status(500).json({ msg: '操作失败' });
-  }
-});
-
-
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -2299,6 +2282,9 @@ app.put('/api/users/settings/profile', authMiddleware, async (req, res) => {
     res.json({ msg: '资料更新成功' });
   } catch (err) { res.status(500).json({ msg: '失败' }); }
 });
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 
 
 
