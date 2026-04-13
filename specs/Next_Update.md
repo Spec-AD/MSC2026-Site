@@ -1,21 +1,4 @@
-1.修复 Songs 页面，舞萌DX 曲目获取不到封面的问题。
-
-请使用落雪查分器的公共 API 接口查询，逻辑：
-
-同一首曲目的标准、DX 谱面的曲目 ID 一致，不存在大于 10000 的曲目 ID（如有，请在请求前对 10000 取余处理）。宴会场曲目为例外，不分标准、DX 谱面，曲目 ID 大于 100000。
-https://assets2.lxns.net/maimai/jacket/\[曲目ID].png，如果后端接口有这方面的冗余，清除。
-
-
-
-2.美化 SongDrawer 中的排行榜。你理应给出榜上用户的头像，并按要求引用 DX 星标（./public/assets/\[数字]dxstar.png），并整体美化 SongDrawer。同时在曲目信息中，需显示曲目的别名。
-
-
-
-3.点击逻辑：对于 SongDrawer 中的一些信息：歌曲曲名，歌曲别名。将它们变得可点击，点击效果是：曲名和别名会自动复制到剪切板。
-
-
-
-4.在用户的 Maimai Profile 页面新建一个前端入口，跳转到关于用户收藏品的统计信息新页面（maimai\_collections.jsx）
+1\[已实现].在用户的 Maimai Profile 页面新建一个前端入口，跳转到关于用户收藏品的统计信息新页面（maimai\_collections.jsx）
 下面是关于收藏品的介绍：
 
 在统计用户的收藏品之前，你理应先获取该游戏的所有收藏品信息并展示。
@@ -303,4 +286,92 @@ silver	string	银
 gold	string	金
 
 rainbow	string	虹
+
+
+
+2.【TODO】目前导入的所有称号（2700+）全部是普通称号，没有颜色区分，但是你似乎已经分好了称号（把数据分成了若干组），但每组标题都是普通称号。请检查 TrophyColor 的处理逻辑。如果是请求的数据本身就全返回普通，直接输出“2. Check Failed"
+
+
+
+3.【TODO】实现用户获取收藏品数据的统计接口，具体获取接口（落雪）可请求：OAuth 认证。该认证已在 MaimaiProfile 前端实现。
+
+
+
+需要在请求头加入 OAuth 生成的访问密钥。访问用户的收藏品进度接口：
+GET /api/v0/maimai/player/{friend\_code}/{collection\_type}/{collection\_id}
+
+获取玩家收藏品进度。
+
+
+
+权限
+
+allow\_third\_party\_fetch\_scores
+
+URL 参数
+
+参数名	类型	说明
+
+friend\_code	int	好友码
+
+collection\_type	string	收藏品类型，值为 trophy、icon、plate 或 frame
+
+collection\_id	int	收藏品 ID
+
+响应体
+
+Collection（见1）
+
+
+
+4.【TODO】针对用户收藏品的前端展示逻辑：需要有完整统计面板，已拥有高亮处理，进度。
+
+
+
+5.【TODO】收藏品详情展示：请仔细阅读，下面这段实现较难。
+Trophy 类收藏品的获取，部分是有条件的，其中一类条件就是在某首/某几首歌中特定难度达成特定条件。例如：
+
+YURUSARENAI
+
+（YURUSHITE\[でらっくす]/MASTER/1 MISS）
+
+上面这个称号要求 YURUSHITE 这首歌的 MASTER 难度达成恰好 1 Miss 后可获得。又如：
+敬愛。
+
+アンクローズ・ヒューマン\[でらっくす]/プレイ
+
+上面这个称号要求 アンクローズ・ヒューマン 这首歌的 任意难度 游玩后可获得。再如：
+Nice boat.
+
+もぺもぺ\[でらっくす]/True Love Song/一回のクレジットでプレイ
+
+上面这个称号要求在 1 PC 内游玩 もぺもぺ 和 True Love Song。还如：
+私が俗に言う天才です
+
+うっせぇわ\[でらっくす]/ALL PERFECT
+上面这个称号要求 うっせぇわ 达成 AP。
+
+
+
+具体来说，这一类称号通常有以下几个字段：\[曲目]/（\[难度]）/\[条件]（可多个条件）
+
+曲目的后面一般都带有\[でらっくす]，或者什么都不带。
+
+当难度缺失时，说明任意难度均可达成。
+
+难度有：BASIC, ADVANCED, EXPERT, MASTER, Re:MASTER, 全难易度。
+
+条件可能是 （几回，例如30回）（几人，例如4人で）プレイ（Play）/FULL COMBO(+)/ALL PERFECT(+)/FULL SYNC(+)/FULL SYNC DX(+)/1 MISS/RANK S(S+,SS,SS+,SSS,SSS+)/Speed Sonic（1）（使用 Sonic 速/1速游玩）
+
+注意：称号全部是用日文和英文写成的。
+
+现在请你做称号详情页，对于这一类称号，需要关联到对应的曲目（信息），并给出用户当前的完成度和距离进度条。
+
+
+
+6.【TODO】在收藏品页面右下角放置固定按钮，用户点击便可到达最顶端。这是由于鼠标滚轮滑动太慢了，且侧边侧拉条过窄。
+
+
+
+7.【TODO】收藏品页面的背景分类：背景也是属于那种水平长大于竖直高的横条形状，请优化当前的竖条显示逻辑，使其变为横板展示。
 

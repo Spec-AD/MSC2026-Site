@@ -1565,10 +1565,101 @@ app.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => {
 
     const topRecordsByPf = [...processedScores].sort((a, b) => b.pf - a.pf).slice(0, 50);
     const totalPf = topRecordsByPf.reduce((sum, score) => sum + score.pf, 0);
-    await User.findByIdAndUpdate(req.user.id, { totalPf: Number(totalPf.toFixed(2)), rating: calculatedRating });
+
+    await User.findByIdAndUpdate(req.user.id, { totalPf: Number(totalPf.toFixed(2)), rating: calculatedRating, lxnsAccessToken: userAccessToken });
 
     res.json({ msg: `全量同步成功！`, rating: calculatedRating });
   } catch (err) { res.status(500).json({ msg: `同步失败` }); }
+});
+
+// ==========================================
+// 🌟 落雪 OAuth：获取玩家收藏品进度
+// ==========================================
+app.get('/api/maimai/player-collections/:username', authMiddleware, async (req, res) => {
+  try {
+    const targetUser = await User.findOne({ username: new RegExp(`^${req.params.username}$`, 'i') }).select('lxnsAccessToken divingFishUsername proberUsername maimaiProfile');
+    if (!targetUser) return res.status(404).json({ msg: '用户不存在' });
+    if (!targetUser.lxnsAccessToken) return res.status(403).json({ msg: '该用户尚未通过落雪 OAuth 授权，无法获取收藏品进度' });
+
+    const { collectionType, collectionId } = req.query;
+    if (!collectionType || !collectionId) return res.status(400).json({ msg: '缺少参数 collectionType 或 collectionId' });
+
+    // 获取用户的好友码（通过落雪 API 的 player info）
+    const playerRes = await axios.get('https://maimai.lxns.net/api/v0/user/maimai/player', {
+      headers: { 'Authorization': `Bearer ${targetUser.lxnsAccessToken}` },
+      timeout: 10000
+    });
+    const friendCode = playerRes.data?.data?.friend_code;
+    if (!friendCode) return res.status(404).json({ msg: '无法获取好友码' });
+
+    const collectionRes = await axios.get(
+      `https://maimai.lxns.net/api/v0/maimai/player/${friendCode}/${collectionType}/${collectionId}`,
+      { headers: { 'Authorization': `Bearer ${targetUser.lxnsAccessToken}` }, timeout: 10000 }
+    );
+    res.json(collectionRes.data);
+  } catch (err) {
+    if (err.response?.status === 403) return res.status(403).json({ msg: '落雪 OAuth 授权已过期，请重新授权' });
+    console.error('获取收藏品进度失败:', err.message);
+    res.status(500).json({ msg: '获取收藏品进度失败' });
+  }
+});
+
+// 批量获取玩家所有收藏品 ID（用于前端高亮已拥有的收藏品）
+app.get('/api/maimai/player-collections-owned/:username', authMiddleware, async (req, res) => {
+  try {
+    const targetUser = await User.findOne({ username: new RegExp(`^${req.params.username}$`, 'i') }).select('lxnsAccessToken');
+    if (!targetUser) return res.status(404).json({ msg: '用户不存在' });
+    if (!targetUser.lxnsAccessToken) return res.status(403).json({ msg: 'NO_TOKEN' });
+
+    const { collectionType } = req.query;
+    if (!collectionType) return res.status(400).json({ msg: '缺少参数 collectionType' });
+
+    const playerRes = await axios.get('https://maimai.lxns.net/api/v0/user/maimai/player', {
+      headers: { 'Authorization': `Bearer ${targetUser.lxnsAccessToken}` },
+      timeout: 10000
+    });
+    const playerData = playerRes.data?.data;
+    if (!playerData) return res.status(404).json({ msg: '无法获取玩家数据' });
+
+    // 落雪 /player 接口返回的数据中包含 name_plate, icon, frame, trophy
+    // 这里提取拥有的收藏品 ID（当前装备的），并额外获取背包里的
+    const friendCode = playerData.friend_code;
+    
+    // 获取玩家收藏品列表（背包）
+    const [trophyRes, iconRes, plateRes, frameRes] = await Promise.allSettled([
+      collectionType === 'trophy' || collectionType === 'all'
+        ? axios.get(`https://maimai.lxns.net/api/v0/maimai/player/${friendCode}/trophy/list`, { headers: { 'Authorization': `Bearer ${targetUser.lxnsAccessToken}` }, timeout: 10000 })
+        : Promise.resolve(null),
+      collectionType === 'icon' || collectionType === 'all'
+        ? axios.get(`https://maimai.lxns.net/api/v0/maimai/player/${friendCode}/icon/list`, { headers: { 'Authorization': `Bearer ${targetUser.lxnsAccessToken}` }, timeout: 10000 })
+        : Promise.resolve(null),
+      collectionType === 'plate' || collectionType === 'all'
+        ? axios.get(`https://maimai.lxns.net/api/v0/maimai/player/${friendCode}/plate/list`, { headers: { 'Authorization': `Bearer ${targetUser.lxnsAccessToken}` }, timeout: 10000 })
+        : Promise.resolve(null),
+      collectionType === 'frame' || collectionType === 'all'
+        ? axios.get(`https://maimai.lxns.net/api/v0/maimai/player/${friendCode}/frame/list`, { headers: { 'Authorization': `Bearer ${targetUser.lxnsAccessToken}` }, timeout: 10000 })
+        : Promise.resolve(null),
+    ]);
+
+    const ownedIds = {
+      trophy: trophyRes.value?.data?.data?.map(t => t.id) || [],
+      icon:   iconRes.value?.data?.data?.map(i => i.id) || [],
+      plate:  plateRes.value?.data?.data?.map(p => p.id) || [],
+      frame:  frameRes.value?.data?.data?.map(f => f.id) || [],
+      equipped: {
+        trophy: playerData.trophy?.id || null,
+        icon:   playerData.icon?.id || null,
+        plate:  playerData.name_plate?.id || null,
+        frame:  playerData.frame?.id || null,
+      }
+    };
+
+    res.json(ownedIds);
+  } catch (err) {
+    if (err.response?.status === 403) return res.status(403).json({ msg: 'TOKEN_EXPIRED' });
+    console.error('获取收藏品持有信息失败:', err.message);
+    res.status(500).json({ msg: '获取失败' });
+  }
 });
 
 app.post('/api/users/sync-chunithm-oauth', authMiddleware, async (req, res) => {
@@ -2209,316 +2300,314 @@ app.put('/api/users/settings/profile', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '失败' }); }
 });
 
-app.put('/api/users/settings/privacy', authMiddleware, async (req, res) => {
-  try {
-    const { isB50Visible, isChuniB50Visible } = req.body;
-    await User.findByIdAndUpdate(req.user.id, { isB50Visible, isChuniB50Visible });
-    res.json({ msg: '更新成功' });
-  } catch (err) { res.status(500).json({ msg: '失败' }); }
-});
 
-app.post('/api/users/settings/request-deletion', authMiddleware, async (req, res) => {
-  try {
-    await User.findByIdAndUpdate(req.user.id, { deletionStatus: 'PENDING', deletionRequestDate: new Date() });
-    res.json({ msg: '已提交' });
-  } catch (err) { res.status(500).json({ msg: '失败' }); }
-});
 
-// ==========================================
-// 🌟 核心修复：多维好友列表查询引擎 (彻底解决 404 与 filter 报错)
-// ==========================================
 
-// 1. 获取当前登录者的好友列表 (解决 Friends.jsx 访问 /api/users/friends 的 404 崩溃问题)
-app.get('/api/users/friends', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id)
-      .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
-      .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
-      
-    if (!user) return res.status(404).json({ msg: '用户未找到' });
-    
-    // 必须确保返回的是数组，防止前端 .filter() 报错崩溃
-    res.json({ 
-      friends: user.friends || [], 
-      friendRequests: user.friendRequests || [] 
-    });
-  } catch (err) {
-    console.error('获取好友列表失败:', err);
-    res.status(500).json({ msg: '获取好友列表失败' });
-  }
-});
 
-// 2. 兼容带 list 后缀的潜在请求
-app.get('/api/users/friends/list', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id)
-      .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
-      .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
-      
-    res.json({ friends: user.friends || [], friendRequests: user.friendRequests || [] });
-  } catch (err) {
-    res.status(500).json({ msg: '获取好友列表失败' });
-  }
-});
 
-// 3. 获取指定玩家的好友列表 (兼容在他人主页查看)
-app.get('/api/users/:username/friends', optionalAuth, async (req, res) => {
-  try {
-    const user = await User.findOne({ username: { $regex: new RegExp(`^${req.params.username}$`, 'i') } })
-      .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role')
-      .populate('friendRequests', 'username uid avatarUrl level sponsorTier role');
 
-    if (!user) return res.status(404).json({ msg: '该用户不存在' });
 
-    const isOwnProfile = req.user && (req.user.id === user._id.toString() || req.user._id === user._id.toString());
 
-    res.json({
-      friends: user.friends || [],
-      friendRequests: isOwnProfile ? (user.friendRequests || []) : []
-    });
-  } catch (err) {
-    console.error('获取好友列表失败:', err);
-    res.status(500).json({ msg: '获取好友列表失败' });
-  }
-});
 
-// ==========================================
-// 🌟 核心：获取玩家详细档案
-// ==========================================
-app.get('/api/users/:username', async (req, res) => {
-    try {
-        const user = await User.findOne({ username: { $regex: new RegExp(`^${req.params.username}$`, 'i') } })
-            .select('-password -contactValue -contactType')
-	          .populate('friends', 'username uid avatarUrl bannerUrl level totalPf rating isB50Visible chuniRating isChuniB50Visible osuPp osuMode osuDetails sponsorTier role');
-        
-        if (!user) return res.status(404).json({ msg: '用户不存在' });
 
-        let pfRank = '-';
-        if (user.totalPf && user.totalPf > 0) pfRank = await User.countDocuments({ totalPf: { $gt: user.totalPf } }) + 1;
-        let chuniRank = '-';
-        if (user.chuniRating && user.chuniRating > 0) chuniRank = await User.countDocuments({ chuniRating: { $gt: user.chuniRating } }) + 1;
 
-	      const allScores = await Score.find({ userId: user._id }).lean();
-        const topScores = await Score.find({ userId: user._id }).sort({ rating: -1, achievement: -1 }).limit(50);
-        const topPfScores = await Score.find({ userId: user._id }).sort({ pf: -1 }).limit(50);
-        const qualifierScores = await QualifierScore.find({ userId: user._id }).sort({ entryTime: -1 });
-        const osuScores = await OsuScore.find({ userId: user._id }).sort({ pp: -1 }).lean();
 
-        res.json({
-            ...user.toObject(),
-	          allScores: allScores || [], topScores: topScores || [], pfRank, chuniRank, 
-            topPfScores: topPfScores || [], qualifierScores: qualifierScores || [], osuScores: osuScores || [],             
-            friendsCount: user.friends ? user.friends.length : 0, friends: user.friends 
-        });
-    } catch (err) { res.status(500).json({ msg: '服务器错误' }); }
-});
 
-// ==================================================
-// 🎮 API 1：开始开字母 2.0 游戏
-// ==================================================
-app.post('/api/letter-game/start', authMiddleware, async (req, res) => {
-  try {
-    let { mods = [], gameType = 'arcaea' } = req.body;
 
-    if (mods.includes('Tenacity') && mods.includes('Fear')) {
-      mods = mods.filter(m => m !== 'Tenacity' && m !== 'Fear');
-      if (!mods.includes('Prudence')) mods.push('Prudence');
-    }
 
-    // 🔥 修复 2：动态切库
-    let TargetModel;
-    if (gameType === 'maimai') TargetModel = Song;
-    else if (gameType === 'chunithm') TargetModel = ChunithmSong;
-    else TargetModel = ArcaeaSong;
 
-    const randomSongs = await TargetModel.aggregate([{ $sample: { size: 5 } }]);
-    if (randomSongs.length < 5) return res.status(400).json({ msg: '曲库不足' });
 
-    let initialOpenedChars = new Set();
-    let baseTime = 60000; 
-    if (mods.includes('Tenacity')) baseTime = 30000;
-    if (mods.includes('Easy')) baseTime = 120000;
 
-    if (mods.includes('Easy')) {
-      ['a','e','i','o','u','あ','い','う','え','お','ア','イ','ウ','エ','オ'].forEach(c => initialOpenedChars.add(c));
-    }
-    
-    if (mods.includes('Lucky')) {
-      let globalChars = new Set();
-      randomSongs.forEach(s => {
-        const title = s.title || s.basic_info?.title || s.id;
-        for (let char of title) {
-          if (char.trim() !== '') globalChars.add(char.toLowerCase());
-        }
-      });
-      const luckyCount = Math.min(7, Math.ceil(globalChars.size * 0.3));
-      const poolArray = Array.from(globalChars);
-      for(let i = 0; i < luckyCount; i++){
-        const randIdx = Math.floor(Math.random() * poolArray.length);
-        initialOpenedChars.add(poolArray.splice(randIdx, 1)[0]);
-      }
-    }
 
-    // 🔥 修复 3：打上特殊字符 Tag
-    const sessionSongs = randomSongs.map(s => {
-      const realTitle = s.title || s.basic_info?.title || s.id;
-      return {
-        songId: s.id || s._id,
-        realTitle: realTitle,
-        baseOv: calculateBaseOV(realTitle),
-        mistakes: 0,
-        status: 'PLAYING',
-        hasKana: /[\u3040-\u309F\u30A0-\u30FF]/.test(realTitle),
-        hasKanji: /[\u4E00-\u9FAF]/.test(realTitle),
-        hasSym: /[^\sa-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(realTitle)
-      };
-    });
 
-    const newSession = new ActiveSession({
-      userId: req.user.id || req.user._id,
-      gameType,
-      mods,
-      openedChars: Array.from(initialOpenedChars),
-      expireAt: new Date(Date.now() + baseTime),
-      songs: sessionSongs
-    });
-    await newSession.save();
 
-    const clientSongs = sessionSongs.map((song, idx) => ({
-      index: idx,
-      maskedTitle: generateMaskedTitle(song.realTitle, newSession.openedChars, mods),
-      status: song.status,
-      hasKana: song.hasKana,
-      hasKanji: song.hasKanji,
-      hasSym: song.hasSym
-    }));
 
-    res.json({ sessionId: newSession._id, expireAt: newSession.expireAt, songs: clientSongs });
-  } catch (err) {
-    res.status(500).json({ msg: '游戏初始化失败' });
-  }
-});
 
-// ==================================================
-// 🎮 API 2：开字母操作
-// ==================================================
-app.post('/api/letter-game/open', authMiddleware, async (req, res) => {
-  try {
-    const { sessionId, char } = req.body;
-    const session = await ActiveSession.findById(sessionId);
-    if (!session) return res.status(404).json({ msg: '对局不存在或已过期' });
 
-    if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
-      const record = await finishGameSession(session);
-      return res.json({ gameOver: true, record, msg: 'Time Out' });
-    }
 
-    const targetChar = char.toLowerCase();
-    if (!session.openedChars.includes(targetChar)) {
-      session.openedChars.push(targetChar);
-    }
 
-    let baseTime = 60000;
-    if (session.mods.includes('Tenacity')) baseTime = 30000;
-    if (session.mods.includes('Easy')) baseTime = 120000;
-    session.expireAt = new Date(Date.now() + baseTime);
 
-    session.songs.forEach(song => {
-      if (song.status === 'PLAYING') {
-        const R_CheckMask = generateMaskedTitle(song.realTitle, session.openedChars, session.mods);
-        if (!R_CheckMask.includes('*') && !session.mods.includes('Puzzle')) {
-          song.status = 'DEAD'; 
-        }
-      }
-    });
-    
-    await session.save();
 
-    const clientSongs = session.songs.map((song, idx) => ({
-      index: idx,
-      maskedTitle: song.status === 'CLEARED' ? song.realTitle : generateMaskedTitle(song.realTitle, session.openedChars, session.mods),
-      status: song.status,
-      hasKana: song.hasKana,
-      hasKanji: song.hasKanji,
-      hasSym: song.hasSym
-    }));
 
-    res.json({ expireAt: session.expireAt, songs: clientSongs });
-  } catch (err) {
-    res.status(500).json({ msg: '操作失败' });
-  }
-});
 
-// ==================================================
-// 🎮 API 3：猜歌名核心裁决
-// ==================================================
-app.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
-  try {
-    const { sessionId, songIndex, guess } = req.body;
-    const session = await ActiveSession.findById(sessionId);
-    if (!session) return res.status(404).json({ msg: '对局不存在或已过期' });
 
-    if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
-      const record = await finishGameSession(session);
-      return res.json({ gameOver: true, record, msg: 'Time Out' });
-    }
 
-    const song = session.songs[songIndex];
-    if (!song || song.status !== 'PLAYING') return res.status(400).json({ msg: '该曲目无法作答' });
 
-    const isCorrect = normalizeTitle(guess) === normalizeTitle(song.realTitle);
 
-    if (isCorrect) {
-      song.status = 'CLEARED';
-      song.actualOv = calculateActualOV(song.baseOv, song.realTitle, session.openedChars, song.mistakes, session.mods);
-    } else {
-      song.mistakes += 1;
-      
-      let penalty = 15000;
-      if (session.mods.includes('Fear')) penalty = 30000;
-      if (session.mods.includes('Brave')) penalty = 5000;
 
-      if (session.mods.includes('Prudence')) {
-        const record = await finishGameSession(session);
-        return res.json({ gameOver: true, record, msg: 'Prudence! 一击必死。' });
-      }
 
-      session.expireAt = new Date(session.expireAt.getTime() - penalty);
 
-      if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
-        const record = await finishGameSession(session);
-        return res.json({ gameOver: true, record, msg: '惩罚导致时间耗尽。' });
-      }
-    }
 
-    const isAllDone = session.songs.every(s => s.status !== 'PLAYING');
-    if (isAllDone) {
-      const record = await finishGameSession(session);
-      return res.json({ gameOver: true, record });
-    }
 
-    await session.save();
 
-    const clientSongs = session.songs.map((s, idx) => ({
-      index: idx,
-      maskedTitle: s.status === 'CLEARED' ? s.realTitle : generateMaskedTitle(s.realTitle, session.openedChars, session.mods),
-      status: s.status,
-      actualOv: s.actualOv,
-      hasKana: s.hasKana,
-      hasKanji: s.hasKanji,
-      hasSym: s.hasSym
-    }));
 
-    res.json({ isCorrect, expireAt: session.expireAt, songs: clientSongs });
-  } catch (err) {
-    res.status(500).json({ msg: '校验失败' });
-  }
-});
 
-// ==============================================
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📅 Current Server Time: ${new Date().toLocaleString()}`);
-});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
