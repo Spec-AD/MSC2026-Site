@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -10,7 +10,7 @@ import {
   FaCalendarCheck, FaSpinner, FaCommentDots, FaHeart, 
   FaChevronRight, FaTimes, FaUserCircle, FaBell, FaMedal,
   FaDiscord, FaPoll, FaUserFriends, FaHistory, FaGamepad,
-  FaCrown, FaSun, FaMoon, FaMusic
+  FaCrown, FaSun, FaMoon, FaMusic, FaCircle
 } from 'react-icons/fa'; 
 
 const Home = () => {
@@ -35,6 +35,18 @@ const Home = () => {
   const [osuMode, setOsuMode] = useState('standard');
   const [dailySong, setDailySong] = useState(null);
   const [isDailyLoading, setIsDailyLoading] = useState(true);
+
+  // ── 在线人数统计 ──────────────────────────────────────────
+  const [onlineStats, setOnlineStats] = useState(null);
+  // 生成/恢复一个持久会话 ID（页面维度，不依赖登录态）
+  const sessionIdRef = useRef((() => {
+    let sid = sessionStorage.getItem('pb-session-id');
+    if (!sid) {
+      sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      sessionStorage.setItem('pb-session-id', sid);
+    }
+    return sid;
+  })());
 
   const hasCustomBanner = userStats?.bannerUrl && !userStats.bannerUrl.includes('bg.png');
 
@@ -95,6 +107,26 @@ const Home = () => {
       fetchUnread();
     }
   }, [user]);
+
+  // ── 在线人数：心跳 + 轮询 ──────────────────────────────────
+  useEffect(() => {
+    const fetchOnlineStats = async () => {
+      try {
+        const res = await axios.get('/api/online/stats');
+        setOnlineStats(res.data);
+      } catch (err) { console.error('获取在线人数失败', err); }
+    };
+    const sendHeartbeat = async () => {
+      try {
+        await axios.post('/api/online/heartbeat', { sessionId: sessionIdRef.current });
+      } catch (err) {}
+    };
+    sendHeartbeat();
+    fetchOnlineStats();
+    const hbTimer = setInterval(sendHeartbeat, 60 * 1000);
+    const statsTimer = setInterval(fetchOnlineStats, 60 * 1000);
+    return () => { clearInterval(hbTimer); clearInterval(statsTimer); };
+  }, []);
 
   const handleCheckIn = async () => {
     setIsCheckingIn(true);
@@ -166,7 +198,73 @@ const Home = () => {
   const compactNews = showAllNews ? announcements.slice(3) : announcements.slice(3, 8); 
   const hasMoreNews = announcements.length > 8 && !showAllNews;
 
+  // ── 在线人数 SVG 折线图（不依赖任何图表库）─────────────────
+  const renderOnlineChart = () => {
+    if (!onlineStats) return null;
+    const { hourlyData, currentHour, currentMinute, currentCount } = onlineStats;
+    const W = 1000, H = 80;
+    const PAD_L = 36, PAD_R = 16, PAD_T = 10, PAD_B = 24;
+    const chartW = W - PAD_L - PAD_R;
+    const chartH = H - PAD_T - PAD_B;
+    const visibleHours = currentHour + 1;
+    const validVals = hourlyData.slice(0, visibleHours).filter(v => v !== null);
+    const maxVal = Math.max(...validVals, 1);
+    const xOf = (h) => PAD_L + (h / 23) * chartW;
+    const yOf = (v) => PAD_T + chartH - (v / maxVal) * chartH;
+    const points = [];
+    for (let h = 0; h < visibleHours; h++) {
+      const v = hourlyData[h];
+      if (v !== null) points.push({ x: xOf(h), y: yOf(v) });
+    }
+    const nowX = PAD_L + ((currentHour + currentMinute / 60) / 23) * chartW;
+    const nowY = yOf(currentCount);
+    const lineStr = points.map(p => `${p.x},${p.y}`).join(' ');
+    const areaStr = points.length > 0
+      ? `${points[0].x},${PAD_T + chartH} ${lineStr} ${points[points.length - 1].x},${PAD_T + chartH}`
+      : '';
+    const xTicks = [0, 4, 8, 12, 16, 20, 23];
     return (
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="onlineAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#6366f1" stopOpacity="0.02" />
+          </linearGradient>
+          <linearGradient id="onlineLineGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#818cf8" />
+            <stop offset="100%" stopColor="#a78bfa" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75, 1].map(r => (
+          <line key={r} x1={PAD_L} y1={PAD_T + chartH - r * chartH} x2={W - PAD_R} y2={PAD_T + chartH - r * chartH}
+            stroke="currentColor" strokeOpacity="0.06" strokeWidth="1" />
+        ))}
+        {areaStr && <polygon points={areaStr} fill="url(#onlineAreaGrad)" />}
+        {lineStr && (
+          <polyline points={lineStr} fill="none" stroke="url(#onlineLineGrad)"
+            strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        )}
+        <line x1={nowX} y1={PAD_T} x2={nowX} y2={PAD_T + chartH}
+          stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="3,3" strokeOpacity="0.85" />
+        <circle cx={nowX} cy={nowY} r="7" fill="#f59e0b" fillOpacity="0.2" />
+        <circle cx={nowX} cy={nowY} r="4" fill="#f59e0b" />
+        <line x1={PAD_L} y1={PAD_T + chartH} x2={W - PAD_R} y2={PAD_T + chartH}
+          stroke="currentColor" strokeOpacity="0.12" strokeWidth="1" />
+        {xTicks.map(h => (
+          <text key={h} x={xOf(h)} y={H - 4} textAnchor="middle" fontSize="9"
+            fill="currentColor" fillOpacity="0.4" fontFamily="Quicksand, sans-serif">
+            {String(h).padStart(2, '0')}:00
+          </text>
+        ))}
+        <text x={PAD_L - 4} y={PAD_T + 4} textAnchor="end" fontSize="8"
+          fill="currentColor" fillOpacity="0.4" fontFamily="Quicksand, sans-serif">
+          {maxVal}
+        </text>
+      </svg>
+    );
+  };
+
+  return (
     <div className="w-full min-h-screen bg-gray-50 dark:bg-[#0c0c11] text-zinc-900 dark:text-zinc-200 selection:bg-indigo-500/30 relative pb-20 overflow-x-hidden transition-colors duration-300" style={{ fontFamily: "'Quicksand', 'NotoSansSC', sans-serif" }}>
       
             {/* 悬浮主题切换按钮 */}
@@ -250,6 +348,44 @@ const Home = () => {
         </div>
       </header>
 
+      {/* ── 在线人数统计卡片（Daily Track 正上方）──────────────── */}
+      <section className="w-full max-w-7xl mx-auto px-6 z-10 relative mb-3">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+          className="w-full bg-white dark:bg-[#15151e] border border-zinc-100 dark:border-white/5 px-5 pt-3 pb-2"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <FaCircle className="text-[7px] text-emerald-400 animate-pulse" />
+              <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Online Now</span>
+              <span className="text-[15px] font-black text-emerald-500 dark:text-emerald-400 ml-1 tabular-nums" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                {onlineStats !== null ? onlineStats.currentCount : '—'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {onlineStats && (
+                <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-600 tabular-nums">
+                  {(() => {
+                    const d = new Date(onlineStats.serverTime);
+                    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${onlineStats.timezone}`;
+                  })()}
+                </span>
+              )}
+              <span className="text-[9px] font-black px-1.5 py-0.5 bg-amber-400/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 uppercase tracking-widest">NOW</span>
+            </div>
+          </div>
+          <div className="text-zinc-400 dark:text-zinc-600 w-full">
+            {onlineStats ? renderOnlineChart() : (
+              <div className="h-[80px] flex items-center justify-center">
+                <FaSpinner className="animate-spin text-indigo-400/40 text-xl" />
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </section>
+
             {/* Daily Track Hero Section - Full Width, split 70/30 */}
             <section className="w-full max-w-7xl mx-auto px-6 z-10 relative">
         <motion.div
@@ -267,6 +403,33 @@ const Home = () => {
                 : 'cursor-default'
             }`}
           >
+            {/* ── 封面背景：模糊 + 四周晕影，仅 Daily Track 左侧（不含往期推荐）── */}
+            {dailySong && dailySong.coverUrl && !dailySong.coverUrl.includes('bg.png') && (
+              <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
+                <img
+                  src={dailySong.coverUrl}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute aspect-square object-cover"
+                  style={{
+                    width: '55%',
+                    top: '50%', left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    filter: 'blur(28px)',
+                    opacity: isDark ? 0.18 : 0.28,
+                  }}
+                />
+                {/* 晕影：径向渐变从中心透明向四周淡出至卡片背景色 */}
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: isDark
+                      ? 'radial-gradient(ellipse 75% 85% at 50% 50%, transparent 15%, #15151e 72%)'
+                      : 'radial-gradient(ellipse 75% 85% at 50% 50%, transparent 15%, #ffffff 72%)',
+                  }}
+                />
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-purple-500/3 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
 
             <div className="flex items-center gap-2 mb-5 relative z-10">

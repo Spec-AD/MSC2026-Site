@@ -1054,6 +1054,17 @@ app.post('/api/match/register', authMiddleware, async (req, res) => {
 app.get('/api/time', (req, res) => {
     res.json({ serverTime: new Date(), timestamp: Date.now() });
 });
+// ==========================================
+// 🌟 在线人数统计系统
+// ==========================================
+const onlineSessions = new Map();
+const dailyOnlineSnapshots = new Map();
+const getServerHour = () => new Date().getHours();
+const getTodayKey = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`; };
+setInterval(() => { const cutoff = Date.now() - 3*60*1000; for (const [sid,ts] of onlineSessions.entries()) { if (ts < cutoff) onlineSessions.delete(sid); } }, 60*1000);
+setInterval(() => { const hour = getServerHour(); const todayKey = getTodayKey(); if (!dailyOnlineSnapshots.has(todayKey)) { dailyOnlineSnapshots.set(todayKey, new Array(24).fill(null)); for (const key of dailyOnlineSnapshots.keys()) { if (key < todayKey) dailyOnlineSnapshots.delete(key); } } dailyOnlineSnapshots.get(todayKey)[hour] = onlineSessions.size; }, 60*60*1000);
+app.post('/api/online/heartbeat', (req, res) => { const { sessionId } = req.body; if (!sessionId) return res.status(400).json({ msg: '缺少 sessionId' }); onlineSessions.set(sessionId, Date.now()); res.json({ onlineCount: onlineSessions.size }); });
+app.get('/api/online/stats', (req, res) => { const now = new Date(); const todayKey = getTodayKey(); const currentHour = getServerHour(); const currentMinute = now.getMinutes(); if (!dailyOnlineSnapshots.has(todayKey)) { dailyOnlineSnapshots.set(todayKey, new Array(24).fill(null)); } const snapshots = [...dailyOnlineSnapshots.get(todayKey)]; snapshots[currentHour] = onlineSessions.size; res.json({ serverTime: now.toISOString(), currentHour, currentMinute, currentCount: onlineSessions.size, hourlyData: snapshots, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }); });
 
 app.post('/api/upload', authMiddleware, upload.single('image'), (req, res) => {
   try { res.json({ url: req.file.path }); } catch (err) { res.status(500).json({ msg: '上传失败' }); }
