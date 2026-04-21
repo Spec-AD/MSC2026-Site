@@ -18,6 +18,9 @@ import DailyHistory from './pages/DailyHistory';
 import LetterGame from './pages/LetterGame';
 import DecodeProfile from './pages/DecodeProfile';
 import Rules from './pages/Rules';
+import TournamentManage from './pages/TournamentManage';
+import TournamentDetail from './pages/TournamentDetail';
+import ComplaintForm from './pages/ComplaintForm';
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -53,6 +56,9 @@ function App() {
               <Route path="/inbox" element={<Inbox />} />
               <Route path="/tournaments" element={<Tournaments />} />
               <Route path="/tournament-info" element={<TournamentInfo />} />
+              <Route path="/tournament/:id" element={<TournamentDetail />} />
+              <Route path="/tournament-manage/:id" element={<TournamentManage />} />
+              <Route path="/complaint" element={<ComplaintForm />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/wiki" element={<WikiIndex />} />
               <Route path="/wiki/:slug" element={<WikiArticle />} />

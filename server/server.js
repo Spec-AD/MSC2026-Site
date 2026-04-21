@@ -7,6 +7,8 @@ const axios = require('axios');
 const Song = require('./models/Song');
 const { calculatePF } = require('./utils/pfCalculator');
 const Feedback = require('./models/Feedback');
+const Tournament = require('./models/Tournament');
+const Complaint = require('./models/Complaint');
 const Message = require('./models/Message');
 const QualifierScore = require('./models/QualifierScore');
 const WikiPage = require('./models/WikiPage');
@@ -1171,11 +1173,11 @@ app.get('/api/announcements', async (req, res) => {
   }
 });
 
-// 2. 发布新闻 (管理员专属，支持横幅大图与副标题)
+// 2. 发布新闻 (ADM + ANN 均可发布)
 app.post('/api/announcements', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    if (!user || user.role !== 'ADM') return res.status(403).json({ msg: '🚨 权限不足：只有管理员可以发布公告！' });
+    if (!user || !['ADM', 'ANN'].includes(user.role)) return res.status(403).json({ msg: '🚨 权限不足：只有管理员或公告管理员可以发布公告！' });
 
     // 🔥 完整接收包含 coverUrl(画面) 和 subtitle(副标题) 的数据
     const { title, subtitle, type, content, coverUrl } = req.body;
@@ -1754,7 +1756,7 @@ app.post('/api/wiki/submit', authMiddleware, async (req, res) => {
 app.get('/api/admin/wiki/pending', authMiddleware, async (req, res) => {
   try {
     const currentUser = await User.findById(req.user.id || req.user._id);
-    if (!currentUser || !['ADM', 'TO'].includes(currentUser.role)) return res.status(403).json({ msg: '权限不足' });
+        if (!currentUser || !['ADM', 'TO', 'MAT'].includes(currentUser.role)) return res.status(403).json({ msg: '权限不足' });
     res.json(await WikiPage.find({ status: 'PENDING' }).populate('category', 'name').populate('author', 'username').sort({ createdAt: -1 }));
   } catch (err) { res.status(500).json({ msg: '失败' }); }
 });
@@ -1762,7 +1764,7 @@ app.get('/api/admin/wiki/pending', authMiddleware, async (req, res) => {
 app.put('/api/admin/wiki/review/:id', authMiddleware, async (req, res) => {
   try {
     const currentUser = await User.findById(req.user.id || req.user._id);
-    if (!currentUser || !['ADM', 'TO'].includes(currentUser.role)) return res.status(403).json({ msg: '权限不足' });
+        if (!currentUser || !['ADM', 'TO', 'MAT'].includes(currentUser.role)) return res.status(403).json({ msg: '权限不足' });
     const { action, rejectReason } = req.body;
     const page = await WikiPage.findById(req.params.id);
     
@@ -2292,6 +2294,389 @@ app.put('/api/users/settings/profile', authMiddleware, async (req, res) => {
     await User.findByIdAndUpdate(req.user.id, { location, occupation, website, twitter, birthday });
     res.json({ msg: '资料更新成功' });
   } catch (err) { res.status(500).json({ msg: '失败' }); }
+});
+
+// ==========================================
+// 📰 公告管理员(ANN)扩展 API：审核/编辑/删除公告
+// ==========================================
+
+// 获取单个公告详情
+app.get('/api/announcements/:id', async (req, res) => {
+  try {
+    const announcement = await Announcement.findById(req.params.id).populate('author', 'username avatarUrl role');
+    if (!announcement) return res.status(404).json({ msg: '公告不存在' });
+    res.json(announcement);
+  } catch (err) { res.status(500).json({ msg: '获取失败' }); }
+});
+
+// 编辑公告 (ADM + ANN)
+app.put('/api/announcements/:id', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || !['ADM', 'ANN'].includes(user.role)) return res.status(403).json({ msg: '权限不足' });
+    const { title, subtitle, type, content, coverUrl } = req.body;
+    const updated = await Announcement.findByIdAndUpdate(req.params.id, { title, subtitle, type, content, coverUrl }, { new: true });
+    if (!updated) return res.status(404).json({ msg: '公告不存在' });
+    res.json({ msg: '公告已更新', data: updated });
+  } catch (err) { res.status(500).json({ msg: '编辑失败' }); }
+});
+
+// 删除公告 (ADM + ANN)
+app.delete('/api/announcements/:id', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || !['ADM', 'ANN'].includes(user.role)) return res.status(403).json({ msg: '权限不足' });
+    await Announcement.findByIdAndDelete(req.params.id);
+    res.json({ msg: '公告已删除' });
+  } catch (err) { res.status(500).json({ msg: '删除失败' }); }
+});
+
+// ==========================================
+// 🏆 赛事管理系统 API (CHM 比赛管理员 + ADM)
+// ==========================================
+
+// 辅助：检查赛事权限
+const checkTournamentPermission = async (userId, tournamentId = null) => {
+  const user = await User.findById(userId);
+  if (!user) return { allowed: false, user: null, msg: '用户不存在' };
+  if (user.role === 'ADM') return { allowed: true, user, msg: 'ok' };
+  if (user.role === 'CHM') {
+    if (!tournamentId) return { allowed: true, user, msg: 'ok' };
+    if (user.chmTournamentId && user.chmTournamentId.toString() === tournamentId.toString()) {
+      return { allowed: true, user, msg: 'ok' };
+    }
+    const tournament = await Tournament.findById(tournamentId);
+    if (tournament && tournament.managers.some(m => m.toString() === userId.toString())) {
+      return { allowed: true, user, msg: 'ok' };
+    }
+    return { allowed: false, user, msg: '您不是该赛事的管理员' };
+  }
+  return { allowed: false, user, msg: '权限不足' };
+};
+
+// 创建赛事 (ADM / CHM)
+app.post('/api/tournaments/create', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || !['ADM', 'CHM'].includes(user.role)) return res.status(403).json({ msg: '权限不足' });
+    const { title, subtitle, description, coverUrl, rules, registrationStart, registrationEnd, startTime, endTime } = req.body;
+    if (!title) return res.status(400).json({ msg: '赛事标题不能为空' });
+    const newTournament = new Tournament({
+      title, subtitle, description, coverUrl, rules,
+      registrationStart, registrationEnd, startTime, endTime,
+      createdBy: user._id, managers: [user._id],
+      timeApproved: user.role === 'ADM'
+    });
+    await newTournament.save();
+    if (user.role === 'CHM') { user.chmTournamentId = newTournament._id; await user.save(); }
+    res.json({ msg: '赛事创建成功！', data: newTournament });
+  } catch (err) { console.error('创建赛事失败:', err); res.status(500).json({ msg: '创建失败' }); }
+});
+
+// 获取所有赛事列表 (公开)
+app.get('/api/tournaments/list', async (req, res) => {
+  try {
+    const tournaments = await Tournament.find({ status: { $ne: 'DRAFT' } })
+      .select('title subtitle coverUrl status registrationStart registrationEnd startTime endTime registrations createdAt')
+      .sort({ createdAt: -1 });
+    const result = tournaments.map(t => ({ ...t.toObject(), registrationCount: t.registrations ? t.registrations.length : 0 }));
+    res.json(result);
+  } catch (err) { res.status(500).json({ msg: '获取赛事列表失败' }); }
+});
+
+// 获取赛事详情 (公开)
+app.get('/api/tournaments/detail/:id', async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id)
+      .populate('createdBy', 'username avatarUrl role')
+      .populate('managers', 'username avatarUrl role')
+      .populate('registrations.userId', 'username uid avatarUrl')
+      .populate('groups.players', 'username uid avatarUrl')
+      .populate('matches.playerA', 'username uid avatarUrl')
+      .populate('matches.playerB', 'username uid avatarUrl')
+      .populate('matches.winner', 'username uid avatarUrl')
+      .populate('results.userId', 'username uid avatarUrl');
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+    res.json(tournament);
+  } catch (err) { res.status(500).json({ msg: '获取赛事详情失败' }); }
+});
+
+// 更新赛事基本信息 (CHM/ADM)
+app.put('/api/tournaments/detail/:id', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTournamentPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const { title, subtitle, description, coverUrl, rules, status, registrationStart, registrationEnd, startTime, endTime } = req.body;
+    const updateFields = {};
+    if (title !== undefined) updateFields.title = title;
+    if (subtitle !== undefined) updateFields.subtitle = subtitle;
+    if (description !== undefined) updateFields.description = description;
+    if (coverUrl !== undefined) updateFields.coverUrl = coverUrl;
+    if (rules !== undefined) updateFields.rules = rules;
+    if (registrationStart !== undefined) updateFields.registrationStart = registrationStart;
+    if (registrationEnd !== undefined) updateFields.registrationEnd = registrationEnd;
+    if (startTime !== undefined || endTime !== undefined) {
+      if (startTime !== undefined) updateFields.startTime = startTime;
+      if (endTime !== undefined) updateFields.endTime = endTime;
+      updateFields.timeApproved = perm.user.role === 'ADM';
+    }
+    if (status !== undefined && perm.user.role === 'ADM') updateFields.status = status;
+    const updated = await Tournament.findByIdAndUpdate(req.params.id, { $set: updateFields }, { new: true });
+    res.json({ msg: '赛事信息已更新', data: updated });
+  } catch (err) { res.status(500).json({ msg: '更新失败' }); }
+});
+
+// ADM 审核赛事时间
+app.put('/api/tournaments/detail/:id/approve-time', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'ADM') return res.status(403).json({ msg: '仅 ADM 可审核' });
+    await Tournament.findByIdAndUpdate(req.params.id, { timeApproved: true });
+    res.json({ msg: '赛事时间已审核通过' });
+  } catch (err) { res.status(500).json({ msg: '审核失败' }); }
+});
+
+// 设计报名表 (CHM/ADM)
+app.put('/api/tournaments/detail/:id/registration-form', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTournamentPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const { fields } = req.body;
+    await Tournament.findByIdAndUpdate(req.params.id, { registrationForm: fields });
+    res.json({ msg: '报名表已更新' });
+  } catch (err) { res.status(500).json({ msg: '更新失败' }); }
+});
+
+// 选手报名
+app.post('/api/tournaments/detail/:id/register', authMiddleware, async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+    const now = new Date();
+    if (tournament.registrationStart && now < tournament.registrationStart) return res.status(400).json({ msg: '报名尚未开始' });
+    if (tournament.registrationEnd && now > tournament.registrationEnd) return res.status(400).json({ msg: '报名已截止' });
+    const existing = tournament.registrations.find(r => r.userId.toString() === req.user.id);
+    if (existing) return res.status(400).json({ msg: '您已报名该赛事' });
+    tournament.registrations.push({ userId: req.user.id, formData: req.body.formData || {} });
+    await tournament.save();
+    await addXp(req.user.id, 100);
+    res.json({ msg: '报名成功！' });
+  } catch (err) { res.status(500).json({ msg: '报名失败' }); }
+});
+
+// 查看报名信息 (CHM/ADM)
+app.get('/api/tournaments/detail/:id/registrations', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTournamentPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const tournament = await Tournament.findById(req.params.id)
+      .populate('registrations.userId', 'username uid avatarUrl nickname contactType contactValue');
+    res.json({ count: tournament.registrations.length, registrations: tournament.registrations });
+  } catch (err) { res.status(500).json({ msg: '获取失败' }); }
+});
+
+// 设计预选赛曲目 (CHM/ADM)
+app.put('/api/tournaments/detail/:id/qualifier-songs', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTournamentPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const { songs } = req.body;
+    await Tournament.findByIdAndUpdate(req.params.id, { qualifierSongs: songs });
+    res.json({ msg: '预选赛曲目已设置' });
+  } catch (err) { res.status(500).json({ msg: '设置失败' }); }
+});
+
+// 录入选手预选赛成绩 (CHM/ADM)
+app.post('/api/tournaments/detail/:id/qualifier-scores', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTournamentPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const { targetUid, songName, achievement, dxScore } = req.body;
+    const targetUser = await User.findOne({ uid: targetUid });
+    if (!targetUser) return res.status(404).json({ msg: '选手不存在' });
+    const tournament = await Tournament.findById(req.params.id);
+    const existingIdx = tournament.qualifierScores.findIndex(
+      s => s.userId.toString() === targetUser._id.toString() && s.songName === songName
+    );
+    if (existingIdx >= 0) {
+      tournament.qualifierScores[existingIdx].achievement = Number(achievement);
+      tournament.qualifierScores[existingIdx].dxScore = Number(dxScore || 0);
+      tournament.qualifierScores[existingIdx].entryBy = perm.user.username;
+      tournament.qualifierScores[existingIdx].entryTime = Date.now();
+    } else {
+      tournament.qualifierScores.push({ userId: targetUser._id, songName, achievement: Number(achievement), dxScore: Number(dxScore || 0), entryBy: perm.user.username });
+    }
+    await tournament.save();
+    res.json({ msg: '成绩录入成功！' });
+  } catch (err) { res.status(500).json({ msg: '录入失败' }); }
+});
+
+// 指定选手分组 (CHM/ADM)
+app.put('/api/tournaments/detail/:id/groups', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTournamentPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const { groups } = req.body;
+    await Tournament.findByIdAndUpdate(req.params.id, { groups });
+    res.json({ msg: '分组已设置' });
+  } catch (err) { res.status(500).json({ msg: '分组设置失败' }); }
+});
+
+// 创建/更新正赛对局 (CHM/ADM)
+app.put('/api/tournaments/detail/:id/matches', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTournamentPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const { matches } = req.body;
+    await Tournament.findByIdAndUpdate(req.params.id, { matches });
+    res.json({ msg: '正赛对局已更新' });
+  } catch (err) { res.status(500).json({ msg: '更新失败' }); }
+});
+
+// 记录单场比赛成绩 (CHM/ADM)
+app.put('/api/tournaments/detail/:id/matches/:matchIndex/score', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTournamentPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const { scoreA, scoreB, songs, status, winnerId } = req.body;
+    const tournament = await Tournament.findById(req.params.id);
+    const matchIdx = Number(req.params.matchIndex);
+    if (!tournament.matches[matchIdx]) return res.status(404).json({ msg: '对局不存在' });
+    if (scoreA !== undefined) tournament.matches[matchIdx].scoreA = scoreA;
+    if (scoreB !== undefined) tournament.matches[matchIdx].scoreB = scoreB;
+    if (songs) tournament.matches[matchIdx].songs = songs;
+    if (status) tournament.matches[matchIdx].status = status;
+    if (winnerId) tournament.matches[matchIdx].winner = winnerId;
+    if (status === 'FINISHED') tournament.matches[matchIdx].finishedAt = new Date();
+    await tournament.save();
+    res.json({ msg: '对局成绩已记录' });
+  } catch (err) { res.status(500).json({ msg: '记录失败' }); }
+});
+
+// 公布比赛结果 (CHM/ADM)
+app.put('/api/tournaments/detail/:id/results', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTournamentPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const { results, resultAnnouncement } = req.body;
+    const updateFields = {};
+    if (results) updateFields.results = results;
+    if (resultAnnouncement) updateFields.resultAnnouncement = resultAnnouncement;
+    await Tournament.findByIdAndUpdate(req.params.id, { $set: updateFields });
+    res.json({ msg: '比赛结果已发布' });
+  } catch (err) { res.status(500).json({ msg: '发布失败' }); }
+});
+
+// 结束赛事并收回 CHM 权限 (ADM only)
+app.put('/api/tournaments/detail/:id/finish', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'ADM') return res.status(403).json({ msg: '仅 ADM 可结束赛事' });
+    const tournament = await Tournament.findByIdAndUpdate(req.params.id, { status: 'FINISHED' }, { new: true });
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+    await User.updateMany({ chmTournamentId: tournament._id, role: 'CHM' }, { $set: { role: 'user', chmTournamentId: null } });
+    res.json({ msg: '赛事已结束，CHM 权限已收回' });
+  } catch (err) { res.status(500).json({ msg: '操作失败' }); }
+});
+
+// ==========================================
+// 🛡️ 维护管理员(MAT) API：投诉系统
+// ==========================================
+
+const checkMaintenancePermission = (role) => ['ADM', 'MAT'].includes(role);
+
+// 用户提交投诉
+app.post('/api/complaints', authMiddleware, async (req, res) => {
+  try {
+    const { type, title, content, targetUserId, targetContentId, attachments } = req.body;
+    if (!title || !content || !type) return res.status(400).json({ msg: '请填写完整信息' });
+    const complaint = new Complaint({ author: req.user.id, type, title, content, targetUserId: targetUserId || null, targetContentId: targetContentId || '', attachments: attachments || [] });
+    await complaint.save();
+    res.json({ msg: '投诉已提交，维护团队将尽快处理', data: complaint });
+  } catch (err) { res.status(500).json({ msg: '提交失败' }); }
+});
+
+// 获取投诉列表 (MAT/ADM)
+app.get('/api/complaints', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || !checkMaintenancePermission(user.role)) return res.status(403).json({ msg: '权限不足' });
+    const { status } = req.query;
+    const filter = status ? { status } : {};
+    const complaints = await Complaint.find(filter)
+      .populate('author', 'username uid avatarUrl')
+      .populate('targetUserId', 'username uid avatarUrl')
+      .populate('handledBy', 'username avatarUrl')
+      .sort({ createdAt: -1 });
+    res.json(complaints);
+  } catch (err) { res.status(500).json({ msg: '获取失败' }); }
+});
+
+// 用户查看自己的投诉
+app.get('/api/complaints/mine', authMiddleware, async (req, res) => {
+  try {
+    const complaints = await Complaint.find({ author: req.user.id })
+      .populate('handledBy', 'username avatarUrl')
+      .sort({ createdAt: -1 });
+    res.json(complaints);
+  } catch (err) { res.status(500).json({ msg: '获取失败' }); }
+});
+
+// 处理投诉 (MAT/ADM)
+app.put('/api/complaints/:id', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || !checkMaintenancePermission(user.role)) return res.status(403).json({ msg: '权限不足' });
+    const { status, handlerNote } = req.body;
+    const updateFields = { status, handledBy: user._id, handlerNote: handlerNote || '' };
+    if (status === 'RESOLVED' || status === 'DISMISSED') updateFields.resolvedAt = new Date();
+    const updated = await Complaint.findByIdAndUpdate(req.params.id, { $set: updateFields }, { new: true });
+    if (updated) {
+      const statusText = status === 'RESOLVED' ? '已解决' : status === 'DISMISSED' ? '已驳回' : '处理中';
+      await Message.create({ receiver: updated.author, sender: user._id, type: 'SYSTEM', title: '投诉处理通知', content: `您的投诉「${updated.title}」已被标记为 ${statusText}。${handlerNote ? '处理备注：' + handlerNote : ''}` });
+    }
+    res.json({ msg: '投诉已处理', data: updated });
+  } catch (err) { res.status(500).json({ msg: '处理失败' }); }
+});
+
+// ==========================================
+// 🔧 ADM 专属：角色管理 API
+// ==========================================
+
+app.put('/api/admin/set-role', authMiddleware, async (req, res) => {
+  try {
+    const admin = await User.findById(req.user.id);
+    if (!admin || admin.role !== 'ADM') return res.status(403).json({ msg: '仅 ADM 可分配角色' });
+    const { targetUid, newRole, tournamentId } = req.body;
+    const targetUser = await User.findOne({ uid: targetUid });
+    if (!targetUser) return res.status(404).json({ msg: '目标用户不存在' });
+    if (targetUser.role === 'ADM' && admin._id.toString() !== targetUser._id.toString()) return res.status(400).json({ msg: '不能修改其他 ADM 的角色' });
+    const validRoles = ['user', 'ADM', 'ANN', 'CHM', 'MAT', 'TO', 'DS'];
+    if (!validRoles.includes(newRole)) return res.status(400).json({ msg: '无效的角色' });
+    targetUser.role = newRole;
+    if (newRole === 'CHM' && tournamentId) {
+      targetUser.chmTournamentId = tournamentId;
+      await Tournament.findByIdAndUpdate(tournamentId, { $addToSet: { managers: targetUser._id } });
+    }
+    if (newRole !== 'CHM') targetUser.chmTournamentId = null;
+    await targetUser.save();
+    const roleNames = { 'user': '普通用户', 'ADM': '管理员', 'ANN': '公告管理员', 'CHM': '比赛管理员', 'MAT': '维护管理员', 'TO': '赛事运营', 'DS': '设计师' };
+    await Message.create({ receiver: targetUser._id, sender: admin._id, type: 'SYSTEM', title: '🎖️ 身份变更通知', content: `您的身份已被更新为：${roleNames[newRole] || newRole}。` });
+    res.json({ msg: `已将 ${targetUser.username} 的角色设置为 ${roleNames[newRole]}` });
+  } catch (err) { console.error('角色设置失败:', err); res.status(500).json({ msg: '设置失败' }); }
+});
+
+// 获取管理员列表 (ADM only)
+app.get('/api/admin/staff', authMiddleware, async (req, res) => {
+  try {
+    const admin = await User.findById(req.user.id);
+    if (!admin || admin.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
+    const staff = await User.find({ role: { $ne: 'user' } })
+      .select('username uid avatarUrl role chmTournamentId')
+      .populate('chmTournamentId', 'title status')
+      .sort({ role: 1 });
+    res.json(staff);
+  } catch (err) { res.status(500).json({ msg: '获取失败' }); }
 });
 
 const PORT = process.env.PORT || 5000;

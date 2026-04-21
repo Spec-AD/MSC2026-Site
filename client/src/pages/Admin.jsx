@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { FaBullhorn, FaGlobe, FaEnvelope, FaTrophy, FaSyncAlt, FaSpinner, FaBook, FaCheck, FaTimes, FaFolderPlus, FaNetworkWired } from 'react-icons/fa';
+import { FaBullhorn, FaGlobe, FaEnvelope, FaTrophy, FaSyncAlt, FaSpinner, FaBook, FaCheck, FaTimes, FaFolderPlus, FaNetworkWired, FaUserShield, FaShieldAlt, FaExclamationTriangle, FaUsersCog, FaEdit, FaTrash } from 'react-icons/fa';
 
 const Admin = () => {
   const { user } = useAuth();
@@ -32,11 +32,29 @@ const Admin = () => {
   const [pendingWikis, setPendingWikis] = useState([]);
   const [isLoadingPending, setIsLoadingPending] = useState(false);
 
+  // 🌟 模块 7：角色管理 (ADM)
+  const [roleData, setRoleData] = useState({ targetUid: '', newRole: 'user', tournamentId: '' });
+  const [isSettingRole, setIsSettingRole] = useState(false);
+  const [staffList, setStaffList] = useState([]);
+  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+
+  // 🌟 模块 8：投诉管理 (MAT/ADM)
+  const [complaints, setComplaints] = useState([]);
+  const [isLoadingComplaints, setIsLoadingComplaints] = useState(false);
+  const [complaintFilter, setComplaintFilter] = useState('');
+
+  // 🌟 模块 9：公告管理 (ANN/ADM)
+  const [allAnnouncements, setAllAnnouncements] = useState([]);
+  const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
+
   useEffect(() => {
-    if (user && ['ADM', 'TO'].includes(user.role)) {
-      fetchPendingWikis();
-      fetchCategories();
-    }
+    if (!user) return;
+    const role = user.role;
+    if (['ADM', 'TO', 'MAT'].includes(role)) { fetchPendingWikis(); fetchCategories(); }
+    if (role === 'ADM') { fetchStaffList(); }
+    if (['ADM', 'MAT'].includes(role)) { fetchComplaints(); }
+    if (['ADM', 'ANN'].includes(role)) { fetchAllAnnouncements(); }
   }, [user]);
 
   const fetchPendingWikis = async () => {
@@ -64,7 +82,84 @@ const Admin = () => {
     }
   };
 
-  if (!user || !['ADM', 'TO'].includes(user.role)) {
+  const fetchStaffList = async () => {
+    setIsLoadingStaff(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('/api/admin/staff', { headers: { Authorization: `Bearer ${token}` } });
+      setStaffList(res.data);
+    } catch (err) { console.error('获取管理员列表失败', err); }
+    finally { setIsLoadingStaff(false); }
+  };
+
+  const fetchComplaints = async () => {
+    setIsLoadingComplaints(true);
+    try {
+      const token = localStorage.getItem('token');
+      const url = complaintFilter ? `/api/complaints?status=${complaintFilter}` : '/api/complaints';
+      const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      setComplaints(res.data);
+    } catch (err) { console.error('获取投诉列表失败', err); }
+    finally { setIsLoadingComplaints(false); }
+  };
+
+  const fetchAllAnnouncements = async () => {
+    setIsLoadingAnnouncements(true);
+    try {
+      const res = await axios.get('/api/announcements');
+      setAllAnnouncements(res.data);
+    } catch (err) { console.error('获取公告列表失败', err); }
+    finally { setIsLoadingAnnouncements(false); }
+  };
+
+  const handleSetRole = async () => {
+    if (!roleData.targetUid || !roleData.newRole) return alert('请填写完整信息！');
+    setIsSettingRole(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.put('/api/admin/set-role', roleData, { headers: { Authorization: `Bearer ${token}` } });
+      alert('✅ ' + res.data.msg);
+      setRoleData({ targetUid: '', newRole: 'user', tournamentId: '' });
+      fetchStaffList();
+    } catch (err) { alert('❌ ' + (err.response?.data?.msg || '设置失败')); }
+    finally { setIsSettingRole(false); }
+  };
+
+  const handleComplaintAction = async (id, status) => {
+    const handlerNote = window.prompt('处理备注（可选）：', '');
+    if (handlerNote === null) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`/api/complaints/${id}`, { status, handlerNote }, { headers: { Authorization: `Bearer ${token}` } });
+      alert('✅ 投诉已处理');
+      fetchComplaints();
+    } catch (err) { alert('❌ 处理失败'); }
+  };
+
+  const handleDeleteAnnouncement = async (id) => {
+    if (!window.confirm('确定要删除该公告吗？此操作不可撤回！')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`/api/announcements/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      alert('✅ 公告已删除');
+      fetchAllAnnouncements();
+    } catch (err) { alert('❌ 删除失败'); }
+  };
+
+  const handleEditAnnouncement = async () => {
+    if (!editingAnnouncement) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`/api/announcements/${editingAnnouncement._id}`, editingAnnouncement, { headers: { Authorization: `Bearer ${token}` } });
+      alert('✅ 公告已更新');
+      setEditingAnnouncement(null);
+      fetchAllAnnouncements();
+    } catch (err) { alert('❌ 编辑失败'); }
+  };
+
+  // 权限检查：允许 ADM, TO, ANN, CHM, MAT 访问（各自看到不同模块）
+  const allowedRoles = ['ADM', 'TO', 'ANN', 'CHM', 'MAT'];
+  if (!user || !allowedRoles.includes(user.role)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-white">
         <h1 className="text-4xl font-bold text-red-500 mb-4">ACCESS DENIED</h1>
@@ -73,6 +168,12 @@ const Admin = () => {
       </div>
     );
   }
+
+  const isADM = user.role === 'ADM';
+  const isANN = ['ADM', 'ANN'].includes(user.role);
+  const isCHM = ['ADM', 'CHM'].includes(user.role);
+  const isMAT = ['ADM', 'MAT'].includes(user.role);
+  const isWikiAdmin = ['ADM', 'TO', 'MAT'].includes(user.role);
 
   const handleSubmit = async (e) => { e.preventDefault(); setIsSubmitting(true); try { const token = localStorage.getItem('token'); await axios.post('/api/announcements', formData, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ 发布成功！全站已同步。'); setFormData({ title: '', type: 'NEWS', content: '' }); navigate('/'); } catch (err) { alert('❌ ' + (err.response?.data?.msg || '发布失败')); } finally { setIsSubmitting(false); } };
   const handleBroadcast = async () => { if (!broadcastData.title || !broadcastData.content) return alert('标题和内容不能为空！'); if (!window.confirm(`⚠️ 警告：确定要向全站所有注册玩家发送这封系统邮件吗？\n此操作不可撤回！`)) return; setIsBroadcasting(true); try { const token = localStorage.getItem('token'); const res = await axios.post('/api/admin/broadcast-message', broadcastData, { headers: { Authorization: `Bearer ${token}` } }); alert('✅ ' + res.data.message); setBroadcastData({ title: '', content: '' }); } catch (err) { alert('❌ ' + (err.response?.data?.message || '广播失败')); } finally { setIsBroadcasting(false); } };
@@ -134,22 +235,25 @@ const Admin = () => {
     } catch (err) { alert('❌ 操作失败'); }
   };
 
+  const roleLabels = { 'ADM': '管理员', 'ANN': '公告管理员', 'CHM': '比赛管理员', 'MAT': '维护管理员', 'TO': '赛事运营', 'DS': '设计师' };
+
   return (
     <div className="w-full min-h-screen pb-24 text-white px-4 md:px-8 max-w-6xl mx-auto pt-24">
       
       {/* 头部标题 */}
       <div className="mb-12 border-b border-white/10 pb-6">
         <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]">
-          ADM CONTROL.
+          {isADM ? 'ADM CONTROL.' : `${roleLabels[user.role] || user.role} PANEL.`}
         </h1>
         <p className="text-gray-400 font-mono text-sm tracking-[0.2em] uppercase mt-2">
-          System Administration & Tournament Operations
+          {isADM ? 'System Administration & Tournament Operations' : `Welcome, ${user.username} — ${roleLabels[user.role] || user.role}`}
         </p>
       </div>
 
       {/* ========================================================= */}
-      {/* WIKI 知识库管理 */}
+      {/* WIKI 知识库管理 — ADM / TO / MAT */}
       {/* ========================================================= */}
+      {isWikiAdmin && (
       <div className="bg-black/40 backdrop-blur-xl border border-cyan-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(34,211,238,0.1)] mb-12">
         <h2 className="text-2xl md:text-3xl font-black italic tracking-tight text-cyan-400 mb-6 border-b border-cyan-500/20 pb-4 flex items-center gap-3">
           <FaNetworkWired /> WIKI DATABASE / 维基知识库管理
@@ -284,10 +388,12 @@ const Admin = () => {
 
         </div>
       </div>
+      )}
 
       {/* ========================================================= */}
-      {/* 赛事录入 */}
+      {/* 赛事录入 — ADM / CHM / TO */}
       {/* ========================================================= */}
+      {(isADM || isCHM || user.role === 'TO') && (
       <div className="bg-black/40 backdrop-blur-xl border border-orange-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(249,115,22,0.1)] mb-12">
         <h2 className="text-2xl md:text-3xl font-black italic tracking-tight text-orange-400 mb-6 border-b border-orange-500/20 pb-4 flex items-center gap-3">
           <FaTrophy className="text-yellow-400" /> TOURNAMENT ENTRY / 预选赛录入
@@ -326,10 +432,12 @@ const Admin = () => {
           </button>
         </form>
       </div>
+      )}
 
       {/* ========================================================= */}
-      {/* 广播与定向邮件 */}
+      {/* 广播与定向邮件 — ADM + ANN */}
       {/* ========================================================= */}
+      {isANN && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
         <div className="bg-black/40 backdrop-blur-xl border border-red-500/30 rounded-3xl p-6 md:p-8 shadow-xl">
           <h2 className="text-xl md:text-2xl font-black italic tracking-tight text-white mb-6 flex items-center gap-3">
@@ -381,11 +489,13 @@ const Admin = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* ========================================================= */}
-      {/* 🔥 核心数据同步引擎 (三轨并列) */}
+      {/* 🔥 核心数据同步引擎 (三轨并列) — ADM ONLY */}
       {/* ========================================================= */}
-      <div className="bg-black/40 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(59,130,246,0.1)]">
+      {isADM && (
+      <div className="bg-black/40 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(59,130,246,0.1)] mb-12">
         <h2 className="text-2xl font-black italic tracking-tight text-blue-500 mb-4 flex items-center gap-3">
           <FaSyncAlt className="text-blue-400" /> SYSTEM SYNC / 核心数据同步
         </h2>
@@ -414,7 +524,6 @@ const Admin = () => {
             {isSyncingChuni ? 'DOWNLOADING...' : '同步 CHUNITHM 曲库'}
           </button>
 
-          {/* 🔥 新增：Arcaea 曲库同步按钮 */}
           <button 
             onClick={handleSyncArcaeaSongs} 
             disabled={isSyncingArcaea} 
@@ -425,6 +534,216 @@ const Admin = () => {
           </button>
         </div>
       </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 🎖️ 身份角色管理 — ADM ONLY */}
+      {/* ========================================================= */}
+      {isADM && (
+      <div className="bg-black/40 backdrop-blur-xl border border-amber-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(245,158,11,0.1)] mb-12">
+        <h2 className="text-2xl md:text-3xl font-black italic tracking-tight text-amber-400 mb-6 border-b border-amber-500/20 pb-4 flex items-center gap-3">
+          <FaUsersCog /> IDENTITY / 身份角色管理
+        </h2>
+
+        {/* 设置角色表单 */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
+          <h3 className="text-gray-300 font-bold tracking-widest uppercase text-sm mb-4 flex items-center gap-2">
+            <FaUserShield className="text-amber-400" /> 分配身份
+          </h3>
+          <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1 space-y-1">
+              <label className="text-xs text-gray-500 font-bold uppercase">目标 UID</label>
+              <input type="number" value={roleData.targetUid} onChange={(e) => setRoleData({...roleData, targetUid: e.target.value})} className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-amber-500 outline-none transition-colors font-mono" placeholder="UID" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <label className="text-xs text-gray-500 font-bold uppercase">目标角色</label>
+              <select value={roleData.newRole} onChange={(e) => setRoleData({...roleData, newRole: e.target.value})} className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-amber-500 outline-none transition-colors font-bold">
+                <option value="user">普通用户 (user)</option>
+                <option value="ADM">管理员 (ADM)</option>
+                <option value="ANN">公告管理员 (ANN)</option>
+                <option value="CHM">比赛管理员 (CHM)</option>
+                <option value="MAT">维护管理员 (MAT)</option>
+                <option value="TO">赛事运营 (TO)</option>
+                <option value="DS">设计师 (DS)</option>
+              </select>
+            </div>
+            {roleData.newRole === 'CHM' && (
+              <div className="flex-1 space-y-1">
+                <label className="text-xs text-gray-500 font-bold uppercase">绑定赛事ID (可选)</label>
+                <input type="text" value={roleData.tournamentId} onChange={(e) => setRoleData({...roleData, tournamentId: e.target.value})} className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-amber-500 outline-none transition-colors font-mono text-sm" placeholder="MongoDB ID" />
+              </div>
+            )}
+            <button onClick={handleSetRole} disabled={isSettingRole} className="px-8 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold tracking-widest rounded-xl transition-all shadow-lg disabled:opacity-50">
+              {isSettingRole ? <FaSpinner className="animate-spin" /> : 'SET ROLE'}
+            </button>
+          </div>
+        </div>
+
+        {/* 管理员列表 */}
+        <div>
+          <h3 className="text-gray-300 font-bold tracking-widest uppercase text-sm mb-4 flex items-center gap-2">
+            <FaShieldAlt className="text-amber-400" /> 当前管理团队
+          </h3>
+          {isLoadingStaff ? (
+            <div className="py-10 flex justify-center"><FaSpinner className="animate-spin text-amber-500 text-2xl" /></div>
+          ) : staffList.length === 0 ? (
+            <p className="text-gray-500 text-sm">暂无管理员</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {staffList.map(s => (
+                <div key={s._id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
+                  <img src={s.avatarUrl || '/assets/logos.png'} alt="" className="w-12 h-12 rounded-full object-cover bg-black border border-white/10" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white font-bold truncate">{s.username}</div>
+                    <div className="text-xs text-gray-400 font-mono">UID: {s.uid}</div>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
+                    s.role === 'ADM' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                    s.role === 'ANN' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                    s.role === 'CHM' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
+                    s.role === 'MAT' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+                    'bg-white/10 text-gray-300 border border-white/10'
+                  }`}>
+                    {s.role}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 📰 公告管理面板 — ANN + ADM */}
+      {/* ========================================================= */}
+      {isANN && (
+      <div className="bg-black/40 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(59,130,246,0.1)] mb-12">
+        <h2 className="text-2xl md:text-3xl font-black italic tracking-tight text-blue-400 mb-6 border-b border-blue-500/20 pb-4 flex items-center gap-3">
+          <FaBullhorn /> ANNOUNCEMENTS / 公告管理
+        </h2>
+
+        {/* 编辑弹窗 */}
+        {editingAnnouncement && (
+          <div className="bg-white/5 border border-blue-500/30 rounded-2xl p-6 mb-6">
+            <h3 className="text-lg font-bold text-blue-300 mb-4 flex items-center gap-2"><FaEdit /> 编辑公告</h3>
+            <div className="space-y-4">
+              <input type="text" value={editingAnnouncement.title} onChange={(e) => setEditingAnnouncement({...editingAnnouncement, title: e.target.value})} className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-blue-500 outline-none" placeholder="标题" />
+              <input type="text" value={editingAnnouncement.subtitle || ''} onChange={(e) => setEditingAnnouncement({...editingAnnouncement, subtitle: e.target.value})} className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-blue-500 outline-none text-sm" placeholder="副标题 (可选)" />
+              <textarea rows="6" value={editingAnnouncement.content} onChange={(e) => setEditingAnnouncement({...editingAnnouncement, content: e.target.value})} className="w-full bg-black/50 border border-white/20 rounded-xl p-4 text-white focus:border-blue-500 outline-none font-mono text-sm resize-y" placeholder="内容" />
+              <div className="flex gap-3">
+                <button onClick={handleEditAnnouncement} className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all">保存修改</button>
+                <button onClick={() => setEditingAnnouncement(null)} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-gray-300 font-bold rounded-xl transition-all">取消</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 公告列表 */}
+        {isLoadingAnnouncements ? (
+          <div className="py-10 flex justify-center"><FaSpinner className="animate-spin text-blue-500 text-2xl" /></div>
+        ) : allAnnouncements.length === 0 ? (
+          <p className="text-gray-500 text-center py-10">暂无公告</p>
+        ) : (
+          <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
+            {allAnnouncements.map(a => (
+              <div key={a._id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between gap-4 hover:border-blue-500/30 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      a.type === 'NEWS' ? 'bg-blue-500/20 text-blue-400' :
+                      a.type === 'UPDATE' ? 'bg-green-500/20 text-green-400' :
+                      a.type === 'EVENT' ? 'bg-purple-500/20 text-purple-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>{a.type}</span>
+                    <h4 className="text-white font-bold truncate">{a.title}</h4>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1 font-mono">{new Date(a.createdAt).toLocaleString('zh-CN')}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => setEditingAnnouncement({...a})} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 rounded-lg transition-all" title="编辑"><FaEdit /></button>
+                  <button onClick={() => handleDeleteAnnouncement(a._id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-lg transition-all" title="删除"><FaTrash /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 🛡️ 投诉处理中心 — MAT + ADM */}
+      {/* ========================================================= */}
+      {isMAT && (
+      <div className="bg-black/40 backdrop-blur-xl border border-green-500/30 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(34,197,94,0.1)] mb-12">
+        <h2 className="text-2xl md:text-3xl font-black italic tracking-tight text-green-400 mb-6 border-b border-green-500/20 pb-4 flex items-center gap-3">
+          <FaExclamationTriangle /> COMPLAINTS / 投诉处理中心
+        </h2>
+
+        {/* 筛选按钮 */}
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {[{ val: '', label: '全部' }, { val: 'PENDING', label: '待处理' }, { val: 'PROCESSING', label: '处理中' }, { val: 'RESOLVED', label: '已解决' }, { val: 'DISMISSED', label: '已驳回' }].map(f => (
+            <button key={f.val} onClick={() => { setComplaintFilter(f.val); setTimeout(fetchComplaints, 0); }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wider transition-all border ${
+                complaintFilter === f.val ? 'bg-green-500 text-white border-green-500' : 'bg-white/5 text-gray-400 border-white/10 hover:border-green-500/50'
+              }`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {isLoadingComplaints ? (
+          <div className="py-10 flex justify-center"><FaSpinner className="animate-spin text-green-500 text-2xl" /></div>
+        ) : complaints.length === 0 ? (
+          <div className="text-center py-10 text-gray-500 font-mono">暂无投诉</div>
+        ) : (
+          <div className="space-y-4 max-h-[700px] overflow-y-auto custom-scrollbar">
+            {complaints.map(c => (
+              <div key={c._id} className="bg-white/5 border border-white/10 rounded-xl p-5 hover:border-green-500/30 transition-colors">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        c.type === 'COMMENT_REPORT' ? 'bg-red-500/20 text-red-400' :
+                        c.type === 'FAIRNESS' ? 'bg-yellow-500/20 text-yellow-400' :
+                        c.type === 'FEEDBACK' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-gray-500/20 text-gray-400'
+                      }`}>{c.type}</span>
+                      <h4 className="text-white font-bold">{c.title}</h4>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      提交者：<span className="text-cyan-400">{c.author?.username}</span> (UID: {c.author?.uid}) · {new Date(c.createdAt).toLocaleString('zh-CN')}
+                    </p>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
+                    c.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+                    c.status === 'PROCESSING' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                    c.status === 'RESOLVED' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+                    'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                  }`}>
+                    {c.status}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-300 bg-black/40 p-3 rounded-lg mb-3 whitespace-pre-wrap">{c.content}</p>
+                {c.targetUserId && (
+                  <p className="text-xs text-gray-500 mb-3">涉及用户：<span className="text-orange-400">{c.targetUserId?.username}</span> (UID: {c.targetUserId?.uid})</p>
+                )}
+                {c.handlerNote && (
+                  <p className="text-xs text-green-400/80 bg-green-500/10 px-3 py-2 rounded-lg mb-3">处理备注：{c.handlerNote}</p>
+                )}
+                {(c.status === 'PENDING' || c.status === 'PROCESSING') && (
+                  <div className="flex gap-2">
+                    <button onClick={() => handleComplaintAction(c._id, 'PROCESSING')} className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white border border-blue-500/30 rounded-lg text-xs font-bold transition-all">标记处理中</button>
+                    <button onClick={() => handleComplaintAction(c._id, 'RESOLVED')} className="px-4 py-2 bg-green-500/20 hover:bg-green-500 text-green-400 hover:text-white border border-green-500/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1"><FaCheck /> 解决</button>
+                    <button onClick={() => handleComplaintAction(c._id, 'DISMISSED')} className="px-4 py-2 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1"><FaTimes /> 驳回</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      )}
 
     </div>
   );

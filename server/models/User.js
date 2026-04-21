@@ -99,9 +99,12 @@ const UserSchema = new mongoose.Schema({
 
     role: { 
         type: String, 
-        enum: ['user', 'ADM', 'TO', 'DS'], // 限制只能填这四个值
+        enum: ['user', 'ADM', 'ANN', 'CHM', 'MAT', 'TO', 'DS'], // ADM=总管理, ANN=公告管理, CHM=比赛管理(临时), MAT=维护管理
         default: 'user' // 默认注册的都是普通玩家
     },
+
+    // 比赛管理员(CHM)绑定的赛事ID，比赛结束后收回权限
+    chmTournamentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tournament', default: null },
     
     deviceLogs: [{ 
     deviceId: String, 

@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
 import { 
   FaCalendarAlt, FaUsers, FaArrowRight, 
-  FaTimes, FaLock, FaCheckCircle, FaPenNib, FaMusic, FaSitemap, FaInfoCircle, FaMedal
+  FaTimes, FaLock, FaCheckCircle, FaPenNib, FaMusic, FaSitemap, FaInfoCircle, FaMedal, FaPlus
 } from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
 
@@ -15,11 +16,27 @@ const Tournaments = () => {
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [now, setNow] = useState(Date.now());
   const { addToast } = useToast();
+  const [dynamicTournaments, setDynamicTournaments] = useState([]);
+  const [isLoadingDynamic, setIsLoadingDynamic] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const fetchDynamic = async () => {
+      setIsLoadingDynamic(true);
+      try {
+        const res = await axios.get('/api/tournaments/list');
+        setDynamicTournaments(res.data);
+      } catch (err) { console.error('获取赛事列表失败', err); }
+      finally { setIsLoadingDynamic(false); }
+    };
+    fetchDynamic();
+  }, []);
+
+  const canCreateTournament = user && ['ADM', 'CHM', 'TO'].includes(user.role);
 
   const tournamentList = [
     {
@@ -166,7 +183,7 @@ const Tournaments = () => {
             </motion.div>
           ))}
 
-          {/* 次级赛事网格 (Sub) */}
+          {/* 次级赛事网格 (Sub) — 硬编码赛事 + 动态赛事 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {tournamentList.filter(t => !t.isHero).map((tourney, index) => (
               <motion.div 
@@ -211,7 +228,80 @@ const Tournaments = () => {
                 </div>
               </motion.div>
             ))}
+
+            {/* 动态赛事 (从数据库获取) */}
+            {dynamicTournaments.map((dt, index) => {
+              const dtStatusLabels = { 'REGISTRATION': '报名中', 'QUALIFYING': '预选中', 'ONGOING': '进行中', 'FINISHED': '已结束', 'DRAFT': '草稿', 'ARCHIVED': '已归档' };
+              return (
+                <motion.div
+                  key={dt._id}
+                  initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + index * 0.1, duration: 0.5 }}
+                  onClick={() => navigate(`/tournament/${dt._id}`)}
+                  className="group relative bg-[#15151e] border border-white/[0.05] rounded-3xl overflow-hidden transition-all duration-300 shadow-sm cursor-pointer hover:bg-[#1a1a24] hover:-translate-y-1 hover:border-white/[0.1]"
+                >
+                  <div className="h-32 md:h-40 relative overflow-hidden bg-[#0a0a0c] border-b border-white/[0.05]">
+                    {dt.coverUrl ? (
+                      <img src={dt.coverUrl} alt="" className="w-full h-full object-cover opacity-50 group-hover:opacity-70 group-hover:scale-105 transition-all duration-700" />
+                    ) : (
+                      <div className="absolute inset-0 bg-gradient-to-br from-cyan-900/20 to-transparent group-hover:scale-105 transition-transform duration-700"></div>
+                    )}
+                    <div className="absolute top-4 right-4">
+                      <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest backdrop-blur-md border ${
+                        dt.status === 'ONGOING' || dt.status === 'REGISTRATION' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-zinc-800/50 text-zinc-400 border-white/[0.05]'
+                      }`}>
+                        {dtStatusLabels[dt.status] || dt.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-6 relative flex flex-col h-[calc(100%-8rem)] md:h-[calc(100%-10rem)]">
+                    <div className="mb-5">
+                      <h2 className="text-xl font-bold text-zinc-100 mb-1.5 group-hover:text-white transition-colors truncate">{dt.title}</h2>
+                      {dt.subtitle && <p className="text-zinc-500 text-xs font-medium truncate">{dt.subtitle}</p>}
+                    </div>
+                    <div className="space-y-2 mb-6 mt-auto">
+                      <div className="flex items-center gap-2.5 text-xs text-zinc-400 font-medium">
+                        <FaUsers className="text-zinc-600" />
+                        <span>{dt.registrationCount || 0} 人已报名</span>
+                      </div>
+                      {dt.startTime && (
+                        <div className="flex items-center gap-2.5 text-xs text-zinc-400 font-medium">
+                          <FaCalendarAlt className="text-zinc-600" />
+                          <span>{new Date(dt.startTime).toLocaleDateString('zh-CN')}</span>
+                        </div>
+                      )}
+                    </div>
+                    <button className="w-full py-3 mt-auto rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-xs active:scale-95 bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.05]">
+                      查看详情 <FaArrowRight className="text-[10px]" />
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
+
+          {/* 管理员创建赛事按钮 */}
+          {canCreateTournament && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-8 flex justify-center">
+              <button
+                onClick={() => {
+                  const title = window.prompt('请输入新赛事的标题：');
+                  if (!title) return;
+                  const token = localStorage.getItem('token');
+                  axios.post('/api/tournaments/create', { title }, { headers: { Authorization: `Bearer ${token}` } })
+                    .then(res => {
+                      addToast(res.data.msg, 'success');
+                      navigate(`/tournament-manage/${res.data.data._id}`);
+                    })
+                    .catch(err => addToast(err.response?.data?.msg || '创建失败', 'error'));
+                }}
+                className="flex items-center gap-3 px-8 py-4 bg-[#15151e] border border-dashed border-white/[0.1] hover:border-cyan-500/40 rounded-2xl text-zinc-400 hover:text-cyan-400 transition-all group"
+              >
+                <FaPlus className="text-lg group-hover:rotate-90 transition-transform" />
+                <span className="font-bold tracking-wide">创建新赛事</span>
+              </button>
+            </motion.div>
+          )}
 
         </div>
 
