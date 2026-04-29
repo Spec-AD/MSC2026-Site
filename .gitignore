@@ -1,0 +1,53 @@
+# ── PureBeat MSC2026 Site .gitignore ──
+
+# === Environment ===
+.env
+.env.*
+!.env.example
+
+# === Node.js ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === Build / Cache ===
+dist/
+build/
+.cache/
+*.tsbuildinfo
+
+# === OpenClaw / Agent artifacts ===
+.openclaw/
+.clawhub/
+.learnings/
+AGENTS.md
+HEARTBEAT.md
+IDENTITY.md
+MEMORY.md
+SOUL.md
+TOOLS.md
+USER.md
+BOOTSTRAP.md
+skills/
+memory/
+UpdateLog/
+
+# === Colleague workspaces ===
+liuli/
+ritsu/
+
+# === Project docs (specs + management) ===
+specs/
+docs/
+
+# === Temp files ===
+tmp_*
+tmp_reg_adm.json
+
+# === OS files ===
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

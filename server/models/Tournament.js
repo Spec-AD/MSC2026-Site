@@ -35,6 +35,10 @@ const qualifierScoreEntrySchema = new mongoose.Schema({
   entryTime: { type: Date, default: Date.now }
 });
 
+// Note: unique index on array subdocuments conflicts with empty arrays (null, null) across documents
+// Uniqueness enforced at application layer instead
+qualifierScoreEntrySchema.index({ userId: 1, songName: 1 });
+
 // 分组信息
 const groupSchema = new mongoose.Schema({
   name: { type: String, required: true },            // 组名 (如 "A组")
@@ -44,6 +48,9 @@ const groupSchema = new mongoose.Schema({
 // 正赛对局记录
 const matchSchema = new mongoose.Schema({
   round: { type: String, default: '' },              // 轮次 (如 "半决赛")
+  roundName: { type: String, default: '' },           // e.g. "Round 1" / "Quarter-Final" / "Semi-Final" / "Final"
+  bracketPosition: { type: Number },                  // bracket 中的索引位置 (0-based)
+  nextMatchIndex: { type: Number, default: -1 },      // 胜者进入的对阵索引，-1 = 决赛/无
   playerA: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   playerB: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   scoreA: { type: Number, default: 0 },
@@ -56,6 +63,9 @@ const matchSchema = new mongoose.Schema({
   }],
   status: { type: String, enum: ['PENDING', 'ONGOING', 'FINISHED'], default: 'PENDING' },
   scheduledAt: { type: Date },
+  timeoutMinutes: { type: Number, default: 30 },      // 超时分钟数
+  forfeited: { type: Boolean, default: false },
+  forfeitReason: { type: String, default: '' },
   finishedAt: { type: Date }
 });
 
@@ -109,7 +119,38 @@ const tournamentSchema = new mongoose.Schema({
 
   // 最终结果
   results: [resultSchema],
-  resultAnnouncement: { type: String, default: '' }  // 比赛结果公告
+  resultAnnouncement: { type: String, default: '' },  // 比赛结果公告
+
+  // === 赛事闭环新增字段 (Phase 1) ===
+  seeding: { type: String, enum: ['qualifier', 'random', 'manual'], default: 'qualifier' },
+  advanceCount: { type: Number, default: 8 },           // 预选晋级人数
+  rewardConfig: {                                        // 奖励配置
+    championXp: { type: Number, default: 1000 },
+    runnerUpXp: { type: Number, default: 500 },
+    semiFinalistXp: { type: Number, default: 200 },
+    participantXp: { type: Number, default: 50 }
+  },
+  tags: [String],                                        // 赛事标签（搜索/分类用）
+  bracketGenerated: { type: Boolean, default: false },
+  bracketGeneratedAt: { type: Date },
+  timeoutStrategy: {
+    type: String,
+    enum: ['forfeit_lower_seed', 'forfeit_both', 'admin_only'],
+    default: 'admin_only'
+  },
+  tieBreakRule: {
+    type: String,
+    enum: ['score_only', 'forfeit_lower_seed', 'admin_decision'],
+    default: 'score_only'
+  },
+  operationLogs: [{
+    action: { type: String },                            // 'transition' | 'rollback' | 'score_update'
+    fromStatus: { type: String },
+    toStatus: { type: String },
+    operatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    operatedAt: { type: Date, default: Date.now },
+    note: { type: String, default: '' }
+  }]
 
 }, { timestamps: true });
 

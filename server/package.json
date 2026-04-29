@@ -5,7 +5,7 @@
   "description": "Backend API for MSC 2026 Rhythm Game Tournament",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node app.js",
     "dev": "nodemon server.js"
   },
   "keywords": [
