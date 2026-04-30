@@ -565,6 +565,7 @@ const TournamentManage = () => {
                       const highestIdx = ds.length - 1;
                       return [...prev, {
                         songName: name,
+                        artist: song.artist || '',
                         difficulty: levelNames[highestIdx] || 'MASTER',
                         level: ds[highestIdx] || 3,
                         constant: ds[highestIdx] || 0,
@@ -854,6 +855,36 @@ const TournamentManage = () => {
               </div>
             </details>
           )}
+        </div>
+      )}
+
+      {/* ========== 危险操作 ========== */}
+      {activeTab === 'results' && !isArchived && isManager && (
+        <div className="mt-12">
+          <div className="bg-red-950/20 border border-red-500/20 rounded-2xl p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-4">
+              <FaTimes className="text-red-400 text-lg" />
+              <h3 className="text-lg font-bold text-red-400">危险操作区</h3>
+            </div>
+            <p className="text-zinc-500 text-sm mb-6">删除后将不可恢复，包括所有报名数据、预选成绩和分组信息。</p>
+            <button
+              onClick={async () => {
+                if (!confirm(`确定要永久删除赛事「${tournament.title}」？此操作不可撤销！`)) return;
+                try {
+                  const token = localStorage.getItem('token');
+                  const axios = (await import('axios')).default;
+                  await axios.delete(`/api/tournaments/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+                  addToast('赛事已删除', 'success');
+                  navigate('/tournaments');
+                } catch (err) {
+                  addToast(err.response?.data?.msg || '删除失败', 'error');
+                }
+              }}
+              className="px-6 py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-sm font-bold transition-all active:scale-95"
+            >
+              删除此赛事
+            </button>
+          </div>
         </div>
       )}
     </div>

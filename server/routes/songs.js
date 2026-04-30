@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const DailySong = require('../models/DailySong');
 
 // ==========================================
 // 🌟 v1.4.0 泛音乐每日推荐引擎 (凌晨4点刷新)
