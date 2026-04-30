@@ -126,19 +126,26 @@ const QualifierScoreMatrix = ({
     }
   };
 
-  // ---- 单格直接编辑 ----
-  const handleCellEdit = (userId, songName, value) => {
-    const achievement = parseFloat(value);
-    if (isNaN(achievement)) {
+  // ---- 单格直接编辑（Achievement + DX Score） ----
+  const getCellData = (userId, songName) => {
+    const cached = cachedScores.find(s => s.userId === userId && s.songName === songName);
+    return cached
+      ? { achievement: cached.achievement ?? '', dxScore: cached.dxScore ?? '' }
+      : { achievement: '', dxScore: '' };
+  };
+
+  const handleCellEdit = (userId, songName, field, value) => {
+    const prev = cachedScores.find(s => s.userId === userId && s.songName === songName);
+    if (!prev && (field === 'achievement' ? isNaN(parseFloat(value)) : isNaN(parseInt(value, 10)))) return;
+
+    const achievement = field === 'achievement' ? parseFloat(value) : (prev?.achievement ?? 0);
+    const dxScore = field === 'dxScore' ? parseInt(value, 10) || 0 : (prev?.dxScore ?? 0);
+
+    if (isNaN(achievement) || achievement === 0) {
       removeCachedScore(userId, songName);
       return;
     }
-    cacheScore({ userId, songName, achievement, dxScore: 0 });
-  };
-
-  const getCellValue = (userId, songName) => {
-    const cached = cachedScores.find(s => s.userId === userId && s.songName === songName);
-    return cached ? cached.achievement : '';
+    cacheScore({ userId, songName, achievement, dxScore });
   };
 
   if (songs.length === 0) {
@@ -308,8 +315,8 @@ const QualifierScoreMatrix = ({
 
                     {/* 成绩列 */}
                     {songs.map((song, sIdx) => {
-                      const val = getCellValue(userId, song.songName);
-                      const grade = val !== '' ? getGrade(Number(val)) : null;
+                      const cell = getCellData(userId, song.songName);
+                      const grade = cell.achievement !== '' ? getGrade(Number(cell.achievement)) : null;
                       const isPending = cachedScores.some(
                         s => s.userId === userId && s.songName === song.songName
                       );
@@ -317,20 +324,28 @@ const QualifierScoreMatrix = ({
                       return (
                         <td key={sIdx} className="px-2 py-2 text-center">
                           {isManager ? (
-                            <div className="relative">
+                            <div className="relative flex gap-1 items-center">
                               <input
                                 type="number"
                                 step="0.0001"
                                 min="0"
                                 max="101"
-                                value={val}
-                                onChange={e => handleCellEdit(userId, song.songName, e.target.value)}
-                                placeholder="—"
-                                className={`w-full bg-black/40 border rounded-lg px-2 py-1.5 text-center text-xs font-mono outline-none transition-all focus:ring-1 ${
+                                value={cell.achievement}
+                                onChange={e => handleCellEdit(userId, song.songName, 'achievement', e.target.value)}
+                                placeholder="达成率"
+                                className={`w-[72px] bg-black/40 border rounded-lg px-1.5 py-1.5 text-center text-[11px] font-mono outline-none transition-all focus:ring-1 ${
                                   isPending
                                     ? 'border-cyan-500/50 text-cyan-300 focus:ring-cyan-500/30'
                                     : 'border-white/[0.08] text-zinc-400 focus:border-white/20 focus:ring-white/10'
                                 } ${grade ? grade.color : ''}`}
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                value={cell.dxScore}
+                                onChange={e => handleCellEdit(userId, song.songName, 'dxScore', e.target.value)}
+                                placeholder="DX"
+                                className="w-[56px] bg-black/40 border border-white/[0.08] rounded-lg px-1.5 py-1.5 text-center text-[11px] font-mono text-zinc-400 outline-none transition-all focus:ring-1 focus:border-white/20 focus:ring-white/10 placeholder:text-zinc-700"
                               />
                               {isPending && (
                                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-500 rounded-full" />
@@ -338,10 +353,13 @@ const QualifierScoreMatrix = ({
                             </div>
                           ) : (
                             <div className={`font-mono text-xs font-bold ${grade ? grade.color : 'text-zinc-700'}`}>
-                              {val !== '' ? (
+                              {cell.achievement !== '' ? (
                                 <div>
-                                  <div>{Number(val).toFixed(4)}</div>
-                                  <div className="text-[10px] opacity-70">{grade?.label}</div>
+                                  <div>{Number(cell.achievement).toFixed(4)}</div>
+                                  <div className="text-[10px] opacity-70">
+                                    {grade?.label}
+                                    {cell.dxScore !== '' && ` · ${cell.dxScore}DX`}
+                                  </div>
                                 </div>
                               ) : '—'}
                             </div>
