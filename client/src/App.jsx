@@ -13,7 +13,16 @@ import MaimaiPlateDetail from './pages/MaimaiPlateDetail';
 import MaimaiLevelDetail from './pages/MaimaiLevelDetail';
 import Settings from './pages/Settings';
 import ChunithmProfile from './pages/ChunithmProfile';
-import OsuProfile from './pages/OsuProfile';
+import OsuProfile from './features/osu/pages/OsuProfile';
+import OsuHome from './features/osu/pages/OsuHome';
+import OsuPass from './features/osu/pages/OsuPass';
+import OsuRecent from './features/osu/pages/OsuRecent';
+import OsuBest from './features/osu/pages/OsuBest';
+import OsuTodayBest from './features/osu/pages/OsuTodayBest';
+import OsuScoreDetail from './features/osu/pages/OsuScoreDetail';
+import OsuInfo from './features/osu/pages/OsuInfo';
+import OsuMap from './features/osu/pages/OsuMap';
+import OsuLeaderboard from './features/osu/pages/OsuLeaderboard';
 import DailyHistory from './pages/DailyHistory';
 import LetterGame from './pages/LetterGame';
 import DecodeProfile from './pages/DecodeProfile';
@@ -70,6 +79,19 @@ function App() {
               <Route path="/profile/:username/maimai/level/:level" element={<MaimaiLevelDetail />} />
               <Route path="/profile/:username/chunithm" element={<ChunithmProfile />} />
               <Route path="/profile/:username/osu" element={<OsuProfile />} />
+              <Route path="/osu" element={<OsuHome />}>
+                <Route index element={<OsuProfile />} />
+                <Route path="pass" element={<OsuPass />} />
+                <Route path="recent" element={<OsuRecent />} />
+                <Route path="best" element={<OsuBest />} />
+                <Route path="todaybest" element={<OsuTodayBest />} />
+                <Route path="score/:bid" element={<OsuScoreDetail />} />
+                <Route path="info" element={<OsuInfo />} />
+                <Route path="map" element={<OsuMap />} />
+                <Route path="map/:bid" element={<OsuMap />} />
+                <Route path="leaderboard" element={<OsuLeaderboard />} />
+                <Route path="leaderboard/:bid" element={<OsuLeaderboard />} />
+              </Route>
               <Route path="/daily-history" element={<DailyHistory />} />
               <Route path="/letter-game" element={<LetterGame />} />
               <Route path="/profile/:username/decode" element={<DecodeProfile />} />

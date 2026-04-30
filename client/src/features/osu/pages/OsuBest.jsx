@@ -1,0 +1,73 @@
+// ============================================================
+// OsuBest — BP 200 列表
+// GET /api/osu/best?mode=&limit=&page=
+// ============================================================
+
+import { useState, useEffect, useMemo } from 'react';
+import { getBest } from '../api/osuApi';
+import OsuModeTabs from '../components/OsuModeTabs';
+import OsuScoreList from '../components/OsuScoreList';
+import { FaSpinner, FaTrophy } from 'react-icons/fa';
+
+export default function OsuBest() {
+  const [activeMode, setActiveMode] = useState('standard');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchBest = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: res } = await getBest({ mode: activeMode, limit: 200 });
+      setData(res);
+    } catch (err) {
+      setError(err.userMessage || '加载失败');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBest();
+  }, [activeMode]);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-6 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]" />
+          <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Best Performance</h2>
+          {data && (
+            <span className="text-xs text-zinc-600 font-medium">BP {data.total || data.scores?.length || 0}</span>
+          )}
+        </div>
+        <OsuModeTabs activeMode={activeMode} onModeChange={setActiveMode} />
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FaSpinner className="animate-spin text-2xl text-pink-500/50" />
+        </div>
+      ) : error ? (
+        <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">
+          {error}
+        </div>
+      ) : !data?.scores?.length ? (
+        <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">
+          <FaTrophy className="mx-auto text-2xl text-zinc-700 mb-3" />
+          暂无成绩记录
+        </div>
+      ) : (
+        <OsuScoreList
+          scores={data.scores}
+          height="75vh"
+          emptyMessage="暂无成绩记录"
+          onScoreClick={(score) => setSelectedScore(score)}
+        />
+      )}
+      <OsuScoreDetailPanel score={selectedScore} onClose={() => setSelectedScore(null)} />
+    </div>
+  );
+}

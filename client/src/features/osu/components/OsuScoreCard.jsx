@@ -1,0 +1,76 @@
+// ============================================================
+// OsuScoreCard — 单条成绩卡片（可复用，支持点击展开详情）
+// ============================================================
+
+import { motion } from 'framer-motion';
+import OsuGrade from './OsuGrade';
+import OsuCoverImage from './OsuCoverImage';
+
+export default function OsuScoreCard({ score, rank, onClick, compact = false }) {
+  const modsStr = score.mods?.length > 0 ? `+${score.mods.join('')}` : '';
+  const accuracy = typeof score.accuracy === 'number'
+    ? score.accuracy.toFixed(2)
+    : score.accuracy;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      onClick={() => onClick?.(score)}
+      className={`
+        flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.03]
+        hover:bg-white/[0.02] transition-colors group
+        ${onClick ? 'cursor-pointer' : ''}
+      `}
+    >
+      {/* 排名 */}
+      <span className="w-10 text-center text-sm font-mono text-zinc-600 shrink-0">
+        #{rank}
+      </span>
+
+      {/* 封面 */}
+      <div className="w-12 h-9 shrink-0 rounded overflow-hidden">
+        <OsuCoverImage src={score.coverUrl} alt={score.title} className="w-full h-full" />
+      </div>
+
+      {/* 评级 */}
+      <div className="w-10 text-center shrink-0">
+        <OsuGrade grade={score.grade} size="sm" />
+      </div>
+
+      {/* 曲名 + 版本 */}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-bold text-zinc-200 truncate group-hover:text-pink-300 transition-colors">
+          {score.title}
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded truncate max-w-[120px]">
+            {score.version}
+          </span>
+          {modsStr && (
+            <span className="text-[9px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1 py-0.5 rounded">
+              {modsStr}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* PP */}
+      <div className="w-24 text-right shrink-0">
+        <span className="text-base font-bold text-pink-400">
+          {Math.round(score.pp)}
+        </span>
+        <span className="text-[9px] text-pink-500/60 ml-0.5">pp</span>
+      </div>
+
+      {/* Acc — 非 compact 时显示 */}
+      {!compact && (
+        <div className="w-20 text-right shrink-0 hidden sm:block">
+          <span className="text-xs text-zinc-400 font-medium">
+            {accuracy}%
+          </span>
+        </div>
+      )}
+    </motion.div>
+  );
+}

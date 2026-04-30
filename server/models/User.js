@@ -31,6 +31,9 @@ const UserSchema = new mongoose.Schema({
     osuGlobalRank: { type: Number, default: 0 }, 
     osuCountryRank: { type: Number, default: 0 },
     osuMode: { type: String, default: 'osu' },
+    osuAccessToken: { type: String, default: '' },     // b1.7 OAuth 访问令牌
+    osuRefreshToken: { type: String, default: '' },    // b1.7 OAuth 刷新令牌
+    osuTokenExpiresAt: { type: Date, default: null },  // b1.7 Token 过期时间,
     letterGameStats: {
       totalOv: { type: Number, default: 0 }, // 经过 OV100 衰减算法计算后的总算力 (用于全球排位)
       totalPlays: { type: Number, default: 0 }, // 总游玩局数 (完成的对局数)

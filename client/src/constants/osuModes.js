@@ -1,25 +1,51 @@
 /**
- * osu! 模式定义 — 前端唯一数据源
+ * osu! 模式定义 — 动态数据源（b1.7）
  *
- * 映射关系：
- *   frontendId (standard/taiko/catch/mania)
- *   → apiMode (osu/taiko/fruits/mania)
- *   → display label
+ * 运行时从 GET /api/osu/modes 获取实际映射关系，
+ * 不再与后端双维护。
  *
- * 后端 (server/routes/osu.js) 维护了相同的 modeMap 常量。
- * 修改此文件时请同步更新后端，反之亦然。
+ * MODE_LABELS 作为同步 fallback，适用于页面首次渲染。
  */
 
-/** @type {{ id: string, apiMode: string, label: string }[]} */
-export const MODES = [
-  { id: 'standard', apiMode: 'osu',    label: 'osu!standard' },
-  { id: 'taiko',    apiMode: 'taiko',  label: 'osu!taiko'    },
-  { id: 'catch',    apiMode: 'fruits', label: 'osu!catch'    },
-  { id: 'mania',    apiMode: 'mania',  label: 'osu!mania'    },
-];
+import { fetchModeMap } from '../features/osu/api/osuApi';
 
-/** 根据 frontendId 获取 apiMode */
-export const getApiMode = (id) => MODES.find((m) => m.id === id)?.apiMode || 'osu';
+/** 同步 fallback 标签 — 仅用于首次渲染占位 */
+export const MODE_LABELS = {
+  standard: 'Standard',
+  taiko: 'Taiko',
+  fruits: 'Catch',
+  mania: 'Mania',
+};
 
-/** 前端→后端的 mode 映射对象，与后端 modeMap 保持同步 */
-export const MODE_MAP = Object.fromEntries(MODES.map((m) => [m.id, m.apiMode]));
+/** 异步获取完整模式列表（含 id / apiMode / label） */
+export async function getModes() {
+  const modeMap = await fetchModeMap();
+  return Object.entries(modeMap).map(([id, apiMode]) => ({
+    id,
+    apiMode,
+    label: MODE_LABELS[id] || id,
+  }));
+}
+
+/** 异步获取前端→后端的 mode 映射对象 */
+export async function getModeMap() {
+  return fetchModeMap();
+}
+
+/** 根据 frontendId 获取 apiMode（异步，带缓存） */
+export async function getApiMode(id) {
+  const modeMap = await fetchModeMap();
+  return modeMap[id] || 'osu';
+}
+
+/** 同步 fallback：根据硬编码映射获取 apiMode（用于无法 await 的场景） */
+const FALLBACK_MAP = {
+  standard: 'osu',
+  taiko: 'taiko',
+  catch: 'fruits',
+  mania: 'mania',
+};
+
+export function getApiModeSync(id) {
+  return FALLBACK_MAP[id] || 'osu';
+}
