@@ -1268,7 +1268,7 @@ router.get('/api/tournaments/songs/search', authMiddleware, async (req, res) => 
       level: s.level || [],
       aliases: s.aliases || [],
       coverUrl: game === 'maimai' && s.id
-        ? `https://www.diving-fish.com/covers/${s.id}.jpg`
+        ? `https://www.diving-fish.com/covers/${s.id}.png`
         : '',
       source: s,
     }));
