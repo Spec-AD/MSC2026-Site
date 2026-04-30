@@ -603,6 +603,9 @@ const TournamentManage = () => {
               advanceCount={tournament.advanceCount || 8}
               isManager={!isArchived && isManager}
               onAdvance={() => { loadTournament(); addToast('晋级名单已确认，赛事推进至正赛', 'success'); }}
+              qualifierSongs={tournament.qualifierSongs || []}
+              qualifierStart={tournament.registrationStart}
+              qualifierEnd={tournament.endTime}
             />
           </div>
         </div>

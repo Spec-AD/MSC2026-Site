@@ -72,7 +72,7 @@ router.post('/api/tournaments/create', authMiddleware, async (req, res) => {
 router.get('/api/tournaments/list', async (req, res) => {
   try {
     const tournaments = await Tournament.find({ status: { $ne: 'DRAFT' } })
-      .select('title subtitle coverUrl status registrationStart registrationEnd startTime endTime registrations createdAt')
+      .select('title subtitle coverUrl status registrationStart registrationEnd startTime endTime advanceCount registrations createdAt')
       .sort({ createdAt: -1 });
     const result = tournaments.map(t => ({ ...t.toObject(), registrationCount: t.registrations ? t.registrations.length : 0 }));
     res.json(result);
@@ -648,7 +648,9 @@ router.post('/api/tournaments/:id/qualifier/advance', authMiddleware, async (req
     const blocked = await archivedWriteGuard(req, res, req.params.id);
     if (blocked) return;
 
-    const tournament = await Tournament.findById(req.params.id);
+    const tournament = await Tournament.findById(req.params.id)
+      .populate('qualifierScores.userId', '_id')
+      .populate('registrations.userId', '_id');
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
 
     const { qualifiedUserIds, overrideCutoff } = req.body;
@@ -697,7 +699,9 @@ router.post('/api/tournaments/:id/bracket/generate', authMiddleware, async (req,
     const blocked = await archivedWriteGuard(req, res, req.params.id);
     if (blocked) return;
 
-    const tournament = await Tournament.findById(req.params.id);
+    const tournament = await Tournament.findById(req.params.id)
+      .populate('qualifierScores.userId', '_id')
+      .populate('registrations.userId', '_id');
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
     if (tournament.bracketGenerated) {
       return res.status(409).json({ msg: '对阵表已生成，请先回退 QUALIFYING 状态重置' });
@@ -1279,5 +1283,54 @@ router.get('/api/tournaments/songs/search', authMiddleware, async (req, res) => 
   }
 });
 
+// ── 18. 删除赛事（仅 ADM/CHM，仅 DRAFT/REGISTRATION 阶段）──
+router.delete('/api/tournaments/:id', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTAPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+    if (!['DRAFT', 'REGISTRATION'].includes(tournament.status)) {
+      return res.status(400).json({ msg: '仅 DRAFT 或 REGISTRATION 阶段的赛事可删除' });
+    }
+
+    await Tournament.findByIdAndDelete(req.params.id);
+    res.json({ msg: '赛事已删除' });
+  } catch (err) {
+    console.error('删除赛事失败:', err);
+    res.status(500).json({ msg: '删除失败' });
+  }
+});
+
+// ── 19. 管理员手动录入报名（ADM/CHM，跳过时间窗口和权限校验）──
+router.post('/api/tournaments/:id/register/user', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTAPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ msg: '缺少 userId' });
+
+    const targetUser = await User.findById(userId);
+    if (!targetUser) return res.status(404).json({ msg: '用户不存在' });
+
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+    if (tournament.status !== 'REGISTRATION') return res.status(400).json({ msg: '当前不在报名阶段' });
+
+    const existing = tournament.registrations.find(r => r.userId.toString() === userId);
+    if (existing) return res.status(400).json({ msg: '该用户已报名' });
+
+    const formData = req.body.formData || {};
+    tournament.registrations.push({ userId, formData });
+    await tournament.save();
+
+    res.json({ msg: `已为 ${targetUser.username} 完成报名` });
+  } catch (err) {
+    console.error('管理员报名失败:', err);
+    res.status(500).json({ msg: '报名失败' });
+  }
+});
 
 module.exports = router;

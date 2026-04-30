@@ -332,6 +332,9 @@ const TournamentDetail = () => {
                       tournamentId={id}
                       advanceCount={tournament.advanceCount || 8}
                       isManager={false}
+                      qualifierSongs={tournament.qualifierSongs || []}
+                      qualifierStart={tournament.registrationStart}
+                      qualifierEnd={tournament.endTime}
                     />
                   </div>
                 )}

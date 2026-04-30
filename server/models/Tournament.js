@@ -15,6 +15,8 @@ const qualifierSongSchema = new mongoose.Schema({
   difficulty: { type: String, default: 'MASTER' },  // 难度标识
   level: { type: Number, default: 3 },               // 难度索引
   constant: { type: Number, default: 0 },
+  artist: { type: String, default: '' },
+  coverUrl: { type: String, default: '' },
   note: { type: String, default: '' }                // 备注
 });
 
