@@ -15,7 +15,7 @@ import {
   FaArrowLeft, FaSpinner, FaUsers, FaMusic, FaSitemap, FaPlus, FaTimes,
   FaTrophy, FaEdit, FaSave, FaClipboardList, FaCheckCircle, FaCalendarAlt,
   FaExchangeAlt, FaUndo, FaForward, FaCog, FaLock, FaPlay, FaArchive,
-  FaDownload
+  FaDownload, FaChevronUp, FaChevronDown
 } from 'react-icons/fa';
 
 // ---- 状态机映射 ----
@@ -84,6 +84,7 @@ const TournamentManage = () => {
         registrationEnd: data.registrationEnd ? new Date(data.registrationEnd).toISOString().slice(0, 16) : '',
         startTime: data.startTime ? new Date(data.startTime).toISOString().slice(0, 16) : '',
         endTime: data.endTime ? new Date(data.endTime).toISOString().slice(0, 16) : '',
+        advanceCount: data.advanceCount || 8,
       });
       setFormFields(data.registrationForm || []);
       setLocalQualSongs(data.qualifierSongs || []);
@@ -445,6 +446,7 @@ const TournamentManage = () => {
             <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">报名结束</label><input type="datetime-local" value={editInfo.registrationEnd || ''} onChange={e => setEditInfo({...editInfo, registrationEnd: e.target.value})} className={inputClass} disabled={isArchived} /></div>
             <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">比赛开始</label><input type="datetime-local" value={editInfo.startTime || ''} onChange={e => setEditInfo({...editInfo, startTime: e.target.value})} className={inputClass} disabled={isArchived} /></div>
             <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">比赛结束</label><input type="datetime-local" value={editInfo.endTime || ''} onChange={e => setEditInfo({...editInfo, endTime: e.target.value})} className={inputClass} disabled={isArchived} /></div>
+            <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">预选晋级人数</label><input type="number" min="1" value={editInfo.advanceCount || 8} onChange={e => setEditInfo({...editInfo, advanceCount: parseInt(e.target.value) || 8})} className={inputClass} disabled={isArchived} /></div>
           </div>
           {!tournament.timeApproved && <p className="text-yellow-400 text-sm flex items-center gap-2"><FaCalendarAlt /> 比赛时间尚待 ADM 审核通过</p>}
           {!isArchived && <button onClick={handleSaveInfo} disabled={isSaving} className={btnClass}>{isSaving ? <FaSpinner className="animate-spin" /> : <FaSave />} 保存信息</button>}
@@ -545,6 +547,18 @@ const TournamentManage = () => {
             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><FaMusic className="text-orange-400" /> 预选赛曲目</h3>
             {localQualSongs.map((song, idx) => (
               <div key={idx} className="bg-white/5 border border-white/10 rounded-xl p-4 mb-3 flex flex-col md:flex-row gap-3 items-start">
+                {/* 顺序标志 */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className={`px-2 py-1 rounded-lg text-xs font-bold ${idx === 0 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-zinc-600/20 text-zinc-400 border border-zinc-600/30'}`}>
+                    {idx === 0 ? '★ 主曲' : idx === 1 ? '副曲A' : idx === 2 ? '副曲B' : `#${idx + 1}`}
+                  </span>
+                  {!isArchived && (
+                    <div className="flex flex-col gap-0.5">
+                      <button disabled={idx === 0} onClick={() => { const s = [...localQualSongs]; [s[idx-1], s[idx]] = [s[idx], s[idx-1]]; setLocalQualSongs(s); }} className={`text-xs p-0.5 ${idx === 0 ? 'text-zinc-600' : 'text-zinc-400 hover:text-white'}`}><FaChevronUp /></button>
+                      <button disabled={idx === localQualSongs.length - 1} onClick={() => { const s = [...localQualSongs]; [s[idx], s[idx+1]] = [s[idx+1], s[idx]]; setLocalQualSongs(s); }} className={`text-xs p-0.5 ${idx === localQualSongs.length - 1 ? 'text-zinc-600' : 'text-zinc-400 hover:text-white'}`}><FaChevronDown /></button>
+                    </div>
+                  )}
+                </div>
                 <input value={song.songName} onChange={e => { const s = [...localQualSongs]; s[idx].songName = e.target.value; setLocalQualSongs(s); }} className="flex-1 bg-black/50 border border-white/20 rounded-lg px-3 py-2 text-white text-sm" placeholder="曲目名称" disabled={isArchived} />
                 <input value={song.difficulty || ''} onChange={e => { const s = [...localQualSongs]; s[idx].difficulty = e.target.value; setLocalQualSongs(s); }} className="w-32 bg-black/50 border border-white/20 rounded-lg px-3 py-2 text-white text-sm" placeholder="难度" disabled={isArchived} />
                 <input type="number" step="0.1" value={song.constant || ''} onChange={e => { const s = [...localQualSongs]; s[idx].constant = parseFloat(e.target.value); setLocalQualSongs(s); }} className="w-24 bg-black/50 border border-white/20 rounded-lg px-3 py-2 text-white text-sm font-mono" placeholder="定数" disabled={isArchived} />

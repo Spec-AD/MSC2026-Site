@@ -54,11 +54,12 @@ router.post('/api/tournaments/create', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user || !['ADM', 'CHM'].includes(user.role)) return res.status(403).json({ msg: '权限不足' });
-    const { title, subtitle, description, coverUrl, rules, registrationStart, registrationEnd, startTime, endTime } = req.body;
+    const { title, subtitle, description, coverUrl, rules, registrationStart, registrationEnd, startTime, endTime, advanceCount } = req.body;
     if (!title) return res.status(400).json({ msg: '赛事标题不能为空' });
     const newTournament = new Tournament({
       title, subtitle, description, coverUrl, rules,
       registrationStart, registrationEnd, startTime, endTime,
+      advanceCount: Number(advanceCount) || 8,
       createdBy: user._id, managers: [user._id],
       timeApproved: user.role === 'ADM'
     });
@@ -103,13 +104,14 @@ router.put('/api/tournaments/detail/:id', authMiddleware, async (req, res) => {
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
     const blocked = await archivedWriteGuard(req, res, req.params.id);
     if (blocked) return;
-    const { title, subtitle, description, coverUrl, rules, status, registrationStart, registrationEnd, startTime, endTime } = req.body;
+    const { title, subtitle, description, coverUrl, rules, status, registrationStart, registrationEnd, startTime, endTime, advanceCount } = req.body;
     const updateFields = {};
     if (title !== undefined) updateFields.title = title;
     if (subtitle !== undefined) updateFields.subtitle = subtitle;
     if (description !== undefined) updateFields.description = description;
     if (coverUrl !== undefined) updateFields.coverUrl = coverUrl;
     if (rules !== undefined) updateFields.rules = rules;
+    if (advanceCount !== undefined) updateFields.advanceCount = Number(advanceCount);
     if (registrationStart !== undefined) updateFields.registrationStart = registrationStart;
     if (registrationEnd !== undefined) updateFields.registrationEnd = registrationEnd;
     if (startTime !== undefined || endTime !== undefined) {
