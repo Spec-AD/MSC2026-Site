@@ -1,17 +1,35 @@
 // ============================================================
 // OsuScoreDetailPanel — BP 列表点击成绩弹出的详情面板
-// 桌面端：右侧滑入 (framer-motion slideInRight)
+// 桌面端：右侧滑入 (framer-motion)
 // 移动端：底部 Sheet
+// 由父级 <AnimatePresence> + 条件挂载控制显隐
 // ============================================================
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { getBeatmap } from '../api/osuApi';
 import OsuGrade from './OsuGrade';
 import OsuCoverImage from './OsuCoverImage';
 import { FaTimes, FaExternalLinkAlt, FaSpinner } from 'react-icons/fa';
 import useWindowSize from '../../../hooks/useWindowSize';
+
+const overlayVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 },
+};
+
+const desktopPanelVariants = {
+  hidden: { x: '100%' },
+  visible: { x: 0 },
+  exit: { x: '100%' },
+};
+
+const mobileSheetVariants = {
+  hidden: { y: '100%' },
+  visible: { y: 0 },
+  exit: { y: '100%' },
+};
 
 export default function OsuScoreDetailPanel({ score, onClose }) {
   const navigate = useNavigate();
@@ -25,7 +43,7 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
     setLoadingBeatmap(true);
     getBeatmap(score.beatmapId)
       .then(({ data }) => setBeatmap(data))
-      .catch(() => {}) // 静默失败，详情面板依然可展示基础信息
+      .catch(() => {}) // 静默失败
       .finally(() => setLoadingBeatmap(false));
   }, [score?.beatmapId]);
 
@@ -84,7 +102,7 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
           </div>
         </div>
 
-        {/* 连击 & 判定 */}
+        {/* 连击 & 评分 */}
         <div className="grid grid-cols-2 gap-3">
           {score?.maxCombo != null && (
             <div className="bg-white/[0.02] rounded-lg p-3">
@@ -99,9 +117,7 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
           )}
           <div className="bg-white/[0.02] rounded-lg p-3">
             <div className="text-[10px] text-zinc-600 uppercase tracking-wider">评分</div>
-            <div className="text-sm font-bold text-zinc-200 mt-1">
-              {score?.grade || '-'}
-            </div>
+            <div className="text-sm font-bold text-zinc-200 mt-1">{score?.grade || '-'}</div>
           </div>
         </div>
 
@@ -177,52 +193,47 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
     </div>
   );
 
+  // 蒙层 — 两个端共用
   return (
-    <AnimatePresence>
+    <>
+      <motion.div
+        key="overlay"
+        variants={overlayVariants}
+        initial="hidden"
+        animate="visible"
+        exit="hidden"
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 bg-black/60 z-40"
+        onClick={onClose}
+      />
+
       {isMobile ? (
-        /* 移动端：底部 Sheet */
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 z-50"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-[#0a0a12] rounded-t-2xl max-h-[85vh] overflow-hidden shadow-2xl border-t border-white/[0.05]"
-          >
-            {/* 拖拽指示条 */}
-            <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mt-3 mb-1" />
-            {panelContent}
-          </motion.div>
-        </>
+        <motion.div
+          key="sheet"
+          variants={mobileSheetVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+          className="fixed bottom-0 left-0 right-0 z-50 bg-[#0a0a12] rounded-t-2xl max-h-[85vh] overflow-hidden shadow-2xl border-t border-white/[0.05]"
+        >
+          <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mt-3 mb-1" />
+          {panelContent}
+        </motion.div>
       ) : (
-        /* 桌面端：右侧滑入 */
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 z-40"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 250 }}
-            className="fixed right-0 top-0 h-full w-full max-w-md z-50 bg-[#0a0a12] border-l border-white/[0.05] shadow-2xl overflow-hidden"
-          >
-            {panelContent}
-          </motion.div>
-        </>
+        <motion.div
+          key="panel"
+          variants={desktopPanelVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+          className="fixed right-0 top-0 h-full w-full max-w-md z-50 bg-[#0a0a12] border-l border-white/[0.05] shadow-2xl overflow-hidden"
+        >
+          {panelContent}
+        </motion.div>
       )}
-    </AnimatePresence>
+    </>
   );
 }
 

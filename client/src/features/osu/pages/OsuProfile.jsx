@@ -349,10 +349,15 @@ export default function OsuProfile() {
       </div>
     </div>
 
-      <OsuScoreDetailPanel
-        score={selectedScore}
-        onClose={() => setSelectedScore(null)}
-      />
+      <AnimatePresence>
+        {selectedScore && (
+          <OsuScoreDetailPanel
+            key="detail-panel"
+            score={selectedScore}
+            onClose={() => setSelectedScore(null)}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }

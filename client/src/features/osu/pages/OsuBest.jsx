@@ -4,6 +4,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { getBest } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuScoreList from '../components/OsuScoreList';
@@ -67,7 +68,11 @@ export default function OsuBest() {
           onScoreClick={(score) => setSelectedScore(score)}
         />
       )}
-      <OsuScoreDetailPanel score={selectedScore} onClose={() => setSelectedScore(null)} />
+      <AnimatePresence>
+        {selectedScore && (
+          <OsuScoreDetailPanel key="detail-panel" score={selectedScore} onClose={() => setSelectedScore(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

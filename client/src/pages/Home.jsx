@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import bbcode from 'bbcode-to-react';
+// bbcode-to-react 改为动态 import（不阻塞首屏 bundle）
+// import bbcode from 'bbcode-to-react';
 import { useAuth } from '../context/AuthContext'; 
 import { useTheme } from '../context/ThemeContext'; // 🔥 引入全局主题管家
 import { useToast } from '../context/ToastContext';
@@ -37,7 +38,15 @@ const Home = () => {
   const [isDailyLoading, setIsDailyLoading] = useState(true);
 
   // ── 在线人数统计 ──────────────────────────────────────────
+  const [bbcodeLib, setBbcodeLib] = useState(null);
   const [onlineStats, setOnlineStats] = useState(null);
+  // BBCode 动态加载 — 用户点开公告时才加载
+  useEffect(() => {
+    if (selectedNews && !bbcodeLib) {
+      import('bbcode-to-react').then(mod => setBbcodeLib(() => mod.default));
+    }
+  }, [selectedNews, bbcodeLib]);
+
   // 生成/恢复一个持久会话 ID（页面维度，不依赖登录态）
   const sessionIdRef = useRef((() => {
     let sid = sessionStorage.getItem('pb-session-id');
@@ -96,19 +105,20 @@ const Home = () => {
     }
   }, [user]);
 
+  // 未读消息 — 延迟请求，不阻塞首屏渲染
   useEffect(() => {
     if (user) {
-      const fetchUnread = async () => {
+      const taskId = requestIdleCallback ? requestIdleCallback(async () => {
         try {
           const res = await axios.get('/api/messages/unread-count', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
           setUnreadCount(res.data.count);
         } catch (err) {}
-      };
-      fetchUnread();
+      }, { timeout: 3000 }) : setTimeout(() => fetchUnread(), 2000);
+      return () => { if (requestIdleCallback) cancelIdleCallback(taskId); else clearTimeout(taskId); };
     }
   }, [user]);
 
-  // ── 在线人数：心跳 + 轮询 ──────────────────────────────────
+  // ── 在线人数：心跳 + 轮询（首屏延迟 2s） ──────────────────
   useEffect(() => {
     const fetchOnlineStats = async () => {
       try {
@@ -122,10 +132,11 @@ const Home = () => {
       } catch (err) {}
     };
     sendHeartbeat();
-    fetchOnlineStats();
+    // 在线统计延迟 2s 请求，不阻塞首屏
+    const statsDelay = setTimeout(fetchOnlineStats, 2000);
     const hbTimer = setInterval(sendHeartbeat, 60 * 1000);
     const statsTimer = setInterval(fetchOnlineStats, 60 * 1000);
-    return () => { clearInterval(hbTimer); clearInterval(statsTimer); };
+    return () => { clearTimeout(statsDelay); clearInterval(hbTimer); clearInterval(statsTimer); };
   }, []);
 
   const handleCheckIn = async () => {
@@ -784,7 +795,7 @@ const Home = () => {
 
               <div className="p-6 md:p-10 flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-[#15151e]">
                 <div className="text-zinc-700 dark:text-zinc-300 leading-loose text-[15px] md:text-base bbcode-content whitespace-pre-wrap">
-                  {bbcode.toReact(selectedNews.content)}
+                  {bbcodeLib ? bbcodeLib.toReact(selectedNews.content) : selectedNews.content}
                 </div>
               </div>
             </motion.div>
