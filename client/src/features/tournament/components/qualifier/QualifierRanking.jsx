@@ -209,16 +209,6 @@ const SongCardStage = ({ songs = [], status, selectedIndex, onCardClick }) => {
   );
 };
 
-// ---- DX 星级阈值 ----
-const calcDxStar = (achievement) => {
-  if (achievement >= 97) return 5;
-  if (achievement >= 95) return 4;
-  if (achievement >= 93) return 3;
-  if (achievement >= 90) return 2;
-  if (achievement >= 85) return 1;
-  return 0;
-};
-
 // ---- 主组件 ----
 const QualifierRanking = ({
   tournamentId,
@@ -230,7 +220,7 @@ const QualifierRanking = ({
   qualifierEnd,
 }) => {
   const {
-    rankings, cutoff, cutoffScore, loading, error,
+    rankings, songBreakdown, cutoff, cutoffScore, loading, error,
     fetchRankings, advance, exportCSV,
   } = useQualifierStore();
 

@@ -1,76 +1,150 @@
 /**
  * 🏆 预选赛排名算法
  *
- * 算法（spec §3.3.3 + 琉璃修正）:
+ * 算法（2026-04-30 凛月版）:
  * 1. 按选手聚合所有预选曲目成绩
- * 2. 每首曲目录入权重 = constant / avgConstant
- * 3. 每位选手取 N 首（剔除 1 首最低分，1 首曲目不剔除）
- * 4. 加权总分 = Σ(single × weight)
- * 5. 按总分降序排名
+ * 2. 总榜 = Σachievement（简单求和，不丢最低分，不加权）
+ * 3. 平局则按 totalDxScore 降序
+ * 4. songBreakdown：每曲独立排行，dxStar 由 dxScore/theoreticalDxScore 计算
+ *   排序：achievement 降序 → dxScore 降序 → entryTime 升序
  */
+
+/**
+ * 计算 DX 星级（按 dxScore/theoreticalDxScore 比值）
+ * @param {number} dxScore - 选手 DX 分数
+ * @param {number} theoreticalDxScore - 该曲理论 DX 分（0 则返回 0）
+ * @returns {number} 0–5
+ */
+function calcDxStar(dxScore, theoreticalDxScore) {
+  if (!theoreticalDxScore || theoreticalDxScore <= 0) return 0;
+  const ratio = (dxScore / theoreticalDxScore) * 100;
+  if (ratio >= 97) return 5;
+  if (ratio >= 95) return 4;
+  if (ratio >= 93) return 3;
+  if (ratio >= 90) return 2;
+  if (ratio >= 85) return 1;
+  return 0;
+}
+
+/**
+ * 构建单曲排行榜
+ * @param {Array} qualifierSongs — tournament.qualifierSongs
+ * @param {Array} qualifierScores — tournament.qualifierScores
+ * @returns {Array<{ songName, rankings }>}
+ */
+function buildSongBreakdown(qualifierSongs, qualifierScores) {
+  if (!qualifierSongs || qualifierSongs.length === 0) return [];
+
+  const songMap = {};
+  qualifierSongs.forEach(s => {
+    songMap[s.songName] = { songName: s.songName, theoreticalDxScore: Number(s.theoreticalDxScore) || 0 };
+  });
+
+  // 按 songName 分组
+  const grouped = {};
+  qualifierScores.forEach(entry => {
+    const name = entry.songName;
+    if (!songMap[name]) return;
+    if (!grouped[name]) grouped[name] = [];
+    grouped[name].push(entry);
+  });
+
+  // 辅助：从 entry 提取用户信息
+  const extractUser = (entry) => {
+    const u = entry.userId || {};
+    return {
+      userId: u._id?.toString?.() ?? u.toString?.() ?? entry.userId,
+      username: u.username || '未知',
+      avatarUrl: u.avatarUrl || '',
+    };
+  };
+
+  return Object.values(songMap).map(song => {
+    const entries = grouped[song.songName] || [];
+
+    // 排序：achievement 降序 → dxScore 降序 → entryTime 升序
+    const sorted = [...entries].sort((a, b) => {
+      const ach = (Number(b.achievement) || 0) - (Number(a.achievement) || 0);
+      if (ach !== 0) return ach;
+      const dx = (Number(b.dxScore) || 0) - (Number(a.dxScore) || 0);
+      if (dx !== 0) return dx;
+      const tA = a.entryTime ? new Date(a.entryTime).getTime() : 0;
+      const tB = b.entryTime ? new Date(b.entryTime).getTime() : 0;
+      return tA - tB;
+    });
+
+    const rankings = sorted.map((entry, i) => ({
+      rank: i + 1,
+      ...extractUser(entry),
+      achievement: Number(entry.achievement) || 0,
+      dxScore: Number(entry.dxScore) || 0,
+      entryTime: entry.entryTime,
+      dxStar: calcDxStar(Number(entry.dxScore) || 0, song.theoreticalDxScore),
+    }));
+
+    return { songName: song.songName, rankings };
+  });
+}
 
 /**
  * 计算预选赛排名
  * @param {Object} tournament — Tournament document
  * @param {Object} [options]
  * @param {number} [options.cutoff] — 晋级线（前 N 名），默认取 tournament.advanceCount
- * @returns {{ rankings: Array, cutoff: number, cutoffScore: number|null }}
+ * @returns {{ rankings: Array, cutoff: number, cutoffScore: number|null, songBreakdown: Array }}
  */
 function calculateQualifierRankings(tournament, options = {}) {
-  const { qualifierSongs, qualifierScores, registrations } = tournament;
+  const { qualifierSongs, qualifierScores } = tournament;
   const cutoff = options.cutoff ?? tournament.advanceCount ?? 8;
 
   if (!qualifierSongs || qualifierSongs.length === 0) {
-    return { rankings: [], cutoff, cutoffScore: null };
+    return { rankings: [], cutoff, cutoffScore: null, songBreakdown: [] };
   }
-
-  const avgConstant =
-    qualifierSongs.reduce((s, q) => s + (Number(q.constant) || 0), 0) / qualifierSongs.length;
 
   // ── 按选手聚合成绩 ──
   const playerMap = {};
   qualifierScores.forEach(entry => {
-    const uid = entry.userId?._id?.toString?.() ?? entry.userId?.toString?.() ?? entry.userId;
+    const u = entry.userId || {};
+    const uid = u._id?.toString?.() ?? u.toString?.() ?? entry.userId;
     if (!playerMap[uid]) {
-      playerMap[uid] = { userId: uid, scores: [] };
+      playerMap[uid] = {
+        userId: uid,
+        username: u.username || '未知',
+        avatarUrl: u.avatarUrl || '',
+        scores: [],
+      };
     }
     playerMap[uid].scores.push(entry);
   });
 
-  // ── 计算每位选手加权总分 ──
+  // ── Σachievement（简单求和，不丢最低分，不加权） ──
   const players = Object.values(playerMap).map(p => {
-    // 按 achievement 降序
-    p.scores.sort((a, b) => (Number(b.achievement) || 0) - (Number(a.achievement) || 0));
-
-    // 取最佳 N-1 首（>= 2 首时才剔除最低分，1 首直接取）
-    const takeCount = qualifierSongs.length >= 2
-      ? Math.max(1, qualifierSongs.length - 1)
-      : qualifierSongs.length;
-    const selected = p.scores.slice(0, takeCount);
-
-    // 加权总分 = Σ(单曲 achievement × 该曲目 weight)
-    let total = 0;
-    selected.forEach(s => {
-      const song = qualifierSongs.find(q => q.songName === s.songName);
-      const constant = Number(song?.constant) || 0;
-      const weight = avgConstant > 0 ? constant / avgConstant : 1;
-      total += (Number(s.achievement) || 0) * weight;
-    });
-
+    const total = p.scores.reduce((sum, s) => sum + (Number(s.achievement) || 0), 0);
+    const totalDxScore = p.scores.reduce((sum, s) => sum + (Number(s.dxScore) || 0), 0);
     return {
       userId: p.userId,
-      total: Math.round(total * 100) / 100,
+      username: p.username,
+      avatarUrl: p.avatarUrl,
+      total: Math.round(total * 10000) / 10000,
+      totalDxScore,
       scoreCount: p.scores.length,
     };
   });
 
-  // ── 按总分降序排名 ──
-  players.sort((a, b) => b.total - a.total);
+  // 排序：total 降序 → totalDxScore 降序
+  players.sort((a, b) => {
+    const diff = b.total - a.total;
+    if (Math.abs(diff) > 0.0001) return diff;
+    return b.totalDxScore - a.totalDxScore;
+  });
 
   const rankings = players.map((p, i) => ({
     rank: i + 1,
     userId: p.userId,
+    username: p.username,
+    avatarUrl: p.avatarUrl,
     total: p.total,
+    totalDxScore: p.totalDxScore,
     scoreCount: p.scoreCount,
   }));
 
@@ -78,7 +152,10 @@ function calculateQualifierRankings(tournament, options = {}) {
     ? rankings[cutoff - 1]?.total ?? null
     : (rankings.length > 0 ? rankings[rankings.length - 1].total : null);
 
-  return { rankings, cutoff, cutoffScore };
+  // ── 构建单曲排行榜 ──
+  const songBreakdown = buildSongBreakdown(qualifierSongs, qualifierScores);
+
+  return { rankings, cutoff, cutoffScore, songBreakdown };
 }
 
 /**

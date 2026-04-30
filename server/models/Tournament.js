@@ -17,6 +17,7 @@ const qualifierSongSchema = new mongoose.Schema({
   constant: { type: Number, default: 0 },
   artist: { type: String, default: '' },
   coverUrl: { type: String, default: '' },
+  theoreticalDxScore: { type: Number, default: 0 },
   note: { type: String, default: '' }                // 备注
 });
 

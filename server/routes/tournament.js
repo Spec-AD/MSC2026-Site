@@ -546,6 +546,18 @@ router.get('/api/tournaments/:id/qualifier/rankings', async (req, res) => {
       avatarUrl: popMap[r.userId]?.avatarUrl || '',
     }));
 
+    // 单曲排行榜也附加用户信息
+    if (result.songBreakdown) {
+      result.songBreakdown = result.songBreakdown.map(song => ({
+        ...song,
+        rankings: song.rankings.map(r => ({
+          ...r,
+          username: popMap[r.userId]?.username || '',
+          avatarUrl: popMap[r.userId]?.avatarUrl || '',
+        })),
+      }));
+    }
+
     res.json({
       ...result,
       cutLineRank: result.cutoff,
@@ -1250,12 +1262,21 @@ router.get('/api/tournaments/songs/search', authMiddleware, async (req, res) => 
     const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
     const [maimai, chuni, arcaea] = await Promise.all([
-      Song.find({ title: regex }).select('id title type ds level basic_info.artist basic_info.genre').limit(30).lean(),
+      Song.find({ title: regex }).select('id title type ds level charts basic_info.artist basic_info.genre').limit(30).lean(),
       ChunithmSong.find({ $or: [{ title: regex }, { 'basic_info.title': regex }] })
         .select('title ds level basic_info.artist basic_info.genre').limit(30).lean(),
       ArcaeaSong.find({ $or: [{ title: regex }, { aliases: regex }] })
         .select('title id aliases').limit(30).lean(),
     ]);
+
+    // 计算理论 DX 分数：从 chart notes 取最高难度，总物量 × 3
+    const calcTheoDx = (s) => {
+      const charts = Array.isArray(s.charts) ? s.charts : [];
+      const chart = charts[charts.length - 1]; // 最高难度
+      if (!chart || !chart.notes) return 0;
+      const notes = Array.isArray(chart.notes) ? chart.notes : [];
+      return notes.reduce((a, b) => a + (Number(b) || 0), 0) * 3;
+    };
 
     // 统一格式
     const format = (arr, game) => arr.map(s => ({
@@ -1270,6 +1291,7 @@ router.get('/api/tournaments/songs/search', authMiddleware, async (req, res) => 
       coverUrl: game === 'maimai' && s.id
         ? `https://www.diving-fish.com/covers/${String(s.id).padStart(5, '0')}.png`
         : '',
+      theoreticalDxScore: game === 'maimai' ? calcTheoDx(s) : 0,
       source: s,
     }));
 

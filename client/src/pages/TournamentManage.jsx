@@ -570,6 +570,7 @@ const TournamentManage = () => {
                         level: ds[highestIdx] || 3,
                         constant: ds[highestIdx] || 0,
                         coverUrl: song.coverUrl || '',
+                        theoreticalDxScore: song.theoreticalDxScore || 0,
                         note: '',
                       }];
                     });
