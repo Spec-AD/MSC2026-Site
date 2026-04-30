@@ -331,7 +331,7 @@ const TournamentDetail = () => {
                     <QualifierRanking
                       tournamentId={id}
                       advanceCount={tournament.advanceCount || 8}
-                      isManager={false}
+                      isManager={canManage}
                       qualifierSongs={tournament.qualifierSongs || []}
                       qualifierStart={tournament.registrationStart}
                       qualifierEnd={tournament.endTime}
@@ -378,7 +378,7 @@ const TournamentDetail = () => {
               {['ONGOING', 'FINISHED', 'ARCHIVED'].includes(tournament.status) && displayMatches.length > 0 ? (
                 <BracketView
                   tournamentId={id}
-                  isManager={false}
+                  isManager={canManage}
                 />
               ) : displayMatches.length > 0 ? (
                 <div className="space-y-4">
@@ -428,7 +428,7 @@ const TournamentDetail = () => {
                   avatarUrl: r.userId?.avatarUrl || r.avatarUrl,
                   rank: r.rank,
                 }))}
-                isManager={false}
+                isManager={canManage}
               />
             </motion.div>
           )}

@@ -124,7 +124,7 @@ const TournamentManage = () => {
   const isArchived = tournament.status === 'ARCHIVED';
   const availableTransitions = isArchived ? [] : (ALLOWED_TRANSITIONS[tournament.status] || []);
   const isAdm = user.role === 'ADM';
-  const isManager = isAdm || (user.role === 'CHM' && tournament.managers?.includes(user._id));
+  const isManager = isAdm || (user.role === 'CHM' && tournament.managers?.some(m => m._id === user._id));
 
   // ==================== State Machine Handlers ====================
   const handleTransition = async (targetStatus) => {
