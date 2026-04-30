@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { FaSpinner, FaCheckCircle } from 'react-icons/fa';
+import { FaSpinner } from 'react-icons/fa';
 import { useToast } from '../context/ToastContext';
 
 const OsuCallback = () => {
@@ -13,9 +13,10 @@ const OsuCallback = () => {
   useEffect(() => {
     const bindOsuAccount = async () => {
       if (hasRequested.current) return;
-      
+
       const urlParams = new URLSearchParams(location.search);
       const code = urlParams.get('code');
+      const state = urlParams.get('state') || '';
 
       if (!code) {
         addToast('未获取到授权码，绑定失败', 'error');
@@ -24,17 +25,23 @@ const OsuCallback = () => {
 
       hasRequested.current = true;
 
+      // 从 state 中解析用户名（格式：{username}_osu）
+      const username = state.replace(/_osu$/, '');
+      // 向前端传递实际使用的 redirect_uri，确保后端 token exchange 用的值一致
+      const redirectUri = `${window.location.origin}/osu-callback`;
+
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.post('/api/osu/bind', { code }, {
+        const res = await axios.post('/api/osu/bind', { code, redirect_uri: redirectUri }, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
         addToast(res.data.msg, 'success');
-        navigate('/profile'); 
+        // 回传用户名，对管理员场景友好
+        navigate(username ? `/profile/${username}/osu` : '/profile');
       } catch (err) {
         addToast(err.response?.data?.msg || '网络错误，绑定失败', 'error');
-        navigate('/profile');
+        navigate(username ? `/profile/${username}` : '/profile');
       }
     };
 
@@ -55,6 +62,5 @@ const OsuCallback = () => {
     </div>
   );
 };
-
 
 export default OsuCallback;

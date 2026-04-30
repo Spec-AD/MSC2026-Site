@@ -57,10 +57,10 @@ const UserSchema = new mongoose.Schema({
     isRegistered: { type: Boolean, default: false },
     isB50Visible: { type: Boolean, default: false },
     isChuniB50Visible: { type: Boolean, default: false },
-    divingFishUsername: { 
-       type: String, 
-       default: '' 
-    },
+    divingFishUsername: { type: String, default: '' },
+    lxnsAccessToken: { type: String, default: '' },
+    lxnsRefreshToken: { type: String, default: '' },
+    lxnsPersonalApiToken: { type: String, default: '' },
     totalPf: { 
        type: Number, 
        default: 0 
@@ -118,8 +118,6 @@ const UserSchema = new mongoose.Schema({
     avatarUrl: { type: String, default: '/assets/logos.png' }, // 默认头像
     bannerUrl: { type: String, default: '/assets/bg.png' },    // 默认背景
 
-    // 4. 好友列表 (存 User 的 ObjectId)
-    friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 });
 
 module.exports = mongoose.model('User', UserSchema);

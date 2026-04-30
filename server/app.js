@@ -21,6 +21,15 @@ const path = require('path');
 
 const app = express();
 
+// ===== 启动时配置检查 =====
+if (!process.env.LXNS_CLIENT_ID || !process.env.LXNS_CLIENT_SECRET) {
+  console.warn('⚠️ LXNS_CLIENT_ID / LXNS_CLIENT_SECRET 未配置，落雪 OAuth 功能不可用');
+}
+if (!process.env.MONGO_URI) {
+  console.error('❌ MONGO_URI 未配置');
+  process.exit(1);
+}
+
 // ===== 全局中间件 =====
 app.use(cors());
 app.use(express.json());

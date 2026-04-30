@@ -1,17 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { MODES, getApiMode } from '../constants/osuModes';
 import { FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt, FaLock, FaGlobe, FaMapMarkerAlt, FaPlay } from 'react-icons/fa';
-
-const MODES = [
-  { id: 'standard', apiMode: 'osu', label: 'osu!standard' },
-  { id: 'taiko', apiMode: 'taiko', label: 'osu!taiko' },
-  { id: 'catch', apiMode: 'fruits', label: 'osu!catch' },
-  { id: 'mania', apiMode: 'mania', label: 'osu!mania' }
-];
 
 export default function OsuProfile() {
   const { username } = useParams();
@@ -23,24 +17,11 @@ export default function OsuProfile() {
   const [allOsuScores, setAllOsuScores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
-  // 当前查看的模式
+
   const [activeMode, setActiveMode] = useState('standard');
   const [isSyncing, setIsSyncing] = useState(false);
-  const oauthCalled = useRef(false);
 
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
-
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    
-    if (code && isOwnProfile && !oauthCalled.current) {
-      oauthCalled.current = true;
-      window.history.replaceState({}, document.title, window.location.pathname);
-      handleOsuOAuthBind(code);
-    }
-  }, [isOwnProfile]);
 
   const fetchProfileData = async () => {
     try {
@@ -62,15 +43,12 @@ export default function OsuProfile() {
     fetchProfileData();
   }, [username]);
 
-  const handleOsuOAuthBind = async (code) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/osu/bind', { code }, { headers: { Authorization: `Bearer ${token}` } });
-      addToast('osu! 账号绑定成功！', 'success');
-      await fetchProfileData();
-    } catch (err) {
-      addToast(err.response?.data?.msg || '绑定失败', 'error');
-    }
+  /** 构造 osu! OAuth 授权 URL — redirect_uri 指向稳定的 /osu-callback 路由 */
+  const buildOsuAuthUrl = () => {
+    const clientId = import.meta.env.VITE_OSU_CLIENT_ID;
+    const redirectUri = encodeURIComponent(`${window.location.origin}/osu-callback`);
+    const state = `${profile.username}_osu`;
+    return `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify+public&state=${state}`;
   };
 
   const handleSyncScores = async () => {
@@ -89,7 +67,7 @@ export default function OsuProfile() {
 
   // 根据当前选择的模式过滤显示成绩
   const currentModeScores = useMemo(() => {
-    const targetApiMode = MODES.find(m => m.id === activeMode)?.apiMode || 'osu';
+    const targetApiMode = getApiMode(activeMode);
     return allOsuScores.filter(s => s.mode === targetApiMode).sort((a, b) => b.pp - a.pp);
   }, [allOsuScores, activeMode]);
 
@@ -101,8 +79,8 @@ export default function OsuProfile() {
 
   const renderGrade = (grade) => {
     const g = (grade || '').toUpperCase();
-    if (g === 'XH' || g === 'SH') return <span className="text-zinc-200 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] font-black italic">{g.replace('H', '')}</span>; 
-    if (g === 'X' || g === 'S') return <span className="text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)] font-black italic">{g === 'X' ? 'SS' : 'S'}</span>; 
+    if (g === 'XH' || g === 'SH') return <span className="text-zinc-200 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] font-black italic">{g.replace('H', '')}</span>;
+    if (g === 'X' || g === 'S') return <span className="text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)] font-black italic">{g === 'X' ? 'SS' : 'S'}</span>;
     if (g === 'A') return <span className="text-emerald-400 font-black italic">A</span>;
     if (g === 'B') return <span className="text-blue-400 font-black italic">B</span>;
     if (g === 'C') return <span className="text-purple-400 font-black italic">C</span>;
@@ -115,7 +93,7 @@ export default function OsuProfile() {
 
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans selection:bg-pink-500/30 relative pb-24 overflow-x-hidden">
-      
+
       {/* osu! 专属品红/粉色环境光 */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-pink-900/10 rounded-full blur-[140px] mix-blend-screen"></div>
@@ -123,7 +101,7 @@ export default function OsuProfile() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 pt-24 relative z-10">
-        
+
         {/* 头部控制台 */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10 border-b border-white/[0.05] pb-8">
           <div className="flex flex-col gap-4">
@@ -147,10 +125,10 @@ export default function OsuProfile() {
           <div className="flex flex-col gap-3 w-full md:w-auto">
             <div className="flex items-center gap-1.5 bg-[#15151e]/80 p-1.5 rounded-xl border border-white/[0.05] w-fit">
               {MODES.map(mode => (
-                <button 
+                <button
                   key={mode.id}
                   onClick={() => setActiveMode(mode.id)}
-                                    style={{ fontFamily: "'Quicksand', sans-serif" }}
+                  style={{ fontFamily: "'Quicksand', sans-serif" }}
                   className={`px-4 py-1.5 text-xs font-bold transition-all border-b-2 ${activeMode === mode.id ? 'bg-pink-500/20 text-pink-400 border-pink-500' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5 border-transparent'}`}
                 >
                   {mode.label}
@@ -160,7 +138,7 @@ export default function OsuProfile() {
 
             {isOwnProfile && (
               profile.osuId ? (
-                <button 
+                <button
                   onClick={handleSyncScores}
                   disabled={isSyncing}
                   className="w-full bg-pink-600 hover:bg-pink-500 text-white px-5 py-2.5 text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
@@ -169,12 +147,7 @@ export default function OsuProfile() {
                 </button>
               ) : (
                 <button
-                  onClick={() => {
-                    const clientId = '38062';
-                    const redirectUri = encodeURIComponent(`${window.location.origin}/profile/${profile.username}/osu`);
-                    const state = `${profile.username}_osu`;
-                    window.location.href = `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify+public&state=${state}`;
-                  }}
+                  onClick={() => { window.location.href = buildOsuAuthUrl(); }}
                   className="w-full bg-pink-600 hover:bg-pink-500 text-white px-5 py-2.5 text-sm font-bold transition-all flex items-center justify-center gap-2 active:scale-95"
                 >
                   <FaLock /> 绑定 osu! 账号
@@ -192,12 +165,7 @@ export default function OsuProfile() {
             </p>
             {isOwnProfile && (
               <button
-                onClick={() => {
-                  const clientId = '38062';
-                  const redirectUri = encodeURIComponent(`${window.location.origin}/profile/${profile.username}/osu`);
-                  const state = `${profile.username}_osu`;
-                  window.location.href = `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify+public&state=${state}`;
-                }}
+                onClick={() => { window.location.href = buildOsuAuthUrl(); }}
                 className="px-6 py-3 bg-pink-600 hover:bg-pink-500 text-white font-bold transition-all active:scale-95 flex items-center gap-2"
               >
                 <FaLock /> 立即绑定 osu! 账号
@@ -246,7 +214,7 @@ export default function OsuProfile() {
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   {currentModeScores.map((score, index) => (
-                    <motion.div 
+                    <motion.div
                       key={score._id || index}
                       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.01 > 0.5 ? 0 : index * 0.01 }}
                       className="relative flex items-center bg-[#15151e] border border-white/[0.05] border-l-4 border-l-transparent hover:border-l-pink-500 p-4 overflow-hidden group transition-colors duration-300"
@@ -255,11 +223,10 @@ export default function OsuProfile() {
                         #{index + 1}
                       </div>
 
-                      {/* 🔥 封面原图缩略图显示 */}
-                      <img src={score.coverUrl} 
-                        alt="cover" 
-                        className="w-16 h-11 object-cover border border-white/5 shrink-0 mr-3 group-hover:scale-105 transition-transform" 
-                        onError={(e) => e.target.style.display='none'} 
+                      <img src={score.coverUrl}
+                        alt="cover"
+                        className="w-16 h-11 object-cover border border-white/5 shrink-0 mr-3 group-hover:scale-105 transition-transform"
+                        onError={(e) => e.target.style.display='none'}
                       />
 
                       <div className="w-10 shrink-0 text-center text-2xl z-10 flex items-center justify-center mr-2">
@@ -274,7 +241,7 @@ export default function OsuProfile() {
                           <span className="text-[11px] font-bold text-yellow-500 bg-yellow-500/10 px-2 py-0.5 truncate max-w-[150px]" title={score.version}>
                             {score.version}
                           </span>
-                                                    {score.mods && score.mods.length > 0 && (
+                          {score.mods && score.mods.length > 0 && (
                             <span className="text-[10px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1.5 py-0.5">+{score.mods.join('')}</span>
                           )}
                         </div>
