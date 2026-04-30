@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const WikiPage = require('../models/WikiPage');
+const WikiCategory = require('../models/WikiCategory');
 const ChunithmSong = require('../models/ChunithmSong');
 const ChunithmScore = require('../models/ChunithmScore');
 const axios = require('axios');

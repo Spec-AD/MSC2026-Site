@@ -4,6 +4,8 @@ const User = require('../models/User');
 const Complaint = require('../models/Complaint');
 const Tournament = require('../models/Tournament');
 const Message = require('../models/Message');
+const Song = require('../models/Song');
+const axios = require('axios');
 const { addXp, authMiddleware, optionalAuth } = require('../middleware/auth');
 
 // ==========================================
@@ -106,5 +108,23 @@ router.get('/api/admin/staff', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '获取失败' }); }
 });
 
+// 同步舞萌曲库 (ADM only)
+router.post('/api/admin/sync-songs', authMiddleware, async (req, res) => {
+  try {
+    const adminUser = await User.findById(req.user.id || req.user._id);
+    if (!adminUser || adminUser.role !== 'ADM') return res.status(403).json({ msg: '权限不足' });
+    const response = await axios.get('https://www.diving-fish.com/api/maimaidxprober/music_data');
+    const songs = response.data;
+    await Song.collection.dropIndexes().catch(() => {});
+
+    const bulkOps = songs.map(song => {
+      const isUtage = song.basic_info?.genre === '宴会場' || song.basic_info?.genre === '宴会场' || song.basic_info?.from === '宴会場' || song.basic_info?.from === '宴会场' || song.type === 'UTAGE';
+      const finalDs = isUtage ? (song.ds ? song.ds.map(() => 0) : [0, 0, 0, 0, 0]) : song.ds;
+      return { updateOne: { filter: { id: String(song.id) }, update: { $set: { id: String(song.id), title: song.title, type: song.type, ds: finalDs, level: song.level, basic_info: song.basic_info, charts: song.charts } }, upsert: true } };
+    });
+    await Song.bulkWrite(bulkOps);
+    res.json({ msg: `✅ 成功同步 ${songs.length} 首乐曲！` });
+  } catch (err) { res.status(500).json({ msg: '同步失败' }); }
+});
 
 module.exports = router;

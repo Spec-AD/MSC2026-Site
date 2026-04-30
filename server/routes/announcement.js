@@ -8,6 +8,14 @@ const { authMiddleware, optionalAuth } = require('../middleware/auth');
 // 📰 公告管理员(ANN)扩展 API：审核/编辑/删除公告
 // ==========================================
 
+// 获取公告列表
+router.get('/api/announcements', async (req, res) => {
+  try {
+    const announcements = await Announcement.find().sort({ createdAt: -1 }).populate('author', 'username avatarUrl role');
+    res.json(announcements);
+  } catch (err) { res.status(500).json({ msg: '获取失败' }); }
+});
+
 // 获取单个公告详情
 router.get('/api/announcements/:id', async (req, res) => {
   try {
