@@ -9,7 +9,8 @@ export const useQualifierStore = create((set, get) => ({
   // ---- State ----
   songs: [], // 预选曲目
   scores: [], // 成绩录入缓存（本地草稿）
-  rankings: [], // 排名数据
+  rankings: [], // 总榜数据
+  songBreakdown: [], // 单曲排行（每曲独立排名）
   cutoff: 0, // 晋级人数
   cutoffScore: 0, // 晋级分数线
   loading: false,
@@ -25,9 +26,10 @@ export const useQualifierStore = create((set, get) => ({
     set({ loading: true, error: null });
     try {
       const res = await api.getQualifierRankings(id, cutoff);
-      const { rankings, cutoff: c, cutoffScore } = res.data;
+      const { rankings, cutoff: c, cutoffScore, songBreakdown } = res.data;
       set({
         rankings: rankings || [],
+        songBreakdown: songBreakdown || [],
         cutoff: c || 0,
         cutoffScore: cutoffScore || 0,
         loading: false,
@@ -115,6 +117,7 @@ export const useQualifierStore = create((set, get) => ({
       songs: [],
       scores: [],
       rankings: [],
+      songBreakdown: [],
       cutoff: 0,
       cutoffScore: 0,
       loading: false,
