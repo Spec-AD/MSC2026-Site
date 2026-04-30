@@ -1250,7 +1250,7 @@ router.get('/api/tournaments/songs/search', authMiddleware, async (req, res) => 
     const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
     const [maimai, chuni, arcaea] = await Promise.all([
-      Song.find({ title: regex }).select('title type ds level basic_info.artist basic_info.genre').limit(30).lean(),
+      Song.find({ title: regex }).select('id title type ds level basic_info.artist basic_info.genre').limit(30).lean(),
       ChunithmSong.find({ $or: [{ title: regex }, { 'basic_info.title': regex }] })
         .select('title ds level basic_info.artist basic_info.genre').limit(30).lean(),
       ArcaeaSong.find({ $or: [{ title: regex }, { aliases: regex }] })
