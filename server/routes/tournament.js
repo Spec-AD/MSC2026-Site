@@ -1258,7 +1258,7 @@ router.get('/api/tournaments/songs/search', authMiddleware, async (req, res) => 
     ]);
 
     // 统一格式
-    const format = (source, game) => arr => arr.map(s => ({
+    const format = (arr, game) => arr.map(s => ({
       _id: s._id,
       game,
       title: s.title || s.basic_info?.title || '',
