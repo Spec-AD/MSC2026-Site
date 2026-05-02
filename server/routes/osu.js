@@ -324,6 +324,7 @@ router.get('/api/osu/map/:bid', async (req, res) => {
     const data = await osuServices.map.getMap(beatmapId);
     res.json(data);
   } catch (err) {
+    if (err.status === 404) return res.status(404).json({ msg: '谱面未找到' });
     if (err.status === 429) return res.status(429).json({ msg: err.message, retryAfter: err.retryAfter });
     res.status(500).json({ msg: '查询失败' });
   }
@@ -365,6 +366,7 @@ router.get('/api/osu/leaderboard/:bid', optionalAuth, async (req, res) => {
     });
     res.json(data);
   } catch (err) {
+    if (err.status === 404) return res.status(404).json({ msg: '谱面未找到' });
     if (err.status === 429) return res.status(429).json({ msg: err.message, retryAfter: err.retryAfter });
     res.status(500).json({ msg: '查询失败' });
   }
