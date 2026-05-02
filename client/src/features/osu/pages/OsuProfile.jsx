@@ -10,7 +10,7 @@ import { Virtuoso } from 'react-virtuoso';
 import {
   FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt,
   FaLock, FaGlobe, FaMapMarkerAlt, FaPlay, FaUser,
-  FaCheck, FaExclamationCircle, FaRedo,
+  FaCheck, FaExclamationCircle, FaRedo, FaTimes,
 } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
@@ -46,7 +46,7 @@ export default function OsuProfile() {
   const [activeMode, setActiveMode] = useState('standard');
   const [modeMap, setModeMap] = useState(null);
 
-  const { syncState, isSyncing, syncProgress, syncAll } = useOsuSync();
+  const { syncState, isSyncing, syncProgress, syncAll, authError, clearAuthError } = useOsuSync();
 
   const isOwnProfile = profile && currentUser &&
     (profile.username?.toLowerCase() === currentUser.username?.toLowerCase());
@@ -243,6 +243,39 @@ export default function OsuProfile() {
                   animate={{ width: `${(syncProgress.completed / syncProgress.total) * 100}%` }}
                   transition={{ duration: 0.3 }}
                 />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ====== Token 过期提醒（需重新绑定）===== */}
+        <AnimatePresence>
+          {isOwnProfile && authError && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-4"
+            >
+              <div className="flex items-start gap-3">
+                <FaExclamationCircle className="text-red-400 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-red-300">osu! 授权已过期</p>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    你的 osu! 账号授权已过期，需要重新绑定后才能同步最新数据。
+                    重新绑定不会影响已有的成绩数据。
+                  </p>
+                  <button
+                    onClick={() => { window.location.href = buildOsuAuthUrl(); }}
+                    className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <FaRedo /> 重新绑定 osu! 账号
+                  </button>
+                </div>
+                <button onClick={clearAuthError}
+                  className="text-zinc-500 hover:text-zinc-300 transition-colors shrink-0">
+                  <FaTimes size={14} />
+                </button>
               </div>
             </motion.div>
           )}

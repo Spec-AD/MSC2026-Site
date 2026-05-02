@@ -181,7 +181,8 @@ async function ensureUserToken(user) {
       client_id:     CFG.clientId,
       client_secret: CFG.clientSecret,
       grant_type:    'refresh_token',
-      refresh_token: user.osuRefreshToken
+      refresh_token: user.osuRefreshToken,
+      scope:         'public'
     }, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } });
 
     user.osuAccessToken  = res.data.access_token;

@@ -160,10 +160,13 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
                 <span className="text-zinc-500">
                   星级: <span className="text-yellow-400 font-bold">{beatmap.starRating.toFixed(2)}★</span>
                 </span>
-                <span className="text-zinc-500">
-                  Aim: <span className="text-zinc-300">{beatmap.aimDifficulty?.toFixed(2) || '-'}</span> |
-                  Speed: <span className="text-zinc-300">{beatmap.speedDifficulty?.toFixed(2) || '-'}</span>
-                </span>
+                {/* Aim / Speed 难度评级 — 仅 standard 模式有意义 */}
+                {score?.mode === 'standard' && (
+                  <span className="text-zinc-500">
+                    Aim: <span className="text-zinc-300">{beatmap.aimDifficulty?.toFixed(2) || '-'}</span> |
+                    Speed: <span className="text-zinc-300">{beatmap.speedDifficulty?.toFixed(2) || '-'}</span>
+                  </span>
+                )}
               </div>
             )}
           </div>

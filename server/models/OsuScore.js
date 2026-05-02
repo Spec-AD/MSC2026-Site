@@ -21,7 +21,13 @@ const OsuScoreSchema = new mongoose.Schema({
   countMiss: { type: Number, default: null },
   // b1.7 新增字段 — 总分与曲目状态
   score:         { type: Number, default: 0 },
-  beatmapStatus: { type: String, default: '' }
+  beatmapStatus: { type: String, default: '' },
+  // b1.7 第二轮新增字段
+  aim:          { type: Number, default: null },
+  speed:        { type: Number, default: null },
+  countPerf:    { type: Number, default: null },
+  countLDrp:    { type: Number, default: null },
+  countSDrpMiss: { type: Number, default: null },
 });
 
 // b1.7 复合索引 — best / BP 200 查询

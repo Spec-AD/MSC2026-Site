@@ -1,27 +1,86 @@
 // ============================================================
-// OsuLeaderboard — 谱面全球排行榜（b1.7 完全重写）
-// GET /api/osu/leaderboard/:bid?mode=&legacy=&mods=&limit=
-// 响应结构：{ beatmap, scores: [{ rank, score, accuracy, ... 平铺字段 }], currentUserRank, availableTypes }
+// OsuLeaderboard — 谱面全球排行榜（b1.7 第二轮优化）
+// GET /api/osu/leaderboard/:bid?legacy=1&limit=50
+// 响应结构：{ beatmap, scores, currentUserRank, userScore, availableTypes }
 // ============================================================
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { getLeaderboard } from '../api/osuApi';
 import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
-import OsuScoreDetailPanel from '../components/OsuScoreDetailPanel';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
+import ScrollToTopButton from '../components/ScrollToTopButton';
 import {
   FaSpinner, FaArrowLeft, FaGlobeAsia, FaMedal, FaUser,
-  FaSearch, FaStar, FaChevronDown, FaChevronUp
+  FaSearch, FaStar, FaClock, FaMusic
 } from 'react-icons/fa';
 
-// ----- 常量 -----
+// ----- 字段映射：新字段 → 旧字段 fallback -----
 
-const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
-const MODE_LABELS = { standard: 'S', taiko: 'T', catch: 'C', mania: 'M' };
-const COMMON_MODS = ['NM', 'HD', 'HR', 'DT', 'HDHR', 'HDDT', 'HRDT', 'HDHRDT', 'FL', 'EZ'];
+const JUDGE_FALLBACK = {
+  countGreat: 'count300',
+  countOk:    'count100',
+  countMeh:   'count50',
+  countPerf:  'count300',
+  countLDrp:  'count100',
+  countSDrpMiss: 'count50',
+};
+
+/** 读取判定值，优先新字段，回退旧字段 */
+function getJudgeValue(entry, newKey) {
+  const val = entry[newKey];
+  if (val != null) return val;
+  const fallbackKey = JUDGE_FALLBACK[newKey];
+  if (fallbackKey) return entry[fallbackKey];
+  return null;
+}
+
+// ----- mode 标签映射 -----
+
+const MODE_BADGE = {
+  standard: { label: 'S', color: 'bg-pink-500/15 text-pink-400 border-pink-500/20' },
+  taiko:    { label: 'T', color: 'bg-red-500/15 text-red-400 border-red-500/20' },
+  catch:    { label: 'C', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' },
+  mania:    { label: 'M', color: 'bg-blue-500/15 text-blue-400 border-blue-500/20' },
+};
+
+const MODE_FULL = {
+  standard: 'osu!standard',
+  taiko:    'osu!taiko',
+  catch:    'osu!catch',
+  mania:    'osu!mania',
+};
+
+// ----- 判定名称映射（按模式）-----
+
+const JUDGE_LABELS = {
+  standard: [
+    { key: 'countGreat', label: '300',    color: 'text-emerald-400' },
+    { key: 'countOk',    label: '100',    color: 'text-blue-400' },
+    { key: 'countMeh',   label: '50',     color: 'text-amber-400' },
+    { key: 'countMiss',  label: 'Miss',   color: 'text-red-400' },
+  ],
+  taiko: [
+    { key: 'countGreat', label: 'GREAT',  color: 'text-emerald-400' },
+    { key: 'countOk',    label: 'OK',     color: 'text-blue-400' },
+    { key: 'countMiss',  label: 'MISS',   color: 'text-red-400' },
+  ],
+  catch: [
+    { key: 'countGreat', label: 'FRUIT',      color: 'text-emerald-400' },
+    { key: 'countLDrp',  label: 'L DRP',      color: 'text-blue-400' },
+    { key: 'countMeh',   label: 'S DRP MISS', color: 'text-amber-400' },
+    { key: 'countMiss',  label: 'MISS',       color: 'text-red-400' },
+  ],
+  mania: [
+    { key: 'countPerf',  label: 'MAX',    color: 'text-yellow-400' },
+    { key: 'countGreat', label: '300',    color: 'text-emerald-400' },
+    { key: 'countOk',    label: '200',    color: 'text-blue-400' },
+    { key: 'countMeh',   label: '100',    color: 'text-amber-400' },
+    { key: 'countMiss',  label: 'MISS',   color: 'text-red-400' },
+  ],
+};
 
 const RANK_COLORS = {
   1: 'text-yellow-400',
@@ -29,18 +88,24 @@ const RANK_COLORS = {
   3: 'text-amber-600',
 };
 
+// ----- 工具函数 -----
+
+function formatDuration(seconds) {
+  if (!seconds) return '';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 // ----- 组件 -----
 
 export default function OsuLeaderboard() {
   const { bid } = useParams();
   const navigate = useNavigate();
   const [bidInput, setBidInput] = useState(bid || '');
-  const [activeMode, setActiveMode] = useState('standard');
-  const [selectedMods, setSelectedMods] = useState('NM');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedEntry, setSelectedEntry] = useState(null);
 
   const effectiveBid = bid || bidInput;
 
@@ -48,12 +113,8 @@ export default function OsuLeaderboard() {
     if (!effectiveBid || isNaN(Number(effectiveBid))) return;
     setLoading(true);
     setError(null);
-    setSelectedEntry(null);
     try {
-      const params = { mode: activeMode, limit: 50 };
-      if (selectedMods !== 'NM') params.mods = selectedMods;
-
-      const { data: res } = await getLeaderboard(effectiveBid, params);
+      const { data: res } = await getLeaderboard(effectiveBid, { limit: 50 });
       setData(res);
     } catch (err) {
       setError(err.userMessage || '加载排行榜失败');
@@ -65,21 +126,23 @@ export default function OsuLeaderboard() {
 
   useEffect(() => {
     if (bid) fetchLeaderboard();
-  }, [bid, activeMode, selectedMods]);
+  }, [bid]);
 
   const handleSearch = () => {
-    if (bidInput) navigate(`/osu/leaderboard/${bidInput}`, { replace: true });
+    if (!bidInput || isNaN(Number(bidInput))) return;
+    navigate(`/osu/leaderboard/${bidInput}`, { replace: true });
     fetchLeaderboard();
-  };
-
-  const handleEntryClick = (entry) => {
-    setSelectedEntry(selectedEntry?.rank === entry.rank ? null : entry);
   };
 
   const handleUsernameClick = (username, e) => {
     e.stopPropagation();
     navigate(`/osu/info?q=${encodeURIComponent(username)}`);
   };
+
+  // 当前谱面的模式（用于判定名称映射）
+  const beatmapMode = data?.beatmap?.mode || 'standard';
+  const judges = JUDGE_LABELS[beatmapMode] || JUDGE_LABELS.standard;
+  const modeBadge = MODE_BADGE[beatmapMode] || MODE_BADGE.standard;
 
   return (
     <div>
@@ -91,67 +154,96 @@ export default function OsuLeaderboard() {
         </button>
       )}
 
-      {/* 控制栏 */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
-        <div className="flex items-center gap-3 flex-1 w-full sm:w-auto">
-          <div className="w-1 h-6 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]" />
-          <h2 className="text-xl font-bold text-zinc-100 tracking-tight whitespace-nowrap">排行榜</h2>
-          {!bid && (
-            <div className="flex items-center gap-2 flex-1">
-              <input type="text" value={bidInput} onChange={(e) => setBidInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="谱面 ID..." className="bg-[#15151e] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 w-32" />
-              <button onClick={handleSearch} disabled={loading}
-                className="p-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg transition-colors">
-                {loading ? <FaSpinner className="animate-spin" /> : <FaSearch />}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* 模式切换 */}
-          <div className="flex items-center gap-1 bg-[#15151e]/80 p-1 rounded-lg border border-white/[0.05]">
-            {MODE_IDS.map(mid => (
-              <button key={mid} onClick={() => setActiveMode(mid)}
-                className={`w-7 h-7 text-[10px] font-bold rounded-md transition-all ${activeMode === mid ? 'bg-pink-500/20 text-pink-400' : 'text-zinc-500 hover:text-zinc-300'}`}>
-                {MODE_LABELS[mid]}
-              </button>
-            ))}
-          </div>
-
-          {/* Mods 过滤 */}
-          <div className="flex items-center gap-1 bg-[#15151e]/80 p-1 rounded-lg border border-white/[0.05] overflow-x-auto">
-            {COMMON_MODS.map(mod => (
-              <button key={mod} onClick={() => setSelectedMods(mod)}
-                className={`px-1.5 py-1 text-[9px] font-bold rounded transition-all whitespace-nowrap ${selectedMods === mod ? 'bg-rose-500/20 text-rose-400' : 'text-zinc-500 hover:text-zinc-300'}`}>
-                {mod}
-              </button>
-            ))}
-          </div>
+      {/* 搜索栏 — 始终保持可见 */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-1 h-6 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]" />
+        <h2 className="text-xl font-bold text-zinc-100 tracking-tight whitespace-nowrap">排行榜</h2>
+        <div className="flex items-center gap-2 flex-1">
+          <input type="text" value={bidInput} onChange={(e) => setBidInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder="谱面 ID..." className="bg-[#15151e] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 w-32" />
+          <button onClick={handleSearch} disabled={loading}
+            className="p-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg transition-colors">
+            {loading ? <FaSpinner className="animate-spin" /> : <FaSearch />}
+          </button>
         </div>
       </div>
 
-      {/* 谱面头部信息 */}
+      {/* 谱面头部信息 — 增强版 */}
       {data?.beatmap && (
-        <div className="mb-4 p-3 bg-[#15151e]/40 border border-white/[0.05] rounded-lg flex items-center gap-3">
-          <div className="w-10 h-8 rounded overflow-hidden shrink-0">
-            <OsuCoverImage src={data.beatmap.coverUrl} alt="" className="w-full h-full" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-zinc-200 truncate">{data.beatmap.title}</span>
-              <OsuBeatmapStatusBadge status={data.beatmap.status} />
+        <div className="mb-4 p-4 bg-gradient-to-br from-[#15151e]/60 to-[#15151e]/30 border border-white/[0.05] rounded-xl">
+          <div className="flex items-start gap-4">
+            {/* 封面 */}
+            <div className="w-16 h-12 rounded-lg overflow-hidden shrink-0">
+              <OsuCoverImage src={data.beatmap.coverUrl} alt="" className="w-full h-full" />
             </div>
-            <div className="text-xs text-zinc-500 truncate">{data.beatmap.artist} — {data.beatmap.version}</div>
+
+            {/* 信息区 */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-base font-bold text-zinc-100 truncate max-w-[300px]">{data.beatmap.title}</span>
+                {/* mode 标签（纯展示，不可切换）*/}
+                <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${modeBadge.color}`}>
+                  {modeBadge.label}
+                </span>
+                <OsuBeatmapStatusBadge status={data.beatmap.status} />
+              </div>
+              <div className="text-xs text-zinc-500 truncate mt-0.5">{data.beatmap.artist} — {data.beatmap.version}</div>
+            </div>
+
+            {/* 星级 */}
+            <div className="flex items-center gap-1 text-xs text-yellow-400 shrink-0">
+              <FaStar className="text-[10px]" /> {data.beatmap.starRating?.toFixed(2)}
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-yellow-400 shrink-0">
-            <FaStar className="text-[10px]" /> {data.beatmap.starRating?.toFixed(2)}
+
+          {/* 谱面参数行 */}
+          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.05] text-[11px] text-zinc-500 flex-wrap">
+            {data.beatmap.bpm != null && <span>{data.beatmap.bpm} BPM</span>}
+            {data.beatmap.od != null && <span>OD {data.beatmap.od}</span>}
+            {data.beatmap.cs != null && <span>CS {data.beatmap.cs}</span>}
+            {data.beatmap.ar != null && <span>AR {data.beatmap.ar}</span>}
+            {data.beatmap.maxCombo != null && <span>{data.beatmap.maxCombo}x</span>}
+            {data.beatmap.totalLength != null && (
+              <span className="flex items-center gap-1">
+                <FaClock className="text-[9px]" /> {formatDuration(data.beatmap.totalLength)}
+              </span>
+            )}
+            <span className="text-zinc-600">{MODE_FULL[beatmapMode] || beatmapMode}</span>
           </div>
         </div>
       )}
 
-      {/* 我的排名横幅 */}
+      {/* 未上榜用户成绩 */}
+      {data?.userScore && !data?.currentUserRank && (
+        <div className="mb-4 p-4 bg-gradient-to-r from-amber-500/[0.06] to-transparent border border-amber-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-2">
+            <FaMusic className="text-amber-400 text-xs" />
+            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">你的成绩</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 text-center shrink-0">
+              <span className="text-xs text-zinc-600">--</span>
+            </div>
+            <div className="flex-1 flex items-center gap-3 flex-wrap">
+              <OsuGrade grade={data.userScore.grade} size="sm" />
+              <span className="text-sm font-bold text-zinc-200">{data.userScore.score?.toLocaleString()}</span>
+              <span className="text-xs text-zinc-400">{data.userScore.accuracy?.toFixed(2)}%</span>
+              {data.userScore.pp != null && (
+                <span className="text-xs font-bold text-pink-400">{Math.round(data.userScore.pp)}pp</span>
+              )}
+              {data.userScore.mods?.length > 0 && (
+                <span className="text-[10px] font-bold text-rose-400">{data.userScore.mods.join('')}</span>
+              )}
+              {data.userScore.maxCombo != null && (
+                <span className="text-xs text-zinc-500">{data.userScore.maxCombo}x</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 我的排名横幅（上榜时）*/}
       {data?.currentUserRank && (
         <div className="mb-4 p-3 bg-gradient-to-r from-pink-500/[0.08] to-transparent border border-pink-500/20 rounded-lg flex items-center gap-3">
           <FaMedal className="text-pink-400 text-lg" />
@@ -176,129 +268,112 @@ export default function OsuLeaderboard() {
           {/* 排行榜列表 */}
           <div className="bg-[#15151e]/40 rounded-xl border border-white/[0.05] overflow-hidden">
             {/* 表头 */}
-            <div className="flex items-center px-4 py-2 text-xs text-zinc-500 font-bold uppercase tracking-wider border-b border-white/[0.05] bg-[#15151e]/95">
+            <div className="hidden sm:flex items-center px-4 py-2 text-xs text-zinc-500 font-bold uppercase tracking-wider border-b border-white/[0.05] bg-[#15151e]/95">
               <span className="w-12 text-center">#</span>
               <span className="w-8" />
               <span className="flex-1 min-w-0">玩家</span>
-              <span className="w-14 text-center">评级</span>
-              <span className="w-16 text-right">PP</span>
-              <span className="w-20 text-right hidden sm:block">Acc</span>
-              <span className="w-16 text-center hidden md:block">Mods</span>
-              <span className="w-20 text-right hidden lg:block">Score</span>
-              <span className="w-6 text-center" />
+              <span className="w-12 text-center">评级</span>
+              <span className="w-24 text-right">分数</span>
+              <span className="w-16 text-right">Acc</span>
+              <span className="w-14 text-right">PP</span>
             </div>
 
-            <AnimatePresence initial={false}>
-              {data.scores.map((entry, i) => {
-                const isHighlighted = data.currentUserRank?.highlight && entry.rank === data.currentUserRank.rank;
-                const isExpanded = selectedEntry?.rank === entry.rank;
+            {data.scores.map((entry, i) => {
+              const rankNum = i + 1;
+              const isHighlighted = data.currentUserRank?.highlight && rankNum === data.currentUserRank.rank;
 
-                return (
-                  <div key={entry.userId + '-' + entry.rank}>
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: i * 0.02 }}
-                      onClick={() => handleEntryClick(entry)}
-                      className={`
-                        flex items-center px-4 py-3 border-b border-white/[0.03]
-                        hover:bg-white/[0.02] transition-colors cursor-pointer
-                        ${isHighlighted ? 'border-l-2 border-pink-500 bg-pink-500/[0.03]' : ''}
-                        ${isExpanded ? 'bg-white/[0.03]' : ''}
-                      `}
-                    >
-                      {/* 排名 */}
-                      <div className="w-12 text-center shrink-0">
-                        {i < 3 ? <FaMedal className={`mx-auto ${RANK_COLORS[i + 1]}`} />
-                          : <span className="text-sm font-mono text-zinc-600">#{entry.rank}</span>}
-                      </div>
+              return (
+                <motion.div
+                  key={entry.userId + '-' + rankNum}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: i * 0.02 }}
+                  className={`
+                    px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors
+                    ${isHighlighted ? 'border-l-2 border-pink-500 bg-pink-500/[0.03]' : ''}
+                  `}
+                >
+                  {/* 第一行 */}
+                  <div className="flex items-center gap-2">
+                    {/* 排名 — 使用 index+1 */}
+                    <div className="w-10 text-center shrink-0">
+                      {rankNum <= 3
+                        ? <FaMedal className={`mx-auto text-sm ${RANK_COLORS[rankNum]}`} />
+                        : <span className="text-sm font-mono text-zinc-600">#{rankNum}</span>
+                      }
+                    </div>
 
-                      {/* 头像 */}
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-zinc-800 shrink-0 mr-2">
-                        {entry.avatarUrl ? (
-                          <img src={entry.avatarUrl} alt="" className="w-full h-full object-cover"
-                            onError={(e) => { e.target.style.display = 'none'; }} />
-                        ) : (
-                          <FaUser className="w-full h-full p-1.5 text-zinc-600" />
-                        )}
-                      </div>
+                    {/* 头像 */}
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-zinc-800 shrink-0">
+                      {entry.avatarUrl ? (
+                        <img src={entry.avatarUrl} alt="" className="w-full h-full object-cover"
+                          onError={(e) => { e.target.style.display = 'none'; }} />
+                      ) : (
+                        <FaUser className="w-full h-full p-1.5 text-zinc-600" />
+                      )}
+                    </div>
 
-                      {/* 用户名 */}
-                      <div className="flex-1 min-w-0">
-                        <span
-                          onClick={(e) => handleUsernameClick(entry.username, e)}
-                          className="text-sm font-bold text-zinc-200 hover:text-pink-400 transition-colors truncate block cursor-pointer"
-                        >
-                          {entry.username}
-                          {entry.countryCode && (
-                            <span className="ml-1.5 text-[10px] text-zinc-500">{entry.countryCode}</span>
-                          )}
-                        </span>
-                      </div>
-
-                      {/* 评级 */}
-                      <div className="w-14 text-center shrink-0"><OsuGrade grade={entry.grade} size="sm" /></div>
-
-                      {/* PP */}
-                      <div className="w-16 text-right shrink-0"><span className="text-sm font-bold text-pink-400">{Math.round(entry.pp)}</span></div>
-
-                      {/* Acc */}
-                      <div className="w-20 text-right shrink-0 hidden sm:block">
-                        <span className="text-xs text-zinc-400">{entry.accuracy?.toFixed(2)}%</span>
-                      </div>
-
-                      {/* Mods */}
-                      <div className="w-16 text-center shrink-0 hidden md:block">
-                        {entry.mods?.length > 0
-                          ? <span className="text-[9px] font-bold text-rose-400">{entry.mods.join('')}</span>
-                          : <span className="text-[9px] text-zinc-600">NM</span>}
-                      </div>
-
-                      {/* Score */}
-                      <div className="w-20 text-right shrink-0 hidden lg:block">
-                        <span className="text-xs text-zinc-400">{entry.score?.toLocaleString()}</span>
-                      </div>
-
-                      {/* 展开指示 */}
-                      <div className="w-6 text-center shrink-0 text-zinc-600">
-                        {isExpanded ? <FaChevronUp className="text-[10px] mx-auto" /> : <FaChevronDown className="text-[10px] mx-auto" />}
-                      </div>
-                    </motion.div>
-
-                    {/* 展开详情 */}
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden border-b border-white/[0.03]"
+                    {/* 用户名 */}
+                    <div className="flex-1 min-w-0">
+                      <span
+                        onClick={(e) => handleUsernameClick(entry.username, e)}
+                        className="text-sm font-bold text-zinc-200 hover:text-pink-400 transition-colors truncate block cursor-pointer"
                       >
-                        <div className="px-4 py-3 bg-[#15151e]/60">
-                          {/* 判定详情 */}
-                          <div className="flex items-center gap-4 text-xs mb-3">
-                            <span className="text-emerald-400">300 <span className="text-zinc-500">{entry.count300 ?? '-'}</span></span>
-                            <span className="text-blue-400">100 <span className="text-zinc-500">{entry.count100 ?? '-'}</span></span>
-                            <span className="text-amber-400">50 <span className="text-zinc-500">{entry.count50 ?? '-'}</span></span>
-                            <span className="text-red-400">Miss <span className="text-zinc-500">{entry.countMiss ?? '-'}</span></span>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-zinc-500">
-                            <span>Max Combo: <span className="text-zinc-300 font-mono">{entry.maxCombo}x</span></span>
-                            <span>得分: <span className="text-zinc-300 font-mono">{entry.score?.toLocaleString()}</span></span>
-                            {entry.hasReplay && (
-                              <a href={entry.osuScoreUrl} target="_blank" rel="noreferrer"
-                                className="text-pink-400 hover:text-pink-300 underline ml-auto"
-                                onClick={(e) => e.stopPropagation()}>
-                                查看回放 →
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
+                        {entry.username}
+                        {entry.countryCode && (
+                          <span className="ml-1.5 text-[10px] text-zinc-500">{entry.countryCode}</span>
+                        )}
+                      </span>
+                    </div>
+
+                    {/* 评级 */}
+                    <div className="w-10 text-center shrink-0"><OsuGrade grade={entry.grade} size="sm" /></div>
+
+                    {/* 分数 */}
+                    <div className="w-20 text-right shrink-0 hidden sm:block">
+                      <span className="text-sm font-bold text-zinc-200">{entry.score?.toLocaleString()}</span>
+                    </div>
+
+                    {/* Acc */}
+                    <div className="w-14 text-right shrink-0">
+                      <span className="text-xs text-zinc-400">{entry.accuracy?.toFixed(2)}%</span>
+                    </div>
+
+                    {/* PP */}
+                    <div className="w-14 text-right shrink-0">
+                      <span className="text-sm font-bold text-pink-400">{Math.round(entry.pp)}</span>
+                    </div>
+                  </div>
+
+                  {/* 第二行 — 判定详情 + Mods（始终可见，不折叠）*/}
+                  <div className="flex items-center gap-2 mt-1.5 pl-12">
+                    {/* 判定详情 — 按模式动态命名 */}
+                    <div className="flex items-center gap-3 text-[10px]">
+                      {judges.map(({ key, label, color }) => (
+                        <span key={key} className={color}>
+                          {label} <span className="text-zinc-500">{getJudgeValue(entry, key) ?? '-'}</span>
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Mods — 右对齐 */}
+                    <div className="ml-auto text-right">
+                      {entry.mods?.length > 0
+                        ? <span className="text-[10px] font-bold text-rose-400">{entry.mods.join('')}</span>
+                        : null}
+                    </div>
+                  </div>
+
+                  {/* 移动端分数行 */}
+                  <div className="flex sm:hidden items-center gap-2 mt-1 pl-12">
+                    <span className="text-xs text-zinc-400">{entry.score?.toLocaleString()}</span>
+                    {entry.mods?.length > 0 && (
+                      <span className="text-[10px] font-bold text-rose-400 ml-auto">{entry.mods.join('')}</span>
                     )}
                   </div>
-                );
-              })}
-            </AnimatePresence>
+                </motion.div>
+              );
+            })}
           </div>
 
           {/* 排行榜总数 */}
@@ -317,6 +392,9 @@ export default function OsuLeaderboard() {
           <FaGlobeAsia className="mx-auto text-3xl text-zinc-700 mb-4" />输入谱面 ID 查看全球排行榜
         </div>
       )}
+
+      {/* 回到顶部按钮 */}
+      <ScrollToTopButton />
     </div>
   );
 }

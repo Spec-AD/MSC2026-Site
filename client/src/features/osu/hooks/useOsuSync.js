@@ -1,6 +1,7 @@
 // ============================================================
 // useOsuSync — 一键全模式同步状态管理
-// 支持 4 模式串行同步 + 进度状态追踪
+// 支持 4 模式串行同步 + 进度状态追踪 + token 过期检测
+// 后端返回 { error: 'token_expired' } → 触发重新绑定提示
 // ============================================================
 
 import { useState, useCallback, useRef } from 'react';
@@ -18,6 +19,7 @@ const INITIAL_STATE = {
 export default function useOsuSync() {
   const [syncState, setSyncState] = useState({ ...INITIAL_STATE });
   const [currentMode, setCurrentMode] = useState(null);
+  const [authError, setAuthError] = useState(false);
   const abortRef = useRef(false);
 
   /** 同步单个模式 */
@@ -31,8 +33,12 @@ export default function useOsuSync() {
         setSyncState(prev => ({ ...prev, [mode]: 'done' }));
       }
       return true;
-    } catch {
+    } catch (err) {
       if (!abortRef.current) {
+        // 检测 token 过期
+        if (err.response?.data?.error === 'token_expired') {
+          setAuthError(true);
+        }
         setSyncState(prev => ({ ...prev, [mode]: 'error' }));
       }
       return false;
@@ -42,6 +48,7 @@ export default function useOsuSync() {
   /** 一键同步全部 4 模式 */
   const syncAll = useCallback(async () => {
     abortRef.current = false;
+    setAuthError(false);
     setSyncState({ ...INITIAL_STATE });
 
     for (const mode of MODES) {
@@ -72,6 +79,11 @@ export default function useOsuSync() {
     setCurrentMode(null);
   }, []);
 
+  /** 清除 authError（用户重新绑定后调用） */
+  const clearAuthError = useCallback(() => {
+    setAuthError(false);
+  }, []);
+
   const isSyncing = Object.values(syncState).some(s => s === 'syncing');
   const syncProgress = {
     total: MODES.length,
@@ -88,5 +100,7 @@ export default function useOsuSync() {
     syncMode,
     abortSync,
     reset,
+    authError,
+    clearAuthError,
   };
 }

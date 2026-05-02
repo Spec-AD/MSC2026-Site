@@ -334,13 +334,15 @@ router.get('/api/osu/map/:bid', async (req, res) => {
  * GET /api/osu/leaderboard/:bid — 谱面全球排行榜
  *
  * 查询参数：
- *   mode   — standard | taiko | catch | mania（PureBeat 命名）
- *   mods   — HD / DT / HR 等 mod 缩写组合
  *   limit  — 条数（默认 50）
  *   legacy — 0=包含 lazer, 1=仅 stable（默认 0）
  *   type   — global | country | friend（默认 global）
  *
- * Auth: optional（绑定 JWT 后返回 currentUserRank）
+ * Auth: optional（绑定 JWT 后返回 currentUserRank / userScore）
+ *
+ * 注意：不再接受 mode/mods 参数
+ *  - mode 由 BID 自动确定（谱面自带 mode）
+ *  - mods 筛选已移除（Peppy 不允许第三方 Mod 过滤）
  */
 router.get('/api/osu/leaderboard/:bid', optionalAuth, async (req, res) => {
   try {
@@ -348,17 +350,14 @@ router.get('/api/osu/leaderboard/:bid', optionalAuth, async (req, res) => {
     if (isNaN(beatmapId) || beatmapId <= 0) {
       return res.status(400).json({ msg: '无效的谱面 ID' });
     }
-    const { mode, mods, limit, legacy, type } = req.query;
+    const { limit, legacy, type } = req.query;
 
-    // 如果已登录，获取用户 osuId 用于 currentUserRank
     let currentUser = null;
     if (req.user) {
       currentUser = await User.findById(req.user.id || req.user._id).select('osuId');
     }
 
     const data = await osuServices.leaderboard.getLeaderboard(beatmapId, {
-      mode,
-      mods,
       limit: parseInt(limit) || 50,
       legacy: legacy !== undefined ? parseInt(legacy) : undefined,
       type,
