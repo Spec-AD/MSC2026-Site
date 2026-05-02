@@ -76,32 +76,42 @@ function formatScore(s, rank) {
 async function getLeaderboard(beatmapId, opts = {}) {
   const { limit = 50, legacy, type, currentUser } = opts;
 
-  // 调 osu! API（不传 mode/mods — BID 自带 mode，Mod 筛选已移除）
+  // 1. 调 osu! API 获取排行榜（不传 mode/mods）
   const raw = await osuApi.getBeatmapScores(beatmapId, { limit, legacy, type });
 
-  // 谱面信息
-  const nativeMode = raw.beatmap?.mode || '';
+  // 2. 谱面信息：排行榜 API 在 scores 为空时不返回 beatmap 对象
+  //    此时单独调 getBeatmap 补数据
+  let beatmapData = raw.beatmap;
+  if (!beatmapData) {
+    try {
+      beatmapData = await osuApi.getBeatmap(beatmapId);
+    } catch (_) {
+      // beatmap 不存在，保持 null
+    }
+  }
+
+  const nativeMode = beatmapData?.mode || '';
   const pureBeatMode = MODE_MAP_REVERSE[nativeMode] || nativeMode;
 
-  const beatmapInfo = raw.beatmap ? {
-    beatmapId:    raw.beatmap.id,
-    title:        raw.beatmap.beatmapset?.title || '',
-    artist:       raw.beatmap.beatmapset?.artist || '',
-    version:      raw.beatmap.version || '',
+  const beatmapInfo = beatmapData ? {
+    beatmapId:    beatmapData.id,
+    title:        beatmapData.beatmapset?.title || '',
+    artist:       beatmapData.beatmapset?.artist || '',
+    version:      beatmapData.version || '',
     mode:         pureBeatMode,
-    coverUrl:     raw.beatmap.beatmapset?.covers?.cover || raw.beatmap.beatmapset?.covers?.['card@2x'] || '',
-    status:       raw.beatmap.status || '',
-    starRating:   raw.beatmap.difficulty_rating || 0,
-    maxCombo:     raw.beatmap.max_combo || 0,
-    bpm:          raw.beatmap.bpm || 0,
+    coverUrl:     beatmapData.beatmapset?.covers?.cover || beatmapData.beatmapset?.covers?.['card@2x'] || '',
+    status:       beatmapData.status || '',
+    starRating:   beatmapData.difficulty_rating || 0,
+    maxCombo:     beatmapData.max_combo || 0,
+    bpm:          beatmapData.bpm || 0,
     // 第二轮新增谱面属性
-    od:           raw.beatmap.accuracy ?? 0,
-    cs:           raw.beatmap.cs ?? 0,
-    ar:           raw.beatmap.approach_rate ?? 0,
-    hp:           raw.beatmap.drain ?? 0,
-    totalLength:  raw.beatmap.total_length || 0,
-    hitLength:    raw.beatmap.hit_length || 0,
-    modeInt:      raw.beatmap.mode_int ?? 0,
+    od:           beatmapData.accuracy ?? 0,
+    cs:           beatmapData.cs ?? 0,
+    ar:           beatmapData.approach_rate ?? 0,  // graveyard 谱面可能是 undefined
+    hp:           beatmapData.drain ?? 0,
+    totalLength:  beatmapData.total_length || 0,
+    hitLength:    beatmapData.hit_length || 0,
+    modeInt:      beatmapData.mode_int ?? 0,
   } : null;
 
   // 格式化成绩列表（rank = index + 1）
