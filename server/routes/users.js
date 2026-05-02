@@ -100,12 +100,22 @@ router.get('/api/users/:username', async (req, res) => {
         const topScores = await Score.find({ userId: user._id }).sort({ rating: -1, achievement: -1 }).limit(50);
         const topPfScores = await Score.find({ userId: user._id }).sort({ pf: -1 }).limit(50);
         const qualifierScores = await QualifierScore.find({ userId: user._id }).sort({ entryTime: -1 });
-        const osuScores = await OsuScore.find({ userId: user._id }).sort({ pp: -1 }).lean();
+
+        // b1.7: osu BP 支持按模式查询
+        const osuModeFilter = req.query.mode ? { userId: user._id, mode: req.query.mode } : { userId: user._id };
+        const osuScores = await OsuScore.find(osuModeFilter).sort({ pp: -1 }).lean();
+
+        // b1.7: 本地 osu 统计数据（从 osuDetails 读取）
+        const osuInfo = require('../services/osu/info');
+        const localStats = user.osuDetails && Object.keys(user.osuDetails).length > 0
+          ? osuInfo.getLocalUserStats(user, req.query.mode)
+          : null;
 
         res.json({
             ...user.toObject(),
 	          allScores: allScores || [], topScores: topScores || [], pfRank, chuniRank, 
-            topPfScores: topPfScores || [], qualifierScores: qualifierScores || [], osuScores: osuScores || [],             
+            topPfScores: topPfScores || [], qualifierScores: qualifierScores || [], osuScores: osuScores || [],
+            localStats,
             friendsCount: user.friends ? user.friends.length : 0, friends: user.friends 
         });
     } catch (err) { res.status(500).json({ msg: '服务器错误' }); }

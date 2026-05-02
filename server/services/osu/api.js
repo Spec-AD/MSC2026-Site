@@ -380,14 +380,43 @@ async function getBeatmap(beatmapId) {
  * @returns {Promise<Object>}
  */
 async function getBeatmapScores(beatmapId, opts = {}) {
-  const { mode, mods, limit = 50 } = opts;
+  const { mode, mods, limit = 50, legacy, type } = opts;
   const params = { limit: Math.min(limit, 100) };
   if (mode) params.mode = mode;
   if (mods) params.mods = mods;
+  if (legacy !== undefined) params.legacy_only = legacy ? 1 : 0;
+  if (type) params.type = type;
   return await request('GET', `/beatmaps/${beatmapId}/scores`, { params });
 }
 
 // ─── 导出 ─────────────────────────────────────────────────────────────
+
+/**
+ * 获取用户在特定谱面的成绩
+ *
+ * @param {number} beatmapId
+ * @param {number} osuId
+ * @param {Object} [opts]
+ * @param {string} [opts.mode]
+ * @param {number} [opts.legacy]
+ * @param {string} [opts.type]
+ * @param {Object} [opts.user] - Mongoose User（使用 user token 查）
+ * @returns {Promise<Object|null>}
+ */
+async function getUserScoreOnBeatmap(beatmapId, osuId, opts = {}) {
+  const { mode, legacy, type, user } = opts;
+  const tokenType = user ? 'user' : 'client';
+  const params = {};
+  if (mode) params.mode = mode;
+  if (legacy !== undefined) params.legacy_only = legacy ? 1 : 0;
+  if (type) params.type = type;
+  try {
+    return await request('GET', `/beatmaps/${beatmapId}/scores/users/${osuId}`, { params, tokenType, user });
+  } catch (err) {
+    if (err.status === 404) return null;   // 用户没打过，不是错误
+    throw err;
+  }
+}
 
 module.exports = {
   // Token 管理
@@ -401,6 +430,7 @@ module.exports = {
   getRecentScores,
   getBeatmap,
   getBeatmapScores,
+  getUserScoreOnBeatmap,
 
   // 工具
   request,

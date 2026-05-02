@@ -32,14 +32,15 @@ router.post('/api/osu/bind', authMiddleware, async (req, res) => {
     const clientSecret = String(process.env.OSU_CLIENT_SECRET || '').trim();
     const redirectUri = req.body.redirect_uri || String(process.env.OSU_CALLBACK_URL || '').trim();
 
-    // Token Exchange
+    // Token Exchange — scope: public 确保 token 有权访问排行榜/BP 等端点
     const axios = require('axios');
     const tokenRes = await axios.post('https://osu.ppy.sh/oauth/token', {
       client_id: clientId,
       client_secret: clientSecret,
       code,
       grant_type: 'authorization_code',
-      redirect_uri: redirectUri
+      redirect_uri: redirectUri,
+      scope: 'public'
     }, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } });
 
     const { access_token, refresh_token, expires_in } = tokenRes.data;
@@ -64,7 +65,10 @@ router.post('/api/osu/bind', authMiddleware, async (req, res) => {
 
     res.json({ msg: '绑定成功' });
   } catch (err) {
-    res.status(500).json({ msg: '绑定失败' });
+    console.error('[osu bind error]', err.response?.data || err.message);
+    const status = err.response?.status || 500;
+    const detail = err.response?.data?.error_description || err.response?.data?.error || '绑定失败';
+    res.status(status).json({ msg: '绑定失败', detail });
   }
 });
 
@@ -94,16 +98,16 @@ router.post('/api/users/sync-osu', authMiddleware, async (req, res) => {
       bp: bpResult
     });
   } catch (err) {
-    if (err.status === 401) return res.status(401).json({ msg: err.message });
-    if (err.status === 429) return res.status(429).json({ msg: err.message, retryAfter: err.retryAfter });
-    res.status(500).json({ msg: '同步失败' });
+    if (err.status === 401) return res.status(401).json({ msg: err.message, error: 'token_expired' });
+    if (err.status === 429) return res.status(429).json({ msg: err.message, retryAfter: err.retryAfter, error: 'rate_limited' });
+    res.status(500).json({ msg: '同步失败', error: 'api_error' });
   }
 });
 
 /**
  * POST /api/osu/sync-all
  *
- * b1.7 新增：一键同步所有四模式
+ * b1.7 新增：一键同步所有四模式，各模式独立返回结果
  */
 router.post('/api/osu/sync-all', authMiddleware, async (req, res) => {
   try {
@@ -113,9 +117,9 @@ router.post('/api/osu/sync-all', authMiddleware, async (req, res) => {
     const results = await osuServices.sync.syncAllModes(user);
     res.json({ msg: '全模式同步完成', results });
   } catch (err) {
-    if (err.status === 401) return res.status(401).json({ msg: err.message });
-    if (err.status === 429) return res.status(429).json({ msg: err.message, retryAfter: err.retryAfter });
-    res.status(500).json({ msg: '全模式同步失败' });
+    if (err.status === 401) return res.status(401).json({ msg: err.message, error: 'token_expired' });
+    if (err.status === 429) return res.status(429).json({ msg: err.message, retryAfter: err.retryAfter, error: 'rate_limited' });
+    res.status(500).json({ msg: '全模式同步失败', error: 'api_error' });
   }
 });
 
@@ -220,22 +224,51 @@ router.get('/api/osu/score/:bid', authMiddleware, async (req, res) => {
  * GET /api/osu/best — BP 200 列表
  *
  * 查询参数：
- *   mode  — standard | taiko | catch | mania（默认 standard）
- *   limit — 条数（默认 200）
- *   page  — 页码（默认 1）
+ *   mode     — standard | taiko | catch | mania（默认 standard）
+ *   limit    — 条数（默认 200）
+ *   page     — 页码（默认 1）
+ *   userId   — 目标用户 MongoDB ObjectId（查他人 BP）
+ *   username — 目标用户 osu 用户名（查他人 BP）
+ *
+ * Auth: optional（未登录时需传 userId 或 username）
  */
-router.get('/api/osu/best', authMiddleware, async (req, res) => {
+router.get('/api/osu/best', optionalAuth, async (req, res) => {
   try {
-    const userId = req.user.id || req.user._id;
-    const { mode, limit, page } = req.query;
+    const { mode, limit, page, userId: targetUserId, username } = req.query;
+
+    // 确定目标用户
+    let targetUser = null;
+    if (targetUserId) {
+      targetUser = await User.findById(targetUserId).select('osuId osuUsername osuAvatarUrl username avatarUrl');
+    } else if (username) {
+      targetUser = await User.findOne({ osuUsername: username }).select('osuId osuUsername osuAvatarUrl username avatarUrl');
+    } else if (req.user) {
+      targetUser = await User.findById(req.user.id || req.user._id).select('osuId osuUsername osuAvatarUrl username avatarUrl');
+    } else {
+      return res.status(400).json({ msg: '请提供 userId 或 username，或登录后查询自己的 BP' });
+    }
+
+    if (!targetUser) {
+      return res.status(404).json({ msg: '未找到该用户' });
+    }
 
     const data = await osuServices.best.getBest({
-      userId,
+      userId: targetUser._id,
       mode: mode || 'standard',
       limit: parseInt(limit) || 200,
       page: parseInt(page) || 1
     });
-    res.json(data);
+
+    res.json({
+      user: {
+        id: targetUser._id,
+        username: targetUser.username || targetUser.osuUsername,
+        osuUsername: targetUser.osuUsername,
+        avatarUrl: targetUser.osuAvatarUrl || targetUser.avatarUrl,
+        osuId: targetUser.osuId
+      },
+      ...data
+    });
   } catch (err) {
     res.status(500).json({ msg: '查询失败' });
   }
@@ -300,22 +333,35 @@ router.get('/api/osu/map/:bid', async (req, res) => {
  * GET /api/osu/leaderboard/:bid — 谱面全球排行榜
  *
  * 查询参数：
- *   mode  — osu | taiko | fruits | mania
- *   mods  — HD / DT / HR 等 mod 缩写组合
- *   limit — 条数（默认 50）
+ *   mode   — standard | taiko | catch | mania（PureBeat 命名）
+ *   mods   — HD / DT / HR 等 mod 缩写组合
+ *   limit  — 条数（默认 50）
+ *   legacy — 0=包含 lazer, 1=仅 stable（默认 0）
+ *   type   — global | country | friend（默认 global）
+ *
+ * Auth: optional（绑定 JWT 后返回 currentUserRank）
  */
-router.get('/api/osu/leaderboard/:bid', async (req, res) => {
+router.get('/api/osu/leaderboard/:bid', optionalAuth, async (req, res) => {
   try {
     const beatmapId = parseInt(req.params.bid, 10);
     if (isNaN(beatmapId) || beatmapId <= 0) {
       return res.status(400).json({ msg: '无效的谱面 ID' });
     }
-    const { mode, mods, limit } = req.query;
+    const { mode, mods, limit, legacy, type } = req.query;
+
+    // 如果已登录，获取用户 osuId 用于 currentUserRank
+    let currentUser = null;
+    if (req.user) {
+      currentUser = await User.findById(req.user.id || req.user._id).select('osuId');
+    }
 
     const data = await osuServices.leaderboard.getLeaderboard(beatmapId, {
       mode,
       mods,
-      limit: parseInt(limit) || 50
+      limit: parseInt(limit) || 50,
+      legacy: legacy !== undefined ? parseInt(legacy) : undefined,
+      type,
+      currentUser
     });
     res.json(data);
   } catch (err) {

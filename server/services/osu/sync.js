@@ -42,6 +42,9 @@ function mapScoreToDoc(userId, apiScore) {
     count100:  apiScore.statistics?.count_100 ?? null,
     count50:   apiScore.statistics?.count_50 ?? null,
     countMiss: apiScore.statistics?.count_miss ?? null,
+    // b1.7 新增: 总分与曲目状态
+    score:         apiScore.total_score ?? apiScore.score ?? 0,
+    beatmapStatus: beatmap.status || '',
   };
 }
 
@@ -110,7 +113,21 @@ async function syncBP(user, frontendMode) {
 }
 
 /**
+ * 将 osu API 错误映射到标准错误码
+ */
+function classifyError(err) {
+  if (err.status === 401) return 'token_expired';
+  if (err.status === 429) return 'rate_limited';
+  if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.message?.includes('network')) {
+    return 'network_error';
+  }
+  return 'api_error';
+}
+
+/**
  * 同步所有四模式的 BP
+ *
+ * 各模式独立 try-catch，一个模式失败不影响其他模式
  *
  * @param {Object} user - Mongoose User 文档
  * @returns {Promise<Object>} - 各模式同步结果
@@ -118,7 +135,22 @@ async function syncBP(user, frontendMode) {
 async function syncAllModes(user) {
   const results = {};
   for (const [frontendMode] of Object.entries(MODE_MAP)) {
-    results[frontendMode] = await syncBP(user, frontendMode);
+    const modeResult = {};
+    // 统计信息（可能失败但不阻塞 BP）
+    try {
+      await syncStats(user, frontendMode);
+      modeResult.stats = 'success';
+    } catch (err) {
+      modeResult.stats = classifyError(err);
+    }
+    // BP 同步
+    try {
+      const bpResult = await syncBP(user, frontendMode);
+      modeResult.bp = { status: 'success', count: (bpResult.upserted || 0) + (bpResult.updated || 0) };
+    } catch (err) {
+      modeResult.bp = { status: 'failed', error: classifyError(err) };
+    }
+    results[frontendMode] = modeResult;
   }
   return results;
 }

@@ -5,6 +5,7 @@
 import { motion } from 'framer-motion';
 import OsuGrade from './OsuGrade';
 import OsuCoverImage from './OsuCoverImage';
+import OsuBeatmapStatusBadge from './OsuBeatmapStatusBadge';
 
 export default function OsuScoreCard({ score, rank, onClick, compact = false }) {
   const modsStr = score.mods?.length > 0 ? `+${score.mods.join('')}` : '';
@@ -47,6 +48,7 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
           <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded truncate max-w-[120px]">
             {score.version}
           </span>
+          <OsuBeatmapStatusBadge status={score.beatmapStatus} />
           {modsStr && (
             <span className="text-[9px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1 py-0.5 rounded">
               {modsStr}

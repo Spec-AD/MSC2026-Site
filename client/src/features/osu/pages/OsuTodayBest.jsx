@@ -8,6 +8,7 @@ import { getTodayBest } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
+import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import { FaSpinner, FaSun, FaFire } from 'react-icons/fa';
 
 const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
@@ -85,7 +86,10 @@ export default function OsuTodayBest() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold text-zinc-100 truncate">{score.title}</div>
-                <div className="text-xs text-zinc-500 truncate">{score.version}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 truncate">{score.version}</span>
+                  <OsuBeatmapStatusBadge status={score.beatmapStatus} />
+                </div>
                 <div className="flex items-center gap-2 mt-1">
                   {score.mods?.length > 0 && (
                     <span className="text-[10px] font-bold text-rose-400">+{score.mods.join('')}</span>

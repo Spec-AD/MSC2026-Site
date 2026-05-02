@@ -8,11 +8,13 @@ import { AnimatePresence } from 'framer-motion';
 import { getBest } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuScoreList from '../components/OsuScoreList';
+import OsuScoreDetailPanel from '../components/OsuScoreDetailPanel';
 import { FaSpinner, FaTrophy } from 'react-icons/fa';
 
 export default function OsuBest() {
   const [activeMode, setActiveMode] = useState('standard');
   const [data, setData] = useState(null);
+  const [selectedScore, setSelectedScore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 

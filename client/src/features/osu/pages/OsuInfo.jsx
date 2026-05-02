@@ -1,15 +1,21 @@
 // ============================================================
-// OsuInfo — 玩家信息查询（输入用户名/UID）
+// OsuInfo — 玩家信息查询（b1.7 多模式展示）
 // GET /api/osu/info?q=
+// 响应结构: { username, osuUsername, avatarUrl, coverUrl, country, joinDate, defaultMode, statistics: { standard, taiko, catch, mania } }
 // ============================================================
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getOsuInfo } from '../api/osuApi';
-import { FaSpinner, FaSearch, FaUser, FaGlobe, FaMapMarkerAlt, FaTrophy, FaCalendar } from 'react-icons/fa';
+import OsuModeTabs from '../components/OsuModeTabs';
+import { FaSpinner, FaSearch, FaUser, FaGlobe, FaCalendar } from 'react-icons/fa';
+import { MODE_LABELS } from '../../../constants/osuModes';
+
+const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
 
 export default function OsuInfo() {
   const [query, setQuery] = useState('');
   const [player, setPlayer] = useState(null);
+  const [activeMode, setActiveMode] = useState('standard');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(false);
@@ -22,6 +28,12 @@ export default function OsuInfo() {
     try {
       const { data } = await getOsuInfo(query.trim());
       setPlayer(data);
+      // 默认选中该用户游玩最多的模式
+      if (data?.defaultMode && MODE_IDS.includes(data.defaultMode)) {
+        setActiveMode(data.defaultMode);
+      } else {
+        setActiveMode('standard');
+      }
     } catch (err) {
       setError(err.userMessage || '未找到该玩家');
       setPlayer(null);
@@ -33,6 +45,9 @@ export default function OsuInfo() {
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') handleSearch();
   };
+
+  // 当前模式的统计数据
+  const currentStats = player?.statistics?.[activeMode] || null;
 
   return (
     <div>
@@ -111,27 +126,35 @@ export default function OsuInfo() {
             </div>
           </div>
 
+          {/* 模式切换 Tab */}
+          <div className="px-6 pt-4">
+            <OsuModeTabs activeMode={activeMode} onModeChange={setActiveMode} />
+          </div>
+
           {/* 各模式统计 */}
           <div className="p-6">
-            <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-4">统计</h4>
-          {player.statistics?.standard ? (
-            <div className="bg-black/20 rounded-lg p-4">
-              <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">osu!standard</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <StatItem label="PP" value={Math.round(player.statistics.standard.pp).toLocaleString()} accent />
-                <StatItem label="Rank" value={`#${player.statistics.standard.rank?.toLocaleString() || '-'}`} />
-                <StatItem label="地区排名" value={`#${player.statistics.standard.countryRank?.toLocaleString() || '-'}`} />
-                <StatItem label="命中率" value={`${player.statistics.standard.accuracy?.toFixed(2)}%`} />
-                <StatItem label="游玩次数" value={player.statistics.standard.playCount?.toLocaleString()} />
-                <StatItem label="等级" value={player.statistics.standard.level?.toString()} />
-                <StatItem label="Max Combo" value={`${player.statistics.standard.maxCombo?.toLocaleString()}x`} />
-                <StatItem label="总 Hits" value={player.statistics.standard.totalHits?.toLocaleString()} />
-                <StatItem label="Ranked Score" value={player.statistics.standard.rankedScore?.toLocaleString()} />
+            <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-4">
+              {MODE_LABELS[activeMode] || activeMode} 统计
+            </h4>
+            {currentStats ? (
+              <div className="bg-black/20 rounded-lg p-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <StatItem label="PP" value={Math.round(currentStats.pp).toLocaleString()} accent />
+                  <StatItem label="Rank" value={`#${currentStats.rank?.toLocaleString() || '-'}`} />
+                  <StatItem label="地区排名" value={`#${currentStats.countryRank?.toLocaleString() || '-'}`} />
+                  <StatItem label="命中率" value={`${currentStats.accuracy?.toFixed(2)}%`} />
+                  <StatItem label="游玩次数" value={currentStats.playCount?.toLocaleString()} />
+                  <StatItem label="等级" value={currentStats.level?.toString()} />
+                  <StatItem label="Max Combo" value={`${currentStats.maxCombo?.toLocaleString()}x`} />
+                  <StatItem label="总 Hits" value={currentStats.totalHits?.toLocaleString()} />
+                  <StatItem label="Ranked Score" value={currentStats.rankedScore?.toLocaleString()} />
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="text-zinc-600 text-sm bg-black/20 rounded-lg p-4 text-center">暂无统计数据</div>
-          )}
+            ) : (
+              <div className="text-zinc-600 text-sm bg-black/20 rounded-lg p-4 text-center">
+                {MODE_LABELS[activeMode]} 模式暂无数据
+              </div>
+            )}
           </div>
         </div>
       )}
