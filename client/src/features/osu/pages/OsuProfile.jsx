@@ -31,17 +31,17 @@ import { getOsuInfo } from '../api/osuApi';
 const MODE_PLAYER_ESTIMATES = { standard: 150000, taiko: 20000, catch: 12000, mania: 30000 };
 
 /**
- * 根据排名值和当前模式返回颜色 CSS class
+ * 根据排名值和当前模式返回颜色 class
  */
 function getRankColor(rank, mode = 'standard') {
-  if (rank == null || rank <= 0) return { bg: '', text: '' };
-  if (rank <= 100) return { bg: 'bg-gradient-to-r from-amber-500 to-yellow-400', text: 'text-black' };
+  if (rank == null || rank <= 0) return '';
+  if (rank <= 100) return 'bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent';
   const total = MODE_PLAYER_ESTIMATES[mode] || 100000;
   const pct = rank / total;
-  if (pct <= 0.015) return { bg: 'bg-yellow-500', text: 'text-black' };
-  if (pct <= 0.05) return { bg: 'bg-zinc-300', text: 'text-black' };
-  if (pct <= 0.15) return { bg: 'bg-amber-700', text: 'text-white' };
-  return { bg: '', text: '' };
+  if (pct <= 0.015) return 'text-yellow-500';
+  if (pct <= 0.05) return 'text-zinc-300';
+  if (pct <= 0.15) return 'text-amber-700';
+  return '';
 }
 
 // 模式简洁图标
@@ -365,10 +365,10 @@ export default function OsuProfile() {
                 value={(() => {
                   if (statsDisplay?.state !== 'loaded') return null;
                   const rank = statsDisplay.data.rank;
-                  const { bg, text } = getRankColor(rank, activeMode);
+                  const colorClass = getRankColor(rank, activeMode);
                   const fmt = `#${rank?.toLocaleString()}`;
-                  if (!bg) return fmt;
-                  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded ${bg} ${text} font-bold`}>{fmt}</span>;
+                  if (!colorClass) return fmt;
+                  return <span className={`${colorClass} font-bold`}>{fmt}</span>;
                 })()}
                 emptyState={statsDisplay?.state}
               />
