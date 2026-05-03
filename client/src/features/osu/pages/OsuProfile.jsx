@@ -135,7 +135,7 @@ export default function OsuProfile() {
 
   /** 构造 OAuth URL */
   const buildOsuAuthUrl = () => {
-    const clientId = import.meta.env.VITE_OSU_CLIENT_ID;
+    const clientId = import.meta.env.VITE_OSU_CLIENT_ID || '49210';
     const redirectUri = encodeURIComponent(`${window.location.origin}/osu-callback`);
     const state = `${profile.username}_osu`;
     const scope = encodeURIComponent('identify public');
