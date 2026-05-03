@@ -27,17 +27,20 @@ import CountryFlag from '../components/CountryFlag';
 import { getOsuInfo } from '../api/osuApi';
 
 // ====== 全球排名颜色分层 (清音 §14.1) ======
-/** 各模式大致活跃玩家数 (用于计算百分比) */
-const MODE_PLAYER_ESTIMATES = { standard: 150000, taiko: 20000, catch: 12000, mania: 30000 };
+/** 各模式总游玩人数 (清音 §14.1 参考表) */
+const MODE_PLAYER_TOTAL = { standard: 3250000, taiko: 386990, catch: 287200, mania: 1007800 };
 
 /**
- * 根据排名值和当前模式返回颜色 class
+ * 全球排名颜色分层 — 返回文字颜色/渐变的 class
  */
 function getRankColor(rank, mode = 'standard') {
   if (rank == null || rank <= 0) return '';
   if (rank <= 100) return 'bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent';
-  const total = MODE_PLAYER_ESTIMATES[mode] || 100000;
+  const total = MODE_PLAYER_TOTAL[mode] || 1000000;
   const pct = rank / total;
+  if (pct <= 0.0005) return 'bg-gradient-to-r from-purple-500 via-fuchsia-400 to-violet-400 bg-clip-text text-transparent';
+  if (pct <= 0.0015) return 'text-emerald-400';
+  if (pct <= 0.005) return 'text-sky-400';
   if (pct <= 0.015) return 'text-yellow-500';
   if (pct <= 0.05) return 'text-zinc-300';
   if (pct <= 0.15) return 'text-amber-700';
