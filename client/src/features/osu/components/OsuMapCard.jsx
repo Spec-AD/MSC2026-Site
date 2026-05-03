@@ -5,6 +5,7 @@
 
 import { FaStar, FaMusic, FaUser, FaClock, FaPlay, FaCircle, FaSlidersH, FaCompactDisc } from 'react-icons/fa';
 import OsuCoverImage from './OsuCoverImage';
+import { getStarBgColor, getStarTextColor } from '../utils/osuColors';
 
 const MODE_NAMES = {
   0: 'Standard', 1: 'Taiko', 2: 'Catch', 3: 'Mania',
@@ -37,9 +38,19 @@ export default function OsuMapCard({ beatmap, onViewLeaderboard, compact = false
             {beatmap.artist} — {beatmap.version}
           </div>
         </div>
-        <div className="flex items-center gap-1 text-yellow-400 text-sm shrink-0">
-          <FaStar className="text-[10px]" />
-          <span className="font-bold">{beatmap.starRating?.toFixed(2)}</span>
+        <div className="flex items-center gap-1 text-sm shrink-0">
+          {(() => {
+            const sr = beatmap.starRating || 0;
+            const bg = getStarBgColor(sr);
+            const tc = getStarTextColor(bg);
+            return (
+              <span className="px-1.5 py-0.5 rounded font-bold inline-flex items-center gap-1"
+                style={{ backgroundColor: bg, color: tc === 'text-black' ? '#000' : '#fff' }}>
+                <FaStar className="text-[10px]" />
+                <span>{sr.toFixed(2)}</span>
+              </span>
+            );
+          })()}
         </div>
       </div>
     );
@@ -74,11 +85,19 @@ export default function OsuMapCard({ beatmap, onViewLeaderboard, compact = false
         </div>
 
         {/* 谱师 + 评级日期 */}
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-lg px-2.5 py-1.5">
-          <FaStar className="text-yellow-400 text-xs" />
-          <span className="text-yellow-400 font-bold text-sm">{beatmap.starRating?.toFixed(2)}</span>
-          <span className="text-zinc-500 text-[10px]">★</span>
-        </div>
+        {(() => {
+          const sr = beatmap.starRating || 0;
+          const bg = getStarBgColor(sr);
+          const tc = getStarTextColor(bg);
+          return (
+            <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{ backgroundColor: bg }}>
+              <FaStar className="text-xs" style={{ color: tc === 'text-black' ? '#000' : '#fff' }} />
+              <span className="font-bold text-sm" style={{ color: tc === 'text-black' ? '#000' : '#fff' }}>{sr.toFixed(2)}</span>
+              <span className="text-[10px]" style={{ color: tc === 'text-black' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }}>★</span>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="p-4 space-y-4">

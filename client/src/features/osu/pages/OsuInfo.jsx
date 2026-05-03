@@ -5,8 +5,10 @@
 // ============================================================
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getOsuInfo } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
+import OsuSearchHistory from '../components/OsuSearchHistory';
 import { FaSpinner, FaSearch, FaUser, FaGlobe, FaCalendar } from 'react-icons/fa';
 import { MODE_LABELS } from '../../../constants/osuModes';
 import useOsuCache from '../store/osuCache';
@@ -14,6 +16,7 @@ import useOsuCache from '../store/osuCache';
 const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
 
 export default function OsuInfo() {
+  const [searchParams] = useSearchParams();
   const cache = useOsuCache();
   const [query, setQuery] = useState(cache.infoQuery || '');
   const [player, setPlayer] = useState(cache.infoData);
@@ -21,6 +24,30 @@ export default function OsuInfo() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(!!cache.infoData);
+
+  // 从 URL ?q= 参数自动触发搜索
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q && q.trim() && !searched) {
+      setQuery(q.trim());
+      // 延迟一下让 query state 更新后再搜索
+      const timer = setTimeout(() => {
+        getOsuInfo(q.trim()).then(({ data }) => {
+          setPlayer(data);
+          recordPlayerHistory(data);
+          cache.setInfo(q.trim(), data);
+          setSearched(true);
+          if (data?.defaultMode && MODE_IDS.includes(data.defaultMode)) {
+            setActiveMode(data.defaultMode);
+          }
+        }).catch((err) => {
+          setError(err.userMessage || '未找到该玩家');
+          setSearched(true);
+        });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -30,6 +57,7 @@ export default function OsuInfo() {
     try {
       const { data } = await getOsuInfo(query.trim());
       setPlayer(data);
+      recordPlayerHistory(data);
       cache.setInfo(query.trim(), data);
       // 默认选中该用户游玩最多的模式
       if (data?.defaultMode && MODE_IDS.includes(data.defaultMode)) {
@@ -43,6 +71,17 @@ export default function OsuInfo() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 搜索成功后记录玩家历史
+  const recordPlayerHistory = (data) => {
+    if (!data) return;
+    cache.addPlayerHistory({
+      username: data.username,
+      avatarUrl: data.avatarUrl,
+      countryCode: data.countryCode || data.country,
+      osuId: data.osuId || data.id,
+    });
   };
 
   const handleKeyDown = (e) => {
@@ -81,6 +120,27 @@ export default function OsuInfo() {
           查询
         </button>
       </div>
+
+      {/* 搜索历史 */}
+      {!searchParams.get('q') && cache.playerHistory?.length > 0 && (
+        <OsuSearchHistory
+          items={cache.playerHistory}
+          type="player"
+          onSelect={(entry) => {
+            setQuery(entry.username);
+            getOsuInfo(entry.username).then(({ data }) => {
+              setPlayer(data);
+              recordPlayerHistory(data);
+              cache.setInfo(entry.username, data);
+              setSearched(true);
+              if (data?.defaultMode && MODE_IDS.includes(data.defaultMode)) {
+                setActiveMode(data.defaultMode);
+              }
+            }).catch(() => {});
+          }}
+          onClear={() => cache.clearAll()}
+        />
+      )}
 
       {/* 加载中 */}
       {loading && (

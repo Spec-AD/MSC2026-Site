@@ -12,6 +12,8 @@ import OsuGrade from './OsuGrade';
 import OsuCoverImage from './OsuCoverImage';
 import CountryFlag from './CountryFlag';
 
+const COUNTRY_NAMES = new Intl.DisplayNames(['zh'], { type: 'region' });
+
 // 排名奖牌色
 const RANK_COLORS = {
   1: 'text-yellow-400',
@@ -155,8 +157,9 @@ export default function OsuLeaderboardRow({
               {entry.username || entry.osuUsername}
             </span>
             {entry.countryCode && (
-              <span className="shrink-0 inline-flex items-center gap-1" title={entry.countryName || ''}>
+              <span className="shrink-0 inline-flex items-center gap-1 ms-1" title={entry.countryName || ''}>
                 <CountryFlag code={entry.countryCode} size="sm" />
+                <span className="text-[10px] text-zinc-500">{COUNTRY_NAMES.of(entry.countryCode) || entry.countryCode}</span>
               </span>
             )}
           </div>

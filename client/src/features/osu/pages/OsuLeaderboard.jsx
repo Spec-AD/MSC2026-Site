@@ -9,7 +9,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getLeaderboard } from '../api/osuApi';
 import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
-import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
+import { getStarBgColor, getStarTextColor } from '../utils/osuColors';
 import ScrollToTopButton from '../components/ScrollToTopButton';
 import OsuLeaderboardRow from '../components/OsuLeaderboardRow';
 import CountryFlag from '../components/CountryFlag';
@@ -18,6 +18,7 @@ import {
   FaSearch, FaStar, FaClock, FaMusic, FaCircle, FaSlidersH
 } from 'react-icons/fa';
 import useOsuCache from '../store/osuCache';
+import OsuSearchHistory from '../components/OsuSearchHistory';
 
 // ----- mode 标签映射 -----
 
@@ -100,6 +101,21 @@ export default function OsuLeaderboard() {
     navigate(`/osu/info?q=${encodeURIComponent(username)}`);
   };
 
+  // 数据加载成功后记录 BID 搜索历史
+  useEffect(() => {
+    if (!data?.beatmap || !effectiveBid) return;
+    const bm = data.beatmap;
+    const modeIcons = { standard: '/osu-resources/RulesetOsu.png', taiko: '/osu-resources/RulesetTaiko.png', catch: '/osu-resources/RulesetCatch.png', mania: '/osu-resources/RulesetMania.png' };
+    cache.addLeaderboardHistory({
+      bid: effectiveBid,
+      coverUrl: bm.coverUrl || bm.covers?.cover,
+      title: bm.titleUnicode || bm.title,
+      version: bm.version,
+      mode: bm.mode || 'standard',
+      modeIcon: modeIcons[bm.mode] || modeIcons.standard,
+    });
+  }, [data?.beatmap]);
+
   // 当前谱面的模式（用于 mode 标签）
   const beatmapMode = data?.beatmap?.mode || 'standard';
   const modeBadge = MODE_BADGE[beatmapMode] || MODE_BADGE.standard;
@@ -128,6 +144,16 @@ export default function OsuLeaderboard() {
           </button>
         </div>
       </div>
+
+      {/* 搜索历史 */}
+      {!effectiveBid && cache.leaderboardHistory?.length > 0 && (
+        <OsuSearchHistory
+          items={cache.leaderboardHistory}
+          type="bid"
+          onSelect={(entry) => navigate(`/osu/leaderboard/${entry.bid}`)}
+          onClear={() => cache.clearAll()}
+        />
+      )}
 
       {/* 谱面头部信息 — b1.7 R3 重构版 */}
       {data?.beatmap && (
@@ -165,11 +191,20 @@ export default function OsuLeaderboard() {
                 </div>
               </div>
 
-              {/* 星级 */}
-              <div className="flex items-center gap-1 text-xs text-yellow-400 shrink-0">
-                <FaStar className="text-[10px]" />
-                <span className="font-bold">{data.beatmap.starRating?.toFixed(2)}</span>
-                <span className="text-zinc-500">★</span>
+              {/* 星级 (带底框色) */}
+              <div className="flex items-center gap-1 shrink-0">
+                {(() => {
+                  const sr = data.beatmap.starRating || 0;
+                  const bg = getStarBgColor(sr);
+                  const text = getStarTextColor(bg);
+                  return (
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold inline-flex items-center gap-1`}
+                      style={{ backgroundColor: bg, color: text === 'text-black' ? '#000' : '#fff' }}>
+                      <span>★</span>
+                      <span>{sr.toFixed(2)}</span>
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 
