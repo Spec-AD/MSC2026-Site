@@ -24,11 +24,12 @@ const JUDGE_STYLES = {
   countPerf: 'text-yellow-300',
   countGreat: 'text-emerald-400',
   count300: 'text-emerald-400',
+  countGood: 'text-green-400',
   countOk: 'text-blue-400',
   count100: 'text-blue-400',
   countMeh: 'text-amber-400',
   count50: 'text-amber-400',
-  countLDrp: 'text-blue-400',
+  countLDrp: 'text-cyan-400',
   countSDrpMiss: 'text-amber-400',
   countMiss: 'text-red-400',
 };
@@ -36,6 +37,7 @@ const JUDGE_STYLES = {
 // 判定新→旧 fallback 映射
 const JUDGE_FALLBACK = {
   countGreat: 'count300',
+  countGood: null,
   countOk: 'count100',
   countMeh: 'count50',
   countLDrp: 'count100',
@@ -69,8 +71,14 @@ export default function OsuLeaderboardRow({
     }
   };
 
-  // 判定数组（按模式更换组）
-  const judgeSets = ['countGreat', 'countOk', 'countMeh', 'countMiss', 'countLDrp', 'countSDrpMiss', 'countPerf']
+  // 判定数组 — 按模式自动排序
+  // Mania：Perf → Great → Good → Ok → Meh → Miss
+  // Standard/Taiko/Catch：Great → Ok → Meh → Miss（无 Perf）
+  const hasPerf = getJudgeVal(entry, 'countPerf') != null;
+  const allJudgeKeys = hasPerf
+    ? ['countPerf', 'countGreat', 'countGood', 'countOk', 'countMeh', 'countMiss', 'countLDrp', 'countSDrpMiss']
+    : ['countGreat', 'countOk', 'countMeh', 'countMiss', 'countLDrp', 'countSDrpMiss'];
+  const judgeSets = allJudgeKeys
     .filter(k => getJudgeVal(entry, k) != null);
   // 去重：如果 countPerf 存在且 countGreat 存在，两者都显示
   // 简单做法：取实际有值的优先判定
