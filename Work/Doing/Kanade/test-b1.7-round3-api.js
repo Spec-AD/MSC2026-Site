@@ -153,13 +153,13 @@ if (rInfo.ok) {
   // 基本字段检查
   ok('P1A.1', !!p.username, `username: ${p.username}`);
   ok('P1A.2', !!p.avatarUrl || !!p.osuAvatarUrl, `avatarUrl: ${!!(p.avatarUrl || p.osuAvatarUrl)}`);
-  ok('P1A.3', !!(p.country?.code) || !!(p.countryCode), `country: ${JSON.stringify(p.country || p.countryCode)}`);
+  ok('P1A.3', !!(p.countryCode), `countryCode: ${p.countryCode || 'missing'}`);
   ok('P1A.4', !!p.coverUrl, `coverUrl: ${!!p.coverUrl}`);
   ok('P1A.5', !!p.joinDate, `joinDate: ${p.joinDate || 'missing'}`);
   ok('P1A.6', p.friendsCount !== undefined, `friendsCount: ${p.friendsCount}`);
-  ok('P1A.7', p.replaysWatchedByOthers !== undefined, `replaysWatchedByOthers: ${p.replaysWatchedByOthers}`);
-  ok('P1A.8', p.badgeCount !== undefined || !!(p.achievements?.length), `badgeCount/achievements: ${p.badgeCount ?? p.achievements?.length ?? 'missing'}`);
-  ok('P1A.9', p.mapperFollowersCount !== undefined, `mapperFollowersCount: ${p.mapperFollowersCount}`);
+  ok('P1A.7', p.badgeCount !== undefined, `badgeCount: ${p.badgeCount}`);
+  ok('P1A.8', p.mapperFollowersCount !== undefined, `mapperFollowersCount: ${p.mapperFollowersCount}`);
+  ok('P1A.9', p.followerCount !== undefined, `followerCount: ${p.followerCount}`);
 
   // 四模式
   const statKeys = p.statistics ? Object.keys(p.statistics) : [];
@@ -167,20 +167,25 @@ if (rInfo.ok) {
   ok('P1A.10', hasFour, `四模式: ${hasFour ? '✅' : statKeys.join(',')}`);
 
   if (hasFour) {
-    const modeFields = ['level', 'pp', 'global_rank', 'country_rank', 'play_time', 'ranked_score',
-      'hit_accuracy', 'play_count', 'total_score', 'total_hits', 'maximum_combo', 'replays_watched_by_others'];
+    // 实际字段名（camelCase，后端返回的格式）
+    const modeFields = ['pp', 'rank', 'countryRank', 'accuracy', 'playCount', 'totalHits',
+      'level', 'maxCombo', 'rankedScore', 'totalScore', 'playTime', 'replaysWatched', 'replaysWatchedByOthers', 'rankHistory'];
     for (const mode of ['standard', 'taiko', 'catch', 'mania']) {
       const ms = p.statistics[mode] || {};
       const n = modeFields.filter(f => ms[f] !== undefined).length;
-      ok(`P1A.11-${mode}`, n > 0, `${mode}: ${n}/${modeFields.length} 字段存在`);
+      // rankHistory might be an empty array, count it but flag
+      const hasRankHistory = Array.isArray(ms.rankHistory);
+      ok(`P1A.11-${mode}`, n >= modeFields.length - 1, `${mode}: ${n}/${modeFields.length} 字段存在 (rankHistory: ${hasRankHistory ? ms.rankHistory.length : 0}pts)`);
     }
   }
 
   ok('P1A.12', !!p.defaultMode, `defaultMode: ${p.defaultMode}`);
   
-  // rankHistory
-  const rh = p.statistics?.standard?.rankHistory;
-  ok('P1A.13', !!(rh && (Array.isArray(rh) ? rh.length : rh.data?.length)), `rankHistory 数据点: ${Array.isArray(rh) ? rh.length : rh?.data?.length || 0}`);
+  // top-level rankHistory
+  const rhTop = p.rankHistory;
+  info(`顶层 rankHistory: ${Array.isArray(rhTop) ? rhTop.length + 'pts' : 'missing'}`);
+  const rhStd = p.statistics?.standard?.rankHistory;
+  ok('P1A.13', Array.isArray(rhStd) && rhStd.length > 0, `standard.rankHistory: ${rhStd?.length || 0}pts`);
 } else {
   fail('P1A.0', `/api/osu/info?q=peppy → ${rInfo.status}`);
 }

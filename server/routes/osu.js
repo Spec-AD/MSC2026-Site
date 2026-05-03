@@ -33,15 +33,19 @@ router.post('/api/osu/bind', authMiddleware, async (req, res) => {
     const redirectUri = req.body.redirect_uri || String(process.env.OSU_CALLBACK_URL || '').trim();
 
     // Token Exchange — scope: public 确保 token 有权访问排行榜/BP 等端点
+    // ⚠️ osu! API 要求 form-urlencoded，不是 JSON
     const axios = require('axios');
-    const tokenRes = await axios.post('https://osu.ppy.sh/oauth/token', {
+    const tokenBody = Object.entries({
       client_id: clientId,
       client_secret: clientSecret,
       code,
       grant_type: 'authorization_code',
       redirect_uri: redirectUri,
       scope: 'public'
-    }, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } });
+    }).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
+    const tokenRes = await axios.post('https://osu.ppy.sh/oauth/token', tokenBody, {
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
 
     const { access_token, refresh_token, expires_in } = tokenRes.data;
 

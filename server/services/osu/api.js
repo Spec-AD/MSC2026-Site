@@ -127,6 +127,15 @@ function makeError(msg, status, retryAfter) {
 // ─── Token 管理 ───────────────────────────────────────────────────────
 
 /**
+ * 构建 OAuth token endpoint 的 form-urlencoded body
+ */
+function buildTokenBody(params) {
+  return Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join('&');
+}
+
+/**
  * 获取 Client Credentials Token（自动缓存 + 过期刷新）
  */
 async function getClientToken() {
@@ -135,12 +144,15 @@ async function getClientToken() {
   }
 
   try {
-    const res = await axios.post(CFG.tokenUrl, {
+    const body = buildTokenBody({
       client_id:     CFG.clientId,
       client_secret: CFG.clientSecret,
       grant_type:    'client_credentials',
       scope:         'public'
-    }, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } });
+    });
+    const res = await axios.post(CFG.tokenUrl, body, {
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
 
     _clientToken = {
       token:     res.data.access_token,
@@ -177,13 +189,16 @@ async function ensureUserToken(user) {
   }
 
   try {
-    const res = await axios.post(CFG.tokenUrl, {
+    const body = buildTokenBody({
       client_id:     CFG.clientId,
       client_secret: CFG.clientSecret,
       grant_type:    'refresh_token',
       refresh_token: user.osuRefreshToken,
       scope:         'public'
-    }, { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } });
+    });
+    const res = await axios.post(CFG.tokenUrl, body, {
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
 
     user.osuAccessToken  = res.data.access_token;
     user.osuRefreshToken = res.data.refresh_token || user.osuRefreshToken;
