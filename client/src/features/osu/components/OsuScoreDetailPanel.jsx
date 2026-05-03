@@ -13,6 +13,7 @@ import OsuGrade from './OsuGrade';
 import OsuCoverImage from './OsuCoverImage';
 import { FaTimes, FaExternalLinkAlt, FaSpinner } from 'react-icons/fa';
 import useWindowSize from '../../../hooks/useWindowSize';
+import OsuStarBadge from './OsuStarBadge';
 
 const overlayVariants = {
   hidden: { opacity: 0 },
@@ -74,6 +75,12 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
           className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-zinc-400 hover:text-zinc-200 transition-colors">
           <FaTimes size={14} />
         </button>
+        {/* 左上角星级徽章 */}
+        {beatmap?.starRating != null && (
+          <div className="absolute top-3 left-3">
+            <OsuStarBadge starRating={beatmap.starRating} size="md" />
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -187,7 +194,7 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
             {beatmap.starRating != null && (
               <div className="mt-2 pt-2 border-t border-white/[0.05] flex items-center justify-between text-xs">
                 <span className="text-zinc-500">
-                  星级: <span className="text-yellow-400 font-bold">{beatmap.starRating.toFixed(2)}★</span>
+                  星级: <OsuStarBadge starRating={beatmap.starRating} size="sm" />
                 </span>
                 {/* Aim / Speed 难度评级 — 仅 standard 模式有意义 */}
                 {score?.mode === 'standard' && (

@@ -12,6 +12,7 @@ import OsuCoverImage from '../components/OsuCoverImage';
 import { getStarBgColor, getStarTextColor } from '../utils/osuColors';
 import ScrollToTopButton from '../components/ScrollToTopButton';
 import OsuLeaderboardRow from '../components/OsuLeaderboardRow';
+import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import CountryFlag from '../components/CountryFlag';
 import {
   FaSpinner, FaArrowLeft, FaGlobeAsia, FaMedal,
@@ -19,6 +20,7 @@ import {
 } from 'react-icons/fa';
 import useOsuCache from '../store/osuCache';
 import OsuSearchHistory from '../components/OsuSearchHistory';
+import OsuStarBadge from '../components/OsuStarBadge';
 
 // ----- mode 标签映射 -----
 
@@ -191,21 +193,8 @@ export default function OsuLeaderboard() {
                 </div>
               </div>
 
-              {/* 星级 (带底框色) */}
-              <div className="flex items-center gap-1 shrink-0">
-                {(() => {
-                  const sr = data.beatmap.starRating || 0;
-                  const bg = getStarBgColor(sr);
-                  const text = getStarTextColor(bg);
-                  return (
-                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold inline-flex items-center gap-1`}
-                      style={{ backgroundColor: bg, color: text === 'text-black' ? '#000' : '#fff' }}>
-                      <span>★</span>
-                      <span>{sr.toFixed(2)}</span>
-                    </span>
-                  );
-                })()}
-              </div>
+              {/* 星级 (底框色 + overall-difficulty.png) */}
+              <OsuStarBadge starRating={data.beatmap.starRating} size="md" />
             </div>
 
             {/* 谱面参数 — PNG 图标+数值 */}

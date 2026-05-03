@@ -5,7 +5,7 @@
 
 import { FaStar, FaMusic, FaUser, FaClock, FaPlay, FaCircle, FaSlidersH, FaCompactDisc } from 'react-icons/fa';
 import OsuCoverImage from './OsuCoverImage';
-import { getStarBgColor, getStarTextColor } from '../utils/osuColors';
+import OsuStarBadge from './OsuStarBadge';
 
 const MODE_NAMES = {
   0: 'Standard', 1: 'Taiko', 2: 'Catch', 3: 'Mania',
@@ -38,20 +38,7 @@ export default function OsuMapCard({ beatmap, onViewLeaderboard, compact = false
             {beatmap.artist} — {beatmap.version}
           </div>
         </div>
-        <div className="flex items-center gap-1 text-sm shrink-0">
-          {(() => {
-            const sr = beatmap.starRating || 0;
-            const bg = getStarBgColor(sr);
-            const tc = getStarTextColor(bg);
-            return (
-              <span className="px-1.5 py-0.5 rounded font-bold inline-flex items-center gap-1"
-                style={{ backgroundColor: bg, color: tc === 'text-black' ? '#000' : '#fff' }}>
-                <FaStar className="text-[10px]" />
-                <span>{sr.toFixed(2)}</span>
-              </span>
-            );
-          })()}
-        </div>
+        <OsuStarBadge starRating={beatmap.starRating} size="sm" />
       </div>
     );
   }
@@ -85,19 +72,9 @@ export default function OsuMapCard({ beatmap, onViewLeaderboard, compact = false
         </div>
 
         {/* 谱师 + 评级日期 */}
-        {(() => {
-          const sr = beatmap.starRating || 0;
-          const bg = getStarBgColor(sr);
-          const tc = getStarTextColor(bg);
-          return (
-            <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-              style={{ backgroundColor: bg }}>
-              <FaStar className="text-xs" style={{ color: tc === 'text-black' ? '#000' : '#fff' }} />
-              <span className="font-bold text-sm" style={{ color: tc === 'text-black' ? '#000' : '#fff' }}>{sr.toFixed(2)}</span>
-              <span className="text-[10px]" style={{ color: tc === 'text-black' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }}>★</span>
-            </div>
-          );
-        })()}
+        <div className="absolute top-3 right-3">
+          <OsuStarBadge starRating={beatmap.starRating} size="md" />
+        </div>
       </div>
 
       <div className="p-4 space-y-4">

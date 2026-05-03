@@ -24,6 +24,7 @@ import OsuScoreDetailPanel from '../components/OsuScoreDetailPanel';
 import OsuModeTabs from '../components/OsuModeTabs';
 import RankHistoryChart from '../components/RankHistoryChart';
 import CountryFlag from '../components/CountryFlag';
+import OsuStarBadge from '../components/OsuStarBadge';
 import { getOsuInfo } from '../api/osuApi';
 
 // ====== 全球排名颜色分层 (清音 §14.1) ======
@@ -599,6 +600,9 @@ function ScoreRow({ score, rank, onClick }) {
           <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded whitespace-normal break-words">
             {score.version}
           </span>
+          {score.starRating != null && (
+            <OsuStarBadge starRating={score.starRating} size="sm" />
+          )}
           {modsStr && (
             <span className="text-[9px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1 py-0.5 rounded">
               {modsStr}
