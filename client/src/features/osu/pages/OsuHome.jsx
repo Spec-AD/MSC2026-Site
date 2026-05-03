@@ -1,29 +1,32 @@
 // ============================================================
 // OsuHome — osu! 模块入口 / 导航
+// b1.7 R3: 顶部导航显示用户头像+昵称（H1 fix）
 // ============================================================
 
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { FaGamepad, FaTrophy, FaHistory, FaStar, FaList, FaSun, FaSearch, FaMap, FaGlobeAsia } from 'react-icons/fa';
-
-const NAV_ITEMS = [
-  { path: '/osu', label: '我的档案', icon: <FaGamepad />, exact: true },
-  { path: '/osu/best', label: 'BP 排行', icon: <FaTrophy /> },
-  { path: '/osu/pass', label: '最近通过', icon: <FaStar /> },
-  { path: '/osu/recent', label: '最近游玩', icon: <FaHistory /> },
-  { path: '/osu/todaybest', label: '今日最佳', icon: <FaSun /> },
-  { path: '/osu/info', label: '玩家查询', icon: <FaSearch /> },
-  { path: '/osu/map', label: '谱面查询', icon: <FaMap /> },
-  { path: '/osu/leaderboard', label: '排行榜', icon: <FaGlobeAsia /> },
-];
+import { FaGamepad, FaTrophy, FaHistory, FaStar, FaList, FaSun, FaSearch, FaMap, FaGlobeAsia, FaUser } from 'react-icons/fa';
+import { useAuth } from '../../../context/AuthContext';
 
 export default function OsuHome() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user: currentUser } = useAuth();
 
   const isActive = (item) => {
     if (item.exact) return location.pathname === '/osu';
     return location.pathname.startsWith(item.path);
   };
+
+  const NAV_ITEMS = [
+    { path: '/osu', label: currentUser ? (currentUser.nickname || currentUser.username) : 'osu!', icon: null, exact: true },
+    { path: '/osu/best', label: 'BP 排行', icon: <FaTrophy /> },
+    { path: '/osu/pass', label: '最近通过', icon: <FaStar /> },
+    { path: '/osu/recent', label: '最近游玩', icon: <FaHistory /> },
+    { path: '/osu/todaybest', label: '今日最佳', icon: <FaSun /> },
+    { path: '/osu/info', label: '玩家查询', icon: <FaSearch /> },
+    { path: '/osu/map', label: '谱面查询', icon: <FaMap /> },
+    { path: '/osu/leaderboard', label: '排行榜', icon: <FaGlobeAsia /> },
+  ];
 
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-osu">
@@ -36,7 +39,7 @@ export default function OsuHome() {
       <div className="max-w-7xl mx-auto px-4 pt-20 relative z-10">
         {/* 顶部导航 */}
         <div className="flex items-center gap-1 mb-8 overflow-x-auto pb-2 scrollbar-none border-b border-white/[0.05]">
-          {NAV_ITEMS.map(item => (
+          {NAV_ITEMS.map((item, idx) => (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
@@ -48,8 +51,25 @@ export default function OsuHome() {
                 }
               `}
             >
-              <span className="text-[10px]">{item.icon}</span>
-              {item.label}
+              {/* 第一个 nav item（我的档案）显示用户头像 + 昵称 */}
+              {idx === 0 && currentUser ? (
+                <>
+                  <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-800 shrink-0">
+                    {currentUser.avatarUrl ? (
+                      <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover"
+                        onError={(e) => { e.target.style.display = 'none'; }} />
+                    ) : (
+                      <FaUser className="w-full h-full p-1 text-zinc-600" />
+                    )}
+                  </div>
+                  <span className="truncate max-w-[100px]">{item.label}</span>
+                </>
+              ) : (
+                <>
+                  {item.icon && <span className="text-[10px]">{item.icon}</span>}
+                  <span>{item.label}</span>
+                </>
+              )}
             </button>
           ))}
         </div>

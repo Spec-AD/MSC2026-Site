@@ -417,7 +417,7 @@ export default function OsuProfile() {
                 <RankHistoryChart data={statsDisplay.data.rankHistory} width={600} />
               </div>
             )}
-            {!statsDisplay?.rankHistory && profile.rankHistory?.length >= 2 && (
+            {statsDisplay?.state !== 'loaded' && profile.rankHistory?.length >= 2 && (
               <div className="mb-8">
                 <RankHistoryChart data={profile.rankHistory} width={600} />
               </div>

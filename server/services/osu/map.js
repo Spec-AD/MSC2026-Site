@@ -27,7 +27,7 @@ function normalizeBeatmap(raw) {
     length:         raw.total_length || 0,
     cs:             raw.cs || 0,
     ar:             raw.ar || 0,
-    od:             raw.od || 0,
+    od:             raw.accuracy || raw.od || 0,
     hp:             raw.drain || 0,
     starRating:     raw.difficulty_rating || 0,
     aimDifficulty:  raw.aim_difficulty || 0,

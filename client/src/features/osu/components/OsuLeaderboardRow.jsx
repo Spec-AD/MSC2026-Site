@@ -65,7 +65,7 @@ export default function OsuLeaderboardRow({
   const handleUsernameClick = (e) => {
     e.stopPropagation();
     if (entry.username || entry.osuUsername) {
-      navigate(`/osu?user=${encodeURIComponent(entry.username || entry.osuUsername)}`);
+      navigate(`/osu/info?q=${encodeURIComponent(entry.username || entry.osuUsername)}`);
     }
   };
 

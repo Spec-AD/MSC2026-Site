@@ -57,6 +57,7 @@ function formatStats(statistics, modeData = null) {
     // 第三轮新增
     playTime:        statistics.play_time || 0,
     replaysWatched:  statistics.replays_watched_by_others || 0,
+    replaysWatchedByOthers: statistics.replays_watched_by_others || 0,  // 前端用名
     rankHistory:     modeData?.rank_history?.data || [],
   };
   return result;
@@ -99,17 +100,19 @@ async function getInfo(query) {
     osuId,
     username: raw.username,
     avatarUrl: raw.avatar_url,
-    country: raw.country?.code || '',
     coverUrl: raw.cover?.url || '',
     joinDate: raw.join_date || null,
     profileColour: raw.profile_colour || null,
     playMode: raw.playmode || 'osu',
     // 第三轮新增
     defaultMode,
+    countryCode: raw.country?.code || '',  // 改名为 countryCode 避免与对象格式混淆
     rankHistory: raw.rank_history?.data || [],
     badges: raw.badges || [],
+    badgeCount: raw.badges?.length || 0,
     friendsCount: raw.friends_count || null,
     followerCount: raw.follower_count || null,
+    mapperFollowersCount: raw.follower_count || null,  // osu! 中 follower_count 即谱师关注者
     // 模式统计数据
     statistics: stats
   };

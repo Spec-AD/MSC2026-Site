@@ -11,13 +11,13 @@ import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import ScrollToTopButton from '../components/ScrollToTopButton';
-import {
-  FaSpinner, FaArrowLeft, FaGlobeAsia, FaMedal,
-  FaSearch, FaStar, FaClock, FaMusic
-} from 'react-icons/fa';
-import useOsuCache from '../store/osuCache';
 import OsuLeaderboardRow from '../components/OsuLeaderboardRow';
 import CountryFlag from '../components/CountryFlag';
+import {
+  FaSpinner, FaArrowLeft, FaGlobeAsia, FaMedal,
+  FaSearch, FaStar, FaClock, FaMusic, FaCircle, FaSlidersH
+} from 'react-icons/fa';
+import useOsuCache from '../store/osuCache';
 
 // ----- mode 标签映射 -----
 
@@ -42,6 +42,12 @@ function formatDuration(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/** 模式图标 */
+function ModeIcon({ mode }) {
+  const icons = { standard: '🎯', taiko: '🥁', catch: '🍎', mania: '⌨️' };
+  return <span>{icons[mode] || '🎯'}</span>;
 }
 
 // ----- 组件 -----
@@ -85,7 +91,7 @@ export default function OsuLeaderboard() {
 
   const handleUsernameClick = (username, e) => {
     e.stopPropagation();
-    navigate(`/osu?user=${encodeURIComponent(username)}`);
+    navigate(`/osu/info?q=${encodeURIComponent(username)}`);
   };
 
   // 当前谱面的模式（用于 mode 标签）
@@ -117,47 +123,94 @@ export default function OsuLeaderboard() {
         </div>
       </div>
 
-      {/* 谱面头部信息 — 增强版 */}
+      {/* 谱面头部信息 — b1.7 R3 重构版 */}
       {data?.beatmap && (
-        <div className="mb-4 p-4 bg-gradient-to-br from-[#15151e]/60 to-[#15151e]/30 border border-white/[0.05] rounded-xl">
-          <div className="flex items-start gap-4">
-            {/* 封面 */}
-            <div className="w-16 h-12 rounded-lg overflow-hidden shrink-0">
-              <OsuCoverImage src={data.beatmap.coverUrl} alt="" className="w-full h-full" />
-            </div>
-
-            {/* 信息区 */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-base font-bold text-zinc-100 truncate max-w-[300px]">{data.beatmap.title}</span>
-                {/* mode 标签（纯展示，不可切换）*/}
-                <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${modeBadge.color}`}>
-                  {modeBadge.label}
-                </span>
-                <OsuBeatmapStatusBadge status={data.beatmap.status} />
-              </div>
-              <div className="text-xs text-zinc-500 truncate mt-0.5">{data.beatmap.artist} — {data.beatmap.version}</div>
-            </div>
-
-            {/* 星级 */}
-            <div className="flex items-center gap-1 text-xs text-yellow-400 shrink-0">
-              <FaStar className="text-[10px]" /> {data.beatmap.starRating?.toFixed(2)}
-            </div>
+        <div className="mb-4 relative overflow-hidden rounded-xl">
+          {/* 背景曲绘 */}
+          <div className="absolute inset-0">
+            <OsuCoverImage src={data.beatmap.coverUrl || data.beatmap.covers?.cover} alt="" className="w-full h-full" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#15151e]/95 via-[#15151e]/85 to-[#15151e]/70" />
           </div>
 
-          {/* 谱面参数行 */}
-          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.05] text-[11px] text-zinc-500 flex-wrap">
-            {data.beatmap.bpm != null && <span>{data.beatmap.bpm} BPM</span>}
-            {data.beatmap.od != null && <span>OD {data.beatmap.od}</span>}
-            {data.beatmap.cs != null && <span>CS {data.beatmap.cs}</span>}
-            {data.beatmap.ar != null && <span>AR {data.beatmap.ar}</span>}
-            {data.beatmap.maxCombo != null && <span>{data.beatmap.maxCombo}x</span>}
-            {data.beatmap.totalLength != null && (
+          <div className="relative z-10 p-4">
+            {/* 第一行：封面 + 标题 + 星级 */}
+            <div className="flex items-start gap-4">
+              {/* 封面 */}
+              <div className="w-16 h-12 rounded-lg overflow-hidden shrink-0 shadow-lg">
+                <OsuCoverImage src={data.beatmap.coverUrl || data.beatmap.covers?.cover} alt="" className="w-full h-full" />
+              </div>
+
+              {/* 信息区 */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-base font-bold text-zinc-100 truncate max-w-[300px]">{data.beatmap.titleUnicode || data.beatmap.title}</span>
+                  {/* mode 标签 — 全称+图标 */}
+                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded border flex items-center gap-1 ${modeBadge.color}`}>
+                    <ModeIcon mode={beatmapMode} />
+                    {MODE_FULL[beatmapMode] || beatmapMode}
+                  </span>
+                  <OsuBeatmapStatusBadge status={data.beatmap.status} />
+                </div>
+                <div className="text-xs text-zinc-400 truncate mt-0.5">
+                  {data.beatmap.artist} — {data.beatmap.version}
+                </div>
+                <div className="text-[10px] text-zinc-600 mt-0.5">
+                  {data.beatmap.mapperUsername || data.beatmap.creator}
+                </div>
+              </div>
+
+              {/* 星级 */}
+              <div className="flex items-center gap-1 text-xs text-yellow-400 shrink-0">
+                <FaStar className="text-[10px]" />
+                <span className="font-bold">{data.beatmap.starRating?.toFixed(2)}</span>
+                <span className="text-zinc-500">★</span>
+              </div>
+            </div>
+
+            {/* 谱面参数 — 图标+数值 */}
+            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-white/[0.08] text-[11px] text-zinc-400 flex-wrap">
               <span className="flex items-center gap-1">
-                <FaClock className="text-[9px]" /> {formatDuration(data.beatmap.totalLength)}
+                <FaClock className="text-[9px]" /> {formatDuration(data.beatmap.totalLength || data.beatmap.length)}
               </span>
-            )}
-            <span className="text-zinc-600">{MODE_FULL[beatmapMode] || beatmapMode}</span>
+              <span className="flex items-center gap-1">
+                <FaMusic className="text-[9px]" /> {data.beatmap.bpm} BPM
+              </span>
+              {(data.beatmap.circles > 0 || data.beatmap.circles != null) && (
+                <span className="flex items-center gap-1">
+                  <FaCircle className="text-[8px] text-blue-400" /> {data.beatmap.circles?.toLocaleString()}
+                </span>
+              )}
+              {(data.beatmap.sliders > 0 || data.beatmap.sliders != null) && (
+                <span className="flex items-center gap-1">
+                  <FaSlidersH className="text-[9px] text-emerald-400" /> {data.beatmap.sliders?.toLocaleString()}
+                </span>
+              )}
+              {data.beatmap.maxCombo != null && (
+                <span className="flex items-center gap-1">{data.beatmap.maxCombo}x</span>
+              )}
+            </div>
+
+            {/* 难度参数进度条 */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3 pt-3 border-t border-white/[0.05]">
+              {[
+                { label: 'OD', value: data.beatmap.od },
+                { label: 'CS', value: data.beatmap.cs },
+                { label: 'AR', value: data.beatmap.ar },
+                { label: 'HP', value: data.beatmap.hp },
+              ].map(p => {
+                const val = p.value != null ? Math.min(Math.max(Number(p.value), 0), 10) : 0;
+                const pct = Math.max(val / 10 * 100, 1);
+                return (
+                  <div key={p.label} className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase w-6 shrink-0">{p.label}</span>
+                    <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #ec4899, #a855f7)' }} />
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-500 w-5 text-right">{val.toFixed(1)}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -241,7 +294,7 @@ export default function OsuLeaderboard() {
                       ...entry,
                       countryCode: entry.countryCode,
                       avatarUrl: entry.avatarUrl,
-                      coverUrl: entry.coverUrl || data.beatmap?.coverUrl,
+                      coverUrl: entry.coverUrl,
                     }}
                     showDetails={true}
                     showCover={false}
