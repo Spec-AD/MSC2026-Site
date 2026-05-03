@@ -26,7 +26,7 @@ export default function OsuHome() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans">
+    <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-osu">
       {/* 环境光 */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-pink-900/10 rounded-full blur-[140px] mix-blend-screen" />

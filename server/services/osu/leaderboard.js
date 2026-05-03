@@ -15,6 +15,29 @@ const osuApi = require('./api');
 // mode 名转换：osu 原生 → PureBeat
 const MODE_MAP_REVERSE = { osu: 'standard', taiko: 'taiko', fruits: 'catch', mania: 'mania' };
 
+// ─── 120s 内存缓存 ──────────────────────────────────────────────────────
+const CACHE_TTL = 120 * 1000;
+const lbCache = new Map();
+
+function cacheKey(bid, opts) {
+  return `${bid}:${opts.limit || 50}:${opts.legacy ?? ''}:${opts.type || 'global'}`;
+}
+
+function getFromCache(key) {
+  const entry = lbCache.get(key);
+  if (entry && entry.expiresAt > Date.now()) return entry.data;
+  lbCache.delete(key);
+  return null;
+}
+
+function setCache(key, data) {
+  lbCache.set(key, { data, expiresAt: Date.now() + CACHE_TTL });
+  if (lbCache.size > 200) {
+    const oldest = lbCache.keys().next().value;
+    if (oldest) lbCache.delete(oldest);
+  }
+}
+
 /**
  * 格式化 Score 对象为通用判定字段
  */
@@ -29,7 +52,7 @@ function formatJudgements(s) {
     countOk:     s.statistics?.count_100 ?? null,  // 100 / OK
     countMeh:    s.statistics?.count_50 ?? null,   // 50 / MEH
     // 多模式专属字段
-    countPerf:    s.statistics?.count_perfect ?? null,
+    countPerf:    s.statistics?.count_geki ?? null,   // mania PERFECT(Geki) / 标准 combo break
     countLDrp:    s.statistics?.count_large_droplet ?? null,
     countSDrpMiss: s.statistics?.count_small_droplet_miss ?? null,
   };
@@ -42,7 +65,7 @@ function formatScore(s, rank) {
   const osuScoreId = s.id || s.best_id || s.legacy_score_id;
   return {
     rank,
-    score:     s.legacy_total_score ?? s.total_score ?? s.score ?? 0,
+    score:     s.legacy_total_score || s.total_score || s.score || 0,
     accuracy:  s.accuracy ? s.accuracy * 100 : 0,
     pp:        s.pp || 0,
     maxCombo:  s.max_combo || 0,
@@ -63,6 +86,39 @@ function formatScore(s, rank) {
 }
 
 /**
+ * 给缓存的排行榜响应注入当前用户的排名/成绩
+ */
+async function injectUserScore(response, beatmapId, currentUser, legacy, type) {
+  if (!currentUser || !currentUser.osuId) {
+    return { ...response, currentUserRank: null, userScore: null };
+  }
+
+  const existing = response.scores.find(s => s.userId === currentUser.osuId);
+  if (existing) {
+    return { ...response, currentUserRank: { rank: existing.rank, highlight: true }, userScore: null };
+  }
+
+  // 未上榜 → 查用户是否打过这个图
+  try {
+    const us = await osuApi.getUserScoreOnBeatmap(beatmapId, currentUser.osuId, { legacy, type, user: currentUser });
+    if (us) {
+      if (us.position) {
+        return { ...response, currentUserRank: { rank: us.position, highlight: false }, userScore: null };
+      }
+      return {
+        ...response,
+        currentUserRank: null,
+        userScore: { ...formatScore(us, null), isOnLeaderboard: false },
+      };
+    }
+  } catch (_) {
+    // 用户没打过这个图，什么都不做
+  }
+
+  return { ...response, currentUserRank: null, userScore: null };
+}
+
+/**
  * 获取谱面排行榜
  *
  * @param {number} beatmapId
@@ -75,6 +131,15 @@ function formatScore(s, rank) {
  */
 async function getLeaderboard(beatmapId, opts = {}) {
   const { limit = 50, legacy, type, currentUser } = opts;
+
+  // 缓存命中直接返回（只缓存 API 响应，userScore 动态查）
+  const ckey = cacheKey(beatmapId, opts);
+  const cached = getFromCache(ckey);
+  if (cached) {
+    // userScore 仍需要根据当前用户动态查
+    const result = await injectUserScore(cached, beatmapId, currentUser, legacy, type);
+    return result;
+  }
 
   // 1. 调 osu! API 获取排行榜（不传 mode/mods）
   const raw = await osuApi.getBeatmapScores(beatmapId, { limit, legacy, type });
@@ -93,13 +158,15 @@ async function getLeaderboard(beatmapId, opts = {}) {
   const nativeMode = beatmapData?.mode || '';
   const pureBeatMode = MODE_MAP_REVERSE[nativeMode] || nativeMode;
 
+  const beatmapset = beatmapData?.beatmapset;
   const beatmapInfo = beatmapData ? {
     beatmapId:    beatmapData.id,
-    title:        beatmapData.beatmapset?.title || '',
-    artist:       beatmapData.beatmapset?.artist || '',
+    title:        beatmapset?.title || '',
+    titleUnicode: beatmapset?.title_unicode || '',
+    artist:       beatmapset?.artist || '',
     version:      beatmapData.version || '',
     mode:         pureBeatMode,
-    coverUrl:     beatmapData.beatmapset?.covers?.cover || beatmapData.beatmapset?.covers?.['card@2x'] || '',
+    coverUrl:     beatmapset?.covers?.cover || beatmapset?.covers?.['card@2x'] || '',
     status:       beatmapData.status || '',
     starRating:   beatmapData.difficulty_rating || 0,
     maxCombo:     beatmapData.max_combo || 0,
@@ -112,50 +179,33 @@ async function getLeaderboard(beatmapId, opts = {}) {
     totalLength:  beatmapData.total_length || 0,
     hitLength:    beatmapData.hit_length || 0,
     modeInt:      beatmapData.mode_int ?? 0,
+    // 第三轮新增：谱师 & 曲目详情
+    mapperId:      beatmapset?.creator_id || null,
+    mapperUsername: beatmapset?.creator || '',
+    submittedDate: beatmapset?.submitted_date || null,
+    rankedDate:    beatmapset?.ranked_date || null,
+    circles:       beatmapData.count_circles || 0,
+    sliders:       beatmapData.count_sliders || 0,
+    spinners:      beatmapData.count_spinners || 0,
   } : null;
 
   // 格式化成绩列表（rank = index + 1）
   const scores = (raw.scores || []).map((s, i) => formatScore(s, i + 1));
 
-  // 当前用户排名 + 未上榜成绩检测
-  let currentUserRank = null;
-  let userScore = null;
-
-  if (currentUser && currentUser.osuId) {
-    const existing = scores.find(s => s.userId === currentUser.osuId);
-    if (existing) {
-      currentUserRank = { rank: existing.rank, highlight: true };
-    } else {
-      // 未上榜 → 查用户是否打过这个图
-      try {
-        const us = await osuApi.getUserScoreOnBeatmap(beatmapId, currentUser.osuId, { legacy, type, user: currentUser });
-        if (us) {
-          if (us.position) {
-            // 有排名但不在前 N 条内
-            currentUserRank = { rank: us.position, highlight: false };
-          } else {
-            // 有成绩但没入榜
-            userScore = {
-              ...formatScore(us, null),
-              isOnLeaderboard: false,
-            };
-          }
-        }
-      } catch (_) {
-        // 用户没打过这个图，什么都不做
-      }
-    }
-  }
-
-  return {
+  const response = {
     beatmap: beatmapInfo,
     availableTypes: ['stable'],
     mode: pureBeatMode,
     totalEntries: raw.total || scores.length,
-    currentUserRank,
-    userScore,
     scores,
   };
+
+  // 写入缓存（不含 currentUserRank / userScore）
+  setCache(ckey, response);
+
+  // 当前用户排名 + 未上榜成绩检测（动态，不缓存）
+  const result = await injectUserScore(response, beatmapId, currentUser, legacy, type);
+  return result;
 }
 
 module.exports = { getLeaderboard };

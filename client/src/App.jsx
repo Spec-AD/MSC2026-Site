@@ -23,6 +23,7 @@ import OsuScoreDetail from './features/osu/pages/OsuScoreDetail';
 import OsuInfo from './features/osu/pages/OsuInfo';
 import OsuMap from './features/osu/pages/OsuMap';
 import OsuLeaderboard from './features/osu/pages/OsuLeaderboard';
+import OsuProfileRedirect from './features/osu/pages/OsuProfileRedirect';
 import DailyHistory from './pages/DailyHistory';
 import LetterGame from './pages/LetterGame';
 import DecodeProfile from './pages/DecodeProfile';
@@ -78,7 +79,7 @@ function App() {
               <Route path="/profile/:username/maimai/plate/:plateId" element={<MaimaiPlateDetail />} />
               <Route path="/profile/:username/maimai/level/:level" element={<MaimaiLevelDetail />} />
               <Route path="/profile/:username/chunithm" element={<ChunithmProfile />} />
-              <Route path="/profile/:username/osu" element={<OsuProfile />} />
+              <Route path="/profile/:username/osu" element={<OsuProfileRedirect />} />
               <Route path="/osu" element={<OsuHome />}>
                 <Route index element={<OsuProfile />} />
                 <Route path="pass" element={<OsuPass />} />

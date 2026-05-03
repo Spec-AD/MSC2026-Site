@@ -6,36 +6,18 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { getLeaderboard } from '../api/osuApi';
 import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import ScrollToTopButton from '../components/ScrollToTopButton';
 import {
-  FaSpinner, FaArrowLeft, FaGlobeAsia, FaMedal, FaUser,
+  FaSpinner, FaArrowLeft, FaGlobeAsia, FaMedal,
   FaSearch, FaStar, FaClock, FaMusic
 } from 'react-icons/fa';
-
-// ----- 字段映射：新字段 → 旧字段 fallback -----
-
-const JUDGE_FALLBACK = {
-  countGreat: 'count300',
-  countOk:    'count100',
-  countMeh:   'count50',
-  countPerf:  'count300',
-  countLDrp:  'count100',
-  countSDrpMiss: 'count50',
-};
-
-/** 读取判定值，优先新字段，回退旧字段 */
-function getJudgeValue(entry, newKey) {
-  const val = entry[newKey];
-  if (val != null) return val;
-  const fallbackKey = JUDGE_FALLBACK[newKey];
-  if (fallbackKey) return entry[fallbackKey];
-  return null;
-}
+import useOsuCache from '../store/osuCache';
+import OsuLeaderboardRow from '../components/OsuLeaderboardRow';
+import CountryFlag from '../components/CountryFlag';
 
 // ----- mode 标签映射 -----
 
@@ -53,41 +35,6 @@ const MODE_FULL = {
   mania:    'osu!mania',
 };
 
-// ----- 判定名称映射（按模式）-----
-
-const JUDGE_LABELS = {
-  standard: [
-    { key: 'countGreat', label: '300',    color: 'text-emerald-400' },
-    { key: 'countOk',    label: '100',    color: 'text-blue-400' },
-    { key: 'countMeh',   label: '50',     color: 'text-amber-400' },
-    { key: 'countMiss',  label: 'Miss',   color: 'text-red-400' },
-  ],
-  taiko: [
-    { key: 'countGreat', label: 'GREAT',  color: 'text-emerald-400' },
-    { key: 'countOk',    label: 'OK',     color: 'text-blue-400' },
-    { key: 'countMiss',  label: 'MISS',   color: 'text-red-400' },
-  ],
-  catch: [
-    { key: 'countGreat', label: 'FRUIT',      color: 'text-emerald-400' },
-    { key: 'countLDrp',  label: 'L DRP',      color: 'text-blue-400' },
-    { key: 'countMeh',   label: 'S DRP MISS', color: 'text-amber-400' },
-    { key: 'countMiss',  label: 'MISS',       color: 'text-red-400' },
-  ],
-  mania: [
-    { key: 'countPerf',  label: 'MAX',    color: 'text-yellow-400' },
-    { key: 'countGreat', label: '300',    color: 'text-emerald-400' },
-    { key: 'countOk',    label: '200',    color: 'text-blue-400' },
-    { key: 'countMeh',   label: '100',    color: 'text-amber-400' },
-    { key: 'countMiss',  label: 'MISS',   color: 'text-red-400' },
-  ],
-};
-
-const RANK_COLORS = {
-  1: 'text-yellow-400',
-  2: 'text-zinc-300',
-  3: 'text-amber-600',
-};
-
 // ----- 工具函数 -----
 
 function formatDuration(seconds) {
@@ -102,8 +49,9 @@ function formatDuration(seconds) {
 export default function OsuLeaderboard() {
   const { bid } = useParams();
   const navigate = useNavigate();
-  const [bidInput, setBidInput] = useState(bid || '');
-  const [data, setData] = useState(null);
+  const cache = useOsuCache();
+  const [bidInput, setBidInput] = useState(bid || cache.leaderboardBid || '');
+  const [data, setData] = useState(bid ? null : cache.leaderboardData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -116,6 +64,7 @@ export default function OsuLeaderboard() {
     try {
       const { data: res } = await getLeaderboard(effectiveBid, { limit: 50 });
       setData(res);
+      cache.setLeaderboard(effectiveBid, res);
     } catch (err) {
       setError(err.userMessage || '加载排行榜失败');
       setData(null);
@@ -136,12 +85,11 @@ export default function OsuLeaderboard() {
 
   const handleUsernameClick = (username, e) => {
     e.stopPropagation();
-    navigate(`/osu/info?q=${encodeURIComponent(username)}`);
+    navigate(`/osu?user=${encodeURIComponent(username)}`);
   };
 
-  // 当前谱面的模式（用于判定名称映射）
+  // 当前谱面的模式（用于 mode 标签）
   const beatmapMode = data?.beatmap?.mode || 'standard';
-  const judges = JUDGE_LABELS[beatmapMode] || JUDGE_LABELS.standard;
   const modeBadge = MODE_BADGE[beatmapMode] || MODE_BADGE.standard;
 
   return (
@@ -161,7 +109,7 @@ export default function OsuLeaderboard() {
         <div className="flex items-center gap-2 flex-1">
           <input type="text" value={bidInput} onChange={(e) => setBidInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="谱面 ID..." className="bg-[#15151e] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 w-32" />
+            placeholder="谱面 ID..." className="bg-[#15151e] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 w-full" />
           <button onClick={handleSearch} disabled={loading}
             className="p-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg transition-colors">
             {loading ? <FaSpinner className="animate-spin" /> : <FaSearch />}
@@ -283,95 +231,23 @@ export default function OsuLeaderboard() {
               const isHighlighted = data.currentUserRank?.highlight && rankNum === data.currentUserRank.rank;
 
               return (
-                <motion.div
-                  key={entry.userId + '-' + rankNum}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.02 }}
-                  className={`
-                    px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors
-                    ${isHighlighted ? 'border-l-2 border-pink-500 bg-pink-500/[0.03]' : ''}
-                  `}
-                >
-                  {/* 第一行 */}
-                  <div className="flex items-center gap-2">
-                    {/* 排名 — 使用 index+1 */}
-                    <div className="w-10 text-center shrink-0">
-                      {rankNum <= 3
-                        ? <FaMedal className={`mx-auto text-sm ${RANK_COLORS[rankNum]}`} />
-                        : <span className="text-sm font-mono text-zinc-600">#{rankNum}</span>
-                      }
-                    </div>
-
-                    {/* 头像 */}
-                    <div className="w-8 h-8 rounded-full overflow-hidden bg-zinc-800 shrink-0">
-                      {entry.avatarUrl ? (
-                        <img src={entry.avatarUrl} alt="" className="w-full h-full object-cover"
-                          onError={(e) => { e.target.style.display = 'none'; }} />
-                      ) : (
-                        <FaUser className="w-full h-full p-1.5 text-zinc-600" />
-                      )}
-                    </div>
-
-                    {/* 用户名 */}
-                    <div className="flex-1 min-w-0">
-                      <span
-                        onClick={(e) => handleUsernameClick(entry.username, e)}
-                        className="text-sm font-bold text-zinc-200 hover:text-pink-400 transition-colors truncate block cursor-pointer"
-                      >
-                        {entry.username}
-                        {entry.countryCode && (
-                          <span className="ml-1.5 text-[10px] text-zinc-500">{entry.countryCode}</span>
-                        )}
-                      </span>
-                    </div>
-
-                    {/* 评级 */}
-                    <div className="w-10 text-center shrink-0"><OsuGrade grade={entry.grade} size="sm" /></div>
-
-                    {/* 分数 */}
-                    <div className="w-20 text-right shrink-0 hidden sm:block">
-                      <span className="text-sm font-bold text-zinc-200">{entry.score?.toLocaleString()}</span>
-                    </div>
-
-                    {/* Acc */}
-                    <div className="w-14 text-right shrink-0">
-                      <span className="text-xs text-zinc-400">{entry.accuracy?.toFixed(2)}%</span>
-                    </div>
-
-                    {/* PP */}
-                    <div className="w-14 text-right shrink-0">
-                      <span className="text-sm font-bold text-pink-400">{Math.round(entry.pp)}</span>
-                    </div>
-                  </div>
-
-                  {/* 第二行 — 判定详情 + Mods（始终可见，不折叠）*/}
-                  <div className="flex items-center gap-2 mt-1.5 pl-12">
-                    {/* 判定详情 — 按模式动态命名 */}
-                    <div className="flex items-center gap-3 text-[10px]">
-                      {judges.map(({ key, label, color }) => (
-                        <span key={key} className={color}>
-                          {label} <span className="text-zinc-500">{getJudgeValue(entry, key) ?? '-'}</span>
-                        </span>
-                      ))}
-                    </div>
-
-                    {/* Mods — 右对齐 */}
-                    <div className="ml-auto text-right">
-                      {entry.mods?.length > 0
-                        ? <span className="text-[10px] font-bold text-rose-400">{entry.mods.join('')}</span>
-                        : null}
-                    </div>
-                  </div>
-
-                  {/* 移动端分数行 */}
-                  <div className="flex sm:hidden items-center gap-2 mt-1 pl-12">
-                    <span className="text-xs text-zinc-400">{entry.score?.toLocaleString()}</span>
-                    {entry.mods?.length > 0 && (
-                      <span className="text-[10px] font-bold text-rose-400 ml-auto">{entry.mods.join('')}</span>
-                    )}
-                  </div>
-                </motion.div>
+                <div key={entry.userId + '-' + rankNum} className={isHighlighted ? 'relative' : ''}>
+                  {isHighlighted && (
+                    <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-pink-500 z-10" />
+                  )}
+                  <OsuLeaderboardRow
+                    rank={rankNum}
+                    entry={{
+                      ...entry,
+                      countryCode: entry.countryCode,
+                      avatarUrl: entry.avatarUrl,
+                      coverUrl: entry.coverUrl || data.beatmap?.coverUrl,
+                    }}
+                    showDetails={true}
+                    showCover={false}
+                    compact={false}
+                  />
+                </div>
               );
             })}
           </div>

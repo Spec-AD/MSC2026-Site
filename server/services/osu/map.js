@@ -12,13 +12,16 @@ const osuApi = require('./api');
  * 规范化 osu! API 返回的谱面数据
  */
 function normalizeBeatmap(raw) {
+  const bms = raw.beatmapset;
   return {
     beatmapId:      raw.id,
-    beatmapsetId:   raw.beatmapset_id || raw.beatmapset?.id,
+    beatmapsetId:   bms?.id || raw.beatmapset_id,
     mode:           raw.mode || raw.mode_int?.toString(),
-    title:          raw.beatmapset?.title || raw.title || '',
-    artist:         raw.beatmapset?.artist || raw.artist || '',
-    creator:        raw.beatmapset?.creator || raw.creator || '',
+    title:          bms?.title || raw.title || '',
+    titleUnicode:   bms?.title_unicode || '',
+    artist:         bms?.artist || raw.artist || '',
+    creator:        bms?.creator || raw.creator || '',
+    creatorId:      bms?.creator_id || null,
     version:        raw.version || '',
     bpm:            raw.bpm || 0,
     length:         raw.total_length || 0,
@@ -32,13 +35,20 @@ function normalizeBeatmap(raw) {
     maxCombo:       raw.max_combo || 0,
     passcount:      raw.passcount || 0,
     playcount:      raw.playcount || 0,
-    covers: {
-      cover:     raw.beatmapset?.covers?.cover      || raw.covers?.cover      || '',
-      card:      raw.beatmapset?.covers?.card       || raw.covers?.card       || '',
-      list:      raw.beatmapset?.covers?.list       || raw.covers?.list       || '',
-      slimCover: raw.beatmapset?.covers?.slim_cover || raw.covers?.slim_cover || '',
-    },
     status:         raw.status || 'unknown',
+    // 曲目 & 构成
+    submittedDate:  bms?.submitted_date || null,
+    rankedDate:     bms?.ranked_date || null,
+    circles:        raw.count_circles || 0,
+    sliders:        raw.count_sliders || 0,
+    spinners:       raw.count_spinners || 0,
+    modeInt:        raw.mode_int ?? 0,
+    covers: {
+      cover:     bms?.covers?.cover      || raw.covers?.cover      || '',
+      card:      bms?.covers?.card       || raw.covers?.card       || '',
+      list:      bms?.covers?.list       || raw.covers?.list       || '',
+      slimCover: bms?.covers?.slim_cover || raw.covers?.slim_cover || '',
+    },
     lastUpdated:    new Date(),
     expiresAt:      new Date(Date.now() + 24 * 60 * 60 * 1000)
   };

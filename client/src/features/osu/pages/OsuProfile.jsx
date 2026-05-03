@@ -4,37 +4,37 @@
 // ============================================================
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Virtuoso } from 'react-virtuoso';
 import {
   FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt,
   FaLock, FaGlobe, FaMapMarkerAlt, FaPlay, FaUser,
   FaCheck, FaExclamationCircle, FaRedo, FaTimes,
+  FaClock, FaEye,
 } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { getUserProfile } from '../api/osuApi';
-import { getModeMap, MODE_LABELS, getApiModeSync } from '../../../constants/osuModes';
+import { getModeMap, getApiModeSync } from '../../../constants/osuModes';
 import useOsuSync from '../hooks/useOsuSync';
 import OsuCoverImage from '../components/OsuCoverImage';
 import OsuGrade from '../components/OsuGrade';
 import OsuScoreDetailPanel from '../components/OsuScoreDetailPanel';
+import OsuModeTabs from '../components/OsuModeTabs';
+import RankHistoryChart from '../components/RankHistoryChart';
+import CountryFlag from '../components/CountryFlag';
+import { getOsuInfo } from '../api/osuApi';
 
 // 模式简洁图标
-const MODE_ICONS = {
-  standard: 'S',
-  taiko: 'T',
-  catch: 'C',
-  mania: 'M',
-};
-
 const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
 
 export default function OsuProfile() {
   const { username: routeUsername } = useParams();
+  const [searchParams] = useSearchParams();
   const { user: currentUser } = useAuth();
-  const username = routeUsername || currentUser?.username;
+  const searchUser = searchParams.get('user');
+  const username = searchUser || routeUsername || currentUser?.username;
   const navigate = useNavigate();
   const { addToast } = useToast();
 
@@ -60,11 +60,43 @@ export default function OsuProfile() {
     try {
       setLoading(true);
       setError('');
-      const res = await getUserProfile(username);
-      setProfile(res.data);
-      setAllOsuScores(res.data.osuScores || []);
-      if (res.data.osuMode && MODE_IDS.includes(res.data.osuMode)) {
-        setActiveMode(res.data.osuMode);
+      const userRes = await getUserProfile(username);
+      const profile = userRes.data;
+
+      // 合并 osu! 实时数据（badges / rankHistory / playTime / 关注等）
+      if (profile.osuId || profile.osuUsername) {
+        try {
+          const osuInfoRes = await getOsuInfo(profile.osuUsername || username);
+          const oi = osuInfoRes.data;
+          if (oi) {
+            profile.defaultMode = oi.defaultMode;
+            profile.rankHistory = oi.rankHistory;
+            profile.badges = oi.badges;
+            profile.friendsCount = oi.friendsCount;
+            profile.followerCount = oi.followerCount;
+            // 合并各模式新增字段
+            for (const mode of MODE_IDS) {
+              if (oi.statistics?.[mode]) {
+                if (!profile.osuDetails?.[mode]) profile.osuDetails[mode] = {};
+                Object.assign(profile.osuDetails[mode], {
+                  playTime: oi.statistics[mode].playTime,
+                  replaysWatched: oi.statistics[mode].replaysWatched,
+                  rankHistory: oi.statistics[mode].rankHistory,
+                });
+              }
+            }
+          }
+        } catch (_) {
+          // osuInfo 不可用（未绑定/网络超时）时只使用本地数据
+        }
+      }
+
+      setProfile(profile);
+      setAllOsuScores(profile.osuScores || []);
+      if (profile.osuMode && MODE_IDS.includes(profile.osuMode)) {
+        setActiveMode(profile.osuMode);
+      } else if (profile.defaultMode && MODE_IDS.includes(profile.defaultMode)) {
+        setActiveMode(profile.defaultMode);
       }
     } catch (err) {
       setError('无法访问该玩家的档案');
@@ -106,7 +138,8 @@ export default function OsuProfile() {
     const clientId = import.meta.env.VITE_OSU_CLIENT_ID;
     const redirectUri = encodeURIComponent(`${window.location.origin}/osu-callback`);
     const state = `${profile.username}_osu`;
-    return `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify+public&state=${state}`;
+    const scope = encodeURIComponent('identify public');
+    return `https://osu.ppy.sh/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
   };
 
   // ---------- 加载状态 ----------
@@ -161,37 +194,32 @@ export default function OsuProfile() {
                   <span className="text-sm font-medium text-zinc-400">
                     {profile.osuUsername || profile.username}
                   </span>
+                  {profile.countryCode && (
+                    <CountryFlag code={profile.countryCode} size="sm" />
+                  )}
                   {profile.osuId && (
                     <span className="bg-pink-500/10 text-pink-400 border border-pink-500/20 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">
                       已绑定
                     </span>
                   )}
                 </div>
+                {(profile.followerCount != null || profile.friendsCount != null) && (
+                  <div className="flex items-center gap-3 mt-1 text-[10px] text-zinc-600 font-medium">
+                    {profile.followerCount != null && (
+                      <span>{profile.followerCount.toLocaleString()} 关注者</span>
+                    )}
+                    {profile.friendsCount != null && (
+                      <span>{profile.friendsCount.toLocaleString()} 好友</span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* 右侧：模式切换 + 绑定/同步按钮 */}
           <div className="flex flex-col gap-2 w-full md:w-auto">
-            {/* 模式切换 — 紧凑图标式 */}
-            <div className="flex items-center gap-1 bg-[#15151e]/80 p-1 rounded-lg border border-white/[0.05] w-fit">
-              {MODE_IDS.map(modeId => (
-                <button
-                  key={modeId}
-                  onClick={() => setActiveMode(modeId)}
-                  className={`
-                    w-8 h-8 text-xs font-bold rounded-md transition-all
-                    ${activeMode === modeId
-                      ? 'bg-pink-500/20 text-pink-400 shadow-sm'
-                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
-                    }
-                  `}
-                  title={MODE_LABELS[modeId] || modeId}
-                >
-                  {MODE_ICONS[modeId]}
-                </button>
-              ))}
-            </div>
+            <OsuModeTabs activeMode={activeMode} onModeChange={setActiveMode} />
 
             {/* 绑定/同步按钮组 */}
             {isOwnProfile && (
@@ -299,8 +327,8 @@ export default function OsuProfile() {
           </div>
         ) : (
           <>
-            {/* ====== 统计卡片 2×2 紧凑版 ====== */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+            {/* ====== 统计卡片 2×3 紧凑版 ====== */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
               <StatCard
                 icon={<FaGlobe />}
                 label="全球排名"
@@ -326,7 +354,74 @@ export default function OsuProfile() {
                 value={statsDisplay?.state === 'loaded' ? statsDisplay.data.playCount?.toLocaleString() : null}
                 emptyState={statsDisplay?.state}
               />
+              <StatCard
+                icon={<FaClock />}
+                label="游戏时长"
+                value={statsDisplay?.state === 'loaded' && statsDisplay.data.playTime != null
+                  ? `${Math.floor(statsDisplay.data.playTime / 3600)}h`
+                  : null}
+                emptyState={statsDisplay?.state}
+              />
+              <StatCard
+                icon={<FaEye />}
+                label="回放观看"
+                value={statsDisplay?.state === 'loaded' && statsDisplay.data.replaysWatched != null
+                  ? statsDisplay.data.replaysWatched?.toLocaleString()
+                  : null}
+                emptyState={statsDisplay?.state}
+              />
             </div>
+
+            {/* ====== Badges 徽章行 ====== */}
+            {profile.badges?.length > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 bg-pink-400/60 rounded-full" />
+                  <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                    荣誉徽章
+                  </span>
+                  <span className="text-[10px] text-zinc-700">({profile.badges.length})</span>
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+                  {profile.badges.map((badge, idx) => (
+                    <div
+                      key={idx}
+                      className="flex-shrink-0 flex items-center gap-2 bg-[#15151e]/60 border border-white/[0.04] rounded-lg px-2.5 py-1.5"
+                      title={badge.description}
+                    >
+                      <img
+                        src={badge.image_url}
+                        alt={badge.description}
+                        className="w-8 h-8 rounded object-contain"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                      <div className="min-w-0">
+                        <div className="text-[10px] text-zinc-400 truncate max-w-[160px]">
+                          {badge.description}
+                        </div>
+                        {badge.awarded_at && (
+                          <div className="text-[9px] text-zinc-700 mt-0.5">
+                            {new Date(badge.awarded_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'short' })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ====== 排名趋势 ====== */}
+            {statsDisplay?.state === 'loaded' && statsDisplay.data.rankHistory?.length >= 2 && (
+              <div className="mb-8">
+                <RankHistoryChart data={statsDisplay.data.rankHistory} width={600} />
+              </div>
+            )}
+            {!statsDisplay?.rankHistory && profile.rankHistory?.length >= 2 && (
+              <div className="mb-8">
+                <RankHistoryChart data={profile.rankHistory} width={600} />
+              </div>
+            )}
 
             {/* ====== BP 列表 ====== */}
             <div className="mb-16">

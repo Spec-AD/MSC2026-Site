@@ -9,16 +9,18 @@ import { getOsuInfo } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
 import { FaSpinner, FaSearch, FaUser, FaGlobe, FaCalendar } from 'react-icons/fa';
 import { MODE_LABELS } from '../../../constants/osuModes';
+import useOsuCache from '../store/osuCache';
 
 const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
 
 export default function OsuInfo() {
-  const [query, setQuery] = useState('');
-  const [player, setPlayer] = useState(null);
+  const cache = useOsuCache();
+  const [query, setQuery] = useState(cache.infoQuery || '');
+  const [player, setPlayer] = useState(cache.infoData);
   const [activeMode, setActiveMode] = useState('standard');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [searched, setSearched] = useState(false);
+  const [searched, setSearched] = useState(!!cache.infoData);
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -28,6 +30,7 @@ export default function OsuInfo() {
     try {
       const { data } = await getOsuInfo(query.trim());
       setPlayer(data);
+      cache.setInfo(query.trim(), data);
       // 默认选中该用户游玩最多的模式
       if (data?.defaultMode && MODE_IDS.includes(data.defaultMode)) {
         setActiveMode(data.defaultMode);

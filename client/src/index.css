@@ -95,11 +95,35 @@ body {
 }
 
 /* =======================================================
+   4. osu! 官方字体 (Torus Pro - 可变字体 Variable Font)
+   Fontspring DEMO 版，用于 osu! 模块所有文字
+======================================================= */
+@font-face {
+  font-family: 'Torus Pro';
+  src: url('/fonts/Torus-Pro/Fontspring-DEMO-toruspro-variable.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Torus Pro';
+  src: url('/fonts/Torus-Pro/Fontspring-DEMO-toruspro-variable-italic.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* =======================================================
    全局字体回退链：英文 (Quicksand) -> 中文 (NotoSansSC) -> 日文 (M PLUS) -> 系统后备
 ======================================================= */
 body {
   font-family: 'Quicksand', 'NotoSansSC', 'MPLUS1p', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-weight: 500;
+}
+
+/* osu! 字体：Torus Pro + fallback */
+.font-osu {
+  font-family: 'Torus Pro', 'Nunito', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* 自定义滚动条 */

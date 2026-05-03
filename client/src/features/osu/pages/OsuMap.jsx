@@ -8,13 +8,15 @@ import { useNavigate } from 'react-router-dom';
 import { getBeatmap } from '../api/osuApi';
 import OsuMapCard from '../components/OsuMapCard';
 import { FaSpinner, FaSearch, FaMusic, FaMap as FaMapIcon } from 'react-icons/fa';
+import useOsuCache from '../store/osuCache';
 
 export default function OsuMap() {
-  const [bid, setBid] = useState('');
-  const [beatmap, setBeatmap] = useState(null);
+  const cache = useOsuCache();
+  const [bid, setBid] = useState(cache.mapQuery || '');
+  const [beatmap, setBeatmap] = useState(cache.mapData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [searched, setSearched] = useState(false);
+  const [searched, setSearched] = useState(!!cache.mapData);
   const navigate = useNavigate();
 
   const handleSearch = async () => {
@@ -25,6 +27,7 @@ export default function OsuMap() {
     try {
       const { data } = await getBeatmap(bid.trim());
       setBeatmap(data);
+      cache.setMap(bid.trim(), data);
     } catch (err) {
       setError(err.userMessage || '未找到该谱面');
       setBeatmap(null);

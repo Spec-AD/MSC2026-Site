@@ -41,8 +41,9 @@ function setCache(query, data) {
 /**
  * 格式化 mode 统计数据
  */
-function formatStats(statistics) {
-  return statistics ? {
+function formatStats(statistics, modeData = null) {
+  if (!statistics) return null;
+  const result = {
     pp:          statistics.pp || 0,
     rank:        statistics.global_rank || 0,
     countryRank: statistics.country_rank || 0,
@@ -53,7 +54,12 @@ function formatStats(statistics) {
     maxCombo:    statistics.maximum_combo || 0,
     rankedScore: statistics.ranked_score || 0,
     totalScore:  statistics.total_score || 0,
-  } : null;
+    // 第三轮新增
+    playTime:        statistics.play_time || 0,
+    replaysWatched:  statistics.replays_watched_by_others || 0,
+    rankHistory:     modeData?.rank_history?.data || [],
+  };
+  return result;
 }
 
 /**
@@ -73,14 +79,21 @@ async function getInfo(query) {
 
   // 2. 串行查询四模式 stats
   const stats = {};
+  const modePlayCounts = {};
   for (const [internalMode, apiMode] of Object.entries(MODE_MAP)) {
     try {
       const modeData = await osuApi.getUserStats(osuId, apiMode);
-      stats[internalMode] = formatStats(modeData.statistics);
+      stats[internalMode] = formatStats(modeData.statistics, modeData);
+      modePlayCounts[internalMode] = modeData.statistics?.play_count || 0;
     } catch (_) {
       stats[internalMode] = null;
+      modePlayCounts[internalMode] = 0;
     }
   }
+
+  // 计算 defaultMode：playCount 最高的模式
+  const defaultMode = Object.entries(modePlayCounts)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'standard';
 
   const result = {
     osuId,
@@ -91,6 +104,13 @@ async function getInfo(query) {
     joinDate: raw.join_date || null,
     profileColour: raw.profile_colour || null,
     playMode: raw.playmode || 'osu',
+    // 第三轮新增
+    defaultMode,
+    rankHistory: raw.rank_history?.data || [],
+    badges: raw.badges || [],
+    friendsCount: raw.friends_count || null,
+    followerCount: raw.follower_count || null,
+    // 模式统计数据
     statistics: stats
   };
 

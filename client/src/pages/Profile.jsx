@@ -534,7 +534,7 @@ const Profile = () => {
             </div>
 
                         {/* osu! */}
-            <div onClick={() => navigate(`/profile/${profile.username}/osu`)} className="group relative bg-[#15151e] border border-white/[0.05] border-l-4 border-l-transparent hover:border-l-pink-500 p-6 md:p-8 cursor-pointer overflow-hidden transition-all duration-300 hover:bg-[#1a1a24]">
+            <div onClick={() => navigate(`/osu?user=${profile.username}`)} className="group relative bg-[#15151e] border border-white/[0.05] border-l-4 border-l-transparent hover:border-l-pink-500 p-6 md:p-8 cursor-pointer overflow-hidden transition-all duration-300 hover:bg-[#1a1a24]">
               <div className="absolute -right-6 -bottom-6 opacity-5 text-9xl text-pink-400 group-hover:scale-110 transition-transform duration-500"><FaGamepad /></div>
               <div className="relative z-10 flex flex-col h-full">
                 <div className="flex items-center justify-between mb-1">
