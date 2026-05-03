@@ -83,7 +83,7 @@ function PassItem({ score }) {
       <div className="flex-1 min-w-0">
         <div className="text-base font-bold text-zinc-100 truncate">{score.title}</div>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-sm text-zinc-400 truncate">{score.version}</span>
+          <span className="text-sm text-zinc-400 whitespace-normal break-words">{score.version}</span>
           <OsuBeatmapStatusBadge status={score.beatmapStatus} />
         </div>
         <div className="flex items-center gap-2 mt-1 text-xs text-zinc-500">

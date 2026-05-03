@@ -87,7 +87,7 @@ export default function OsuTodayBest() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold text-zinc-100 truncate">{score.title}</div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-500 truncate">{score.version}</span>
+                  <span className="text-xs text-zinc-500">{score.version}</span>
                   <OsuBeatmapStatusBadge status={score.beatmapStatus} />
                 </div>
                 <div className="flex items-center gap-2 mt-1">

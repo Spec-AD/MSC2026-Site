@@ -26,6 +26,24 @@ import RankHistoryChart from '../components/RankHistoryChart';
 import CountryFlag from '../components/CountryFlag';
 import { getOsuInfo } from '../api/osuApi';
 
+// ====== 全球排名颜色分层 (清音 §14.1) ======
+/** 各模式大致活跃玩家数 (用于计算百分比) */
+const MODE_PLAYER_ESTIMATES = { standard: 150000, taiko: 20000, catch: 12000, mania: 30000 };
+
+/**
+ * 根据排名值和当前模式返回颜色 CSS class
+ */
+function getRankColor(rank, mode = 'standard') {
+  if (rank == null || rank <= 0) return { bg: '', text: '' };
+  if (rank <= 100) return { bg: 'bg-gradient-to-r from-amber-500 to-yellow-400', text: 'text-black' };
+  const total = MODE_PLAYER_ESTIMATES[mode] || 100000;
+  const pct = rank / total;
+  if (pct <= 0.015) return { bg: 'bg-yellow-500', text: 'text-black' };
+  if (pct <= 0.05) return { bg: 'bg-zinc-300', text: 'text-black' };
+  if (pct <= 0.15) return { bg: 'bg-amber-700', text: 'text-white' };
+  return { bg: '', text: '' };
+}
+
 // 模式简洁图标
 const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
 
@@ -344,7 +362,14 @@ export default function OsuProfile() {
               <StatCard
                 icon={<FaGlobe />}
                 label="全球排名"
-                value={statsDisplay?.state === 'loaded' ? `#${statsDisplay.data.rank?.toLocaleString()}` : null}
+                value={(() => {
+                  if (statsDisplay?.state !== 'loaded') return null;
+                  const rank = statsDisplay.data.rank;
+                  const { bg, text } = getRankColor(rank, activeMode);
+                  const fmt = `#${rank?.toLocaleString()}`;
+                  if (!bg) return fmt;
+                  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded ${bg} ${text} font-bold`}>{fmt}</span>;
+                })()}
                 emptyState={statsDisplay?.state}
               />
               <StatCard
@@ -423,17 +448,14 @@ export default function OsuProfile() {
               </div>
             )}
 
-            {/* ====== 排名趋势 ====== */}
-            {statsDisplay?.state === 'loaded' && statsDisplay.data.rankHistory?.length >= 2 && (
-              <div ref={chartContainerRef} className="mb-8 w-full min-h-[160px]">
+            {/* ====== 排名趋势 （外层带 ref，始终测量宽度） ====== */}
+            <div ref={chartContainerRef} className="mb-8 w-full min-h-[160px]">
+              {statsDisplay?.state === 'loaded' && statsDisplay.data.rankHistory?.length >= 2 ? (
                 <RankHistoryChart data={statsDisplay.data.rankHistory} width={chartWidth} />
-              </div>
-            )}
-            {statsDisplay?.state !== 'loaded' && profile.rankHistory?.length >= 2 && (
-              <div className="mb-8 w-full min-h-[160px]">
+              ) : profile.rankHistory?.length >= 2 ? (
                 <RankHistoryChart data={profile.rankHistory} width={chartWidth} />
-              </div>
-            )}
+              ) : null}
+            </div>
 
             {/* ====== BP 列表 ====== */}
             <div className="mb-16">
@@ -571,7 +593,7 @@ function ScoreRow({ score, rank, onClick }) {
           {score.title}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded truncate max-w-[120px]">
+          <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded whitespace-normal break-words">
             {score.version}
           </span>
           {modsStr && (
