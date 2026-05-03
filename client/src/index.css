@@ -96,11 +96,11 @@ body {
 
 /* =======================================================
    4. osu! 官方字体 (Torus Pro - Semi-Bold)
-   Fontspring DEMO 版，用于 osu! 模块所有文字
+   正版文件，用于 osu! 模块所有文字
 ======================================================= */
 @font-face {
   font-family: 'Torus Pro';
-  src: url('/fonts/Torus-Pro/Fontspring-DEMO-toruspro-semibold.otf') format('opentype');
+  src: url('/fonts/Torus-Semi-Bold.otf?v=2') format('opentype');
   font-weight: 600;
   font-style: normal;
   font-display: swap;
