@@ -65,7 +65,7 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
             {score.title}
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded whitespace-normal break-words max-w-[200px]">
+            <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded whitespace-normal break-words">
               {score.version}
             </span>
             <OsuBeatmapStatusBadge status={score.beatmapStatus} />

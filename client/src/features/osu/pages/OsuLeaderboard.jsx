@@ -44,10 +44,16 @@ function formatDuration(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-/** 模式图标 */
+/** 模式图标 — osu-resources PNG */
 function ModeIcon({ mode }) {
-  const icons = { standard: '🎯', taiko: '🥁', catch: '🍎', mania: '⌨️' };
-  return <span>{icons[mode] || '🎯'}</span>;
+  const icons = {
+    standard: '/osu-resources/RulesetOsu.png',
+    taiko: '/osu-resources/RulesetTaiko.png',
+    catch: '/osu-resources/RulesetCatch.png',
+    mania: '/osu-resources/RulesetMania.png',
+  };
+  const src = icons[mode] || icons.standard;
+  return <img src={src} alt="" className="w-3.5 h-3.5 inline-block" />;
 }
 
 // ----- 组件 -----
@@ -167,22 +173,26 @@ export default function OsuLeaderboard() {
               </div>
             </div>
 
-            {/* 谱面参数 — 图标+数值 */}
+            {/* 谱面参数 — PNG 图标+数值 */}
             <div className="flex items-center gap-4 mt-3 pt-3 border-t border-white/[0.08] text-[11px] text-zinc-400 flex-wrap">
               <span className="flex items-center gap-1">
-                <FaClock className="text-[9px]" /> {formatDuration(data.beatmap.totalLength || data.beatmap.length)}
+                <img src="/osu-resources/clock.png" alt="" className="w-3 h-3 opacity-60" />
+                {formatDuration(data.beatmap.totalLength || data.beatmap.length)}
               </span>
               <span className="flex items-center gap-1">
-                <FaMusic className="text-[9px]" /> {data.beatmap.bpm} BPM
+                <img src="/osu-resources/bpm.png" alt="" className="w-3 h-3 opacity-60" />
+                {data.beatmap.bpm} BPM
               </span>
-              {(data.beatmap.circles > 0 || data.beatmap.circles != null) && (
+              {(data.beatmap.circles != null && data.beatmap.circles > 0) && (
                 <span className="flex items-center gap-1">
-                  <FaCircle className="text-[8px] text-blue-400" /> {data.beatmap.circles?.toLocaleString()}
+                  <img src="/osu-resources/circles.png" alt="" className="w-3 h-3 opacity-60" />
+                  {data.beatmap.circles?.toLocaleString()}
                 </span>
               )}
-              {(data.beatmap.sliders > 0 || data.beatmap.sliders != null) && (
+              {(data.beatmap.sliders != null && data.beatmap.sliders > 0) && (
                 <span className="flex items-center gap-1">
-                  <FaSlidersH className="text-[9px] text-emerald-400" /> {data.beatmap.sliders?.toLocaleString()}
+                  <img src="/osu-resources/sliders.png" alt="" className="w-3 h-3 opacity-60" />
+                  {data.beatmap.sliders?.toLocaleString()}
                 </span>
               )}
               {data.beatmap.maxCombo != null && (
