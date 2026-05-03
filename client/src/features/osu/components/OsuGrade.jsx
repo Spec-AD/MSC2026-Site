@@ -31,7 +31,7 @@ export default function OsuGrade({ grade, size = 'md', className = '' }) {
 
   return (
     <span
-      className={`font-black italic ${style.color} ${sizeClasses[size] || sizeClasses.md} ${className}`}
+      className={`font-black italic leading-none ${style.color} ${sizeClasses[size] || sizeClasses.md} ${className}`}
       style={shadow}
     >
       {style.text}

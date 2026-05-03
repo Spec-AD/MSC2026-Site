@@ -95,20 +95,20 @@ body {
 }
 
 /* =======================================================
-   4. osu! 官方字体 (Torus Pro - 可变字体 Variable Font)
+   4. osu! 官方字体 (Torus Pro - Semi-Bold)
    Fontspring DEMO 版，用于 osu! 模块所有文字
 ======================================================= */
 @font-face {
   font-family: 'Torus Pro';
-  src: url('/fonts/Torus-Pro/Fontspring-DEMO-toruspro-variable.ttf') format('truetype');
-  font-weight: 100 900;
+  src: url('/fonts/Torus-Pro/Fontspring-DEMO-toruspro-semibold.otf') format('opentype');
+  font-weight: 600;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Torus Pro';
-  src: url('/fonts/Torus-Pro/Fontspring-DEMO-toruspro-variable-italic.ttf') format('truetype');
-  font-weight: 100 900;
+  src: url('/fonts/Torus-Pro/Fontspring-DEMO-toruspro-semibolditalic.otf') format('opentype');
+  font-weight: 600;
   font-style: italic;
   font-display: swap;
 }

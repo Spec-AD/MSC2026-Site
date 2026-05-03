@@ -35,10 +35,10 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
           <img
             src={score.coverUrl}
             alt=""
-            className="absolute inset-0 w-1/3 h-full object-cover opacity-30"
+            className="absolute inset-0 w-1/3 h-full object-cover opacity-20"
             onError={() => setBgError(true)}
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#0c0c11]/90 to-[#0c0c11]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#14141d]/95 to-[#0c0c11]" />
         </div>
       )}
 
@@ -61,11 +61,11 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
 
         {/* 曲名 + 版本 */}
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-zinc-200 truncate group-hover:text-pink-300 transition-colors">
+          <div className="text-sm font-bold text-zinc-200 whitespace-normal break-words leading-tight group-hover:text-pink-300 transition-colors">
             {score.title}
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded truncate max-w-[120px]">
+            <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded whitespace-normal break-words max-w-[200px]">
               {score.version}
             </span>
             <OsuBeatmapStatusBadge status={score.beatmapStatus} />
