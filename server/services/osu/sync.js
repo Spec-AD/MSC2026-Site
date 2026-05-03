@@ -49,6 +49,7 @@ function mapScoreToDoc(userId, apiScore) {
     aim:          apiScore.statistics?.aim ?? null,
     speed:        apiScore.statistics?.speed ?? null,
     countPerf:    apiScore.statistics?.count_geki ?? null,   // mania PERFECT(Geki) / 标准 combo break
+    countGood:    apiScore.statistics?.count_katu ?? null,   // 200 / GOOD (mania)
     countLDrp:    apiScore.statistics?.count_large_droplet ?? null,
     countSDrpMiss: apiScore.statistics?.count_small_droplet_miss ?? null,
   };

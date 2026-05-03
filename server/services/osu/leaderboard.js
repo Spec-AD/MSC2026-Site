@@ -53,6 +53,7 @@ function formatJudgements(s) {
     countMeh:    s.statistics?.count_50 ?? null,   // 50 / MEH
     // 多模式专属字段
     countPerf:    s.statistics?.count_geki ?? null,   // mania PERFECT(Geki) / 标准 combo break
+    countGood:    s.statistics?.count_katu ?? null,   // 200 / GOOD (mania)
     countLDrp:    s.statistics?.count_large_droplet ?? null,
     countSDrpMiss: s.statistics?.count_small_droplet_miss ?? null,
   };

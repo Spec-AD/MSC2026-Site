@@ -26,6 +26,7 @@ const OsuScoreSchema = new mongoose.Schema({
   aim:          { type: Number, default: null },
   speed:        { type: Number, default: null },
   countPerf:    { type: Number, default: null },
+  countGood:    { type: Number, default: null },  // 200 / GOOD (mania)
   countLDrp:    { type: Number, default: null },
   countSDrpMiss: { type: Number, default: null },
 });
