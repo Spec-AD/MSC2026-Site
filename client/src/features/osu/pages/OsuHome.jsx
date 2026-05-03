@@ -7,7 +7,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { FaGamepad, FaTrophy, FaHistory, FaStar, FaList, FaSun, FaSearch, FaMap, FaGlobeAsia, FaUser } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext';
-import { getOsuInfo } from '../api/osuApi';
+import { getOsuInfo, getUserProfile } from '../api/osuApi';
 import CountryFlag from '../components/CountryFlag';
 
 const COUNTRY_NAMES = new Intl.DisplayNames(['zh'], { type: 'region' });
@@ -18,14 +18,15 @@ export default function OsuHome() {
   const { user: currentUser } = useAuth();
   const [osuCountry, setOsuCountry] = useState(null);
 
-  // 获取当前用户的 osu! 国家信息
+  // 获取当前用户已同步的 osu! 国家信息（从数据库，不搜公开 API）
   useEffect(() => {
     if (!currentUser) return;
     const username = currentUser.nickname || currentUser.username;
     if (!username) return;
-    getOsuInfo(username)
+    getUserProfile(username)
       .then(({ data }) => {
-        if (data?.countryCode) setOsuCountry(data.countryCode);
+        const countryCode = data?.osuDetails?.countryCode || data?.osuDefault?.countryCode;
+        if (countryCode) setOsuCountry(countryCode);
       })
       .catch(() => {});
   }, [currentUser]);

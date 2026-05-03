@@ -3,7 +3,7 @@
 // 紧凑布局 · 虚拟滚动 · 全模式同步 · 懒加载封面
 // ============================================================
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Virtuoso } from 'react-virtuoso';
@@ -45,6 +45,8 @@ export default function OsuProfile() {
   const [error, setError] = useState('');
   const [activeMode, setActiveMode] = useState('standard');
   const [modeMap, setModeMap] = useState(null);
+  const [chartWidth, setChartWidth] = useState(600);
+  const chartContainerRef = useRef(null);
 
   const { syncState, isSyncing, syncProgress, syncAll, authError, clearAuthError } = useOsuSync();
 
@@ -54,6 +56,16 @@ export default function OsuProfile() {
   // 初始化时获取 MODE_MAP
   useEffect(() => {
     getModeMap().then(setModeMap).catch(() => setModeMap(null));
+  }, []);
+
+  // 跟踪图表容器宽度
+  useEffect(() => {
+    const el = chartContainerRef.current;
+    if (!el) return;
+    const measure = () => setChartWidth(el.clientWidth);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
   }, []);
 
   const fetchProfileData = useCallback(async () => {
@@ -162,7 +174,7 @@ export default function OsuProfile() {
 
   return (
     <>
-    <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-sans selection:bg-pink-500/30 relative pb-24 overflow-x-hidden">
+    <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-osu selection:bg-pink-500/30 relative pb-24 overflow-x-hidden">
 
       {/* 环境光 */}
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
@@ -413,13 +425,13 @@ export default function OsuProfile() {
 
             {/* ====== 排名趋势 ====== */}
             {statsDisplay?.state === 'loaded' && statsDisplay.data.rankHistory?.length >= 2 && (
-              <div className="mb-8">
-                <RankHistoryChart data={statsDisplay.data.rankHistory} width={600} />
+              <div ref={chartContainerRef} className="mb-8 w-full min-h-[160px]">
+                <RankHistoryChart data={statsDisplay.data.rankHistory} width={chartWidth} />
               </div>
             )}
             {statsDisplay?.state !== 'loaded' && profile.rankHistory?.length >= 2 && (
-              <div className="mb-8">
-                <RankHistoryChart data={profile.rankHistory} width={600} />
+              <div className="mb-8 w-full min-h-[160px]">
+                <RankHistoryChart data={profile.rankHistory} width={chartWidth} />
               </div>
             )}
 
