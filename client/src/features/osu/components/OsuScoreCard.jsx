@@ -30,16 +30,23 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
         ${onClick ? 'cursor-pointer' : ''}
       `}
     >
-      {/* 背景曲绘渐变 — 左侧 1/3 曲绘渐变过渡到右侧纯色 */}
+      {/* 背景曲绘 — 全幅居中 · 降亮度 · 渐变融合 */}
       {hasBg && (
-        <div className="absolute inset-0 z-0">
+        <div className="absolute inset-0 z-0 overflow-hidden">
           <img
             src={score.coverUrl}
             alt=""
-            className="absolute inset-0 w-1/3 h-full object-cover opacity-20"
+            className="absolute inset-0 w-full h-full object-cover object-center opacity-10"
+            style={{ filter: 'brightness(0.35) blur(6px)' }}
             onError={() => setBgError(true)}
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#14141d]/95 to-[#0c0c11]" />
+          {/* 径向渐变暗角 — 中心微透曲绘，四角深暗融合背景 */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'radial-gradient(ellipse at center, transparent 25%, rgba(12,12,17,0.7) 60%, rgba(12,12,17,0.92) 100%)',
+            }}
+          />
         </div>
       )}
 

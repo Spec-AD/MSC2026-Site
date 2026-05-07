@@ -166,6 +166,7 @@ export interface LeaderboardEntry {
   count100: number | null;
   count50: number | null;
   countMiss: number | null;
+  statistics?: Record<string, number | null>;
   user: {
     id: number;
     username: string;

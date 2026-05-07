@@ -54,12 +54,26 @@ const MODE_JUDGES = {
   ],
 };
 
+/** 读取判定值 — 兼容多种字段路径 */
+function readJudgeVal(entry, key) {
+  // 1. 顶层 camelCase (entry.count300)
+  if (entry[key] != null) return entry[key];
+  // 2. 嵌套 statistics.camelCase (entry.statistics.count300)
+  if (entry.statistics?.[key] != null) return entry.statistics[key];
+  // 3. 顶层 snake_case (entry.count_300)
+  const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+  if (entry[snakeKey] != null) return entry[snakeKey];
+  // 4. 嵌套 statistics.snake_case (entry.statistics.count_300)
+  if (entry.statistics?.[snakeKey] != null) return entry.statistics[snakeKey];
+  return null;
+}
+
 /** 根据模式获取实际有值的判定数组 */
 function getJudges(entry, mode) {
   const config = MODE_JUDGES[mode] || MODE_JUDGES.standard;
   return config
-    .filter(j => entry[j.key] != null)
-    .map(j => ({ ...j, value: entry[j.key] }));
+    .map(j => ({ ...j, value: readJudgeVal(entry, j.key) }))
+    .filter(j => j.value != null);
 }
 
 export default function OsuLeaderboardRow({
