@@ -28,6 +28,7 @@ function mapScoreToDoc(userId, apiScore) {
     mode,
     beatmapId: beatmap.id,
     title: beatmapset?.title || '',
+    titleOriginal: beatmapset?.title_unicode || '',
     version: beatmap.version || '',
     accuracy: apiScore.accuracy ? apiScore.accuracy * 100 : 0,
     mods: (apiScore.mods || []).map(m => m.acronym || m),

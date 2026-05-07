@@ -86,6 +86,7 @@ async function refreshFromApi(user, mode) {
         mode,
         beatmapId: beatmap.id,
         title: apiScore.beatmapset?.title || '',
+        titleOriginal: apiScore.beatmapset?.title_unicode || '',
         version: beatmap.version || '',
         accuracy: apiScore.accuracy ? apiScore.accuracy * 100 : 0,
         mods: (apiScore.mods || []).map(m => m.acronym || m),

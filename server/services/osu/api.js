@@ -256,7 +256,8 @@ async function request(method, path, opts = {}) {
         url: `${CFG.baseUrl}${path}`,
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: 'application/json'
+          Accept: 'application/json',
+          'x-api-version': '20220705'  // 新 Score 格式（含 total_score / legacy_total_score）
         },
         params
       });

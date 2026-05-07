@@ -4,7 +4,8 @@ const OsuScoreSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   mode: { type: String, required: true },
   beatmapId: { type: Number },
-  title: { type: String },         // 曲名
+  title: { type: String },         // 罗马化曲名
+  titleOriginal: { type: String }, // 原始曲名（非罗马化，如日韩中文）
   version: { type: String },       // 难度名 (如 Extra)
   accuracy: { type: Number },      // 准确率 (如 99.50)
   mods: { type: [String] },        // 开启的 Mod (如 HD, DT)

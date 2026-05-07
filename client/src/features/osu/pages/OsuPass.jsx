@@ -9,6 +9,7 @@ import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
+import OsuStarBadge from '../components/OsuStarBadge';
 import { FaSpinner, FaCheckCircle } from 'react-icons/fa';
 import { MODE_LABELS } from '../../../constants/osuModes';
 
@@ -83,6 +84,9 @@ function PassItem({ score }) {
       <div className="flex-1 min-w-0">
         <div className="text-base font-bold text-zinc-100 truncate">{score.title}</div>
         <div className="flex items-center gap-2 mt-0.5">
+          {score.starRating != null && (
+            <OsuStarBadge starRating={score.starRating} size="sm" />
+          )}
           <span className="text-sm text-zinc-400 whitespace-normal break-words">{score.version}</span>
           <OsuBeatmapStatusBadge status={score.beatmapStatus} />
         </div>
