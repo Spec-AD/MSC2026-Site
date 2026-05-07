@@ -24,6 +24,7 @@ export interface OsuScoreData {
   beatmapId: number;
   mode: OsuApiMode;
   title: string;
+  titleOriginal?: string;
   version: string;
   accuracy: number;
   pp: number;

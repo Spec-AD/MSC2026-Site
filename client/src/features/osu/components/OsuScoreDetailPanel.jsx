@@ -86,7 +86,7 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
         {/* 曲名区 */}
         <div>
-          <h3 className="text-lg font-bold text-zinc-100 leading-tight">{score?.title || '未知曲目'}</h3>
+          <h3 className="text-lg font-bold text-zinc-100 leading-tight">{score?.titleOriginal || score?.title || '未知曲目'}</h3>
           {score?.version && (
             <p className="text-sm text-zinc-500 mt-0.5">{score.version}</p>
           )}

@@ -82,7 +82,7 @@ function PassItem({ score }) {
         <OsuCoverImage src={score.coverUrl} alt={score.title} className="w-full h-full" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-base font-bold text-zinc-100 truncate">{score.title}</div>
+        <div className="text-base font-bold text-zinc-100 truncate">{score.titleOriginal || score.title}</div>
         <div className="flex items-center gap-2 mt-0.5">
           {score.starRating != null && (
             <OsuStarBadge starRating={score.starRating} size="sm" />

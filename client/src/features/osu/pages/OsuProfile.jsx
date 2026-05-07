@@ -594,7 +594,7 @@ function ScoreRow({ score, rank, onClick }) {
       {/* 曲名 + 版本 */}
       <div className="flex-1 min-w-0">
         <div className="text-sm font-bold text-zinc-200 truncate group-hover:text-pink-300 transition-colors">
-          {score.title}
+          {score.titleOriginal || score.title}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {score.starRating != null && (

@@ -34,12 +34,22 @@ memory/
 UpdateLog/
 
 # === Colleague workspaces ===
+kanade/
+Kiyone/
 liuli/
 ritsu/
 
 # === Project docs (specs + management) ===
+ManagementDocs/
 specs/
 docs/
+
+# === Daily logs / runner state ===
+DaliyLog/
+state/
+
+# === Work (shared workflow) ===
+Work/
 
 # === Temp files ===
 tmp_*
