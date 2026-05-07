@@ -333,6 +333,7 @@ export default function OsuLeaderboard() {
                     showDetails={true}
                     showCover={false}
                     compact={false}
+                    mode={beatmapMode}
                   />
                 </div>
               );

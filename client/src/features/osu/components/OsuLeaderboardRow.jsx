@@ -21,38 +21,45 @@ const RANK_COLORS = {
   3: 'text-amber-600',
 };
 
-// 判定颜色映射（支持新旧两种字段名）
-const JUDGE_STYLES = {
-  countPerf: 'text-yellow-300',
-  countGreat: 'text-emerald-400',
-  count300: 'text-emerald-400',
-  countGood: 'text-green-400',
-  countOk: 'text-blue-400',
-  count100: 'text-blue-400',
-  countMeh: 'text-amber-400',
-  count50: 'text-amber-400',
-  countLDrp: 'text-cyan-400',
-  countSDrpMiss: 'text-amber-400',
-  countMiss: 'text-red-400',
+// ====== 各模式判定配置（字段 key + 显示标签 + 颜色） ======
+const MODE_JUDGES = {
+  // osu!standard: 300 / 100 / 50 / Miss
+  standard: [
+    { key: 'count300', label: '300', color: 'text-emerald-400' },
+    { key: 'count100', label: '100', color: 'text-blue-400' },
+    { key: 'count50',  label: '50',  color: 'text-amber-400' },
+    { key: 'countMiss',label: 'Miss',color: 'text-red-400' },
+  ],
+  // osu!taiko: Great / OK / Miss
+  taiko: [
+    { key: 'count300', label: 'Great', color: 'text-emerald-400' },
+    { key: 'count100', label: 'OK',    color: 'text-blue-400' },
+    { key: 'countMiss',label: 'Miss',  color: 'text-red-400' },
+  ],
+  // osu!catch: Fruit / Juice / Droplet / Miss
+  catch: [
+    { key: 'count300', label: 'Fruit',  color: 'text-emerald-400' },
+    { key: 'count100', label: 'Juice',  color: 'text-blue-400' },
+    { key: 'count50',  label: 'Droplet',color: 'text-amber-400' },
+    { key: 'countMiss',label: 'Miss',   color: 'text-red-400' },
+  ],
+  // osu!mania: PERF / GREAT / GOOD / OK / MEH / Miss
+  mania: [
+    { key: 'countGeki', label: 'PERF', color: 'text-yellow-200' },
+    { key: 'count300',  label: 'GREAT',color: 'text-yellow-400' },
+    { key: 'countKatu', label: 'GOOD', color: 'text-lime-400' },
+    { key: 'count100',  label: 'OK',   color: 'text-green-400' },
+    { key: 'count50',   label: 'MEH',  color: 'text-orange-400' },
+    { key: 'countMiss', label: 'Miss', color: 'text-red-400' },
+  ],
 };
 
-// 判定新→旧 fallback 映射
-const JUDGE_FALLBACK = {
-  countGreat: 'count300',
-  countGood: null,
-  countOk: 'count100',
-  countMeh: 'count50',
-  countLDrp: 'count100',
-  countSDrpMiss: 'count50',
-};
-
-/** 读取判定值，优先新字段，回退旧字段 */
-function getJudgeVal(entry, key) {
-  const val = entry[key];
-  if (val != null) return val;
-  const fallbackKey = JUDGE_FALLBACK[key];
-  if (fallbackKey) return entry[fallbackKey];
-  return null;
+/** 根据模式获取实际有值的判定数组 */
+function getJudges(entry, mode) {
+  const config = MODE_JUDGES[mode] || MODE_JUDGES.standard;
+  return config
+    .filter(j => entry[j.key] != null)
+    .map(j => ({ ...j, value: entry[j.key] }));
 }
 
 export default function OsuLeaderboardRow({
@@ -62,6 +69,7 @@ export default function OsuLeaderboardRow({
   showDetails = true,
   showCover = true,
   compact = false,
+  mode = 'standard',
 }) {
   const navigate = useNavigate();
   const [imgError, setImgError] = useState(false);
@@ -73,18 +81,7 @@ export default function OsuLeaderboardRow({
     }
   };
 
-  // 判定数组 — 按模式自动排序
-  // Mania：Perf → Great → Good → Ok → Meh → Miss
-  // Standard/Taiko/Catch：Great → Ok → Meh → Miss（无 Perf）
-  const hasPerf = getJudgeVal(entry, 'countPerf') != null;
-  const allJudgeKeys = hasPerf
-    ? ['countPerf', 'countGreat', 'countGood', 'countOk', 'countMeh', 'countMiss', 'countLDrp', 'countSDrpMiss']
-    : ['countGreat', 'countOk', 'countMeh', 'countMiss', 'countLDrp', 'countSDrpMiss'];
-  const judgeSets = allJudgeKeys
-    .filter(k => getJudgeVal(entry, k) != null);
-  // 去重：如果 countPerf 存在且 countGreat 存在，两者都显示
-  // 简单做法：取实际有值的优先判定
-  const judges = judgeSets.map(k => ({ key: k, value: getJudgeVal(entry, k), style: JUDGE_STYLES[k] || 'text-zinc-300' }));
+  const judges = getJudges(entry, mode);
 
   // MODs 显示
   const modsStr = entry.mods?.length > 0 ? `+${entry.mods.join('')}` : '';
@@ -170,13 +167,13 @@ export default function OsuLeaderboardRow({
           <OsuGrade grade={entry.grade} size={compact ? 'xs' : 'sm'} />
         </div>
 
-        {/* 分数 */}
+        {/* 分数 + Acc + PP 行 */}
         <div className="text-right shrink-0">
           <span className={`font-bold text-zinc-100 ${compact ? 'text-xs' : 'text-sm'}`}>
             {entry.score?.toLocaleString() || Math.round(entry.pp || 0).toLocaleString()}
           </span>
           {!compact && entry.accuracy != null && (
-            <div className="text-[10px] text-amber-400 font-medium">{entry.accuracy}%</div>
+            <div className="text-[10px] text-amber-400 font-medium">{Number(entry.accuracy).toFixed(4)}%</div>
           )}
         </div>
 
@@ -194,18 +191,21 @@ export default function OsuLeaderboardRow({
       {/* 第二行：判定详情 + MODs */}
       {showDetails && judges.length > 0 && (
         <div className="relative z-10 flex items-center gap-2 mt-1 ml-12">
-          <div className="flex items-center gap-1.5 text-xs" style={{ paddingLeft: showCover ? '3rem' : '2.5rem' }}>
+          <div className="flex items-center gap-1.5 text-xs flex-wrap" style={{ paddingLeft: showCover ? '3rem' : '2.5rem' }}>
             {judges.map((j, i) => (
-              <span key={j.key} className={`${j.style} font-bold`}>
-                {j.value.toLocaleString()}
-                {i < judges.length - 1 && <span className="text-zinc-700 ml-1">/</span>}
+              <span key={j.key} className="inline-flex items-center gap-1">
+                <span className="text-[10px] text-zinc-500 font-medium">{j.label}</span>
+                <span className={`${j.color} font-bold tabular-nums`}>
+                  {j.value.toLocaleString()}
+                </span>
+                {i < judges.length - 1 && <span className="text-zinc-700">|</span>}
               </span>
             ))}
           </div>
 
           {/* MODs */}
           {modsStr && (
-            <span className="text-[10px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1.5 py-0.5 rounded shrink-0">
               {modsStr}
             </span>
           )}

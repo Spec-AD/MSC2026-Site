@@ -160,7 +160,9 @@ export interface LeaderboardEntry {
   maxCombo: number;
   mods: string[];
   grade: string;
+  countGeki: number | null;
   count300: number | null;
+  countKatu: number | null;
   count100: number | null;
   count50: number | null;
   countMiss: number | null;
