@@ -4,7 +4,7 @@
 // 响应结构：{ beatmap, scores, currentUserRank, userScore, availableTypes }
 // ============================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getLeaderboard } from '../api/osuApi';
 import OsuGrade from '../components/OsuGrade';
@@ -13,49 +13,42 @@ import { getStarBgColor, getStarTextColor } from '../utils/osuColors';
 import ScrollToTopButton from '../components/ScrollToTopButton';
 import OsuLeaderboardRow from '../components/OsuLeaderboardRow';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
-import CountryFlag from '../components/CountryFlag';
 import {
   FaSpinner, FaArrowLeft, FaGlobeAsia, FaMedal,
-  FaSearch, FaStar, FaClock, FaMusic, FaCircle, FaSlidersH
+  FaSearch, FaStar, FaClock, FaMusic, FaCircle, FaSlidersH,
+  FaBolt, FaDatabase
 } from 'react-icons/fa';
-import useOsuCache from '../store/osuCache';
-import OsuSearchHistory from '../components/OsuSearchHistory';
-import OsuStarBadge from '../components/OsuStarBadge';
+import { LazyLoadImage } from 'react-lazy-load-image-component';
 
-// ----- mode 标签映射 -----
-
-const MODE_BADGE = {
-  standard: { label: 'S', color: 'bg-pink-500/15 text-pink-400 border-pink-500/20' },
-  taiko:    { label: 'T', color: 'bg-red-500/15 text-red-400 border-red-500/20' },
-  catch:    { label: 'C', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' },
-  mania:    { label: 'M', color: 'bg-blue-500/15 text-blue-400 border-blue-500/20' },
+const SafeImage = ({ src, alt, className, ...rest }) => {
+  try {
+    return <LazyLoadImage src={src} alt={alt || ''} className={className} {...rest} />;
+  } catch {
+    return <img src={src} alt={alt || ''} className={className} {...rest} />;
+  }
 };
 
-const MODE_FULL = {
-  standard: 'osu!standard',
-  taiko:    'osu!taiko',
-  catch:    'osu!catch',
-  mania:    'osu!mania',
-};
-
-// ----- 工具函数 -----
-
-function formatDuration(seconds) {
-  if (!seconds) return '';
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
+function useOsuCache() {
+  const [cache, setCache] = useState(() => ({
+    leaderboardBid: sessionStorage.getItem('osu_leaderboard_bid') || '',
+    leaderboardData: null,
+    setLeaderboard(bid, data) {
+      sessionStorage.setItem('osu_leaderboard_bid', bid);
+      setCache(prev => ({ ...prev, leaderboardBid: bid, leaderboardData: data }));
+    },
+  }));
+  return cache;
 }
 
-/** 模式图标 — osu-resources PNG */
+const modeIcons = {
+  standard: '/osu-resources/RulesetOsu.png',
+  taiko: '/osu-resources/RulesetTaiko.png',
+  catch: '/osu-resources/RulesetCatch.png',
+  mania: '/osu-resources/RulesetMania.png',
+};
+
 function ModeIcon({ mode }) {
-  const icons = {
-    standard: '/osu-resources/RulesetOsu.png',
-    taiko: '/osu-resources/RulesetTaiko.png',
-    catch: '/osu-resources/RulesetCatch.png',
-    mania: '/osu-resources/RulesetMania.png',
-  };
-  const src = icons[mode] || icons.standard;
+  const src = modeIcons[mode] || modeIcons.standard;
   return <img src={src} alt="" className="w-3.5 h-3.5 inline-block" />;
 }
 
@@ -69,6 +62,18 @@ export default function OsuLeaderboard() {
   const [data, setData] = useState(bid ? null : cache.leaderboardData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [filterType, setFilterType] = useState('all');
+
+  // 过滤后的成绩
+  const filteredScores = useMemo(() => {
+    if (!data?.scores?.length) return [];
+    return data.scores.filter(entry => {
+      if (filterType === 'all') return true;
+      if (filterType === 'lazer') return entry.isLazer === true;
+      if (filterType === 'stable') return entry.isLazer === false;
+      return true;
+    });
+  }, [data, filterType]);
 
   const effectiveBid = bid || bidInput;
 
@@ -81,171 +86,141 @@ export default function OsuLeaderboard() {
       setData(res);
       cache.setLeaderboard(effectiveBid, res);
     } catch (err) {
-      setError(err.userMessage || '加载排行榜失败');
-      setData(null);
+      setError(err.response?.data?.message || err.message || '拉取排行榜失败');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSearch = () => {
+    if (!bidInput) return;
+    if (bidInput === effectiveBid) {
+      fetchLeaderboard();
+    } else {
+      navigate(`/leaderboard/${bidInput}`, { replace: true });
+    }
+  };
+
+  // 路由 bid 变化时自动拉取
   useEffect(() => {
-    if (bid) fetchLeaderboard();
+    if (bid && bid !== cache.leaderboardBid) {
+      fetchLeaderboard();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bid]);
 
-  const handleSearch = () => {
-    if (!bidInput || isNaN(Number(bidInput))) return;
-    navigate(`/osu/leaderboard/${bidInput}`, { replace: true });
-    fetchLeaderboard();
-  };
-
-  const handleUsernameClick = (username, e) => {
-    e.stopPropagation();
-    navigate(`/osu/info?q=${encodeURIComponent(username)}`);
-  };
-
-  // 数据加载成功后记录 BID 搜索历史
-  useEffect(() => {
-    if (!data?.beatmap || !effectiveBid) return;
-    const bm = data.beatmap;
-    const modeIcons = { standard: '/osu-resources/RulesetOsu.png', taiko: '/osu-resources/RulesetTaiko.png', catch: '/osu-resources/RulesetCatch.png', mania: '/osu-resources/RulesetMania.png' };
-    cache.addLeaderboardHistory({
-      bid: effectiveBid,
-      coverUrl: bm.coverUrl || bm.covers?.cover,
-      title: bm.titleUnicode || bm.title,
-      version: bm.version,
-      mode: bm.mode || 'standard',
-      modeIcon: modeIcons[bm.mode] || modeIcons.standard,
-    });
-  }, [data?.beatmap]);
-
-  // 当前谱面的模式（用于 mode 标签）
-  const beatmapMode = data?.beatmap?.mode || 'standard';
-  const modeBadge = MODE_BADGE[beatmapMode] || MODE_BADGE.standard;
+  // 谱面信息
+  const beatmap = data?.beatmap;
+  const beatmapSet = beatmap?.beatmapset;
+  const beatmapMode = beatmap?.mode || 'standard';
+  const starRating = beatmap?.difficulty_rating || 0;
 
   return (
-    <div>
-      {/* 返回按钮 */}
-      {bid && (
-        <button onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-zinc-500 hover:text-zinc-200 transition-colors font-bold text-sm mb-6 w-fit">
-          <FaArrowLeft /> 返回
-        </button>
-      )}
-
-      {/* 搜索栏 — 始终保持可见 */}
+    <div className="max-w-4xl mx-auto px-4 py-6">
+      {/* 返回 & 标题 */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-1 h-6 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]" />
-        <h2 className="text-xl font-bold text-zinc-100 tracking-tight whitespace-nowrap">排行榜</h2>
-        <div className="flex items-center gap-2 flex-1">
-          <input type="text" value={bidInput} onChange={(e) => setBidInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="谱面 ID..." className="bg-[#15151e] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 w-full" />
-          <button onClick={handleSearch} disabled={loading}
-            className="p-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg transition-colors">
-            {loading ? <FaSpinner className="animate-spin" /> : <FaSearch />}
-          </button>
-        </div>
+        <button onClick={() => navigate('/osu')} className="text-zinc-500 hover:text-zinc-300 transition-colors">
+          <FaArrowLeft className="w-4 h-4" />
+        </button>
+        <h1 className="text-lg font-bold text-zinc-200">全球排行榜</h1>
+        <span className="text-[10px] text-zinc-600 tracking-wider bg-zinc-800/50 px-2 py-0.5 rounded">BETA</span>
       </div>
 
-      {/* 搜索历史 */}
-      {!effectiveBid && cache.leaderboardHistory?.length > 0 && (
-        <OsuSearchHistory
-          items={cache.leaderboardHistory}
-          type="bid"
-          onSelect={(entry) => navigate(`/osu/leaderboard/${entry.bid}`)}
-          onClear={() => cache.clearAll()}
-        />
+      {/* 谱面搜索栏 */}
+      <div className="mb-6 flex gap-2">
+        <div className="flex-1 relative">
+          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 text-xs" />
+          <input
+            type="text"
+            value={bidInput}
+            onChange={e => setBidInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="输入谱面 ID 或 URL..."
+            className="w-full pl-9 pr-3 py-2 bg-[#15151e] border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-600 transition-colors"
+          />
+        </div>
+        <button
+          onClick={handleSearch}
+          disabled={loading}
+          className="px-4 py-2 bg-pink-600 hover:bg-pink-500 disabled:bg-pink-600/50 text-white text-sm font-bold rounded-lg transition-colors"
+        >
+          {loading ? <FaSpinner className="animate-spin" /> : '搜索'}
+        </button>
+      </div>
+
+      {/* 谱面信息卡 */}
+      {beatmap && (
+        <div className="relative mb-6 rounded-xl overflow-hidden border border-white/[0.05]">
+          <SafeImage
+            src={beatmapSet?.cover_url || beatmapSet?.cover || ''}
+            alt={beatmapSet?.title || ''}
+            className="absolute inset-0 w-full h-full object-cover"
+            wrapperClassName="!absolute inset-0"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#14141e] via-[#14141e]/92 to-transparent" />
+          <div className="relative z-10 p-4 sm:p-6 flex items-start gap-4 sm:gap-6">
+            {/* 谱面封面 */}
+            <SafeImage
+              src={beatmapSet?.covers?.list_widget_hires || beatmapSet?.covers?.list_widget || ''}
+              alt={beatmapSet?.title || ''}
+              className="w-20 sm:w-28 rounded-lg shadow-lg shrink-0"
+            />
+            {/* 谱面信息 */}
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-zinc-100 truncate">{beatmapSet?.title || 'Unknown'}</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">{beatmapSet?.artist || 'Unknown'}</p>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-700/60 text-zinc-300">{beatmap?.version || '-'}</span>
+                {beatmap?.status != null && <OsuBeatmapStatusBadge status={beatmap.status} />}
+                <span className="flex items-center gap-1 text-xs text-zinc-500">
+                  <ModeIcon mode={beatmapMode} />
+                  {beatmapMode}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 mt-2 text-xs">
+                {starRating > 0 && (
+                  <span className="flex items-center gap-1">
+                    <FaStar className={`w-3 h-3 ${getStarTextColor(starRating)}`} />
+                    <span className={`font-bold tabular-nums ${getStarTextColor(starRating)}`}>{starRating.toFixed(2)}★</span>
+                  </span>
+                )}
+                {beatmap.bpm && <span className="text-zinc-500">{beatmap.bpm}bpm</span>}
+                {beatmap.total_length && <span className="text-zinc-500">{Math.floor(beatmap.total_length / 60)}:{String(beatmap.total_length % 60).padStart(2, '0')}</span>}
+                {beatmap.count_circles != null && <span className="text-zinc-600">{beatmap.count_circles}C</span>}
+                {beatmap.count_sliders != null && <span className="text-zinc-600">{beatmap.count_sliders}S</span>}
+                {beatmap.count_spinners != null && <span className="text-zinc-600">{beatmap.count_spinners}Sp</span>}
+                {beatmap.max_combo && <span className="text-zinc-500">{beatmap.max_combo}x</span>}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* 谱面头部信息 — b1.7 R3 重构版 */}
-      {data?.beatmap && (
-        <div className="mb-4 relative overflow-hidden rounded-xl">
-          {/* 背景曲绘 */}
-          <div className="absolute inset-0">
-            <OsuCoverImage src={data.beatmap.coverUrl || data.beatmap.covers?.cover} alt="" className="w-full h-full" />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#15151e]/95 via-[#15151e]/85 to-[#15151e]/70" />
-          </div>
+      {/* 已缓存的老数据提示 */}
+      {data && !bid && (
+        <div className="mb-4 flex items-center gap-2 text-xs text-zinc-600 bg-zinc-800/30 px-3 py-2 rounded-lg border border-zinc-800">
+          <FaClock className="shrink-0" />
+          显示缓存的排行榜数据
+        </div>
+      )}
 
-          <div className="relative z-10 p-4">
-            {/* 第一行：封面 + 标题 + 星级 */}
-            <div className="flex items-start gap-4">
-              {/* 封面 */}
-              <div className="w-16 h-12 rounded-lg overflow-hidden shrink-0 shadow-lg">
-                <OsuCoverImage src={data.beatmap.coverUrl || data.beatmap.covers?.cover} alt="" className="w-full h-full" />
-              </div>
-
-              {/* 信息区 */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-base font-bold text-zinc-100 truncate max-w-[300px]">{data.beatmap.titleUnicode || data.beatmap.title}</span>
-                  {/* mode 标签 — 全称+图标 */}
-                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded border flex items-center gap-1 ${modeBadge.color}`}>
-                    <ModeIcon mode={beatmapMode} />
-                    {MODE_FULL[beatmapMode] || beatmapMode}
-                  </span>
-                  <OsuBeatmapStatusBadge status={data.beatmap.status} />
-                </div>
-                <div className="text-xs text-zinc-400 truncate mt-0.5">
-                  {data.beatmap.artist} — {data.beatmap.version}
-                </div>
-                <div className="text-[10px] text-zinc-600 mt-0.5">
-                  {data.beatmap.mapperUsername || data.beatmap.creator}
-                </div>
-              </div>
-
-              {/* 星级 (底框色 + overall-difficulty.png) */}
-              <OsuStarBadge starRating={data.beatmap.starRating} size="md" />
-            </div>
-
-            {/* 谱面参数 — PNG 图标+数值 */}
-            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-white/[0.08] text-[11px] text-zinc-400 flex-wrap">
-              <span className="flex items-center gap-1">
-                <img src="/osu-resources/clock.png" alt="" className="w-3 h-3 opacity-60" />
-                {formatDuration(data.beatmap.totalLength || data.beatmap.length)}
-              </span>
-              <span className="flex items-center gap-1">
-                <img src="/osu-resources/bpm.png" alt="" className="w-3 h-3 opacity-60" />
-                {data.beatmap.bpm} BPM
-              </span>
-              {(data.beatmap.circles != null && data.beatmap.circles > 0) && (
-                <span className="flex items-center gap-1">
-                  <img src="/osu-resources/circles.png" alt="" className="w-3 h-3 opacity-60" />
-                  {data.beatmap.circles?.toLocaleString()}
-                </span>
-              )}
-              {(data.beatmap.sliders != null && data.beatmap.sliders > 0) && (
-                <span className="flex items-center gap-1">
-                  <img src="/osu-resources/sliders.png" alt="" className="w-3 h-3 opacity-60" />
-                  {data.beatmap.sliders?.toLocaleString()}
-                </span>
-              )}
-              {data.beatmap.maxCombo != null && (
-                <span className="flex items-center gap-1">{data.beatmap.maxCombo}x</span>
-              )}
-            </div>
-
-            {/* 难度参数进度条 */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3 pt-3 border-t border-white/[0.05]">
-              {[
-                { label: 'OD', value: data.beatmap.od },
-                { label: 'CS', value: data.beatmap.cs },
-                { label: 'AR', value: data.beatmap.ar },
-                { label: 'HP', value: data.beatmap.hp },
-              ].map(p => {
-                const val = p.value != null ? Math.min(Math.max(Number(p.value), 0), 10) : 0;
-                const pct = Math.max(val / 10 * 100, 1);
-                return (
-                  <div key={p.label} className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase w-6 shrink-0">{p.label}</span>
-                    <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #ec4899, #a855f7)' }} />
-                    </div>
-                    <span className="text-[10px] font-mono text-zinc-500 w-5 text-right">{val.toFixed(1)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+      {/* 模式筛选（availableTypes） */}
+      {data?.availableTypes?.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {data.availableTypes.map(t => (
+            <button
+              key={t}
+              onClick={() => {
+                setBidInput('');
+                navigate(`/leaderboard/${bid}?type=${t}`, { replace: true });
+              }}
+              className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border transition-all
+                border-zinc-800 text-zinc-500 hover:border-pink-600/40 hover:text-pink-400"
+            >
+              <ModeIcon mode={t} />
+              {t}
+            </button>
+          ))}
         </div>
       )}
 
@@ -293,14 +268,39 @@ export default function OsuLeaderboard() {
         </div>
       )}
 
-      {/* 加载中 */}
+      {/* Stable / Lazer 筛选器 */}
+      {data?.scores?.length > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <div className="flex bg-[#15151e]/60 rounded-lg border border-white/[0.05] p-0.5">
+            {[
+              { key: 'all', label: '全部', icon: null },
+              { key: 'lazer', label: 'LAZER', icon: FaBolt },
+              { key: 'stable', label: 'STABLE', icon: FaDatabase },
+            ].map(opt => (
+              <button key={opt.key} onClick={() => setFilterType(opt.key)}
+                className={`text-xs font-bold rounded-md transition-all flex items-center gap-1 px-3 py-1.5 ${
+                  filterType === opt.key
+                    ? 'bg-pink-600 text-white shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}>
+                {opt.icon && <opt.icon className="w-3 h-3" />}
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <span className="text-[10px] text-zinc-600">
+            {filteredScores.length} / {data.scores.length} 条
+          </span>
+        </div>
+      )}
+
+      {/* 排行榜列表 */}
       {loading ? (
         <div className="flex items-center justify-center py-20"><FaSpinner className="animate-spin text-2xl text-pink-500/50" /></div>
       ) : error ? (
         <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">{error}</div>
-      ) : data?.scores?.length > 0 ? (
+      ) : filteredScores.length > 0 ? (
         <>
-          {/* 排行榜列表 */}
           <div className="bg-[#15151e]/40 rounded-xl border border-white/[0.05] overflow-hidden">
             {/* 表头 */}
             <div className="hidden sm:flex items-center px-4 py-2 text-xs text-zinc-500 font-bold uppercase tracking-wider border-b border-white/[0.05] bg-[#15151e]/95">
@@ -313,7 +313,7 @@ export default function OsuLeaderboard() {
               <span className="w-14 text-right">PP</span>
             </div>
 
-            {data.scores.map((entry, i) => {
+            {filteredScores.map((entry, i) => {
               const rankNum = i + 1;
               const isHighlighted = data.currentUserRank?.highlight && rankNum === data.currentUserRank.rank;
 
@@ -347,13 +347,20 @@ export default function OsuLeaderboard() {
             </div>
           )}
         </>
+      ) : data?.scores?.length > 0 && filteredScores.length === 0 ? (
+        <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">
+          <FaBolt className="mx-auto text-2xl text-zinc-700 mb-3" />
+          无匹配的 {filterType === 'lazer' ? 'LAZER' : 'STABLE'} 成绩
+        </div>
       ) : bid || bidInput ? (
         <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">
-          <FaGlobeAsia className="mx-auto text-2xl text-zinc-700 mb-3" />该谱面暂无排行榜数据
+          <FaGlobeAsia className="mx-auto text-2xl text-zinc-700 mb-3" />
+          该谱面暂无排行榜数据
         </div>
       ) : (
         <div className="py-20 text-center text-zinc-600">
-          <FaGlobeAsia className="mx-auto text-3xl text-zinc-700 mb-4" />输入谱面 ID 查看全球排行榜
+          <FaGlobeAsia className="mx-auto text-3xl text-zinc-700 mb-4" />
+          输入谱面 ID 查看全球排行榜
         </div>
       )}
 

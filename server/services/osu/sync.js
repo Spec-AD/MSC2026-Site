@@ -36,13 +36,15 @@ function mapScoreToDoc(userId, apiScore) {
     grade: apiScore.rank || '',
     coverUrl: beatmapset?.covers?.list || '',
     playedAt: apiScore.created_at || new Date(),
-    // b1.7 新字段
+    // b1.7 新字段 — lazer 原生名(great/ok/meh/miss/perfect/good)优先，legacy 兜底
+    // osu! API v2 (x-api-version: 20220705) 返回 lazer 字段名
+    isLazer:  apiScore.legacy_score_id == null,         // null=原生lazer，非null=stable导入
     maxCombo:  apiScore.max_combo ?? null,
     combo:     apiScore.max_combo ?? null,    // max_combo 即 combo
-    count300:  apiScore.statistics?.count_300 ?? null,
-    count100:  apiScore.statistics?.count_100 ?? null,
-    count50:   apiScore.statistics?.count_50 ?? null,
-    countMiss: apiScore.statistics?.count_miss ?? null,
+    count300:  apiScore.statistics?.great ?? apiScore.statistics?.count_300 ?? null,
+    count100:  apiScore.statistics?.ok ?? apiScore.statistics?.count_100 ?? null,
+    count50:   apiScore.statistics?.meh ?? apiScore.statistics?.count_50 ?? null,
+    countMiss: apiScore.statistics?.miss ?? apiScore.statistics?.count_miss ?? null,
     // b1.7 新增: 总分与曲目状态
     starRating:    beatmap.difficulty_rating || 0,
     score:         apiScore.legacy_total_score || apiScore.total_score || apiScore.score || 0,
@@ -50,12 +52,15 @@ function mapScoreToDoc(userId, apiScore) {
     // b1.7 第二轮: Aim/Speed + 多模式判定
     aim:          apiScore.statistics?.aim ?? null,
     speed:        apiScore.statistics?.speed ?? null,
-    countGeki:   apiScore.statistics?.count_geki ?? null,   // mania PERFECT(Geki) — 前端 OsuLeaderboardRow 主读取
-    countKatu:   apiScore.statistics?.count_katu ?? null,   // mania GOOD(Katu)   — 前端 OsuLeaderboardRow 主读取
-    countPerf:   apiScore.statistics?.count_geki ?? null,   // 旧名，向后兼容
-    countGood:   apiScore.statistics?.count_katu ?? null,   // 旧名，向后兼容
-    countLDrp:    apiScore.statistics?.count_large_droplet ?? null,
-    countSDrpMiss: apiScore.statistics?.count_small_droplet_miss ?? null,
+    // mania: lazer perfect/good → 通用名 countGeki/countKatu
+    countGeki:   apiScore.statistics?.perfect ?? apiScore.statistics?.count_geki ?? null,
+    countKatu:   apiScore.statistics?.good ?? apiScore.statistics?.count_katu ?? null,
+    // 旧名向后兼容（OsuScoreDetailPanel 等直接读取）
+    countPerf:   apiScore.statistics?.perfect ?? apiScore.statistics?.count_geki ?? null,
+    countGood:   apiScore.statistics?.good ?? apiScore.statistics?.count_katu ?? null,
+    // catch: lazer 大果/小果 miss
+    countLDrp:     apiScore.statistics?.large_tick_miss ?? apiScore.statistics?.count_large_droplet ?? null,
+    countSDrpMiss: apiScore.statistics?.small_tick_miss ?? apiScore.statistics?.count_small_droplet_miss ?? null,
   };
 }
 

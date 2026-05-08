@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FaMedal, FaUser, FaCircle } from 'react-icons/fa';
+import { FaMedal, FaUser, FaCircle, FaBolt, FaDatabase } from 'react-icons/fa';
 import OsuGrade from './OsuGrade';
 import OsuCoverImage from './OsuCoverImage';
 import CountryFlag from './CountryFlag';
@@ -110,6 +110,13 @@ export default function OsuLeaderboardRow({
 
   // MODs 显示
   const modsStr = entry.mods?.length > 0 ? `+${entry.mods.join('')}` : '';
+
+  // Lazer / Stable 标签
+  const lazerBadge = entry.isLazer === true
+    ? { label: 'LAZER', icon: FaBolt, cls: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' }
+    : entry.isLazer === false
+      ? { label: 'STABLE', icon: FaDatabase, cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' }
+      : null;
 
   // 排名
   const rankNum = rank;
@@ -232,6 +239,14 @@ export default function OsuLeaderboardRow({
           {modsStr && (
             <span className="text-[10px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1.5 py-0.5 rounded shrink-0">
               {modsStr}
+            </span>
+          )}
+
+          {/* Lazer / Stable 标签 */}
+          {lazerBadge && (
+            <span className={`text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded shrink-0 border ${lazerBadge.cls}`}>
+              <lazerBadge.icon className="inline-block w-2.5 h-2.5 mr-0.5 -mt-0.5" />
+              {lazerBadge.label}
             </span>
           )}
         </div>

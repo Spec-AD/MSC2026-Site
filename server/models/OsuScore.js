@@ -27,10 +27,14 @@ const OsuScoreSchema = new mongoose.Schema({
   starRating:   { type: Number, default: 0 }, // 谱面星级
   aim:          { type: Number, default: null },
   speed:        { type: Number, default: null },
-  countPerf:    { type: Number, default: null },
-  countGood:    { type: Number, default: null },  // 200 / GOOD (mania)
+  countPerf:    { type: Number, default: null },    // 旧名，向后兼容
+  countGood:    { type: Number, default: null },    // 旧名，向后兼容
+  countGeki:    { type: Number, default: null },    // mania PERFECT (前端主读取)
+  countKatu:    { type: Number, default: null },    // mania GOOD    (前端主读取)
   countLDrp:    { type: Number, default: null },
   countSDrpMiss: { type: Number, default: null },
+  // 客户端来源
+  isLazer: { type: Boolean, default: null },        // null=未知，true=lazer，false=stable
 });
 
 // b1.7 复合索引 — best / BP 200 查询

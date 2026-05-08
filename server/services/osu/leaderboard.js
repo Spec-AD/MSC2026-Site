@@ -40,27 +40,35 @@ function setCache(key, data) {
 
 /**
  * 格式化 Score 对象为通用判定字段
+ *
+ * osu! API v2 使用 x-api-version: 20220705 时，statistics 采用 osu!lazer
+ * 原生字段名（great/ok/meh/miss/perfect/good），而非 legacy 的
+ * count_300/count_100/count_50/count_miss/count_geki/count_katu。
+ *
+ * 本函数兼容两套命名，lazer 优先，legacy 兜底。
  */
 function formatJudgements(s) {
+  const stats = s.statistics || {};
   return {
-    count300:  s.statistics?.count_300 ?? null,    // ← 旧字段，过渡期保留
-    count100:  s.statistics?.count_100 ?? null,
-    count50:   s.statistics?.count_50 ?? null,
-    countMiss: s.statistics?.count_miss ?? null,
+    // 主字段：lazer 优先 + legacy 兜底
+    count300:  stats.great ?? stats.count_300 ?? null,
+    count100:  stats.ok ?? stats.count_100 ?? null,
+    count50:   stats.meh ?? stats.count_50 ?? null,
+    countMiss: stats.miss ?? stats.count_miss ?? null,
     // 别名（同值不同名，方便前端按 mode 动态映射）
-    countGreat:  s.statistics?.count_300 ?? null,  // 300 / GREAT
-    countOk:     s.statistics?.count_100 ?? null,  // 100 / OK
-    countMeh:    s.statistics?.count_50 ?? null,   // 50 / MEH
-    // 多模式专属字段
-    // countGeki / countKatu 是 osu! API count_geki / count_katu 的自然 camelCase，
-    // 前端 OsuLeaderboardRow (MODE_JUDGES) 直接按此命名读取。
-    // countPerf / countGood 保留作为旧代码兼容（OsuScoreDetailPanel 等）
-    countGeki:   s.statistics?.count_geki ?? null,   // mania PERFECT(Geki)
-    countKatu:   s.statistics?.count_katu ?? null,   // mania GOOD(Katu)
-    countPerf:   s.statistics?.count_geki ?? null,   // 旧名，向后兼容
-    countGood:   s.statistics?.count_katu ?? null,   // 旧名，向后兼容
-    countLDrp:    s.statistics?.count_large_droplet ?? null,
-    countSDrpMiss: s.statistics?.count_small_droplet_miss ?? null,
+    countGreat:  stats.great ?? stats.count_300 ?? null,
+    countOk:     stats.ok ?? stats.count_100 ?? null,
+    countMeh:    stats.meh ?? stats.count_50 ?? null,
+    // mania 专属：lazer perfect/good → 通用名 countGeki/countKatu
+    // 前端 OsuLeaderboardRow (MODE_JUDGES) 直接按此命名读取
+    countGeki:  stats.perfect ?? stats.count_geki ?? null,
+    countKatu:  stats.good ?? stats.count_katu ?? null,
+    // 旧名向后兼容（OsuScoreDetailPanel 等）
+    countPerf:  stats.perfect ?? stats.count_geki ?? null,
+    countGood:  stats.good ?? stats.count_katu ?? null,
+    // catch 专属
+    countLDrp:     stats.large_tick_miss ?? stats.count_large_droplet ?? null,
+    countSDrpMiss: stats.small_tick_miss ?? stats.count_small_droplet_miss ?? null,
   };
 }
 
@@ -86,6 +94,9 @@ function formatScore(s, rank) {
     username:  s.user?.username || '',
     avatarUrl: s.user?.avatar_url || '',
     countryCode: s.user?.country?.code || '',
+    // 客户端来源：lazer vs stable
+    // SoloScore.isLegacy() 用 legacy_score_id 区分，null=原生lazer，非null=stable导入
+    isLazer:  s.legacy_score_id == null,
     // 跳转
     osuScoreUrl: osuScoreId ? `https://osu.ppy.sh/scores/${osuScoreId}` : '',
   };
