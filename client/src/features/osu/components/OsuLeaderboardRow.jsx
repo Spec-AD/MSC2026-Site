@@ -54,17 +54,28 @@ const MODE_JUDGES = {
   ],
 };
 
-/** 读取判定值 — 兼容多种字段路径 */
+/** 读取判定值 — 兼容 PPY 各分支 API 字段命名差异 */
 function readJudgeVal(entry, key) {
-  // 1. 顶层 camelCase (entry.count300)
+  const stats = entry.statistics;
+  // 1. 顶层 camelCase: entry.count300
   if (entry[key] != null) return entry[key];
-  // 2. 嵌套 statistics.camelCase (entry.statistics.count300)
-  if (entry.statistics?.[key] != null) return entry.statistics[key];
-  // 3. 顶层 snake_case (entry.count_300)
-  const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-  if (entry[snakeKey] != null) return entry[snakeKey];
-  // 4. 嵌套 statistics.snake_case (entry.statistics.count_300)
-  if (entry.statistics?.[snakeKey] != null) return entry.statistics[snakeKey];
+  // 2. 嵌套 camelCase: entry.statistics.count300
+  if (stats?.[key] != null) return stats[key];
+  // 3. 顶层 snake_case: entry.count_300
+  const snake = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+  if (entry[snake] != null) return entry[snake];
+  // 4. 嵌套 snake_case: entry.statistics.count_300
+  if (stats?.[snake] != null) return stats[snake];
+  // 5. 全小写变体: countmiss, countgeki, countkatu
+  const lower = key.toLowerCase();
+  if (entry[lower] != null) return entry[lower];
+  // 6. 嵌套全小写
+  if (stats?.[lower] != null) return stats[lower];
+  // 7. PPY n-前缀变体: n300, n100, n50, nmiss, ngeki, nkatu
+  const nKey = 'n' + key.replace(/^count/i, '').toLowerCase();
+  if (entry[nKey] != null) return entry[nKey];
+  // 8. statistics 中的 n-前缀
+  if (stats?.[nKey] != null) return stats[nKey];
   return null;
 }
 

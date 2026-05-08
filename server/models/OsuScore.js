@@ -24,6 +24,7 @@ const OsuScoreSchema = new mongoose.Schema({
   score:         { type: Number, default: 0 },
   beatmapStatus: { type: String, default: '' },
   // b1.7 第二轮新增字段
+  starRating:   { type: Number, default: 0 }, // 谱面星级
   aim:          { type: Number, default: null },
   speed:        { type: Number, default: null },
   countPerf:    { type: Number, default: null },

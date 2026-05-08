@@ -26,6 +26,8 @@ export interface OsuScoreData {
   title: string;
   titleOriginal?: string;
   version: string;
+  starRating?: number;
+  beatmapStatus?: string;
   accuracy: number;
   pp: number;
   grade: string;

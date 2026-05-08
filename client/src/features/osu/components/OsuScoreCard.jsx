@@ -30,21 +30,19 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
         ${onClick ? 'cursor-pointer' : ''}
       `}
     >
-      {/* 背景曲绘 — 全幅居中 · 降亮度 · 渐变融合 */}
+      {/* 背景曲绘 — 全幅 · 渐变覆盖 (同排行榜榜头卡片) */}
       {hasBg && (
         <div className="absolute inset-0 z-0 overflow-hidden">
           <img
             src={score.coverUrl}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover object-center opacity-10"
-            style={{ filter: 'brightness(0.35) blur(6px)' }}
+            className="absolute inset-0 w-full h-full object-cover object-center"
             onError={() => setBgError(true)}
           />
-          {/* 径向渐变暗角 — 中心微透曲绘，四角深暗融合背景 */}
-          <div
-            className="absolute inset-0"
+          {/* 渐变暗角 — 保留曲绘可见度，确保文字可读 */}
+          <div className="absolute inset-0"
             style={{
-              background: 'radial-gradient(ellipse at center, transparent 25%, rgba(12,12,17,0.7) 60%, rgba(12,12,17,0.92) 100%)',
+              background: 'linear-gradient(to right, rgba(21,21,30,0.95) 0%, rgba(21,21,30,0.85) 50%, rgba(21,21,30,0.7) 100%)',
             }}
           />
         </div>
@@ -73,7 +71,7 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
             {score.titleOriginal || score.title}
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            {score.starRating != null && (
+            {(score.starRating ?? 0) > 0 && (
               <OsuStarBadge starRating={score.starRating} size="sm" />
             )}
             <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded whitespace-normal break-words">

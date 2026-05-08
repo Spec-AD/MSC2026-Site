@@ -564,21 +564,40 @@ function ScoreRow({ score, rank, onClick }) {
   const accuracy = typeof score.accuracy === 'number'
     ? score.accuracy.toFixed(2)
     : score.accuracy;
+  const [bgError, setBgError] = useState(false);
+  const hasBg = score.coverUrl && !bgError;
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       onClick={onClick}
-      className="flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.03] hover:bg-white/[0.02] hover:cursor-pointer transition-colors group"
+      className="relative flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.03] hover:bg-white/[0.02] hover:cursor-pointer transition-colors group overflow-hidden"
     >
+      {/* 背景曲绘 — 同排行榜榜头卡片 */}
+      {hasBg && (
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <img
+            src={score.coverUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover object-center"
+            onError={() => setBgError(true)}
+          />
+          <div className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(to right, rgba(21,21,30,0.95) 0%, rgba(21,21,30,0.85) 50%, rgba(21,21,30,0.7) 100%)',
+            }}
+          />
+        </div>
+      )}
+
       {/* 排名 */}
-      <span className="w-10 text-center text-sm font-mono text-zinc-600 shrink-0">
+      <span className="relative z-10 w-10 text-center text-sm font-mono text-zinc-600 shrink-0">
         #{rank}
       </span>
 
       {/* 封面 — F5: OsuCoverImage */}
-      <div className="w-12 h-9 shrink-0 rounded overflow-hidden">
+      <div className="relative z-10 w-12 h-9 shrink-0 rounded overflow-hidden">
         <OsuCoverImage
           src={score.coverUrl}
           alt={score.title}
@@ -587,17 +606,17 @@ function ScoreRow({ score, rank, onClick }) {
       </div>
 
       {/* 评级 */}
-      <div className="w-10 text-center shrink-0">
+      <div className="relative z-10 w-10 text-center shrink-0">
         <OsuGrade grade={score.grade} size="sm" />
       </div>
 
       {/* 曲名 + 版本 */}
-      <div className="flex-1 min-w-0">
+      <div className="relative z-10 flex-1 min-w-0">
         <div className="text-sm font-bold text-zinc-200 truncate group-hover:text-pink-300 transition-colors">
           {score.titleOriginal || score.title}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          {score.starRating != null && (
+          {(score.starRating ?? 0) > 0 && (
             <OsuStarBadge starRating={score.starRating} size="sm" />
           )}
           <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded whitespace-normal break-words">
@@ -612,7 +631,7 @@ function ScoreRow({ score, rank, onClick }) {
       </div>
 
       {/* PP */}
-      <div className="w-24 text-right shrink-0">
+      <div className="relative z-10 w-24 text-right shrink-0">
         <span className="text-base font-bold text-pink-400">
           {Math.round(score.pp)}
         </span>
@@ -620,7 +639,7 @@ function ScoreRow({ score, rank, onClick }) {
       </div>
 
       {/* Acc — 桌面端显示 */}
-      <div className="w-20 text-right shrink-0 hidden sm:block">
+      <div className="relative z-10 w-20 text-right shrink-0 hidden sm:block">
         <span className="text-xs text-zinc-400 font-medium">
           {accuracy}%
         </span>

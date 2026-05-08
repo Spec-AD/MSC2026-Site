@@ -44,13 +44,16 @@ function mapScoreToDoc(userId, apiScore) {
     count50:   apiScore.statistics?.count_50 ?? null,
     countMiss: apiScore.statistics?.count_miss ?? null,
     // b1.7 新增: 总分与曲目状态
+    starRating:    beatmap.difficulty_rating || 0,
     score:         apiScore.legacy_total_score || apiScore.total_score || apiScore.score || 0,
     beatmapStatus: beatmap.status || '',
     // b1.7 第二轮: Aim/Speed + 多模式判定
     aim:          apiScore.statistics?.aim ?? null,
     speed:        apiScore.statistics?.speed ?? null,
-    countPerf:    apiScore.statistics?.count_geki ?? null,   // mania PERFECT(Geki) / 标准 combo break
-    countGood:    apiScore.statistics?.count_katu ?? null,   // 200 / GOOD (mania)
+    countGeki:   apiScore.statistics?.count_geki ?? null,   // mania PERFECT(Geki) — 前端 OsuLeaderboardRow 主读取
+    countKatu:   apiScore.statistics?.count_katu ?? null,   // mania GOOD(Katu)   — 前端 OsuLeaderboardRow 主读取
+    countPerf:   apiScore.statistics?.count_geki ?? null,   // 旧名，向后兼容
+    countGood:   apiScore.statistics?.count_katu ?? null,   // 旧名，向后兼容
     countLDrp:    apiScore.statistics?.count_large_droplet ?? null,
     countSDrpMiss: apiScore.statistics?.count_small_droplet_miss ?? null,
   };

@@ -52,8 +52,13 @@ function formatJudgements(s) {
     countOk:     s.statistics?.count_100 ?? null,  // 100 / OK
     countMeh:    s.statistics?.count_50 ?? null,   // 50 / MEH
     // 多模式专属字段
-    countPerf:    s.statistics?.count_geki ?? null,   // mania PERFECT(Geki) / 标准 combo break
-    countGood:    s.statistics?.count_katu ?? null,   // 200 / GOOD (mania)
+    // countGeki / countKatu 是 osu! API count_geki / count_katu 的自然 camelCase，
+    // 前端 OsuLeaderboardRow (MODE_JUDGES) 直接按此命名读取。
+    // countPerf / countGood 保留作为旧代码兼容（OsuScoreDetailPanel 等）
+    countGeki:   s.statistics?.count_geki ?? null,   // mania PERFECT(Geki)
+    countKatu:   s.statistics?.count_katu ?? null,   // mania GOOD(Katu)
+    countPerf:   s.statistics?.count_geki ?? null,   // 旧名，向后兼容
+    countGood:   s.statistics?.count_katu ?? null,   // 旧名，向后兼容
     countLDrp:    s.statistics?.count_large_droplet ?? null,
     countSDrpMiss: s.statistics?.count_small_droplet_miss ?? null,
   };
