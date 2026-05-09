@@ -61,6 +61,22 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  const isManiaMode = (score?.mode || beatmap?.mode) === 'mania';
+  const beatmapParams = isManiaMode
+    ? [
+      { label: 'OD', value: beatmap?.od },
+      { label: 'HP', value: beatmap?.hp },
+      { label: 'Keys', value: beatmap?.maniaKeys ?? beatmap?.cs },
+    ]
+    : [
+      { label: 'CS', value: beatmap?.cs },
+      { label: 'AR', value: beatmap?.ar },
+      { label: 'OD', value: beatmap?.od },
+      { label: 'HP', value: beatmap?.hp },
+      { label: 'BPM', value: beatmap?.bpm },
+      { label: '时长', value: formatDuration(beatmap?.length) },
+    ];
+
   const panelContent = (
     <div className="flex flex-col h-full">
       {/* 封面 */}
@@ -167,14 +183,22 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
                   { label: '50', value: mVal, color: 'text-amber-400' },
                   { label: 'Miss', value: missVal, color: 'text-red-400' },
                 ].filter(j => j.value != null);
-              })().map(({ label, value, color }) => (
-                <div key={label}>
-                  <div className={`text-sm font-bold ${value != null ? color : 'text-zinc-600'}`}>
-                    {value != null ? value.toLocaleString() : '-'}
+              })().map(({ label, value, color }) => {
+                const valueClass = value == null
+                  ? 'text-zinc-600'
+                  : value === 0
+                    ? 'text-zinc-500'
+                    : color;
+
+                return (
+                  <div key={label}>
+                    <div className={`text-sm font-bold ${valueClass}`}>
+                      {value != null ? value.toLocaleString() : '-'}
+                    </div>
+                    <div className="text-[10px] text-zinc-600">{label}</div>
                   </div>
-                  <div className="text-[10px] text-zinc-600">{label}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -184,12 +208,9 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
           <div className="bg-white/[0.02] rounded-lg p-3">
             <div className="text-[10px] text-zinc-600 uppercase tracking-wider mb-2">谱面参数</div>
             <div className="grid grid-cols-3 gap-y-2 text-center">
-              <ParamItem label="CS" value={beatmap.cs} />
-              <ParamItem label="AR" value={beatmap.ar} />
-              <ParamItem label="OD" value={beatmap.od} />
-              <ParamItem label="HP" value={beatmap.hp} />
-              <ParamItem label="BPM" value={beatmap.bpm} />
-              <ParamItem label="时长" value={formatDuration(beatmap.length)} />
+              {beatmapParams.map((item) => (
+                <ParamItem key={item.label} label={item.label} value={item.value} />
+              ))}
             </div>
             {beatmap.starRating != null && (
               <div className="mt-2 pt-2 border-t border-white/[0.05] flex items-center justify-between text-xs">
@@ -277,10 +298,12 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
 }
 
 function ParamItem({ label, value }) {
+  const labelCls = label === 'Keys' ? '' : 'uppercase';
+
   return (
     <div>
       <div className="text-xs font-bold text-zinc-200">{value != null ? value : '-'}</div>
-      <div className="text-[9px] text-zinc-600 uppercase">{label}</div>
+      <div className={`text-[9px] text-zinc-600 ${labelCls}`}>{label}</div>
     </div>
   );
 }

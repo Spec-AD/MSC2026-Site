@@ -25,7 +25,7 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
       animate={{ opacity: 1 }}
       onClick={() => onClick?.(score)}
       className={`
-        relative flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.03]
+        relative flex items-center gap-2 px-3 py-3.5 min-h-[76px] border-b border-white/[0.03]
         hover:bg-white/[0.02] transition-colors group overflow-hidden
         ${onClick ? 'cursor-pointer' : ''}
       `}
@@ -56,7 +56,7 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
         </span>
 
         {/* 封面 */}
-        <div className="w-12 h-9 shrink-0 rounded overflow-hidden">
+        <div className="w-14 h-10 shrink-0 rounded overflow-hidden">
           <OsuCoverImage src={score.coverUrl} alt={score.title} className="w-full h-full" />
         </div>
 

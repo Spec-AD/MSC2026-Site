@@ -227,7 +227,7 @@ export default function OsuLeaderboardRow({
             {judges.map((j, i) => (
               <span key={j.key} className="inline-flex items-center gap-1">
                 <span className="text-[10px] text-zinc-500 font-medium">{j.label}</span>
-                <span className={`${j.color} font-bold tabular-nums`}>
+                <span className={`${j.value === 0 ? 'text-zinc-500' : j.color} font-bold tabular-nums`}>
                   {j.value.toLocaleString()}
                 </span>
                 {i < judges.length - 1 && <span className="text-zinc-700">|</span>}

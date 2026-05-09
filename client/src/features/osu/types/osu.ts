@@ -40,6 +40,7 @@ export interface OsuScoreData {
   count100: number | null;
   count50: number | null;
   countMiss: number | null;
+  maniaKeys?: number | null;
 }
 
 // ----- 八大模块响应类型 -----
@@ -132,8 +133,9 @@ export interface BeatmapInfo {
   version: string;
   bpm: number;
   length: number; // 秒
-  cs: number;
-  ar: number;
+  cs: number | null;
+  ar: number | null;
+  maniaKeys?: number | null;
   od: number;
   hp: number;
   starRating: number;

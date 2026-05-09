@@ -6,7 +6,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Virtuoso } from 'react-virtuoso';
 import {
   FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt,
   FaLock, FaGlobe, FaMapMarkerAlt, FaPlay, FaUser,
@@ -16,15 +15,10 @@ import {
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { getUserProfile } from '../api/osuApi';
-import { getModeMap, getApiModeSync } from '../../../constants/osuModes';
 import useOsuSync from '../hooks/useOsuSync';
-import OsuCoverImage from '../components/OsuCoverImage';
-import OsuGrade from '../components/OsuGrade';
-import OsuScoreDetailPanel from '../components/OsuScoreDetailPanel';
 import OsuModeTabs from '../components/OsuModeTabs';
 import RankHistoryChart from '../components/RankHistoryChart';
 import CountryFlag from '../components/CountryFlag';
-import OsuStarBadge from '../components/OsuStarBadge';
 import { getOsuInfo } from '../api/osuApi';
 
 // ====== 全球排名颜色分层 (清音 §14.1) ======
@@ -61,12 +55,9 @@ export default function OsuProfile() {
   const { addToast } = useToast();
 
   const [profile, setProfile] = useState(null);
-  const [allOsuScores, setAllOsuScores] = useState([]);
-  const [selectedScore, setSelectedScore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeMode, setActiveMode] = useState('standard');
-  const [modeMap, setModeMap] = useState(null);
   const [chartWidth, setChartWidth] = useState(600);
   const chartContainerRef = useRef(null);
 
@@ -75,19 +66,26 @@ export default function OsuProfile() {
   const isOwnProfile = profile && currentUser &&
     (profile.username?.toLowerCase() === currentUser.username?.toLowerCase());
 
-  // 初始化时获取 MODE_MAP
-  useEffect(() => {
-    getModeMap().then(setModeMap).catch(() => setModeMap(null));
-  }, []);
-
-  // 跟踪图表容器宽度
+  // 跟踪图表容器宽度（全宽自适应）
   useEffect(() => {
     const el = chartContainerRef.current;
     if (!el) return;
-    const measure = () => setChartWidth(el.clientWidth);
+
+    const measure = () => setChartWidth(el.clientWidth || 600);
     measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+    } else {
+      window.addEventListener('resize', measure);
+    }
+
+    return () => {
+      if (ro) ro.disconnect();
+      else window.removeEventListener('resize', measure);
+    };
   }, []);
 
   const fetchProfileData = useCallback(async () => {
@@ -108,6 +106,7 @@ export default function OsuProfile() {
             profile.badges = oi.badges;
             profile.friendsCount = oi.friendsCount;
             profile.followerCount = oi.followerCount;
+            profile.coverUrl = oi.coverUrl || oi.cover?.url || profile.coverUrl || null;
             // 合并各模式新增字段
             for (const mode of MODE_IDS) {
               if (oi.statistics?.[mode]) {
@@ -126,7 +125,6 @@ export default function OsuProfile() {
       }
 
       setProfile(profile);
-      setAllOsuScores(profile.osuScores || []);
       if (profile.osuMode && MODE_IDS.includes(profile.osuMode)) {
         setActiveMode(profile.osuMode);
       } else if (profile.defaultMode && MODE_IDS.includes(profile.defaultMode)) {
@@ -142,14 +140,6 @@ export default function OsuProfile() {
   useEffect(() => {
     fetchProfileData();
   }, [fetchProfileData]);
-
-  // 当前模式成绩
-  const currentModeScores = useMemo(() => {
-    const apiMode = modeMap?.[activeMode] || getApiModeSync(activeMode);
-    return (allOsuScores || [])
-      .filter(s => s.mode === apiMode)
-      .sort((a, b) => b.pp - a.pp);
-  }, [allOsuScores, activeMode, modeMap]);
 
   // 当前模式统计数据
   const modeStats = useMemo(() => {
@@ -280,6 +270,53 @@ export default function OsuProfile() {
                 </button>
               )
             )}
+          </div>
+        </div>
+
+        {/* ====== 官方风格 Banner ====== */}
+        <div className="relative mb-6 rounded-xl overflow-hidden border border-white/[0.05] h-44 md:h-56">
+          {profile.coverUrl ? (
+            <img
+              src={profile.coverUrl}
+              alt="osu profile banner"
+              className="absolute inset-0 w-full h-full object-cover object-center"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          ) : null}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0f0f17]/90 via-[#0f0f17]/65 to-[#0f0f17]/92" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c11] via-transparent to-transparent" />
+
+          <div className="relative z-10 h-full flex items-end p-4 md:p-5">
+            <div className="flex items-end gap-3 md:gap-4 min-w-0">
+              <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border border-white/15 bg-zinc-800 shrink-0">
+                {profile.avatarUrl ? (
+                  <img
+                    src={profile.avatarUrl}
+                    alt={profile.osuUsername || profile.username}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-zinc-400 uppercase tracking-[0.18em] mb-1">osu! profile</div>
+                <h2 className="text-lg md:text-2xl font-bold text-zinc-100 truncate">
+                  {profile.osuUsername || profile.username}
+                </h2>
+                {profile.countryCode && (
+                  <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
+                    <CountryFlag code={profile.countryCode} size="sm" />
+                    <span>{profile.countryCode}</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -461,69 +498,11 @@ export default function OsuProfile() {
               ) : null}
             </div>
 
-            {/* ====== BP 列表 ====== */}
-            <div className="mb-16">
-              <div className="flex items-center gap-3 border-b border-white/[0.05] pb-3 mb-4">
-                <div className="w-1 h-5 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]" />
-                <h2 className="text-lg font-bold text-zinc-100 tracking-tight">
-                  Best Performance
-                </h2>
-                <span className="text-xs text-zinc-600 font-medium">
-                  BP {currentModeScores.length}
-                </span>
-              </div>
-
-              {currentModeScores.length === 0 ? (
-                <div className="py-12 text-center text-zinc-600 font-medium bg-[#15151e]/40 rounded-xl border border-white/[0.05]">
-                  <FaPlay className="mx-auto text-2xl mb-3 text-zinc-700" />
-                  该模式下暂无成绩记录<br/>
-                  <span className="text-xs">请先在游戏中打出成绩后点击同步</span>
-                </div>
-              ) : (
-                // 虚拟滚动 (F3)
-                <div className="bg-[#15151e]/40 rounded-xl border border-white/[0.05] overflow-hidden">
-                  <Virtuoso
-                    style={{ height: '70vh', minHeight: 400 }}
-                    totalCount={currentModeScores.length}
-                    itemContent={(index) => (
-                      <ScoreRow
-                        score={currentModeScores[index]}
-                        rank={index + 1}
-                        onClick={() => setSelectedScore(currentModeScores[index])}
-                      />
-                    )}
-                    overscan={5}
-                    components={{
-                      Header: () => (
-                        <div className="sticky top-0 bg-[#15151e]/95 backdrop-blur-sm z-10 flex items-center px-3 py-2 text-xs text-zinc-500 font-bold uppercase tracking-wider border-b border-white/[0.05]">
-                          <span className="w-10 text-center">#</span>
-                          <span className="w-14" />
-                          <span className="w-10 text-center">评级</span>
-                          <span className="flex-1 min-w-0">曲名</span>
-                          <span className="w-24 text-right">PP</span>
-                          <span className="w-20 text-right hidden sm:block">Acc</span>
-                        </div>
-                      ),
-                      EmptyPlaceholder: () => null,
-                    }}
-                  />
-                </div>
-              )}
-            </div>
           </>
         )}
       </div>
     </div>
 
-      <AnimatePresence>
-        {selectedScore && (
-          <OsuScoreDetailPanel
-            key="detail-panel"
-            score={selectedScore}
-            onClose={() => setSelectedScore(null)}
-          />
-        )}
-      </AnimatePresence>
     </>
   );
 }
@@ -558,92 +537,3 @@ function StatCard({ icon, label, value, emptyState, accent = false }) {
   );
 }
 
-/** 单条成绩行 */
-function ScoreRow({ score, rank, onClick }) {
-  const modsStr = score.mods?.length > 0 ? `+${score.mods.join('')}` : '';
-  const accuracy = typeof score.accuracy === 'number'
-    ? score.accuracy.toFixed(2)
-    : score.accuracy;
-  const [bgError, setBgError] = useState(false);
-  const hasBg = score.coverUrl && !bgError;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      onClick={onClick}
-      className="relative flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.03] hover:bg-white/[0.02] hover:cursor-pointer transition-colors group overflow-hidden"
-    >
-      {/* 背景曲绘 — 同排行榜榜头卡片 */}
-      {hasBg && (
-        <div className="absolute inset-0 z-0 overflow-hidden">
-          <img
-            src={score.coverUrl}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover object-center"
-            onError={() => setBgError(true)}
-          />
-          <div className="absolute inset-0"
-            style={{
-              background: 'linear-gradient(to right, rgba(21,21,30,0.95) 0%, rgba(21,21,30,0.85) 50%, rgba(21,21,30,0.7) 100%)',
-            }}
-          />
-        </div>
-      )}
-
-      {/* 排名 */}
-      <span className="relative z-10 w-10 text-center text-sm font-mono text-zinc-600 shrink-0">
-        #{rank}
-      </span>
-
-      {/* 封面 — F5: OsuCoverImage */}
-      <div className="relative z-10 w-12 h-9 shrink-0 rounded overflow-hidden">
-        <OsuCoverImage
-          src={score.coverUrl}
-          alt={score.title}
-          className="w-full h-full"
-        />
-      </div>
-
-      {/* 评级 */}
-      <div className="relative z-10 w-10 text-center shrink-0">
-        <OsuGrade grade={score.grade} size="sm" />
-      </div>
-
-      {/* 曲名 + 版本 */}
-      <div className="relative z-10 flex-1 min-w-0">
-        <div className="text-sm font-bold text-zinc-200 truncate group-hover:text-pink-300 transition-colors">
-          {score.titleOriginal || score.title}
-        </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          {(score.starRating ?? 0) > 0 && (
-            <OsuStarBadge starRating={score.starRating} size="sm" />
-          )}
-          <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded whitespace-normal break-words">
-            {score.version}
-          </span>
-          {modsStr && (
-            <span className="text-[9px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1 py-0.5 rounded">
-              {modsStr}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* PP */}
-      <div className="relative z-10 w-24 text-right shrink-0">
-        <span className="text-base font-bold text-pink-400">
-          {Math.round(score.pp)}
-        </span>
-        <span className="text-[9px] text-pink-500/60 ml-0.5">pp</span>
-      </div>
-
-      {/* Acc — 桌面端显示 */}
-      <div className="relative z-10 w-20 text-right shrink-0 hidden sm:block">
-        <span className="text-xs text-zinc-400 font-medium">
-          {accuracy}%
-        </span>
-      </div>
-    </motion.div>
-  );
-}

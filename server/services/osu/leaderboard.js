@@ -176,6 +176,11 @@ async function getLeaderboard(beatmapId, opts = {}) {
   const pureBeatMode = MODE_MAP_REVERSE[nativeMode] || nativeMode;
 
   const beatmapset = beatmapData?.beatmapset;
+
+  // b1.7 第三轮 — mania 模式字段修正
+  const isMania = pureBeatMode === 'mania';
+  const rawCs = beatmapData?.cs ?? 0;
+
   const beatmapInfo = beatmapData ? {
     beatmapId:    beatmapData.id,
     title:        beatmapset?.title || '',
@@ -190,12 +195,14 @@ async function getLeaderboard(beatmapId, opts = {}) {
     bpm:          beatmapData.bpm || 0,
     // 第二轮新增谱面属性
     od:           beatmapData.accuracy ?? 0,
-    cs:           beatmapData.cs ?? 0,
-    ar:           beatmapData.approach_rate ?? 0,  // graveyard 谱面可能是 undefined
+    cs:           isMania ? null : rawCs,
+    ar:           isMania ? null : (beatmapData.approach_rate ?? 0),
     hp:           beatmapData.drain ?? 0,
     totalLength:  beatmapData.total_length || 0,
     hitLength:    beatmapData.hit_length || 0,
     modeInt:      beatmapData.mode_int ?? 0,
+    // 第三轮新增 — mania 键数映射
+    maniaKeys:    isMania ? rawCs : null,
     // 第三轮新增：谱师 & 曲目详情
     mapperId:      beatmapset?.creator_id || null,
     mapperUsername: beatmapset?.creator || '',

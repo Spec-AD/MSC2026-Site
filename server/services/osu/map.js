@@ -13,10 +13,14 @@ const osuApi = require('./api');
  */
 function normalizeBeatmap(raw) {
   const bms = raw.beatmapset;
+  const mode = raw.mode || raw.mode_int?.toString();
+  const isMania = mode === 'mania' || raw.mode_int === 3;
+  const rawCs = raw.cs || 0;
+
   return {
     beatmapId:      raw.id,
     beatmapsetId:   bms?.id || raw.beatmapset_id,
-    mode:           raw.mode || raw.mode_int?.toString(),
+    mode,
     title:          bms?.title || raw.title || '',
     titleUnicode:   bms?.title_unicode || '',
     artist:         bms?.artist || raw.artist || '',
@@ -25,10 +29,12 @@ function normalizeBeatmap(raw) {
     version:        raw.version || '',
     bpm:            raw.bpm || 0,
     length:         raw.total_length || 0,
-    cs:             raw.cs || 0,
-    ar:             raw.ar || 0,
+    // b1.7 第三轮 — mania 模式字段修正
+    cs:             isMania ? null : rawCs,
+    ar:             isMania ? null : (raw.ar || 0),
     od:             raw.accuracy || raw.od || 0,
     hp:             raw.drain || 0,
+    maniaKeys:      isMania ? rawCs : null,
     starRating:     raw.difficulty_rating || 0,
     aimDifficulty:  raw.aim_difficulty || 0,
     speedDifficulty: raw.speed_difficulty || 0,

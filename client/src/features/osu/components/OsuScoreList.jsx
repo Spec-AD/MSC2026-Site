@@ -33,9 +33,15 @@ export default function OsuScoreList({ scores, onScoreClick, height = '70vh', em
             <div className="sticky top-0 bg-[#15151e]/95 backdrop-blur-sm z-10 flex items-center px-3 py-2 text-xs text-zinc-500 font-bold uppercase tracking-wider border-b border-white/[0.05]">
               <span className="w-10 text-center">#</span>
               <span className="w-14" />
-              <span className="w-10 text-center">评级</span>
-              <span className="flex-1 min-w-0">曲名</span>
-              <span className="w-24 text-right">PP</span>
+              <span className="w-10 text-center">
+                <span className="inline-block translate-x-[0.5em]">评级</span>
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="inline-block translate-x-[1em]">曲名</span>
+              </span>
+              <span className="w-24 text-right">
+                <span className="inline-block translate-x-[2em]">PP</span>
+              </span>
               <span className="w-20 text-right hidden sm:block">Acc</span>
             </div>
           ),

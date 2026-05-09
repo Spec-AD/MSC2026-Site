@@ -23,6 +23,7 @@ export default function OsuMapCard({ beatmap, onViewLeaderboard, compact = false
   const modeLabel = beatmap.modeInt != null
     ? (MODE_NAMES[beatmap.modeInt] || beatmap.mode || 'Standard')
     : (beatmap.mode || 'Standard');
+  const isManiaMode = (beatmap.mode || '').toLowerCase() === 'mania';
 
   if (compact) {
     return (
@@ -44,12 +45,18 @@ export default function OsuMapCard({ beatmap, onViewLeaderboard, compact = false
   }
 
   // 难度参数进度条（范围 0-10，至少 1% 可见）
-  const diffBars = [
-    { label: 'CS', value: beatmap.cs, icon: null },
-    { label: 'AR', value: beatmap.ar, icon: null },
-    { label: 'OD', value: beatmap.od, icon: null },
-    { label: 'HP', value: beatmap.hp, icon: null },
-  ];
+  const diffBars = isManiaMode
+    ? [
+      { label: 'OD', value: beatmap.od, precision: 1 },
+      { label: 'HP', value: beatmap.hp, precision: 1 },
+      { label: 'Keys', value: beatmap.maniaKeys ?? beatmap.cs, precision: 0 },
+    ]
+    : [
+      { label: 'CS', value: beatmap.cs, precision: 1 },
+      { label: 'AR', value: beatmap.ar, precision: 1 },
+      { label: 'OD', value: beatmap.od, precision: 1 },
+      { label: 'HP', value: beatmap.hp, precision: 1 },
+    ];
 
   return (
     <div className="bg-[#15151e] border border-white/[0.05] rounded-lg overflow-hidden">
@@ -123,10 +130,11 @@ export default function OsuMapCard({ beatmap, onViewLeaderboard, compact = false
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           {diffBars.map(p => {
             const val = p.value != null ? Math.min(Math.max(p.value, 0), 10) : 0;
-            const pct = Math.max(val / 10 * 100, 1);
+            const pct = Math.max((val / 10) * 100, 1);
+            const precision = Number.isFinite(p.precision) ? p.precision : 1;
             return (
               <div key={p.label} className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase w-6 shrink-0">{p.label}</span>
+                <span className="text-[10px] font-bold text-zinc-500 w-8 shrink-0">{p.label}</span>
                 <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full"
@@ -136,7 +144,7 @@ export default function OsuMapCard({ beatmap, onViewLeaderboard, compact = false
                     }}
                   />
                 </div>
-                <span className="text-xs font-mono text-zinc-400 w-6 text-right">{val.toFixed(1)}</span>
+                <span className="text-xs font-mono text-zinc-400 w-8 text-right">{val.toFixed(precision)}</span>
               </div>
             );
           })}
