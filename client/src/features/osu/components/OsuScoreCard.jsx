@@ -4,19 +4,35 @@
 // ============================================================
 
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import OsuGrade from './OsuGrade';
 import OsuCoverImage from './OsuCoverImage';
 import OsuBeatmapStatusBadge from './OsuBeatmapStatusBadge';
 import OsuStarBadge from './OsuStarBadge';
 
+function toRetinaCover(url = '') {
+  if (!url) return '';
+  const keys = ['cover', 'card', 'list', 'slim_cover', 'slimcover'];
+  for (const key of keys) {
+    if (url.includes(`${key}@2x.`)) return url;
+    if (url.includes(`${key}.`)) return url.replace(`${key}.`, `${key}@2x.`);
+  }
+  return url;
+}
+
 export default function OsuScoreCard({ score, rank, onClick, compact = false }) {
+  const [bgError, setBgError] = useState(false);
   const modsStr = score.mods?.length > 0 ? `+${score.mods.join('')}` : '';
   const accuracy = typeof score.accuracy === 'number'
     ? score.accuracy.toFixed(2)
     : score.accuracy;
 
-  const hasBg = !!score.coverUrl;
+  const hasBg = !!score.coverUrl && !bgError;
+  const retinaCoverUrl = toRetinaCover(score.coverUrl);
+  const bgSrcSet = retinaCoverUrl && retinaCoverUrl !== score.coverUrl
+    ? `${retinaCoverUrl} 2x, ${score.coverUrl} 1x`
+    : undefined;
 
   return (
     <motion.div
@@ -29,19 +45,28 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
         ${onClick ? 'cursor-pointer' : ''}
       `}
     >
-      {/* 背景曲绘 — background-image 渲染管线（比 mask+img 质量更高） */}
+      {/* 背景曲绘 — 仅提升清晰度，透明度逻辑保持不变 */}
       {hasBg && (
-        <div
-          className="absolute inset-0 z-0 bg-[#0c0c11]"
-          style={{
-            backgroundImage: `url(${score.coverUrl})`,
-            backgroundSize: 'cover',
-            backgroundPosition: '25% center',
-            filter: 'brightness(0.5)',
-            WebkitMaskImage: 'linear-gradient(to right, transparent 0%, transparent 30%, #000 36%, #000 58%, rgba(0,0,0,0.4) 68%, transparent 82%, transparent 100%)',
-            maskImage: 'linear-gradient(to right, transparent 0%, transparent 30%, #000 36%, #000 58%, rgba(0,0,0,0.4) 68%, transparent 82%, transparent 100%)',
-          }}
-        />
+        <div className="absolute inset-0 z-0 bg-[#0c0c11]">
+          <div
+            className="absolute inset-0 overflow-hidden"
+            style={{
+              WebkitMaskImage: 'linear-gradient(to right, transparent 0%, transparent 30%, #000 36%, #000 58%, rgba(0,0,0,0.4) 68%, transparent 82%, transparent 100%)',
+              maskImage: 'linear-gradient(to right, transparent 0%, transparent 30%, #000 36%, #000 58%, rgba(0,0,0,0.4) 68%, transparent 82%, transparent 100%)',
+            }}
+          >
+            <img
+              src={score.coverUrl}
+              srcSet={bgSrcSet}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ objectPosition: '25% center', imageRendering: 'auto' }}
+              onError={() => setBgError(true)}
+              draggable={false}
+            />
+            <div className="absolute inset-0 bg-black/50" />
+          </div>
+        </div>
       )}
 
       {/* 内容 */}
