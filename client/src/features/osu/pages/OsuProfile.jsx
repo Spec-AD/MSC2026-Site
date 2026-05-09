@@ -306,15 +306,12 @@ export default function OsuProfile() {
               </div>
               <div className="min-w-0">
                 <div className="text-xs text-zinc-400 uppercase tracking-[0.18em] mb-1">osu! profile</div>
-                <h2 className="text-lg md:text-2xl font-bold text-zinc-100 truncate">
+                <h2 className="text-lg md:text-2xl font-bold text-zinc-100 truncate flex items-center gap-2">
                   {profile.osuUsername || profile.username}
+                  {profile.countryCode && (
+                    <CountryFlag code={profile.countryCode} size="sm" className="!inline-block" />
+                  )}
                 </h2>
-                {profile.countryCode && (
-                  <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
-                    <CountryFlag code={profile.countryCode} size="sm" />
-                    <span>{profile.countryCode}</span>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -489,13 +486,64 @@ export default function OsuProfile() {
               </div>
             )}
 
-            {/* ====== 排名趋势 （外层带 ref，始终测量宽度） ====== */}
-            <div ref={chartContainerRef} className="mb-8 w-full min-h-[160px]">
-              {statsDisplay?.state === 'loaded' && statsDisplay.data.rankHistory?.length >= 2 ? (
-                <RankHistoryChart data={statsDisplay.data.rankHistory} width={chartWidth} />
-              ) : profile.rankHistory?.length >= 2 ? (
-                <RankHistoryChart data={profile.rankHistory} width={chartWidth} />
-              ) : null}
+            {/* ====== 排名趋势（左图 + 右摘要） ====== */}
+            <div className="flex gap-4 mb-8">
+              <div ref={chartContainerRef} className="flex-1 min-h-[160px] min-w-0">
+                {statsDisplay?.state === 'loaded' && statsDisplay.data.rankHistory?.length >= 2 ? (
+                  <RankHistoryChart data={statsDisplay.data.rankHistory} width={chartWidth} />
+                ) : profile.rankHistory?.length >= 2 ? (
+                  <RankHistoryChart data={profile.rankHistory} width={chartWidth} />
+                ) : null}
+              </div>
+              {/* 右侧摘要面板 */}
+              <div className="w-48 shrink-0 bg-[#15151e]/60 border border-white/[0.05] rounded-lg p-3 flex flex-col justify-center gap-2.5 min-h-[160px]">
+                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <FaGlobe className="text-xs" /> 排名概览
+                </div>
+                {statsDisplay?.state === 'loaded' && (
+                  <>
+                    <div>
+                      <span className="text-[9px] text-zinc-600">当前排名</span>
+                      <div className={`text-sm font-bold mt-0.5 ${getRankColor(statsDisplay.data.rank, activeMode) || 'text-zinc-300'}`}>
+                        #{statsDisplay.data.rank?.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <div>
+                        <span className="text-[9px] text-zinc-600">PP</span>
+                        <div className="text-xs font-bold text-pink-400 mt-0.5">{Math.round(statsDisplay.data.pp).toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-zinc-600">游玩</span>
+                        <div className="text-xs font-bold text-zinc-300 mt-0.5">{statsDisplay.data.playCount?.toLocaleString()}</div>
+                      </div>
+                    </div>
+                    {(() => {
+                      const rh = statsDisplay.data.rankHistory;
+                      if (rh?.length >= 2) {
+                        const first = rh[0];
+                        const last = rh[rh.length - 1];
+                        const fv = first?.rank ?? first;
+                        const lv = last?.rank ?? last;
+                        const diff = fv - lv;
+                        const improved = diff > 0;
+                        return (
+                          <div className="pt-1.5 border-t border-white/[0.04]">
+                            <span className="text-[9px] text-zinc-600">趋势</span>
+                            <div className={`text-xs font-bold mt-0.5 flex items-center gap-1 ${improved ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {improved ? <><FaCheck className="text-[9px]" /> ↑{Math.abs(diff).toLocaleString()}</> : <><FaTimes className="text-[9px]" /> ↓{Math.abs(diff).toLocaleString()}</>}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </>
+                )}
+                {statsDisplay?.state !== 'loaded' && statsDisplay?.state === 'unsynced' && (
+                  <div className="text-[11px] text-zinc-600">数据同步后可见</div>
+                )}
+              </div>
             </div>
 
           </>

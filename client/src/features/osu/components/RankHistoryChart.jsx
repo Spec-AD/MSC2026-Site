@@ -51,8 +51,9 @@ function normalizeHistoryPoint(item, idx) {
   }
 
   if (item && typeof item === 'object') {
+    // ⚠️ value 可能表示 pp/score 而非 rank，放在最后兜底
     return {
-      rank: Number(item.rank ?? item.globalRank ?? item.value ?? item.ranking ?? item.y),
+      rank: Number(item.rank ?? item.globalRank ?? item.ranking ?? item.y ?? item.value),
       score: item.score ?? item.totalScore ?? item.pp ?? null,
       date: item.date ?? item.at ?? item.time ?? item.playedAt ?? null,
       index: idx,
@@ -110,10 +111,12 @@ export default function RankHistoryChart({ data, width = 400 }) {
     ctx.strokeStyle = GRID_COLOR;
     ctx.lineWidth = 1;
 
+    // y轴标签：minRank(顶部) → maxRank(底部)，取整显示
     const yTicks = [];
     for (let i = 0; i <= tickCount; i++) {
       const y = CHART_PADDING.top + (i / tickCount) * innerHeight;
-      const labelValue = Math.round(minRank + ((maxRank - minRank) * i) / tickCount / step) * step;
+      const raw = minRank + (maxRank - minRank) * (i / tickCount);
+      const labelValue = Math.max(1, Math.round(raw));
       yTicks.push({ y, label: labelValue });
       ctx.beginPath();
       ctx.moveTo(CHART_PADDING.left, y);
@@ -126,7 +129,7 @@ export default function RankHistoryChart({ data, width = 400 }) {
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     yTicks.forEach(({ y, label }) => {
-      ctx.fillText(`#${Math.max(1, label).toLocaleString()}`, CHART_PADDING.left - 8, y);
+      ctx.fillText(`#${label.toLocaleString()}`, CHART_PADDING.left - 8, y);
     });
 
     // 填充
@@ -181,8 +184,8 @@ export default function RankHistoryChart({ data, width = 400 }) {
       ctx.stroke();
 
       // tooltip
-      const tooltipW = 188;
-      const tooltipH = 58;
+      const tooltipW = 180;
+      const tooltipH = 50;
       let tx = p.x + 12;
       let ty = p.y - tooltipH - 10;
       if (tx + tooltipW > width - CHART_PADDING.right) tx = p.x - tooltipW - 12;
@@ -196,23 +199,33 @@ export default function RankHistoryChart({ data, width = 400 }) {
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      const scoreText = p.score != null
-        ? `Score ${Number(p.score).toLocaleString()}`
-        : 'Score —';
-      const dateText = p.date
-        ? new Date(p.date).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-        : `数据点 ${hoveredIdx + 1}/${points.length}`;
+      const rankLabel = `全球排名 #${p.rank.toLocaleString()}`;
+      // 相对时间
+      let relativeDate = `数据点 ${hoveredIdx + 1}/${points.length}`;
+      if (p.date) {
+        const d = new Date(p.date);
+        const now = new Date();
+        const diffMs = now - d;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) {
+          relativeDate = '今天';
+        } else if (diffDays === 1) {
+          relativeDate = '1 天前';
+        } else if (diffDays < 30) {
+          relativeDate = `${diffDays} 天前`;
+        } else {
+          relativeDate = d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+        }
+      }
 
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#f4f4f5';
       ctx.font = 'bold 11px "Torus Pro", monospace';
-      ctx.fillText(`Rank #${p.rank.toLocaleString()}`, tx + 10, ty + 14);
-      ctx.fillStyle = '#c4c4cf';
-      ctx.font = '10px "Torus Pro", monospace';
-      ctx.fillText(scoreText, tx + 10, ty + 31);
+      ctx.fillText(rankLabel, tx + 10, ty + 18);
       ctx.fillStyle = TEXT_COLOR;
-      ctx.fillText(dateText, tx + 10, ty + 46);
+      ctx.font = '10px "Torus Pro", monospace';
+      ctx.fillText(relativeDate, tx + 10, ty + 38);
     }
   }, [points, width, innerHeight, minRank, maxRank, hoveredIdx]);
 
