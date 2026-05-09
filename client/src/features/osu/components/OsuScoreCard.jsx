@@ -3,7 +3,7 @@
 // b1.7 R3: 添加背景曲绘渐变渲染
 // ============================================================
 
-import { useState } from 'react';
+
 import { motion } from 'framer-motion';
 import OsuGrade from './OsuGrade';
 import OsuCoverImage from './OsuCoverImage';
@@ -11,13 +11,12 @@ import OsuBeatmapStatusBadge from './OsuBeatmapStatusBadge';
 import OsuStarBadge from './OsuStarBadge';
 
 export default function OsuScoreCard({ score, rank, onClick, compact = false }) {
-  const [bgError, setBgError] = useState(false);
   const modsStr = score.mods?.length > 0 ? `+${score.mods.join('')}` : '';
   const accuracy = typeof score.accuracy === 'number'
     ? score.accuracy.toFixed(2)
     : score.accuracy;
 
-  const hasBg = score.coverUrl && !bgError;
+  const hasBg = !!score.coverUrl;
 
   return (
     <motion.div
@@ -30,24 +29,19 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
         ${onClick ? 'cursor-pointer' : ''}
       `}
     >
-      {/* 背景曲绘 — 左 40% 纯色 → 中段可见 → 右渐隐（不拉伸，低亮度） */}
+      {/* 背景曲绘 — background-image 渲染管线（比 mask+img 质量更高） */}
       {hasBg && (
-        <div className="absolute inset-0 z-0 overflow-hidden bg-[#0c0c11]">
-          <img
-            src={score.coverUrl}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover object-left brightness-[0.55]"
-            style={{
-              maskImage: 'linear-gradient(to right, transparent 0%, transparent 40%, rgba(0,0,0,1) 48%, rgba(0,0,0,1) 68%, rgba(0,0,0,0.5) 78%, transparent 88%, transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(to right, transparent 0%, transparent 40%, rgba(0,0,0,1) 48%, rgba(0,0,0,1) 68%, rgba(0,0,0,0.5) 78%, transparent 88%, transparent 100%)',
-            }}
-            onError={() => setBgError(true)}
-          />
-          {/* 底层渐变 — 确保文字可读性 */}
-          <div className="absolute inset-0" style={{
-            background: 'linear-gradient(to right, transparent 0%, transparent 38%, rgba(10,10,18,0.1) 45%, rgba(10,10,18,0.05) 55%, rgba(10,10,18,0.08) 68%, rgba(10,10,18,0.2) 82%, rgba(10,10,18,0.5) 94%, rgba(10,10,18,0.8) 100%)',
-          }} />
-        </div>
+        <div
+          className="absolute inset-0 z-0 bg-[#0c0c11]"
+          style={{
+            backgroundImage: `url(${score.coverUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: '25% center',
+            filter: 'brightness(0.5)',
+            WebkitMaskImage: 'linear-gradient(to right, transparent 0%, transparent 30%, #000 36%, #000 58%, rgba(0,0,0,0.4) 68%, transparent 82%, transparent 100%)',
+            maskImage: 'linear-gradient(to right, transparent 0%, transparent 30%, #000 36%, #000 58%, rgba(0,0,0,0.4) 68%, transparent 82%, transparent 100%)',
+          }}
+        />
       )}
 
       {/* 内容 */}
