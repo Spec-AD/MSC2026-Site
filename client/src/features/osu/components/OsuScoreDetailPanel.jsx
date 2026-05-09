@@ -187,7 +187,7 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
                 const valueClass = value == null
                   ? 'text-zinc-600'
                   : value === 0
-                    ? 'text-zinc-500'
+                    ? 'text-zinc-400'
                     : color;
 
                 return (

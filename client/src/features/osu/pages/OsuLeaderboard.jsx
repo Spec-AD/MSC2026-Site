@@ -15,18 +15,9 @@ import OsuLeaderboardRow from '../components/OsuLeaderboardRow';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import {
   FaSpinner, FaArrowLeft, FaGlobeAsia, FaMedal,
-  FaSearch, FaStar, FaClock, FaMusic, FaCircle, FaSlidersH,
+  FaSearch, FaStar, FaClock, FaMusic,
   FaBolt, FaDatabase
 } from 'react-icons/fa';
-import { LazyLoadImage } from 'react-lazy-load-image-component';
-
-const SafeImage = ({ src, alt, className, ...rest }) => {
-  try {
-    return <LazyLoadImage src={src} alt={alt || ''} className={className} {...rest} />;
-  } catch {
-    return <img src={src} alt={alt || ''} className={className} {...rest} />;
-  }
-};
 
 function useOsuCache() {
   const [cache, setCache] = useState(() => ({
@@ -111,12 +102,11 @@ export default function OsuLeaderboard() {
 
   // 谱面信息
   const beatmap = data?.beatmap;
-  const beatmapSet = beatmap?.beatmapset;
   const beatmapMode = beatmap?.mode || 'standard';
   const starRating = beatmap?.difficulty_rating || 0;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
+    <div className="max-w-6xl mx-auto px-4 py-6">
       {/* 返回 & 标题 */}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate('/osu')} className="text-zinc-500 hover:text-zinc-300 transition-colors">
@@ -148,48 +138,106 @@ export default function OsuLeaderboard() {
         </button>
       </div>
 
-      {/* 谱面信息卡 */}
+      {/* 谱面信息卡 — b1.7 R3 修复：使用扁平字段 + 图标 + 进度条 */}
       {beatmap && (
         <div className="relative mb-6 rounded-xl overflow-hidden border border-white/[0.05]">
-          <SafeImage
-            src={beatmapSet?.cover_url || beatmapSet?.cover || ''}
-            alt={beatmapSet?.title || ''}
+          <img
+            src={beatmap.coverUrl || ''}
+            alt=""
             className="absolute inset-0 w-full h-full object-cover"
-            wrapperClassName="!absolute inset-0"
+            onError={(e) => { e.target.style.display = 'none'; }}
           />
           <div className="absolute inset-0 bg-gradient-to-r from-[#14141e] via-[#14141e]/92 to-transparent" />
           <div className="relative z-10 p-4 sm:p-6 flex items-start gap-4 sm:gap-6">
             {/* 谱面封面 */}
-            <SafeImage
-              src={beatmapSet?.covers?.list_widget_hires || beatmapSet?.covers?.list_widget || ''}
-              alt={beatmapSet?.title || ''}
-              className="w-20 sm:w-28 rounded-lg shadow-lg shrink-0"
+            <img
+              src={beatmap.coverUrl || ''}
+              alt={beatmap.title || ''}
+              className="w-20 sm:w-28 rounded-lg shadow-lg shrink-0 object-cover"
+              onError={(e) => { e.target.style.display = 'none'; }}
             />
             {/* 谱面信息 */}
             <div className="flex-1 min-w-0">
-              <h2 className="text-base sm:text-lg font-bold text-zinc-100 truncate">{beatmapSet?.title || 'Unknown'}</h2>
-              <p className="text-xs text-zinc-400 mt-0.5">{beatmapSet?.artist || 'Unknown'}</p>
+              <h2 className="text-base sm:text-lg font-bold text-zinc-100 truncate">{beatmap.titleUnicode || beatmap.title || 'Unknown'}</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">{beatmap.artist || 'Unknown'}</p>
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-700/60 text-zinc-300">{beatmap?.version || '-'}</span>
-                {beatmap?.status != null && <OsuBeatmapStatusBadge status={beatmap.status} />}
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-700/60 text-zinc-300">{beatmap.version || '-'}</span>
+                {beatmap.status != null && <OsuBeatmapStatusBadge status={beatmap.status} />}
                 <span className="flex items-center gap-1 text-xs text-zinc-500">
                   <ModeIcon mode={beatmapMode} />
                   {beatmapMode}
                 </span>
               </div>
-              <div className="flex items-center gap-3 mt-2 text-xs">
+              {/* 字段图标 + 数值（圆/条/转盘/时长/BPM/cbx） */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs">
                 {starRating > 0 && (
                   <span className="flex items-center gap-1">
                     <FaStar className={`w-3 h-3 ${getStarTextColor(starRating)}`} />
                     <span className={`font-bold tabular-nums ${getStarTextColor(starRating)}`}>{starRating.toFixed(2)}★</span>
                   </span>
                 )}
-                {beatmap.bpm && <span className="text-zinc-500">{beatmap.bpm}bpm</span>}
-                {beatmap.total_length && <span className="text-zinc-500">{Math.floor(beatmap.total_length / 60)}:{String(beatmap.total_length % 60).padStart(2, '0')}</span>}
-                {beatmap.count_circles != null && <span className="text-zinc-600">{beatmap.count_circles}C</span>}
-                {beatmap.count_sliders != null && <span className="text-zinc-600">{beatmap.count_sliders}S</span>}
-                {beatmap.count_spinners != null && <span className="text-zinc-600">{beatmap.count_spinners}Sp</span>}
-                {beatmap.max_combo && <span className="text-zinc-500">{beatmap.max_combo}x</span>}
+                {beatmap.bpm > 0 && (
+                  <span className="flex items-center gap-1 text-zinc-500">
+                    <img src="/osu-resources/bpm.png" className="w-3.5 h-3.5" />
+                    {beatmap.bpm} BPM
+                  </span>
+                )}
+                {beatmap.totalLength > 0 && (
+                  <span className="flex items-center gap-1 text-zinc-500">
+                    <img src="/osu-resources/clock.png" className="w-3.5 h-3.5" />
+                    {Math.floor(beatmap.totalLength / 60)}:{String(beatmap.totalLength % 60).padStart(2, '0')}
+                  </span>
+                )}
+                {beatmap.circles > 0 && (
+                  <span className="flex items-center gap-1 text-zinc-500">
+                    <img src="/osu-resources/circles.png" className="w-3.5 h-3.5" />
+                    {beatmap.circles.toLocaleString()}
+                  </span>
+                )}
+                {beatmap.sliders > 0 && (
+                  <span className="flex items-center gap-1 text-zinc-500">
+                    <img src="/osu-resources/sliders.png" className="w-3.5 h-3.5" />
+                    {beatmap.sliders.toLocaleString()}
+                  </span>
+                )}
+                {beatmap.maxCombo > 0 && (
+                  <span className="text-zinc-500 font-medium tabular-nums">{beatmap.maxCombo.toLocaleString()}x</span>
+                )}
+              </div>
+              {/* HP/OD 难度进度条 */}
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 max-w-xs">
+                {(beatmapMode === 'mania'
+                  ? [
+                      { label: 'OD', value: beatmap.od },
+                      { label: 'HP', value: beatmap.hp },
+                      { label: 'Keys', value: beatmap.maniaKeys ?? beatmap.cs },
+                    ]
+                  : [
+                      { label: 'CS', value: beatmap.cs },
+                      { label: 'AR', value: beatmap.ar },
+                      { label: 'OD', value: beatmap.od },
+                      { label: 'HP', value: beatmap.hp },
+                    ]
+                ).map(({ label, value }) => {
+                  const val = value != null ? Math.min(Math.max(value, 0), 10) : 0;
+                  const pct = Math.max((val / 10) * 100, 1);
+                  const display = label === 'Keys' ? String(Math.round(val)) : val.toFixed(1);
+                  return (
+                    <div key={label} className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-bold text-zinc-500 w-6 shrink-0">{label}</span>
+                      <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${pct}%`,
+                            background: 'linear-gradient(90deg, #ec4899, #a855f7)',
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-400 w-6 text-right">{display}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

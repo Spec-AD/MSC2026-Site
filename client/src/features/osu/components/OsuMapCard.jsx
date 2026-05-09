@@ -3,7 +3,7 @@
 // 曲绘大背景 + 进度条参数 + 圆条转盘 + 谱师/日期
 // ============================================================
 
-import { FaStar, FaMusic, FaUser, FaClock, FaPlay, FaCircle, FaSlidersH, FaCompactDisc } from 'react-icons/fa';
+import { FaStar, FaUser, FaPlay, FaCompactDisc } from 'react-icons/fa';
 import OsuCoverImage from './OsuCoverImage';
 import OsuStarBadge from './OsuStarBadge';
 
@@ -107,13 +107,13 @@ export default function OsuMapCard({ beatmap, onViewLeaderboard, compact = false
           <div className="flex items-center gap-4 text-xs text-zinc-500">
             {beatmap.circles > 0 && (
               <span className="flex items-center gap-1">
-                <FaCircle className="text-[8px] text-blue-400" />
+                <img src="/osu-resources/circles.png" className="w-3.5 h-3.5" />
                 <span>{beatmap.circles.toLocaleString()} 圆圈</span>
               </span>
             )}
             {beatmap.sliders > 0 && (
               <span className="flex items-center gap-1">
-                <FaSlidersH className="text-[10px] text-emerald-400" />
+                <img src="/osu-resources/sliders.png" className="w-3.5 h-3.5" />
                 <span>{beatmap.sliders.toLocaleString()} 滑条</span>
               </span>
             )}
@@ -153,11 +153,11 @@ export default function OsuMapCard({ beatmap, onViewLeaderboard, compact = false
         {/* BPM / 长度 / 连击 */}
         <div className="flex items-center gap-4 text-xs text-zinc-500">
           <div className="flex items-center gap-1">
-            <FaMusic className="text-[10px]" />
+            <img src="/osu-resources/bpm.png" className="w-3.5 h-3.5" />
             <span className="font-medium">{beatmap.bpm} BPM</span>
           </div>
           <div className="flex items-center gap-1">
-            <FaClock className="text-[10px]" />
+            <img src="/osu-resources/clock.png" className="w-3.5 h-3.5" />
             <span>{formatLength(beatmap.length)}</span>
           </div>
           {beatmap.maxCombo && (
