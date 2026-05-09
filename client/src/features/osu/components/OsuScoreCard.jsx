@@ -30,21 +30,23 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
         ${onClick ? 'cursor-pointer' : ''}
       `}
     >
-      {/* 背景曲绘 — 与排行榜搜歌卡一致：全幅封面 + 左右渐变 */}
+      {/* 背景曲绘 — 左 40% 纯色 → 中段可见 → 右渐隐（不拉伸，低亮度） */}
       {hasBg && (
-        <div className="absolute inset-0 z-0 overflow-hidden">
+        <div className="absolute inset-0 z-0 overflow-hidden bg-[#0c0c11]">
           <img
             src={score.coverUrl}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover object-center"
+            className="absolute inset-0 w-full h-full object-cover object-left brightness-[0.55]"
+            style={{
+              maskImage: 'linear-gradient(to right, transparent 0%, transparent 40%, rgba(0,0,0,1) 48%, rgba(0,0,0,1) 68%, rgba(0,0,0,0.5) 78%, transparent 88%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to right, transparent 0%, transparent 40%, rgba(0,0,0,1) 48%, rgba(0,0,0,1) 68%, rgba(0,0,0,0.5) 78%, transparent 88%, transparent 100%)',
+            }}
             onError={() => setBgError(true)}
           />
-          <div
-            className="absolute inset-0"
-            style={{
-              background: 'linear-gradient(to right, rgba(21,21,30,0.92) 0%, rgba(21,21,30,0.76) 42%, rgba(21,21,30,0.9) 72%, rgba(21,21,30,0.97) 100%)',
-            }}
-          />
+          {/* 底层渐变 — 确保文字可读性 */}
+          <div className="absolute inset-0" style={{
+            background: 'linear-gradient(to right, transparent 0%, transparent 38%, rgba(10,10,18,0.1) 45%, rgba(10,10,18,0.05) 55%, rgba(10,10,18,0.08) 68%, rgba(10,10,18,0.2) 82%, rgba(10,10,18,0.5) 94%, rgba(10,10,18,0.8) 100%)',
+          }} />
         </div>
       )}
 
