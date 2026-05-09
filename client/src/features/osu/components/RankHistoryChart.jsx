@@ -12,15 +12,6 @@ const GRID_COLOR = 'rgba(255,255,255,0.06)';
 const TEXT_COLOR = '#71717a';
 const FILL_GRADIENT = ['rgba(236,72,153,0.16)', 'rgba(236,72,153,0)'];
 
-function smartStep(range) {
-  if (range <= 0) return 1;
-  const magnitude = Math.pow(10, Math.floor(Math.log10(range)));
-  const residual = range / magnitude;
-  if (residual <= 1.5) return magnitude * 0.2;
-  if (residual <= 3.5) return magnitude * 0.5;
-  if (residual <= 7.5) return magnitude;
-  return magnitude * 2;
-}
 
 function drawSmoothPath(ctx, pts) {
   if (!pts.length) return;
@@ -106,7 +97,6 @@ export default function RankHistoryChart({ data, width = 400 }) {
     ctx.clearRect(0, 0, width, CHART_HEIGHT);
 
     // 网格 + y 轴标签
-    const step = smartStep(Math.max(maxRank - minRank, 1));
     const tickCount = 4;
     ctx.strokeStyle = GRID_COLOR;
     ctx.lineWidth = 1;
@@ -200,13 +190,14 @@ export default function RankHistoryChart({ data, width = 400 }) {
       ctx.stroke();
 
       const rankLabel = `全球排名 #${p.rank.toLocaleString()}`;
-      // 相对时间
-      let relativeDate = `数据点 ${hoveredIdx + 1}/${points.length}`;
+      // 相对时间（无日期时按历史点位估算：最后一个点=今天）
+      const approxDaysAgo = Math.max(0, (points.length - 1) - hoveredIdx);
+      let relativeDate = approxDaysAgo === 0 ? '今天' : `${approxDaysAgo} 天前`;
       if (p.date) {
         const d = new Date(p.date);
         const now = new Date();
         const diffMs = now - d;
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
         if (diffDays === 0) {
           relativeDate = '今天';
         } else if (diffDays === 1) {

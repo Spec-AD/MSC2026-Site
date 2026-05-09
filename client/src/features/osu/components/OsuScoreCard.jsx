@@ -30,19 +30,19 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
         ${onClick ? 'cursor-pointer' : ''}
       `}
     >
-      {/* 背景曲绘 — 左→右渐变过渡（清晰优先，不拉伸） */}
+      {/* 背景曲绘 — 与排行榜搜歌卡一致：全幅封面 + 左右渐变 */}
       {hasBg && (
         <div className="absolute inset-0 z-0 overflow-hidden">
           <img
             src={score.coverUrl}
             alt=""
-            className="absolute inset-0 max-h-full object-contain object-left"
+            className="absolute inset-0 w-full h-full object-cover object-center"
             onError={() => setBgError(true)}
           />
-          {/* 从左到右渐变 — 图像自然显示在左侧，向右渐变为纯底色 */}
-          <div className="absolute inset-0"
+          <div
+            className="absolute inset-0"
             style={{
-              background: 'linear-gradient(to right, rgba(21,21,30,0.3) 0%, rgba(21,21,30,0.6) 25%, rgba(21,21,30,0.92) 55%, #0c0c11 70%)',
+              background: 'linear-gradient(to right, rgba(21,21,30,0.92) 0%, rgba(21,21,30,0.76) 42%, rgba(21,21,30,0.9) 72%, rgba(21,21,30,0.97) 100%)',
             }}
           />
         </div>

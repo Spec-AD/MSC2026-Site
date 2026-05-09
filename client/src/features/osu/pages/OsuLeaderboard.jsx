@@ -16,7 +16,7 @@ import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import {
   FaSpinner, FaArrowLeft, FaGlobeAsia, FaMedal,
   FaSearch, FaStar, FaClock, FaMusic,
-  FaBolt, FaDatabase
+  FaBolt
 } from 'react-icons/fa';
 
 function useOsuCache() {
@@ -323,7 +323,6 @@ export default function OsuLeaderboard() {
             {[
               { key: 'all', label: '全部', icon: null },
               { key: 'lazer', label: 'LAZER', icon: FaBolt },
-              { key: 'stable', label: 'STABLE', icon: FaDatabase },
             ].map(opt => (
               <button key={opt.key} onClick={() => setFilterType(opt.key)}
                 className={`text-xs font-bold rounded-md transition-all flex items-center gap-1 px-3 py-1.5 ${
@@ -398,7 +397,7 @@ export default function OsuLeaderboard() {
       ) : data?.scores?.length > 0 && filteredScores.length === 0 ? (
         <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">
           <FaBolt className="mx-auto text-2xl text-zinc-700 mb-3" />
-          无匹配的 {filterType === 'lazer' ? 'LAZER' : 'STABLE'} 成绩
+          无匹配的筛选成绩
         </div>
       ) : bid || bidInput ? (
         <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">

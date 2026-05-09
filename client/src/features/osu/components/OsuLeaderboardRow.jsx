@@ -82,9 +82,10 @@ function readJudgeVal(entry, key) {
 /** 根据模式获取实际有值的判定数组 */
 function getJudges(entry, mode) {
   const config = MODE_JUDGES[mode] || MODE_JUDGES.standard;
-  return config
-    .map(j => ({ ...j, value: readJudgeVal(entry, j.key) }))
-    .filter(j => j.value != null);
+  return config.map((j) => ({
+    ...j,
+    value: readJudgeVal(entry, j.key) ?? 0,
+  }));
 }
 
 export default function OsuLeaderboardRow({
