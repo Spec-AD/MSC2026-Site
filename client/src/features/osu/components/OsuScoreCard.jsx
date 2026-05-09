@@ -59,7 +59,7 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
               src={score.coverUrl}
               srcSet={bgSrcSet}
               alt=""
-              className="absolute left-[30%] w-[52%] max-w-none h-auto top-1/2 -translate-y-1/2"
+              className="absolute left-[30%] w-[38%] max-w-none h-auto top-1/2 -translate-y-1/2"
               style={{ imageRendering: 'auto' }}
               onError={() => setBgError(true)}
               draggable={false}
