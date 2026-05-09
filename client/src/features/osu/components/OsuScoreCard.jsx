@@ -51,15 +51,15 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
           <div
             className="absolute inset-0 overflow-hidden"
             style={{
-              WebkitMaskImage: 'linear-gradient(to right, transparent 0%, transparent 30%, #000 36%, #000 58%, rgba(0,0,0,0.4) 68%, transparent 82%, transparent 100%)',
-              maskImage: 'linear-gradient(to right, transparent 0%, transparent 30%, #000 36%, #000 58%, rgba(0,0,0,0.4) 68%, transparent 82%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to right, transparent 0%, transparent 35%, rgba(0,0,0,0.2) 35%, rgba(0,0,0,1) 50%, rgba(0,0,0,1) 65%, rgba(0,0,0,0.2) 80%, transparent 80%, transparent 100%)',
+              maskImage: 'linear-gradient(to right, transparent 0%, transparent 35%, rgba(0,0,0,0.2) 35%, rgba(0,0,0,1) 50%, rgba(0,0,0,1) 65%, rgba(0,0,0,0.2) 80%, transparent 80%, transparent 100%)',
             }}
           >
             <img
               src={score.coverUrl}
               srcSet={bgSrcSet}
               alt=""
-              className="absolute left-[30%] w-[38%] max-w-none h-auto top-1/2 -translate-y-1/2"
+              className="absolute left-[35%] w-[30%] max-w-none h-auto top-1/2 -translate-y-1/2"
               style={{ imageRendering: 'auto' }}
               onError={() => setBgError(true)}
               draggable={false}
