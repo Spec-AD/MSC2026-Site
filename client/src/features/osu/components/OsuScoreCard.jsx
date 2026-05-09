@@ -45,21 +45,24 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
         ${onClick ? 'cursor-pointer' : ''}
       `}
     >
-      {/* 背景曲绘 — overlay 梯度实现透明度过渡（弃用 mask-image） */}
+      {/* 背景曲绘 — 对齐实际量测 1131×121（55.2% 覆盖率） */}
       {hasBg && (
         <div className="absolute inset-0 z-0 overflow-hidden bg-[#0c0c11]">
-          <img
-            src={score.coverUrl}
-            srcSet={bgSrcSet}
-            alt=""
-            className="absolute left-[35%] w-[30%] max-w-none h-auto top-1/2 -translate-y-1/2"
-            style={{ filter: 'brightness(0.55)', imageRendering: 'auto' }}
-            onError={() => setBgError(true)}
-            draggable={false}
-          />
-          {/* bg 底色梯度：遮挡/显露图片，实现透明度过渡 */}
+          {/* 图片容器：覆盖 55.2%，左边界 22.4% */}
+          <div className="absolute top-0 bottom-0" style={{ left: '22.4%', width: '55.2%' }}>
+            <img
+              src={score.coverUrl}
+              srcSet={bgSrcSet}
+              alt=""
+              className="w-full h-full object-cover"
+              style={{ filter: 'brightness(0.55)', objectPosition: 'center center', imageRendering: 'auto' }}
+              onError={() => setBgError(true)}
+              draggable={false}
+            />
+          </div>
+          {/* 底色梯度：渐入→常量→渐出 */}
           <div className="absolute inset-0" style={{
-            background: 'linear-gradient(to right, rgba(12,12,17,1) 0%, rgba(12,12,17,1) 33%, rgba(12,12,17,0.8) 35%, rgba(12,12,17,0) 50%, rgba(12,12,17,0) 65%, rgba(12,12,17,0.8) 80%, rgba(12,12,17,1) 82%, rgba(12,12,17,1) 100%)',
+            background: 'linear-gradient(to right, rgba(12,12,17,1) 0%, rgba(12,12,17,1) 22.4%, rgba(12,12,17,0) 37.4%, rgba(12,12,17,0) 62.4%, rgba(12,12,17,1) 77.6%, rgba(12,12,17,1) 100%)',
           }} />
         </div>
       )}
