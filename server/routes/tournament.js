@@ -460,16 +460,27 @@ router.post('/api/tournaments/detail/:id/qualifier-scores', authMiddleware, asyn
 });
 
 // ── 获取预选赛成绩（支持 userId 过滤，供成绩录入 UX 回填）──
-router.get('/api/tournaments/detail/:id/qualifier-scores', async (req, res) => {
+// 权限：管理员可看全部；普通选手只能看自己的
+router.get('/api/tournaments/detail/:id/qualifier-scores', authMiddleware, async (req, res) => {
   try {
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+
+    const perm = await checkTournamentPermission(req.user.id, req.params.id).catch(() => null);
+    const isAdminOrManager = perm && perm.allowed;
 
     let scores = tournament.qualifierScores || [];
 
     // 按 userId 过滤
     if (req.query.userId) {
+      // 非管理员只能查自己的
+      if (req.query.userId !== req.user.id && !isAdminOrManager) {
+        return res.status(403).json({ msg: '无权查看他人成绩' });
+      }
       scores = scores.filter(s => s.userId.toString() === req.query.userId);
+    } else if (!isAdminOrManager) {
+      // 普通选手不传 userId 时默认只看自己
+      scores = scores.filter(s => s.userId.toString() === req.user.id);
     }
 
     res.json({ scores });

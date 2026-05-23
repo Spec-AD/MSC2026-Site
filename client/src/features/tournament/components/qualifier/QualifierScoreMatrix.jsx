@@ -232,7 +232,11 @@ const ScoreEntryModal = ({
               关闭
             </button>
             <button
-              onClick={() => onSubmit(userId)}
+              onClick={async () => {
+                await onSubmit(userId);
+                // 提交后重置 loaded，下次 Modal 打开时重新拉取已提交成绩回填
+                setLoaded(false);
+              }}
               disabled={submitting}
               className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/30 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
@@ -247,19 +251,28 @@ const ScoreEntryModal = ({
 };
 
 // ============================================================
-// 全量矩阵视图（降级选项，仅高级管理员可见）
+// 全量矩阵视图（降级选项 — 只读预览，编辑请切换回选手列表模式）
 // ============================================================
 const FullMatrixView = ({
   songs,
   registrations,
   cachedScores,
   getCellData,
-  handleCellEdit,
   isManager,
 }) => {
   if (songs.length === 0) return null;
 
   return (
+    <>
+      {/* 只读提示 */}
+      {isManager && (
+        <div className="px-4 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-3">
+          <p className="text-xs text-amber-400 flex items-center gap-2">
+            <FaExclamationTriangle className="flex-shrink-0" />
+            全量矩阵仅为只读预览，编辑请切换到选手列表模式
+          </p>
+        </div>
+      )}
     <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
       <table className="w-full text-sm border-collapse min-w-[600px]">
         <thead>
@@ -299,13 +312,13 @@ const FullMatrixView = ({
                           <div className="relative flex gap-1 items-center justify-center">
                             <input type="number" step="0.0001" min="0" max="101"
                               value={cell.achievement}
-                              onChange={e => { /* reuse from parent */ }}
+                              readOnly
                               placeholder="达成率"
-                              className={`w-[72px] bg-black/40 border rounded-lg px-1.5 py-1.5 text-center text-[11px] font-mono outline-none ${
+                              className={`w-[72px] bg-black/40 border rounded-lg px-1.5 py-1.5 text-center text-[11px] font-mono outline-none cursor-not-allowed opacity-70 ${
                                 isPending ? 'border-cyan-500/50 text-cyan-300' : 'border-white/[0.08] text-zinc-400'
                               } ${grade ? grade.color : ''}`} />
-                            <input type="number" min="0" value={cell.dxScore} placeholder="DX"
-                              className="w-[56px] bg-black/40 border border-white/[0.08] rounded-lg px-1.5 py-1.5 text-center text-[11px] font-mono text-zinc-400" />
+                            <input type="number" min="0" value={cell.dxScore} placeholder="DX" readOnly
+                              className="w-[56px] bg-black/40 border border-white/[0.08] rounded-lg px-1.5 py-1.5 text-center text-[11px] font-mono text-zinc-400 cursor-not-allowed opacity-70" />
                           </div>
                         ) : (
                           <div className={`font-mono text-xs font-bold ${grade ? grade.color : 'text-zinc-700'}`}>
@@ -326,6 +339,7 @@ const FullMatrixView = ({
         </tbody>
       </table>
     </div>
+    </>
   );
 };
 

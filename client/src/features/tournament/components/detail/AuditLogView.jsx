@@ -24,6 +24,7 @@ const ACTION_CONFIG = {
   registration_modify:{ label: '报名修改',  color: 'text-green-400',   bg: 'bg-green-500/10',  border: 'border-green-500/20', icon: FaEdit },
   info_edit:          { label: '信息编辑',  color: 'text-zinc-400',    bg: 'bg-zinc-500/10',  border: 'border-zinc-500/20',  icon: FaInfoCircle },
   form_edit:          { label: '表单编辑',  color: 'text-zinc-400',    bg: 'bg-zinc-500/10',  border: 'border-zinc-500/20',  icon: FaEdit },
+  qualifier_songs_update: { label: '预选曲目更新', color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', icon: FaMusic },
   archive:            { label: '归档',      color: 'text-zinc-600',    bg: 'bg-zinc-800/30',  border: 'border-zinc-700/30',  icon: FaArchive },
 };
 
@@ -233,7 +234,7 @@ const AuditLogView = ({
                 {/* 内容 */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-white">{log.operatedBy?.username || '未知'}</span>
+                    <span className="text-sm font-bold text-white">{log.operatedBy?.username || (log.operatedBy === null ? '系统' : '未知')}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${cfg.color} ${cfg.bg}`}>
                       {cfg.label}
                     </span>
