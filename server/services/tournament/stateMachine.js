@@ -52,14 +52,13 @@ function validateTransition(tournament, targetStatus) {
   }
 
   // ── 进入 QUALIFYING 前 ──
+  // 注意：不再校验 registrationEnd 已到。窗口独立于阶段存在，
+  // 管理员可在报名窗口仍开放时手动推进至 QUALIFYING。
+  // 报名人数和预选曲目的校验保留。
   if (targetStatus === 'QUALIFYING') {
     const regCount = t.registrations?.length ?? 0;
     if (regCount < 2) errors.push(`报名人数不足（当前 ${regCount}，需至少 2 人）`);
     if (!t.qualifierSongs || t.qualifierSongs.length === 0) errors.push('必须设置至少一首预选赛曲目');
-    const now = new Date();
-    if (t.registrationEnd && now < t.registrationEnd) {
-      errors.push('报名截止时间未到，不能自动推进');
-    }
   }
 
   // ── 进入 ONGOING 前 ──
@@ -151,15 +150,9 @@ function getRollbackPatch(currentStatus, targetStatus) {
 function checkAutoAdvance(tournament) {
   const now = new Date();
 
-  if (tournament.status === 'REGISTRATION') {
-    if (tournament.registrationEnd && now >= tournament.registrationEnd) {
-      const regCount = tournament.registrations?.length ?? 0;
-      if (regCount >= 2) {
-        return { shouldAdvance: true, targetStatus: 'QUALIFYING', reason: '报名截止，自动进入预选赛' };
-      }
-      return { shouldAdvance: false, targetStatus: null, reason: `报名截止但人数不足（${regCount} 人）` };
-    }
-  }
+  // 窗口与阶段解耦后，REGISTRATION 不再自动推进到 QUALIFYING
+  // 由管理员手动控制推进时机
+  // checkStageAutoAdvance 定时任务中保留 registrationEnd 到后的通知提醒
 
   if (tournament.status === 'ONGOING') {
     if (tournament.matches?.length > 0) {

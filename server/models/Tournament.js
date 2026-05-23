@@ -25,7 +25,8 @@ const qualifierSongSchema = new mongoose.Schema({
 const registrationSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   formData: { type: Object, default: {} },           // 动态报名表填写的数据
-  registeredAt: { type: Date, default: Date.now }
+  registeredAt: { type: Date, default: Date.now },
+  modifyCount: { type: Number, default: 0 }           // 报名信息修改次数上限 1
 });
 
 // 选手预选赛成绩

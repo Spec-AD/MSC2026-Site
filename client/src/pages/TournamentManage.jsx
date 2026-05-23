@@ -11,11 +11,12 @@ import BracketView from '../features/tournament/components/bracket/BracketView';
 import GroupAllocationPanel from '../features/tournament/components/bracket/GroupAllocationPanel';
 import ResultPodium from '../features/tournament/components/common/ResultPodium';
 import SongSearchInput from '../features/tournament/components/common/SongSearchInput';
+import AuditLogView from '../features/tournament/components/detail/AuditLogView';
 import {
   FaArrowLeft, FaSpinner, FaUsers, FaMusic, FaSitemap, FaPlus, FaTimes,
   FaTrophy, FaEdit, FaSave, FaClipboardList, FaCheckCircle, FaCalendarAlt,
   FaExchangeAlt, FaUndo, FaForward, FaCog, FaLock, FaPlay, FaArchive,
-  FaDownload, FaChevronUp, FaChevronDown
+  FaDownload, FaChevronUp, FaChevronDown, FaHistory, FaExclamationTriangle
 } from 'react-icons/fa';
 
 // ---- 状态机映射 ----
@@ -246,6 +247,7 @@ const TournamentManage = () => {
     { id: 'groups', label: '分组', icon: FaSitemap },
     { id: 'matches', label: '正赛对局', icon: FaTrophy },
     { id: 'results', label: '结果公布', icon: FaCheckCircle },
+    { id: 'audit', label: '操作日志', icon: FaHistory },
   ];
 
   const inputClass = "w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none transition-colors";
@@ -350,8 +352,17 @@ const TournamentManage = () => {
                         );
                       })}
                   </div>
+                  {/* #2: REGISTRATION→QUALIFYING 推进提示 */}
+                  {tournament.status === 'REGISTRATION' && availableTransitions.includes('QUALIFYING') && (
+                    <div className="mt-3 px-4 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                      <p className="text-xs text-amber-400 flex items-center gap-2">
+                        <FaExclamationTriangle className="flex-shrink-0" />
+                        报名窗口仍开放中，推进后选手仍可报名
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
+              )
 
               {/* 回退操作 */}
               {isAdm && availableTransitions.filter(t => STATUS_ORDER.indexOf(t) < STATUS_ORDER.indexOf(tournament.status)).length > 0 && (
@@ -396,20 +407,24 @@ const TournamentManage = () => {
                 </div>
               )}
 
-              {/* 操作日志 */}
+              {/* 精简操作日志预览 — 完整日志请切到「操作日志」Tab */}
               {tournament.operationLogs && tournament.operationLogs.length > 0 && (
                 <div className="mt-6 pt-6 border-t border-white/5">
-                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">操作日志</h3>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {[...tournament.operationLogs].reverse().slice(0, 10).map((log, i) => (
-                      <div key={i} className="text-xs text-zinc-500 flex gap-3">
-                        <span className="text-zinc-600 font-mono">{new Date(log.operatedAt).toLocaleString('zh-CN')}</span>
+                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">操作日志（最近 5 条）</h3>
+                  <div className="space-y-1 max-h-24 overflow-y-auto">
+                    {[...tournament.operationLogs].reverse().slice(0, 5).map((log, i) => (
+                      <div key={i} className="text-xs text-zinc-500 flex gap-2">
+                        <span className="text-zinc-600 font-mono text-[10px]">{new Date(log.operatedAt).toLocaleString('zh-CN')}</span>
                         <span className="text-zinc-400">{log.action}</span>
-                        <span>{log.fromStatus} → {log.toStatus}</span>
-                        {log.note && <span className="text-zinc-600">— {log.note}</span>}
                       </div>
                     ))}
                   </div>
+                  <button
+                    onClick={() => setActiveTab('audit')}
+                    className="mt-2 text-[10px] text-cyan-400 hover:text-cyan-300 underline"
+                  >
+                    查看完整操作日志 →
+                  </button>
                 </div>
               )}
             </div>
@@ -871,6 +886,14 @@ const TournamentManage = () => {
             </details>
           )}
         </div>
+      )}
+
+      {/* ========== 操作日志 ========== */}
+      {activeTab === 'audit' && (
+        <AuditLogView
+          tournamentId={id}
+          isPublic={false}
+        />
       )}
 
       {/* ========== 危险操作 ========== */}

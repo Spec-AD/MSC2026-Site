@@ -5,16 +5,17 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTournamentStore, useBracketStore } from '../features/tournament/store';
 import { selectStatusLabel, selectStatusColor } from '../features/tournament/store/tournamentStore';
-import { createEventSource } from '../features/tournament/api/tournamentApi';
+import { createEventSource, getResults, getMyRegistration, updateMyRegistration, getAuditLog } from '../features/tournament/api/tournamentApi';
 import QualifierRanking from '../features/tournament/components/qualifier/QualifierRanking';
 import BracketView from '../features/tournament/components/bracket/BracketView';
 import ResultPodium from '../features/tournament/components/common/ResultPodium';
 import CountdownTimer from '../features/tournament/components/common/CountdownTimer';
-import { getResults } from '../features/tournament/api/tournamentApi';
+import AuditLogView from '../features/tournament/components/detail/AuditLogView';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaArrowLeft, FaSpinner, FaUsers, FaMusic, FaSitemap, FaTrophy,
-  FaCalendarAlt, FaCheckCircle, FaCog, FaClipboardList, FaMedal, FaInfoCircle, FaBook
+  FaCalendarAlt, FaCheckCircle, FaCog, FaClipboardList, FaMedal, FaInfoCircle, FaBook,
+  FaEdit, FaHistory, FaTimes
 } from 'react-icons/fa';
 
 const TournamentDetail = () => {
@@ -39,6 +40,18 @@ const TournamentDetail = () => {
   const [formAnswers, setFormAnswers] = useState({});
   const [results, setResults] = useState([]);
   const [resultsLoaded, setResultsLoaded] = useState(false);
+
+  // #1: 报名查看/修改
+  const [myRegistration, setMyRegistration] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editFormAnswers, setEditFormAnswers] = useState({});
+  const [isEditing, setIsEditing] = useState(false);
+
+  // #5.3: 审计日志
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditPublic, setAuditPublic] = useState(false);
+  const [auditLoading, setAuditLoading] = useState(false);
+
   const esRef = useRef(null);
 
   // ---- Data load ----
@@ -47,6 +60,18 @@ const TournamentDetail = () => {
   }, [id, fetchTournament]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // #1: 加载当前选手报名信息
+  useEffect(() => {
+    if (!user || !tournament || !alreadyRegistered) {
+      setMyRegistration(null);
+      return;
+    }
+    getMyRegistration(id).then(res => {
+      const data = res.data;
+      setMyRegistration(data.registration || { formData: {}, modifyCount: 0 });
+    }).catch(() => {});
+  }, [user, tournament?._id, alreadyRegistered]);
 
   // Load bracket when tournament is ONGOING+
   useEffect(() => {
@@ -140,6 +165,9 @@ const TournamentDetail = () => {
   const statusColor = selectStatusColor(tournament.status);
   const statusLabel = selectStatusLabel(tournament.status);
 
+  // #5.3: 审计日志 — 赛后公开/赛前仅管理
+  const showAuditTab = ['FINISHED', 'ARCHIVED'].includes(tournament?.status) || canManage;
+
   const tabs = [
     { id: 'overview', label: '概况', icon: FaInfoCircle },
     { id: 'rules', label: '规则', icon: FaBook },
@@ -147,6 +175,7 @@ const TournamentDetail = () => {
     { id: 'groups', label: '分组', icon: FaSitemap },
     { id: 'matches', label: '对局', icon: FaTrophy },
     { id: 'results', label: '结果', icon: FaMedal },
+    ...(showAuditTab ? [{ id: 'audit', label: '操作记录', icon: FaHistory }] : []),
   ];
 
   // Use bracket data when available, fallback to tournament.matches
@@ -223,7 +252,7 @@ const TournamentDetail = () => {
         </div>
 
         {/* 报名区域 */}
-        {regOpen && !alreadyRegistered && tournament.status === 'REGISTRATION' && (
+        {regOpen && !alreadyRegistered && ( // #2: 去掉 status 校验，纯时间窗口控制
           <div className="bg-[#15151e] border border-green-500/20 rounded-2xl p-6 mb-8">
             <h3 className="text-lg font-bold text-green-400 mb-4 flex items-center gap-2"><FaClipboardList /> 赛事报名</h3>
             {tournament.registrationForm && tournament.registrationForm.length > 0 && (
@@ -251,25 +280,56 @@ const TournamentDetail = () => {
             </button>
           </div>
         )}
+        {/* #1: 已报名 — 预览 + 编辑入口 */}
         {alreadyRegistered && (
-          <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-5 mb-8 flex items-center justify-between">
-            <div className="flex items-center gap-3 text-green-400 font-bold">
-              <FaCheckCircle /> 您已成功报名该赛事
+          <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-5 mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3 text-green-400 font-bold">
+                <FaCheckCircle /> 您已成功报名该赛事
+              </div>
+              {regOpen && ( // #2: 用时间窗口控制，不再检查 status
+                <button
+                  onClick={async () => {
+                    if (!confirm('确定取消报名？')) return;
+                    try {
+                      const { unregisterFromTournament } = await import('../features/tournament/api/tournamentApi');
+                      await unregisterFromTournament(id);
+                      addToast('已取消报名', 'success');
+                      fetchTournament(id);
+                    } catch { addToast('取消报名失败', 'error'); }
+                  }}
+                  className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 rounded-xl text-xs font-bold transition-all"
+                >
+                  取消报名
+                </button>
+              )}
             </div>
-            {tournament.status === 'REGISTRATION' && (
+            {/* 报名表预览 */}
+            {myRegistration?.formData && Object.keys(myRegistration.formData).length > 0 && (
+              <div className="bg-black/30 border border-white/[0.05] rounded-xl p-4 mb-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {Object.entries(myRegistration.formData).map(([label, value]) => (
+                    <div key={label}>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase block mb-0.5">{label}</span>
+                      <span className="text-zinc-200 text-sm">{String(value) || '-'}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 text-[10px] text-zinc-600">
+                  修改次数: {myRegistration.modifyCount ?? 0} / 1
+                </div>
+              </div>
+            )}
+            {/* 编辑按钮（modifyCount < 1 且窗口开放时显示） */}
+            {regOpen && (myRegistration?.modifyCount ?? 0) < 1 && (
               <button
-                onClick={async () => {
-                  if (!confirm('确定取消报名？')) return;
-                  try {
-                    const { unregisterFromTournament } = await import('../features/tournament/api/tournamentApi');
-                    await unregisterFromTournament(id);
-                    addToast('已取消报名', 'success');
-                    fetchTournament(id);
-                  } catch { addToast('取消报名失败', 'error'); }
+                onClick={() => {
+                  setEditFormAnswers(myRegistration?.formData || {});
+                  setEditModalOpen(true);
                 }}
-                className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 rounded-xl text-xs font-bold transition-all"
+                className="px-4 py-2 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-400 border border-cyan-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition-all"
               >
-                取消报名
+                <FaEdit /> 编辑报名信息
               </button>
             )}
           </div>
@@ -326,7 +386,8 @@ const TournamentDetail = () => {
                   </div>
                 )}
                 {/* 预选排名榜 */}
-                {['QUALIFYING', 'ONGOING', 'FINISHED', 'ARCHIVED'].includes(tournament.status) && (
+                {/* #2: 预选排行榜入口扩展到 REGISTRATION */}
+                {!['DRAFT'].includes(tournament.status) && (
                   <div>
                     <QualifierRanking
                       tournamentId={id}
@@ -337,9 +398,6 @@ const TournamentDetail = () => {
                       qualifierEnd={tournament.endTime}
                     />
                   </div>
-                )}
-                {tournament.status === 'REGISTRATION' && (
-                  <p className="text-zinc-500 text-center py-6 text-sm">预选赛尚未开始，请关注后续公告。</p>
                 )}
               </div>
             </motion.div>
@@ -432,7 +490,77 @@ const TournamentDetail = () => {
               />
             </motion.div>
           )}
+
+          {/* #5.3: 审计日志 Tab */}
+          {activeTab === 'audit' && (
+            <motion.div key="audit" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <AuditLogView
+                tournamentId={id}
+                isPublic={['FINISHED', 'ARCHIVED'].includes(tournament?.status)}
+              />
+            </motion.div>
+          )}
         </AnimatePresence>
+
+        {/* #1: 编辑报名信息弹窗 */}
+        {editModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setEditModalOpen(false)}>
+            <div className="bg-[#15151e] border border-white/[0.08] rounded-2xl p-6 md:p-8 w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2"><FaEdit className="text-cyan-400" /> 编辑报名信息</h3>
+                <button onClick={() => setEditModalOpen(false)} className="text-zinc-500 hover:text-zinc-300"><FaTimes /></button>
+              </div>
+
+              {tournament.registrationForm && tournament.registrationForm.length > 0 && (
+                <div className="space-y-4 mb-6">
+                  {tournament.registrationForm.map((field, idx) => (
+                    <div key={idx}>
+                      <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">
+                        {field.label} {field.required && <span className="text-red-400">*</span>}
+                      </label>
+                      {field.type === 'textarea' ? (
+                        <textarea rows="3" value={editFormAnswers[field.label] || ''} onChange={e => setEditFormAnswers({...editFormAnswers, [field.label]: e.target.value})} className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none resize-y" placeholder={field.placeholder} />
+                      ) : field.type === 'select' ? (
+                        <select value={editFormAnswers[field.label] || ''} onChange={e => setEditFormAnswers({...editFormAnswers, [field.label]: e.target.value})} className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none">
+                          <option value="">请选择</option>
+                          {(field.options || []).map((opt, oi) => <option key={oi} value={opt}>{opt}</option>)}
+                        </select>
+                      ) : (
+                        <input type={field.type === 'number' ? 'number' : 'text'} value={editFormAnswers[field.label] || ''} onChange={e => setEditFormAnswers({...editFormAnswers, [field.label]: e.target.value})} className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none" placeholder={field.placeholder} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button onClick={() => setEditModalOpen(false)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 rounded-xl text-sm font-bold transition-all">
+                  取消
+                </button>
+                <button
+                  onClick={async () => {
+                    setIsEditing(true);
+                    try {
+                      const res = await updateMyRegistration(id, editFormAnswers);
+                      setMyRegistration(res.data.registration);
+                      addToast(res.data.msg || '报名信息已更新', 'success');
+                      setEditModalOpen(false);
+                    } catch (err) {
+                      addToast(err.response?.data?.msg || '更新失败', 'error');
+                    } finally {
+                      setIsEditing(false);
+                    }
+                  }}
+                  disabled={isEditing}
+                  className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 text-white border border-cyan-500/30 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isEditing ? <FaSpinner className="animate-spin" /> : <FaCheckCircle />}
+                  {isEditing ? '保存中...' : '保存修改'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

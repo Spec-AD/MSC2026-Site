@@ -37,6 +37,29 @@ export const exportQualifierCSV = (id) =>
 export const submitQualifierScores = (id, scores) =>
   axios.post(`${BASE}/${id}/qualifier/scores`, { scores }, { headers: authHeaders() });
 
+/** 获取指定选手的已提交预选成绩（回填用） */
+export const getPlayerScores = (id, userId) =>
+  axios.get(`${BASE}/${id}/qualifier/scores`, {
+    params: { userId },
+    headers: authHeaders(),
+  });
+
+// ==================== 报名查看/修改 ====================
+
+/** 获取当前用户的报名信息 */
+export const getMyRegistration = (id) =>
+  axios.get(`${BASE}/detail/${id}/my-registration`, { headers: authHeaders() });
+
+/** 修改报名信息（最多 1 次） */
+export const updateMyRegistration = (id, formData) =>
+  axios.put(`${BASE}/detail/${id}/my-registration`, { formData }, { headers: authHeaders() });
+
+// ==================== 审计日志 ====================
+
+/** 获取审计日志（赛后公开/赛前仅管理） */
+export const getAuditLog = (id) =>
+  axios.get(`${BASE}/detail/${id}/audit-log`, { headers: authHeaders() });
+
 // ==================== 正赛 ====================
 
 /** 生成对阵表（基于种子分配） */

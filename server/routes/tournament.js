@@ -97,6 +97,40 @@ router.get('/api/tournaments/detail/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '获取赛事详情失败' }); }
 });
 
+// ── 审计日志端点 ──
+router.get('/api/tournaments/detail/:id/audit-log', authMiddleware, async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id)
+      .select('operationLogs status')
+      .populate('operationLogs.operatedBy', 'username role avatarUrl');
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+
+    // 权限控制：赛后公开，赛前仅管理
+    const isPublic = ['FINISHED', 'ARCHIVED'].includes(tournament.status);
+    if (!isPublic) {
+      const perm = await checkTournamentPermission(req.user.id, req.params.id);
+      if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    }
+
+    // 按时间倒序
+    const logs = (tournament.operationLogs || [])
+      .sort((a, b) => new Date(b.operatedAt) - new Date(a.operatedAt))
+      .map(log => ({
+        action: log.action,
+        fromStatus: log.fromStatus ?? null,
+        toStatus: log.toStatus ?? null,
+        operatedBy: log.operatedBy ? { username: log.operatedBy.username, role: log.operatedBy.role, avatarUrl: log.operatedBy.avatarUrl ?? null } : null,
+        operatedAt: log.operatedAt,
+        note: log.note ?? null,
+      }));
+
+    res.json({ logs, isPublic });
+  } catch (err) {
+    console.error('获取审计日志失败:', err);
+    res.status(500).json({ msg: '获取审计日志失败' });
+  }
+});
+
 // 更新赛事基本信息 (CHM/ADM)
 router.put('/api/tournaments/detail/:id', authMiddleware, async (req, res) => {
   try {
@@ -120,7 +154,12 @@ router.put('/api/tournaments/detail/:id', authMiddleware, async (req, res) => {
       updateFields.timeApproved = perm.user.role === 'ADM';
     }
     if (status !== undefined && perm.user.role === 'ADM') updateFields.status = status;
-    const updated = await Tournament.findByIdAndUpdate(req.params.id, { $set: updateFields }, { new: true });
+
+    const before = await Tournament.findById(req.params.id).select('status');
+    const updated = await Tournament.findByIdAndUpdate(req.params.id, {
+      $set: updateFields,
+      $push: { operationLogs: { action: 'info_edit', fromStatus: before?.status ?? 'N/A', toStatus: updateFields.status ?? before?.status ?? 'N/A', operatedBy: req.user.id, operatedAt: new Date() } }
+    }, { new: true });
     res.json({ msg: '赛事信息已更新', data: updated });
   } catch (err) { res.status(500).json({ msg: '更新失败' }); }
 });
@@ -143,7 +182,10 @@ router.put('/api/tournaments/detail/:id/registration-form', authMiddleware, asyn
     const blocked = await archivedWriteGuard(req, res, req.params.id);
     if (blocked) return;
     const { fields } = req.body;
-    await Tournament.findByIdAndUpdate(req.params.id, { registrationForm: fields });
+    await Tournament.findByIdAndUpdate(req.params.id, {
+      $set: { registrationForm: fields },
+      $push: { operationLogs: { action: 'form_edit', fromStatus: 'N/A', toStatus: 'N/A', operatedBy: req.user.id, operatedAt: new Date(), note: `更新报名表（${fields?.length ?? 0} 个字段）` } }
+    });
     res.json({ msg: '报名表已更新' });
   } catch (err) { res.status(500).json({ msg: '更新失败' }); }
 });
@@ -157,8 +199,7 @@ router.post('/api/tournaments/detail/:id/register', authMiddleware, async (req, 
 
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
-    if (tournament.status !== 'REGISTRATION') return res.status(400).json({ msg: '当前不在报名阶段' });
-
+    // 不再校验 status，仅由时间窗口控制
     const now = new Date();
     if (tournament.registrationStart && now < tournament.registrationStart) return res.status(400).json({ msg: '报名尚未开始' });
     if (tournament.registrationEnd && now > tournament.registrationEnd) return res.status(400).json({ msg: '报名已截止' });
@@ -185,12 +226,99 @@ router.post('/api/tournaments/detail/:id/register', authMiddleware, async (req, 
   }
 });
 
+// ── 1.1 选手查看自己的报名信息 ──
+router.get('/api/tournaments/detail/:id/my-registration', authMiddleware, async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+
+    const reg = tournament.registrations.find(r => r.userId.toString() === req.user.id);
+    if (!reg) return res.json({ registered: false });
+
+    res.json({
+      registered: true,
+      registration: {
+        formData: reg.formData,
+        registeredAt: reg.registeredAt,
+        modifyCount: reg.modifyCount ?? 0,
+      }
+    });
+  } catch (err) {
+    console.error('查询报名信息失败:', err);
+    res.status(500).json({ msg: '查询失败' });
+  }
+});
+
+// ── 1.2 选手修改报名信息（最多 1 次） ──
+router.put('/api/tournaments/detail/:id/my-registration', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(401).json({ msg: '用户不存在' });
+    if (user.banned || user.role === 'BANNED')
+      return res.status(403).json({ msg: '您已被封禁' });
+
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+
+    // 时间窗口校验：报名窗口内才可修改
+    const now = new Date();
+    if (tournament.registrationStart && now < tournament.registrationStart)
+      return res.status(400).json({ msg: '报名尚未开始' });
+    if (tournament.registrationEnd && now > tournament.registrationEnd)
+      return res.status(400).json({ msg: '报名已截止，无法修改' });
+
+    const reg = tournament.registrations.find(r => r.userId.toString() === req.user.id);
+    if (!reg) return res.status(400).json({ msg: '您未报名该赛事' });
+
+    if ((reg.modifyCount ?? 0) >= 1)
+      return res.status(400).json({ msg: '报名信息仅可修改一次' });
+
+    // 必填字段校验
+    const formFields = tournament.registrationForm || [];
+    const formData = req.body.formData || {};
+    for (const field of formFields) {
+      if (field.required && (!formData[field.label] || String(formData[field.label]).trim() === '')) {
+        return res.status(400).json({ msg: `必填字段「${field.label}」不能为空` });
+      }
+    }
+
+    reg.formData = formData;
+    reg.modifyCount = (reg.modifyCount ?? 0) + 1;
+
+    tournament.operationLogs.push({
+      action: 'registration_modify',
+      fromStatus: tournament.status, toStatus: tournament.status,
+      operatedBy: req.user.id,
+      note: `修改报名信息（第 ${reg.modifyCount} 次）`,
+    });
+
+    await tournament.save();
+
+    res.json({
+      msg: '报名信息已更新',
+      registration: {
+        formData: reg.formData,
+        registeredAt: reg.registeredAt,
+        modifyCount: reg.modifyCount,
+      }
+    });
+  } catch (err) {
+    console.error('修改报名信息失败:', err);
+    res.status(500).json({ msg: '修改失败' });
+  }
+});
+
 // 选手自行取消报名
 router.delete('/api/tournaments/detail/:id/register', authMiddleware, async (req, res) => {
   try {
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
-    if (tournament.status !== 'REGISTRATION') return res.status(400).json({ msg: '当前不在报名阶段，无法取消' });
+    // 改为时间窗口校验，不再校验 status
+    const now = new Date();
+    if (tournament.registrationStart && now < tournament.registrationStart)
+      return res.status(400).json({ msg: '报名尚未开始' });
+    if (tournament.registrationEnd && now > tournament.registrationEnd)
+      return res.status(400).json({ msg: '报名已截止，无法取消' });
 
     const idx = tournament.registrations.findIndex(r => r.userId.toString() === req.user.id);
     if (idx === -1) return res.status(400).json({ msg: '您未报名该赛事' });
@@ -220,7 +348,7 @@ router.delete('/api/tournaments/detail/:id/registrations/:targetUserId', authMid
 
     tournament.registrations.splice(idx, 1);
     tournament.operationLogs.push({
-      action: 'score_update',
+      action: 'rollback',
       fromStatus: tournament.status, toStatus: tournament.status,
       operatedBy: req.user.id,
       note: `删除选手 ${req.params.targetUserId} 的报名`,
@@ -289,7 +417,10 @@ router.put('/api/tournaments/detail/:id/qualifier-songs', authMiddleware, async 
     const blocked = await archivedWriteGuard(req, res, req.params.id);
     if (blocked) return;
     const { songs } = req.body;
-    await Tournament.findByIdAndUpdate(req.params.id, { qualifierSongs: songs });
+    await Tournament.findByIdAndUpdate(req.params.id, {
+      $set: { qualifierSongs: songs },
+      $push: { operationLogs: { action: 'qualifier_songs_update', fromStatus: 'QUALIFYING', toStatus: 'QUALIFYING', operatedBy: req.user.id, operatedAt: new Date(), note: `更新了 ${songs?.length ?? 0} 首预选赛曲目` } }
+    });
     res.json({ msg: '预选赛曲目已设置' });
   } catch (err) { res.status(500).json({ msg: '设置失败' }); }
 });
@@ -316,9 +447,36 @@ router.post('/api/tournaments/detail/:id/qualifier-scores', authMiddleware, asyn
     } else {
       tournament.qualifierScores.push({ userId: targetUser._id, songName, achievement: Number(achievement), dxScore: Number(dxScore || 0), entryBy: perm.user.username });
     }
+    tournament.operationLogs.push({
+      action: existingIdx >= 0 ? 'score_edit' : 'score_entry',
+      fromStatus: tournament.status, toStatus: tournament.status,
+      operatedBy: req.user.id,
+      operatedAt: new Date(),
+      note: `${targetUser.username} — ${songName}（${achievement}%）`,
+    });
     await tournament.save();
     res.json({ msg: '成绩录入成功！' });
   } catch (err) { res.status(500).json({ msg: '录入失败' }); }
+});
+
+// ── 获取预选赛成绩（支持 userId 过滤，供成绩录入 UX 回填）──
+router.get('/api/tournaments/detail/:id/qualifier-scores', async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+
+    let scores = tournament.qualifierScores || [];
+
+    // 按 userId 过滤
+    if (req.query.userId) {
+      scores = scores.filter(s => s.userId.toString() === req.query.userId);
+    }
+
+    res.json({ scores });
+  } catch (err) {
+    console.error('获取预选赛成绩失败:', err);
+    res.status(500).json({ msg: '获取失败' });
+  }
 });
 
 // 指定选手分组 (CHM/ADM)
@@ -329,7 +487,10 @@ router.put('/api/tournaments/detail/:id/groups', authMiddleware, async (req, res
     const blocked = await archivedWriteGuard(req, res, req.params.id);
     if (blocked) return;
     const { groups } = req.body;
-    await Tournament.findByIdAndUpdate(req.params.id, { groups });
+    await Tournament.findByIdAndUpdate(req.params.id, {
+      $set: { groups },
+      $push: { operationLogs: { action: 'group_update', fromStatus: 'QUALIFYING', toStatus: 'QUALIFYING', operatedBy: req.user.id, operatedAt: new Date(), note: `设置了 ${groups?.length ?? 0} 个分组` } }
+    });
     res.json({ msg: '分组已设置' });
   } catch (err) { res.status(500).json({ msg: '分组设置失败' }); }
 });
@@ -342,7 +503,10 @@ router.put('/api/tournaments/detail/:id/matches', authMiddleware, async (req, re
     const blocked = await archivedWriteGuard(req, res, req.params.id);
     if (blocked) return;
     const { matches } = req.body;
-    await Tournament.findByIdAndUpdate(req.params.id, { matches });
+    await Tournament.findByIdAndUpdate(req.params.id, {
+      $set: { matches },
+      $push: { operationLogs: { action: 'match_update', fromStatus: 'ONGOING', toStatus: 'ONGOING', operatedBy: req.user.id, operatedAt: new Date(), note: `更新了 ${matches?.length ?? 0} 场对局` } }
+    });
     res.json({ msg: '正赛对局已更新' });
   } catch (err) { res.status(500).json({ msg: '更新失败' }); }
 });
@@ -780,6 +944,13 @@ router.post('/api/tournaments/:id/bracket/generate', authMiddleware, async (req,
     tournament.bracketGenerated = true;
     tournament.bracketGeneratedAt = new Date();
     if (seeding) tournament.seeding = seeding;
+    tournament.operationLogs.push({
+      action: 'bracket_generate',
+      fromStatus: 'QUALIFYING', toStatus: 'ONGOING',
+      operatedBy: req.user.id,
+      operatedAt: new Date(),
+      note: `生成对阵表：${totalRounds} 轮，${totalByes} 轮空`,
+    });
     await tournament.save();
 
     res.json({
@@ -810,7 +981,7 @@ router.post('/api/tournaments/:id/bracket/reset', authMiddleware, async (req, re
     tournament.bracketGenerated = false;
     tournament.bracketGeneratedAt = null;
     tournament.operationLogs.push({
-      action: 'score_update',
+      action: 'rollback',
       fromStatus: 'QUALIFYING', toStatus: 'QUALIFYING',
       operatedBy: req.user.id,
       note: '重置对阵表生成状态（允许重新生成）',
@@ -965,7 +1136,7 @@ router.put('/api/tournaments/:id/matches/:matchId', authMiddleware, async (req, 
     if (status && status !== 'FINISHED') match.status = status;
 
     tournament.operationLogs.push({
-      action: 'score_update', fromStatus: tournament.status, toStatus: tournament.status,
+      action: 'score_edit', fromStatus: tournament.status, toStatus: tournament.status,
       operatedBy: req.user.id, note: `更新比赛 ${matchId}`,
     });
     await tournament.save();
@@ -1344,7 +1515,10 @@ router.post('/api/tournaments/:id/register/user', authMiddleware, async (req, re
 
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
-    if (tournament.status !== 'REGISTRATION') return res.status(400).json({ msg: '当前不在报名阶段' });
+    // 管理员录入不检查 status，仅确认报名未彻底截止
+    // 允许提前录入（registrationStart 未到），但拒绝已截止后的录入
+    if (tournament.registrationEnd && new Date() > tournament.registrationEnd)
+      return res.status(400).json({ msg: '报名已截止，无法录入' });
 
     const existing = tournament.registrations.find(r => r.userId.toString() === userId);
     if (existing) return res.status(400).json({ msg: '该用户已报名' });

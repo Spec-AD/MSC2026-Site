@@ -76,7 +76,7 @@ async function checkTimeoutMatches() {
 
       if (modified) {
         t.operationLogs.push({
-          action: 'score_update',
+          action: 'match_update',
           fromStatus: 'ONGOING',
           toStatus: 'ONGOING',
           operatedBy: null,
@@ -108,16 +108,15 @@ async function checkTimeoutMatches() {
 }
 
 /**
- * 自动阶段推进：REGISTRATION → QUALIFYING
- *
- * 检查 registrationEnd 已过且报名人数 >= 2 的 REGISTRATION 赛事，
- * 自动推进到 QUALIFYING 阶段。
+ * 自动阶段推进：状态独立于时间窗口后，仅处理 ONGOING → FINISHED。
+ * REGISTRATION → QUALIFYING 改为仅通知管理员，不自动改 status。
+ * 管理员通过管理端手动推进以保留报名窗口的灵活性。
  */
 async function checkStageAutoAdvance() {
   const now = new Date();
 
   try {
-    // ── 处理 REGISTRATION → QUALIFYING ──
+    // ── 处理 REGISTRATION：报名截止后仅通知管理员，不自动推进 ──
     const regTournaments = await Tournament.find({
       status: 'REGISTRATION',
       registrationEnd: { $lte: now },
@@ -127,41 +126,27 @@ async function checkStageAutoAdvance() {
       const count = t.registrations?.length || 0;
 
       if (count < 2) {
-        console.log(`[tournament-stage] 赛事 ${t._id} 报名人数不足（${count}人），跳过自动推进`);
-        // 通知管理员
-        const managerIds = [...new Set([...t.managers.map(m => m.toString())])];
-        for (const mid of managerIds) {
-          try {
-            await Message.create({
-              receiver: mid,
-              sender: null,
-              type: 'SYSTEM',
-              title: '赛事自动推进失败',
-              content: `赛事「${t.title}」报名截止已到，但仅有 ${count} 人报名（需 ≥2 人）。（赛事ID: ${t._id}）`,
-            });
-          } catch (e) {
-            console.error(`[tournament-stage] 发送通知给 ${mid} 失败:`, e);
-          }
-        }
-        continue;
+        console.log(`[tournament-stage] 赛事 ${t._id} 报名截止但人数不足（${count}人）`);
       }
 
-      t.status = 'QUALIFYING';
-      t.operationLogs.push({
-        action: 'transition',
-        fromStatus: 'REGISTRATION',
-        toStatus: 'QUALIFYING',
-        operatedBy: null,
-        note: `自动推进：报名截止时间已过，共 ${count} 人报名`,
-      });
-      await t.save();
-
-      // 通知
-      pushSSE(t._id.toString(), 'tournament:stateChange', {
-        from: 'REGISTRATION', to: 'QUALIFYING', timestamp: now.toISOString(),
-      });
-
-      console.log(`[tournament-stage] 赛事 ${t._id} 自动推进至 QUALIFYING（${count}人）`);
+      // 通知管理员
+      const managerIds = [...new Set([...t.managers.map(m => m.toString())])];
+      for (const mid of managerIds) {
+        try {
+          await Message.create({
+            receiver: mid,
+            sender: null,
+            type: 'SYSTEM',
+            title: count < 2 ? '赛事报名截止 — 人数不足' : '赛事报名截止 — 可推进至预选',
+            content: count < 2
+              ? `赛事「${t.title}」报名截止已到，但仅有 ${count} 人报名（需 ≥2 人）。（赛事ID: ${t._id}）`
+              : `赛事「${t.title}」报名截止，共 ${count} 人报名。请前往管理端手动推进至预选赛阶段。`,
+          });
+        } catch (e) {
+          console.error(`[tournament-stage] 发送通知给 ${mid} 失败:`, e);
+        }
+      }
+      console.log(`[tournament-stage] 赛事 ${t._id} 报名截止（${count}人），已通知管理员`);
     }
 
     // ── 处理 ONGOING → FINISHED（所有比赛已结束） ──
