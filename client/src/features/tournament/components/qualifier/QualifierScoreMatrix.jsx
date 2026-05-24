@@ -307,8 +307,6 @@ const ScoreEntryModal = ({
             <button
               onClick={async () => {
                 await onSubmit(userId);
-                // 提交后重置 loaded，下次 Modal 打开时重新拉取已提交成绩回填
-                setLoaded(false);
               }}
               disabled={submitting}
               className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/30 rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
