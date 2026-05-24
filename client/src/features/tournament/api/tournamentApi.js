@@ -37,9 +37,17 @@ export const exportQualifierCSV = (id) =>
 export const submitQualifierScores = (id, scores) =>
   axios.post(`${BASE}/${id}/qualifier/scores`, { scores }, { headers: authHeaders() });
 
+/** 回退单条成绩（Ctrl+Z） */
+export const rollbackQualifierScore = (id, userId, songName) =>
+  axios.post(`${BASE}/${id}/qualifier/rollback`, { userId, songName }, { headers: authHeaders() });
+
+/** 获取全量成绩矩阵（所有选手 × 所有曲目） */
+export const getQualifierMatrix = (id) =>
+  axios.get(`${BASE}/${id}/qualifier/matrix`, { headers: authHeaders() });
+
 /** 获取指定选手的已提交预选成绩（回填用） */
 export const getPlayerScores = (id, userId) =>
-  axios.get(`${BASE}/${id}/qualifier/scores`, {
+  axios.get(`/api/tournaments/detail/${id}/qualifier-scores`, {
     params: { userId },
     headers: authHeaders(),
   });
@@ -117,6 +125,10 @@ export const createTournament = (data) =>
 /** 更新赛事信息 */
 export const updateTournament = (id, data) =>
   axios.put(`/api/tournaments/detail/${id}`, data, { headers: authHeaders() });
+
+/** 保存阶段时间窗口（独立端点） */
+export const saveStageTimes = (id, times) =>
+  axios.put(`/api/tournaments/detail/${id}/stage-times`, times, { headers: authHeaders() });
 
 /** 选手报名 */
 export const registerForTournament = (id, formData) =>

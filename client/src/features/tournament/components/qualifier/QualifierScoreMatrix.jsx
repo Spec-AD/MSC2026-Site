@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // QualifierScoreMatrix.jsx — 预选赛成绩录入 (#5.1 UX 改造)
 // b1.7.06 | 选手列表 → 展开 Modal 逐人录入 + 旧成绩自动回填
 // 全量矩阵作为降级选项（仅高级管理员可切）
@@ -6,12 +6,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQualifierStore } from '../../store/qualifierStore';
-import { getPlayerScores } from '../../api/tournamentApi';
+import { getPlayerScores, rollbackQualifierScore, getQualifierMatrix } from '../../api/tournamentApi';
 import {
   FaMusic, FaUpload, FaSpinner, FaSave, FaCheck,
   FaTimes, FaExclamationTriangle, FaSearch,
   FaChevronDown, FaChevronUp, FaChevronRight, FaUser, FaList,
-  FaTable, FaCheckCircle, FaCircle, FaEdit
+  FaTable, FaCheckCircle, FaCircle, FaEdit, FaUndo
 } from 'react-icons/fa';
 
 // ---- CSV 解析（与旧版一致） ----
@@ -57,6 +57,8 @@ const ScoreEntryModal = ({
   onSubmit,
   submitting,
   submitResult,
+  onRollback, // 调后端 rollback API: (songName) => Promise<void>
+  canRollback, // 当前选手是否有可回退的记录
 }) => {
   const userId = player.userId?._id || player.userId;
   const [localScores, setLocalScores] = useState({}); // { [songName]: { achievement, dxScore } }
@@ -114,6 +116,34 @@ const ScoreEntryModal = ({
     }
   };
 
+  // 当前焦点曲目（用于 Ctrl+Z 精确定位）
+  const [activeSongName, setActiveSongName] = useState(null);
+  // 回退结果/错误消息（与 submitResult 分离 不污染成绩提交的展示区）
+  const [rollbackMsg, setRollbackMsg] = useState(null); // { type: 'success'|'error', text }
+
+  // Ctrl+Z — 调后端 rollback API，回退焦点曲目的已提交成绩
+  useEffect(() => {
+    const handler = async (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (activeSongName) {
+          const result = await onRollback(activeSongName);
+          if (result?._error) {
+            setRollbackMsg({ type: 'error', text: result._error });
+          } else if (result?.achievement !== undefined) {
+            setLocalScores(prev => ({
+              ...prev,
+              [activeSongName]: { achievement: result.achievement ?? '', dxScore: result.dxScore ?? '' }
+            }));
+            setRollbackMsg({ type: 'success', text: `已回退 ${activeSongName}` });
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeSongName, onRollback]);
+
   // 判断某曲目状态
   const getSongStatus = (songName) => {
     const cached = cachedScores.find(c => c.userId === userId && c.songName === songName);
@@ -160,14 +190,24 @@ const ScoreEntryModal = ({
 
             return (
               <div key={idx} className="bg-black/40 border border-white/[0.05] rounded-xl p-4 hover:border-white/10 transition-colors">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-white font-bold text-sm">{song.songName}</span>
-                    <span className="text-[10px] text-zinc-500">{song.difficulty} · Lv{song.level}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${status.dot}`} />
-                    <span className={`text-[10px] font-bold ${status.color}`}>{status.label}</span>
+                <div className="flex items-start gap-3 mb-3">
+                  {/* 曲绘 */}
+                  {song.coverUrl ? (
+                    <img src={song.coverUrl} alt="" className="w-12 h-12 rounded-lg object-cover bg-black border border-white/10 flex-shrink-0" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
+                      <FaMusic className="text-orange-400/60 text-sm" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white font-bold text-sm truncate">{song.songName}</span>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                        <span className={`w-2 h-2 rounded-full ${status.dot}`} />
+                        <span className={`text-[10px] font-bold ${status.color}`}>{status.label}</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 block mt-0.5">{song.difficulty} · Lv{song.level}</span>
                   </div>
                 </div>
 
@@ -182,6 +222,7 @@ const ScoreEntryModal = ({
                       max="101"
                       value={local.achievement}
                       onChange={e => handleChange(song.songName, 'achievement', e.target.value)}
+                      onFocus={() => setActiveSongName(song.songName)}
                       placeholder="0.0000"
                       className={`w-full bg-black/40 border rounded-lg px-3 py-2 text-center text-xs font-mono outline-none transition-all focus:ring-1 ${
                         !status.submitted
@@ -198,6 +239,7 @@ const ScoreEntryModal = ({
                       min="0"
                       value={local.dxScore}
                       onChange={e => handleChange(song.songName, 'dxScore', e.target.value)}
+                      onFocus={() => setActiveSongName(song.songName)}
                       placeholder="0"
                       className="w-full bg-black/40 border border-white/[0.08] rounded-lg px-3 py-2 text-center text-xs font-mono text-zinc-400 outline-none transition-all focus:ring-1 focus:border-white/20 focus:ring-white/10 placeholder:text-zinc-700"
                     />
@@ -227,7 +269,38 @@ const ScoreEntryModal = ({
               <span>已录入 {submitResult.updated} 条</span>
             </div>
           )}
-          <div className="flex gap-3">
+          {/* 回退消息独立展示（不污染 submitResult） */}
+          {rollbackMsg && (
+            <div className={`px-4 py-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+              rollbackMsg.type === 'error'
+                ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+            }`}>
+              {rollbackMsg.type === 'error' ? <FaExclamationTriangle /> : <FaCheck />}
+              <span>{rollbackMsg.text}</span>
+            </div>
+          )}
+          <div className="flex gap-2">
+            {activeSongName && (
+              <button
+                onClick={async () => {
+                  const result = await onRollback(activeSongName);
+                  if (result?._error) {
+                    setRollbackMsg({ type: 'error', text: result._error });
+                  } else if (result?.achievement !== undefined) {
+                    setLocalScores(prev => ({
+                      ...prev,
+                      [activeSongName]: { achievement: result.achievement ?? '', dxScore: result.dxScore ?? '' }
+                    }));
+                    setRollbackMsg({ type: 'success', text: `已回退 ${activeSongName}` });
+                  }
+                }}
+                className="px-4 py-3 bg-zinc-700/40 hover:bg-zinc-700/60 text-zinc-300 border border-zinc-600/30 rounded-xl text-sm font-bold flex items-center gap-2 transition-all"
+                title="Ctrl+Z"
+              >
+                <FaUndo /> 回退
+              </button>
+            )}
             <button onClick={onClose} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 rounded-xl text-sm font-bold transition-all">
               关闭
             </button>
@@ -253,99 +326,9 @@ const ScoreEntryModal = ({
 // ============================================================
 // 全量矩阵视图（降级选项 — 只读预览，编辑请切换回选手列表模式）
 // ============================================================
-const FullMatrixView = ({
-  songs,
-  registrations,
-  cachedScores,
-  getCellData,
-  isManager,
-}) => {
-  if (songs.length === 0) return null;
+const FullMatrixView = () => null;
 
-  return (
-    <>
-      {/* 只读提示 */}
-      {isManager && (
-        <div className="px-4 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-3">
-          <p className="text-xs text-amber-400 flex items-center gap-2">
-            <FaExclamationTriangle className="flex-shrink-0" />
-            全量矩阵仅为只读预览，编辑请切换到选手列表模式
-          </p>
-        </div>
-      )}
-    <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
-      <table className="w-full text-sm border-collapse min-w-[600px]">
-        <thead>
-          <tr className="border-b border-white/[0.06]">
-            <th className="text-left px-4 py-3 text-xs text-zinc-500 font-bold uppercase tracking-wider bg-white/[0.02] min-w-[140px] sticky left-0 z-10 border-r border-white/[0.05]">选手</th>
-            {songs.map((song, i) => (
-              <th key={i} className="px-4 py-3 text-center text-xs text-zinc-400 font-bold bg-white/[0.02] min-w-[130px]">
-                <div className="truncate max-w-[120px]">{song.songName}</div>
-                <div className="text-[10px] text-zinc-600 font-normal mt-0.5">{song.difficulty} · Lv{song.level}</div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {registrations.length === 0 ? (
-            <tr><td colSpan={songs.length + 1} className="text-center text-zinc-600 py-10 text-sm">暂无选手报名</td></tr>
-          ) : (
-            registrations.map((reg, rIdx) => {
-              const userId = reg.userId?._id || reg.userId;
-              const username = reg.userId?.username || '未知';
-              const avatarUrl = reg.userId?.avatarUrl;
-              return (
-                <tr key={userId} className={`border-b border-white/[0.04] transition-colors ${rIdx % 2 === 0 ? '' : 'bg-white/[0.01]'} hover:bg-white/[0.03]`}>
-                  <td className="px-4 py-3 sticky left-0 bg-[#0c0c11] border-r border-white/[0.05] z-10">
-                    <div className="flex items-center gap-2">
-                      <img src={avatarUrl || '/assets/logos.png'} alt="" className="w-7 h-7 rounded-full object-cover bg-black border border-white/10 flex-shrink-0" />
-                      <span className="text-zinc-200 font-medium text-xs truncate max-w-[90px]">{username}</span>
-                    </div>
-                  </td>
-                  {songs.map((song, sIdx) => {
-                    const cell = getCellData(userId, song.songName);
-                    const grade = cell.achievement !== '' ? getGrade(Number(cell.achievement)) : null;
-                    const isPending = cachedScores.some(s => s.userId === userId && s.songName === song.songName);
-                    return (
-                      <td key={sIdx} className="px-2 py-2 text-center">
-                        {isManager ? (
-                          <div className="relative flex gap-1 items-center justify-center">
-                            <input type="number" step="0.0001" min="0" max="101"
-                              value={cell.achievement}
-                              readOnly
-                              placeholder="达成率"
-                              className={`w-[72px] bg-black/40 border rounded-lg px-1.5 py-1.5 text-center text-[11px] font-mono outline-none cursor-not-allowed opacity-70 ${
-                                isPending ? 'border-cyan-500/50 text-cyan-300' : 'border-white/[0.08] text-zinc-400'
-                              } ${grade ? grade.color : ''}`} />
-                            <input type="number" min="0" value={cell.dxScore} placeholder="DX" readOnly
-                              className="w-[56px] bg-black/40 border border-white/[0.08] rounded-lg px-1.5 py-1.5 text-center text-[11px] font-mono text-zinc-400 cursor-not-allowed opacity-70" />
-                          </div>
-                        ) : (
-                          <div className={`font-mono text-xs font-bold ${grade ? grade.color : 'text-zinc-700'}`}>
-                            {cell.achievement !== '' ? (
-                              <div><div>{Number(cell.achievement).toFixed(4)}</div>
-                                <div className="text-[10px] opacity-70">{grade?.label}{cell.dxScore !== '' && ` · ${cell.dxScore}DX`}</div>
-                              </div>
-                            ) : '—'}
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
-    </div>
-    </>
-  );
-};
 
-// ============================================================
-// 主组件
-// ============================================================
 const QualifierScoreMatrix = ({
   tournamentId,
   songs = [],
@@ -364,6 +347,19 @@ const QualifierScoreMatrix = ({
   const [submitResult, setSubmitResult] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFullMatrix, setShowFullMatrix] = useState(false);
+  // 全量矩阵数据（从后端 /qualifier/matrix 获取）
+  const [matrixData, setMatrixData] = useState({ songs: [], entries: [] });
+  const [matrixLoading, setMatrixLoading] = useState(false);
+
+  // 展开全量矩阵时 从后端拉取完整数据
+  useEffect(() => {
+    if (!showFullMatrix || !tournamentId) return;
+    setMatrixLoading(true);
+    getQualifierMatrix(tournamentId)
+      .then(res => setMatrixData(res.data || { songs: [], entries: [] }))
+      .catch(() => setMatrixData({ songs: [], entries: [] }))
+      .finally(() => setMatrixLoading(false));
+  }, [showFullMatrix, tournamentId]);
 
   // CSV 导入
   const [csvErrors, setCsvErrors] = useState([]);
@@ -682,14 +678,19 @@ const QualifierScoreMatrix = ({
 
       {/* ========== 全量矩阵视图（降级） ========== */}
       {showFullMatrix && (
-        <FullMatrixView
-          songs={songs}
-          registrations={registrations}
-          cachedScores={cachedScores}
-          getCellData={getCellData}
-          handleCellEdit={() => {}}
-          isManager={isManager}
-        />
+        matrixLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <FaSpinner className="animate-spin text-cyan-500 text-lg" />
+            <span className="ml-3 text-zinc-500 text-sm">加载成绩矩阵...</span>
+          </div>
+        ) : (
+          <FullMatrixView
+            songs={matrixData.songs || songs}
+            entries={matrixData.entries || []}
+            tournamentId={tournamentId}
+            isManager={isManager}
+          />
+        )
       )}
 
       {/* 选手成绩录入 Modal */}
@@ -705,6 +706,17 @@ const QualifierScoreMatrix = ({
           onSubmit={(userId) => handleSubmit(userId)}
           submitting={submitting}
           submitResult={submitResult}
+          onRollback={async (songName) => {
+            const userId = selectedPlayer.userId?._id || selectedPlayer.userId;
+            try {
+              const res = await rollbackQualifierScore(tournamentId, userId, songName);
+              // 返回后端回退后的旧值 让 Modal 填入 localScores 展示
+              return res.data?.data || {};
+            } catch (err) {
+              const msg = err.response?.data?.msg || '回退失败';
+              return { _error: msg };
+            }
+          }}
         />
       )}
 
@@ -720,3 +732,5 @@ const QualifierScoreMatrix = ({
 };
 
 export default QualifierScoreMatrix;
+
+

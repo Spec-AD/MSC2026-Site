@@ -93,7 +93,20 @@ router.get('/api/tournaments/detail/:id', async (req, res) => {
       .populate('matches.winner', 'username uid avatarUrl')
       .populate('results.userId', 'username uid avatarUrl');
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
-    res.json(tournament);
+
+    // 附加 timeWindows 字段，前端直接消费避免两端时间计算不一致
+    const now = new Date();
+    const timeWindows = {
+      registration: { start: tournament.registrationStart, end: tournament.registrationEnd },
+      qualifier: { start: tournament.qualifierStart, end: tournament.qualifierEnd },
+      matches: { start: tournament.matchesStart, end: tournament.matchesEnd },
+    };
+    for (const [key, w] of Object.entries(timeWindows)) {
+      w.isOpen = !!(w.start && w.end && now >= new Date(w.start) && now <= new Date(w.end));
+      w.remainingMs = w.isOpen ? Math.max(0, new Date(w.end).getTime() - now.getTime()) : 0;
+    }
+
+    res.json({ ...tournament.toObject(), timeWindows });
   } catch (err) { res.status(500).json({ msg: '获取赛事详情失败' }); }
 });
 
@@ -174,6 +187,46 @@ router.put('/api/tournaments/detail/:id/approve-time', authMiddleware, async (re
   } catch (err) { res.status(500).json({ msg: '审核失败' }); }
 });
 
+// ── 阶段时间窗口设置 (CHM/ADM) ──
+router.put('/api/tournaments/detail/:id/stage-times', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTournamentPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const blocked = await archivedWriteGuard(req, res, req.params.id);
+    if (blocked) return;
+
+    const { registrationStart, registrationEnd, qualifierStart, qualifierEnd, matchesStart, matchesEnd } = req.body;
+
+    // 时间校验
+    const stageRules = [
+      { a: registrationStart, b: registrationEnd, msg: '报名开始时间不能晚于结束时间' },
+      { a: qualifierStart, b: qualifierEnd, msg: '预选开始时间不能晚于结束时间' },
+      { a: matchesStart, b: matchesEnd, msg: '正赛开始时间不能晚于结束时间' },
+    ];
+    for (const { a, b, msg } of stageRules) {
+      if (a && b && new Date(a) >= new Date(b)) return res.status(400).json({ msg });
+    }
+
+    const updateFields = {};
+    if (registrationStart !== undefined) updateFields.registrationStart = registrationStart;
+    if (registrationEnd !== undefined) updateFields.registrationEnd = registrationEnd;
+    if (qualifierStart !== undefined) updateFields.qualifierStart = qualifierStart;
+    if (qualifierEnd !== undefined) updateFields.qualifierEnd = qualifierEnd;
+    if (matchesStart !== undefined) updateFields.matchesStart = matchesStart;
+    if (matchesEnd !== undefined) updateFields.matchesEnd = matchesEnd;
+
+    await Tournament.findByIdAndUpdate(req.params.id, {
+      $set: updateFields,
+      $push: { operationLogs: { action: 'info_edit', fromStatus: 'N/A', toStatus: 'N/A', operatedBy: req.user.id, operatedAt: new Date(), note: '更新阶段时间窗口' } }
+    });
+
+    res.json({ msg: '阶段时间已更新' });
+  } catch (err) {
+    console.error('阶段时间更新失败:', err);
+    res.status(500).json({ msg: '更新失败' });
+  }
+});
+
 // 设计报名表 (CHM/ADM)
 router.put('/api/tournaments/detail/:id/registration-form', authMiddleware, async (req, res) => {
   try {
@@ -210,16 +263,38 @@ router.post('/api/tournaments/detail/:id/register', authMiddleware, async (req, 
     // 自定义报名字段必填校验
     const formFields = tournament.registrationForm || [];
     const formData = req.body.formData || {};
+
+    // 空值校验增强：必填、数值类型、未知字段拦截
+    const knownLabels = new Set(formFields.map(f => f.label));
     for (const field of formFields) {
       if (field.required && (!formData[field.label] || String(formData[field.label]).trim() === '')) {
         return res.status(400).json({ msg: `必填字段「${field.label}」不能为空` });
       }
+      if (field.type === 'number' && formData[field.label] !== undefined && formData[field.label] !== '') {
+        if (isNaN(Number(formData[field.label]))) {
+          return res.status(400).json({ msg: `字段「${field.label}」需要为有效数字` });
+        }
+      }
+    }
+    for (const key of Object.keys(formData)) {
+      if (!knownLabels.has(key)) {
+        return res.status(400).json({ msg: `未知字段「${key}」不允许提交` });
+      }
     }
 
-    tournament.registrations.push({ userId: req.user.id, formData });
+    // 生成随机令牌 001-999（去重，池满时拒绝）
+    const existingTokens = new Set(tournament.registrations.map(r => r.token).filter(Boolean));
+    if (existingTokens.size >= 999) return res.status(400).json({ msg: '令牌池已满，无法继续报名' });
+    let token;
+    do {
+      const num = Math.floor(Math.random() * 999) + 1;
+      token = String(num).padStart(3, '0');
+    } while (existingTokens.has(token));
+
+    const reg = tournament.registrations.push({ userId: req.user.id, formData, token });
     await tournament.save();
     await addXp(req.user.id, 100);
-    res.json({ msg: '报名成功！' });
+    res.json({ msg: '报名成功！', token });
   } catch (err) {
     console.error('报名失败:', err);
     res.status(500).json({ msg: '报名失败' });
@@ -241,6 +316,7 @@ router.get('/api/tournaments/detail/:id/my-registration', authMiddleware, async 
         formData: reg.formData,
         registeredAt: reg.registeredAt,
         modifyCount: reg.modifyCount ?? 0,
+        token: reg.token || '',
       }
     });
   } catch (err) {
@@ -273,12 +349,23 @@ router.put('/api/tournaments/detail/:id/my-registration', authMiddleware, async 
     if ((reg.modifyCount ?? 0) >= 1)
       return res.status(400).json({ msg: '报名信息仅可修改一次' });
 
-    // 必填字段校验
+    // 必填字段校验 + 增强校验
     const formFields = tournament.registrationForm || [];
     const formData = req.body.formData || {};
+    const knownLabels = new Set(formFields.map(f => f.label));
     for (const field of formFields) {
       if (field.required && (!formData[field.label] || String(formData[field.label]).trim() === '')) {
         return res.status(400).json({ msg: `必填字段「${field.label}」不能为空` });
+      }
+      if (field.type === 'number' && formData[field.label] !== undefined && formData[field.label] !== '') {
+        if (isNaN(Number(formData[field.label]))) {
+          return res.status(400).json({ msg: `字段「${field.label}」需要为有效数字` });
+        }
+      }
+    }
+    for (const key of Object.keys(formData)) {
+      if (!knownLabels.has(key)) {
+        return res.status(400).json({ msg: `未知字段「${key}」不允许提交` });
       }
     }
 
@@ -300,6 +387,7 @@ router.put('/api/tournaments/detail/:id/my-registration', authMiddleware, async 
         formData: reg.formData,
         registeredAt: reg.registeredAt,
         modifyCount: reg.modifyCount,
+        token: reg.token || '',
       }
     });
   } catch (err) {
@@ -372,7 +460,7 @@ router.get('/api/tournaments/detail/:id/registrations/export', authMiddleware, a
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
 
     const formFields = (tournament.registrationForm || []).map(f => f.label);
-    const headers = ['选手', 'UID', ...formFields, '报名时间'];
+    const headers = ['令牌', '选手', 'UID', ...formFields, '报名时间'];
     const rows = [headers.join(',')];
 
     tournament.registrations.forEach(r => {
@@ -382,6 +470,7 @@ router.get('/api/tournaments/detail/:id/registrations/export', authMiddleware, a
         return val !== undefined ? `"${val}"` : '';
       });
       rows.push([
+        `"${r.token || ''}"`,
         `"${u.username || ''}"`,
         `"${u.uid || ''}"`,
         ...customFields,
@@ -440,10 +529,21 @@ router.post('/api/tournaments/detail/:id/qualifier-scores', authMiddleware, asyn
       s => s.userId.toString() === targetUser._id.toString() && s.songName === songName
     );
     if (existingIdx >= 0) {
-      tournament.qualifierScores[existingIdx].achievement = Number(achievement);
-      tournament.qualifierScores[existingIdx].dxScore = Number(dxScore || 0);
-      tournament.qualifierScores[existingIdx].entryBy = perm.user.username;
-      tournament.qualifierScores[existingIdx].entryTime = Date.now();
+      // 修改前推入 history（与批量端点保持一致）
+      const old = tournament.qualifierScores[existingIdx];
+      old.history = old.history || [];
+      old.history.push({
+        achievement: old.achievement,
+        dxScore: old.dxScore,
+        entryBy: old.entryBy,
+        entryTime: old.entryTime,
+        revertedAt: new Date()
+      });
+      if (old.history.length > 10) old.history = old.history.slice(-10);
+      old.achievement = Number(achievement);
+      old.dxScore = Number(dxScore || 0);
+      old.entryBy = perm.user.username;
+      old.entryTime = Date.now();
     } else {
       tournament.qualifierScores.push({ userId: targetUser._id, songName, achievement: Number(achievement), dxScore: Number(dxScore || 0), entryBy: perm.user.username });
     }
@@ -746,6 +846,28 @@ router.get('/api/tournaments/:id/qualifier/rankings', async (req, res) => {
   }
 });
 
+// ── 4.0 获取预选赛成绩（按 userId 过滤，与 detail 端点同功能但路径匹配凛月的 GET 调用）──
+router.get('/api/tournaments/:id/qualifier/scores', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTAPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const tournament = await Tournament.findById(req.params.id)
+      .populate('qualifierScores.userId', 'username uid avatarUrl');
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+
+    let scores = tournament.qualifierScores || [];
+    if (req.query.userId) {
+      scores = scores.filter(s => s.userId?._id?.toString() === req.query.userId);
+    }
+
+    res.json({ scores });
+  } catch (err) {
+    console.error('获取预选赛成绩失败:', err);
+    res.status(500).json({ msg: '获取失败' });
+  }
+});
+
 // ── 4. 预选赛成绩录入（批量）──
 router.post('/api/tournaments/:id/qualifier/scores', authMiddleware, async (req, res) => {
   try {
@@ -797,10 +919,22 @@ router.post('/api/tournaments/:id/qualifier/scores', authMiddleware, async (req,
           errors.push({ userId, songName, reason: 'TO 角色不可覆盖已有成绩' });
           continue;
         }
-        tournament.qualifierScores[existingIdx].achievement = Number(achievement) || 0;
-        tournament.qualifierScores[existingIdx].dxScore = Number(dxScore) || 0;
-        tournament.qualifierScores[existingIdx].entryBy = perm.user.username;
-        tournament.qualifierScores[existingIdx].entryTime = new Date();
+        // 修改前将旧值推入 history（支持 Ctrl+Z 回退）
+        const old = tournament.qualifierScores[existingIdx];
+        old.history = old.history || [];
+        old.history.push({
+          achievement: old.achievement,
+          dxScore: old.dxScore,
+          entryBy: old.entryBy,
+          entryTime: old.entryTime,
+          revertedAt: new Date()
+        });
+        if (old.history.length > 10) old.history = old.history.slice(-10);
+        // 更新为新值
+        old.achievement = Number(achievement) || 0;
+        old.dxScore = Number(dxScore) || 0;
+        old.entryBy = perm.user.username;
+        old.entryTime = new Date();
       } else {
         tournament.qualifierScores.push({
           userId, songName,
@@ -877,6 +1011,120 @@ router.post('/api/tournaments/:id/qualifier/advance', authMiddleware, async (req
   } catch (err) {
     console.error('确认晋级失败:', err);
     res.status(500).json({ msg: '操作失败' });
+  }
+});
+
+// ── 5.1 预选赛成绩矩阵（完整二维视图）──
+router.get('/api/tournaments/:id/qualifier/matrix', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTAPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const tournament = await Tournament.findById(req.params.id)
+      .populate('registrations.userId', 'username uid avatarUrl')
+      .populate('qualifierScores.userId', 'username uid avatarUrl');
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+
+    const songs = (tournament.qualifierSongs || []).map(s => ({
+      songName: s.songName,
+      difficulty: s.difficulty,
+      coverUrl: s.coverUrl,
+      level: s.level,
+    }));
+
+    // 收集所有有报名或成绩记录的选手
+    const playerMap = new Map();
+    tournament.registrations.forEach(r => {
+      const uid = r.userId?._id?.toString() || r.userId?.toString();
+      if (uid) playerMap.set(uid, { userId: uid, username: r.userId?.username || '', scores: {} });
+    });
+    tournament.qualifierScores.forEach(s => {
+      const uid = s.userId?._id?.toString() || s.userId?.toString();
+      if (uid && !playerMap.has(uid)) {
+        playerMap.set(uid, { userId: uid, username: s.userId?.username || '', scores: {} });
+      }
+    });
+
+    // 填充每位选手 × 每首曲目的成绩
+    const scoreToSongMap = {};
+    tournament.qualifierScores.forEach(s => {
+      const uid = s.userId?._id?.toString() || s.userId?.toString();
+      if (!uid) return;
+      if (!scoreToSongMap[uid]) scoreToSongMap[uid] = {};
+      scoreToSongMap[uid][s.songName] = { achievement: s.achievement, dxScore: s.dxScore, entryTime: s.entryTime };
+    });
+
+    songs.forEach(song => {
+      playerMap.forEach((player) => {
+        const score = scoreToSongMap[player.userId]?.[song.songName];
+        player.scores[song.songName] = score || { achievement: 0, dxScore: 0 };
+      });
+    });
+
+    res.json({ songs, entries: Array.from(playerMap.values()) });
+  } catch (err) {
+    console.error('获取成绩矩阵失败:', err);
+    res.status(500).json({ msg: '获取失败' });
+  }
+});
+
+// ── 5.2 预选赛成绩回退（撤销最近一次修改）──
+router.post('/api/tournaments/:id/qualifier/rollback', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTAPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const blocked = await archivedWriteGuard(req, res, req.params.id);
+    if (blocked) return;
+
+    const { userId, songName } = req.body;
+    if (!userId || !songName) return res.status(400).json({ msg: '缺少 userId 或 songName' });
+
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+
+    // 阶段保护：仅 QUALIFYING 阶段可回退预选成绩
+    if (tournament.status !== 'QUALIFYING') {
+      return res.status(400).json({ msg: '赛事已不在预选阶段，无法回退成绩' });
+    }
+
+    const existingIdx = tournament.qualifierScores.findIndex(
+      s => s.userId.toString() === userId.toString() && s.songName === songName
+    );
+    if (existingIdx < 0) return res.status(400).json({ msg: '该选手此曲目没有成绩记录' });
+
+    const entry = tournament.qualifierScores[existingIdx];
+    if (!entry.history || entry.history.length === 0) {
+      return res.status(400).json({ msg: '无可回退的记录' });
+    }
+
+    // 弹出栈顶历史，恢复旧值
+    const snapshot = entry.history.pop();
+    entry.achievement = snapshot.achievement;
+    entry.dxScore = snapshot.dxScore;
+    entry.entryBy = snapshot.entryBy || '';
+    entry.entryTime = snapshot.entryTime || new Date();
+    entry.markModified('history');
+
+    // 审计日志
+    tournament.operationLogs.push({
+      action: 'score_edit',
+      fromStatus: tournament.status, toStatus: tournament.status,
+      operatedBy: req.user.id,
+      operatedAt: new Date(),
+      note: `回退 ${userId} - ${songName}（${snapshot.achievement}%）`,
+    });
+
+    await tournament.save();
+
+    // SSE 推送
+    pushSSE(tournament._id.toString(), 'tournament:qualifierUpdated', {
+      tournamentId: tournament._id.toString(), timestamp: new Date().toISOString(),
+    });
+
+    res.json({ msg: '已回退至上次修改前的状态', data: { userId, songName, achievement: entry.achievement, dxScore: entry.dxScore } });
+  } catch (err) {
+    console.error('成绩回退失败:', err);
+    res.status(500).json({ msg: '回退失败' });
   }
 });
 
@@ -1535,10 +1783,20 @@ router.post('/api/tournaments/:id/register/user', authMiddleware, async (req, re
     if (existing) return res.status(400).json({ msg: '该用户已报名' });
 
     const formData = req.body.formData || {};
-    tournament.registrations.push({ userId, formData });
+
+    // 生成随机令牌 001-999（去重，池满时拒绝）
+    const existingTokens = new Set(tournament.registrations.map(r => r.token).filter(Boolean));
+    if (existingTokens.size >= 999) return res.status(400).json({ msg: '令牌池已满，无法继续报名' });
+    let token;
+    do {
+      const num = Math.floor(Math.random() * 999) + 1;
+      token = String(num).padStart(3, '0');
+    } while (existingTokens.has(token));
+
+    tournament.registrations.push({ userId, formData, token });
     await tournament.save();
 
-    res.json({ msg: `已为 ${targetUser.username} 完成报名` });
+    res.json({ msg: `已为 ${targetUser.username} 完成报名`, token });
   } catch (err) {
     console.error('管理员报名失败:', err);
     res.status(500).json({ msg: '报名失败' });

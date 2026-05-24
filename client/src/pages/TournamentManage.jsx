@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTournamentStore, useBracketStore, useQualifierStore } from '../features/tournament/store';
 import { selectStatusLabel, selectStatusColor } from '../features/tournament/store/tournamentStore';
+import { saveStageTimes } from '../features/tournament/api/tournamentApi';
 import QualifierScoreMatrix from '../features/tournament/components/qualifier/QualifierScoreMatrix';
 import QualifierRanking from '../features/tournament/components/qualifier/QualifierRanking';
 import BracketView from '../features/tournament/components/bracket/BracketView';
@@ -60,6 +61,7 @@ const TournamentManage = () => {
   // ---- Local UI state ----
   const [activeTab, setActiveTab] = useState('state'); // default to state machine
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingTimes, setIsSavingTimes] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionErrors, setTransitionErrors] = useState([]);
 
@@ -83,6 +85,10 @@ const TournamentManage = () => {
         rules: data.rules || '', coverUrl: data.coverUrl || '', status: data.status,
         registrationStart: data.registrationStart ? new Date(data.registrationStart).toISOString().slice(0, 16) : '',
         registrationEnd: data.registrationEnd ? new Date(data.registrationEnd).toISOString().slice(0, 16) : '',
+        qualifierStart: data.qualifierStart ? new Date(data.qualifierStart).toISOString().slice(0, 16) : '',
+        qualifierEnd: data.qualifierEnd ? new Date(data.qualifierEnd).toISOString().slice(0, 16) : '',
+        matchesStart: data.matchesStart ? new Date(data.matchesStart).toISOString().slice(0, 16) : '',
+        matchesEnd: data.matchesEnd ? new Date(data.matchesEnd).toISOString().slice(0, 16) : '',
         startTime: data.startTime ? new Date(data.startTime).toISOString().slice(0, 16) : '',
         endTime: data.endTime ? new Date(data.endTime).toISOString().slice(0, 16) : '',
         advanceCount: data.advanceCount || 8,
@@ -168,14 +174,73 @@ const TournamentManage = () => {
   const token = localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}` };
 
+  /** 检查时间字段是否有未保存的修改 */
+  const hasUnsavedTimeChanges = () => {
+    const timeKeys = ['registrationStart', 'registrationEnd', 'qualifierStart', 'qualifierEnd', 'matchesStart', 'matchesEnd', 'startTime', 'endTime'];
+    for (const k of timeKeys) {
+      const current = tournament[k] ? new Date(tournament[k]).toISOString().slice(0, 16) : '';
+      const edited = editInfo[k] || '';
+      if (current !== edited) return true;
+    }
+    return false;
+  };
+
+  /** 保存基本信息（不含时间字段） */
   const handleSaveInfo = async () => {
     setIsSaving(true);
     try {
-      await updateTournament(id, editInfo);
+      // 只传非时间字段
+      const { registrationStart, registrationEnd, qualifierStart, qualifierEnd, matchesStart, matchesEnd, startTime, endTime, ...rest } = editInfo;
+      await updateTournament(id, rest);
       addToast('赛事信息已更新', 'success');
+      if (hasUnsavedTimeChanges()) {
+        addToast('⚠ 阶段时间有修改未保存，请点击「保存时间设置」按钮', 'warning');
+      }
       loadTournament();
     } catch (err) { addToast(err.msg || '更新失败', 'error'); }
     finally { setIsSaving(false); }
+  };
+
+  /** 保存阶段时间设置 */
+  const handleSaveStageTimes = async () => {
+    // ---- 时间校验 ----
+    const regStart = editInfo.registrationStart ? new Date(editInfo.registrationStart) : null;
+    const regEnd = editInfo.registrationEnd ? new Date(editInfo.registrationEnd) : null;
+    const qualStart = editInfo.qualifierStart ? new Date(editInfo.qualifierStart) : null;
+    const qualEnd = editInfo.qualifierEnd ? new Date(editInfo.qualifierEnd) : null;
+    const matchStart = editInfo.matchesStart ? new Date(editInfo.matchesStart) : null;
+    const matchEnd = editInfo.matchesEnd ? new Date(editInfo.matchesEnd) : null;
+
+    const timeErrors = [];
+    if (regStart && regEnd && regEnd <= regStart) {
+      timeErrors.push('报名结束时间必须晚于报名开始时间');
+    }
+    if (qualStart && qualEnd && qualEnd <= qualStart) {
+      timeErrors.push('预选结束时间必须晚于预选开始时间');
+    }
+    if (matchStart && matchEnd && matchEnd <= matchStart) {
+      timeErrors.push('正赛结束时间必须晚于正赛开始时间');
+    }
+
+    if (timeErrors.length > 0) {
+      timeErrors.forEach(msg => addToast('⚠ ' + msg, 'error'));
+      return;
+    }
+
+    setIsSavingTimes(true);
+    try {
+      await saveStageTimes(id, {
+        registrationStart: editInfo.registrationStart || null,
+        registrationEnd: editInfo.registrationEnd || null,
+        qualifierStart: editInfo.qualifierStart || null,
+        qualifierEnd: editInfo.qualifierEnd || null,
+        matchesStart: editInfo.matchesStart || null,
+        matchesEnd: editInfo.matchesEnd || null,
+      });
+      addToast('时间设置已保存', 'success');
+      loadTournament();
+    } catch (err) { addToast(err.response?.data?.msg || '时间保存失败', 'error'); }
+    finally { setIsSavingTimes(false); }
   };
 
   const handleSaveForm = async () => {
@@ -280,6 +345,40 @@ const TournamentManage = () => {
             <FaCog className="text-cyan-400" /> 赛事状态机
           </h2>
           <p className="text-gray-500 text-sm mb-6">当前阶段的操作面板。可用操作取决于当前状态和你的权限角色。</p>
+
+          {/* 当前时段信息 */}
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">当前阶段</p>
+              <p className="text-lg font-bold flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${
+                  tournament.status === 'DRAFT' ? 'bg-zinc-500' :
+                  tournament.status === 'REGISTRATION' ? 'bg-green-400' :
+                  tournament.status === 'QUALIFYING' ? 'bg-purple-400' :
+                  tournament.status === 'ONGOING' ? 'bg-amber-400' :
+                  tournament.status === 'FINISHED' ? 'bg-gray-400' :
+                  'bg-zinc-600'
+                }`} />
+                {selectStatusLabel(tournament.status)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">报名时间</p>
+              <p className="text-sm text-zinc-300">
+                {tournament.registrationStart ? new Date(tournament.registrationStart).toLocaleString('zh-CN') : '—'}
+                <span className="text-zinc-600 mx-1">→</span>
+                {tournament.registrationEnd ? new Date(tournament.registrationEnd).toLocaleString('zh-CN') : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">正赛时间</p>
+              <p className="text-sm text-zinc-300">
+                {tournament.startTime ? new Date(tournament.startTime).toLocaleString('zh-CN') : '—'}
+                <span className="text-zinc-600 mx-1">→</span>
+                {tournament.endTime ? new Date(tournament.endTime).toLocaleString('zh-CN') : '—'}
+              </p>
+            </div>
+          </div>
 
           {/* 状态时间轴 */}
           <div className="flex items-center gap-1 mb-8 overflow-x-auto pb-2">
@@ -456,15 +555,41 @@ const TournamentManage = () => {
           <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">封面图 URL</label><input value={editInfo.coverUrl || ''} onChange={e => setEditInfo({...editInfo, coverUrl: e.target.value})} className={inputClass} disabled={isArchived} /></div>
           <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">赛事描述</label><textarea rows="4" value={editInfo.description || ''} onChange={e => setEditInfo({...editInfo, description: e.target.value})} className={inputClass + " resize-y"} disabled={isArchived} /></div>
           <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">比赛规则 (BBCode)</label><textarea rows="8" value={editInfo.rules || ''} onChange={e => setEditInfo({...editInfo, rules: e.target.value})} className={inputClass + " resize-y font-mono text-sm"} disabled={isArchived} /></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">报名开始</label><input type="datetime-local" value={editInfo.registrationStart || ''} onChange={e => setEditInfo({...editInfo, registrationStart: e.target.value})} className={inputClass} disabled={isArchived} /></div>
-            <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">报名结束</label><input type="datetime-local" value={editInfo.registrationEnd || ''} onChange={e => setEditInfo({...editInfo, registrationEnd: e.target.value})} className={inputClass} disabled={isArchived} /></div>
-            <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">比赛开始</label><input type="datetime-local" value={editInfo.startTime || ''} onChange={e => setEditInfo({...editInfo, startTime: e.target.value})} className={inputClass} disabled={isArchived} /></div>
-            <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">比赛结束</label><input type="datetime-local" value={editInfo.endTime || ''} onChange={e => setEditInfo({...editInfo, endTime: e.target.value})} className={inputClass} disabled={isArchived} /></div>
-            <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">预选晋级人数</label><input type="number" min="1" value={editInfo.advanceCount || 8} onChange={e => setEditInfo({...editInfo, advanceCount: parseInt(e.target.value) || 8})} className={inputClass} disabled={isArchived} /></div>
+          {/* 阶段时间设置 */}
+          <div className="bg-zinc-900/30 border border-zinc-800/40 rounded-xl p-5 space-y-4">
+            <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2"><FaCalendarAlt className="text-cyan-400" /> 阶段时间窗口</h3>
+            <div className="space-y-1">
+              <p className="text-[10px] text-green-400/60 font-bold uppercase tracking-wider">报名阶段</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">开始</label><input type="datetime-local" value={editInfo.registrationStart || ''} onChange={e => setEditInfo({...editInfo, registrationStart: e.target.value})} className={inputClass} disabled={isArchived} /></div>
+                <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">结束</label><input type="datetime-local" value={editInfo.registrationEnd || ''} onChange={e => setEditInfo({...editInfo, registrationEnd: e.target.value})} className={inputClass} disabled={isArchived} /></div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] text-purple-400/60 font-bold uppercase tracking-wider">预选阶段</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">开始</label><input type="datetime-local" value={editInfo.qualifierStart || ''} onChange={e => setEditInfo({...editInfo, qualifierStart: e.target.value})} className={inputClass} disabled={isArchived} /></div>
+                <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">结束</label><input type="datetime-local" value={editInfo.qualifierEnd || ''} onChange={e => setEditInfo({...editInfo, qualifierEnd: e.target.value})} className={inputClass} disabled={isArchived} /></div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] text-amber-400/60 font-bold uppercase tracking-wider">正赛阶段</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">开始</label><input type="datetime-local" value={editInfo.matchesStart || ''} onChange={e => setEditInfo({...editInfo, matchesStart: e.target.value})} className={inputClass} disabled={isArchived} /></div>
+                <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">结束</label><input type="datetime-local" value={editInfo.matchesEnd || ''} onChange={e => setEditInfo({...editInfo, matchesEnd: e.target.value})} className={inputClass} disabled={isArchived} /></div>
+              </div>
+            </div>
+            <div className="pt-2 flex gap-3">
+              <button onClick={handleSaveInfo} disabled={isSaving} className={btnClass}>{isSaving ? <FaSpinner className="animate-spin" /> : <FaSave />} 保存赛事信息</button>
+              <button onClick={handleSaveStageTimes} disabled={isSavingTimes} className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all disabled:opacity-50">
+                {isSavingTimes ? <FaSpinner className="animate-spin" /> : <FaCalendarAlt />} 保存时间设置
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div><label className="text-xs text-gray-500 font-bold uppercase mb-1 block">预选晋级人数</label><input type="number" min="1" value={editInfo.advanceCount || 8} onChange={e => setEditInfo({...editInfo, advanceCount: parseInt(e.target.value) || 8})} className={inputClass} disabled={isArchived} /></div>
+            </div>
           </div>
           {!tournament.timeApproved && <p className="text-yellow-400 text-sm flex items-center gap-2"><FaCalendarAlt /> 比赛时间尚待 ADM 审核通过</p>}
-          {!isArchived && <button onClick={handleSaveInfo} disabled={isSaving} className={btnClass}>{isSaving ? <FaSpinner className="animate-spin" /> : <FaSave />} 保存信息</button>}
         </div>
       )}
 

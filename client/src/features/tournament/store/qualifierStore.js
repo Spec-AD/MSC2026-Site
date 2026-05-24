@@ -9,6 +9,7 @@ export const useQualifierStore = create((set, get) => ({
   // ---- State ----
   songs: [], // 预选曲目
   scores: [], // 成绩录入缓存（本地草稿）
+  scoreHistory: [], // Ctrl+Z 回退栈（每次修改前 push 快照）
   rankings: [], // 总榜数据
   songBreakdown: [], // 单曲排行（每曲独立排名）
   cutoff: 0, // 晋级人数
@@ -45,7 +46,7 @@ export const useQualifierStore = create((set, get) => ({
   submitScores: async (id, scores) => {
     try {
       const res = await api.submitQualifierScores(id, scores);
-      set({ scores: [] }); // 清空本地缓存
+      set({ scores: [], scoreHistory: [] }); // 清空本地缓存和回退栈
       return res.data;
     } catch (err) {
       throw err.response?.data || { msg: '成绩提交失败' };
@@ -78,28 +79,53 @@ export const useQualifierStore = create((set, get) => ({
     }
   },
 
+  /** 快照当前 scores 推入回退栈 */
+  pushScoreSnapshot: () => {
+    set((state) => ({
+      scoreHistory: [...state.scoreHistory, [...state.scores]],
+    }));
+  },
+
+  /** 回退到上一次 scores 状态（Ctrl+Z） */
+  undoScore: () => {
+    const { scoreHistory } = get();
+    if (scoreHistory.length === 0) return false;
+    const prev = scoreHistory[scoreHistory.length - 1];
+    set({
+      scores: prev,
+      scoreHistory: scoreHistory.slice(0, -1),
+    });
+    return true;
+  },
+
   /** 本地缓存成绩草稿（未提交前） */
   cacheScore: (entry) => {
     set((state) => {
+      // 修改前 push 快照
+      const history = [...state.scoreHistory, [...state.scores]];
       // 覆盖同一选手+同一曲目
       const filtered = state.scores.filter(
         (s) => !(s.userId === entry.userId && s.songName === entry.songName)
       );
-      return { scores: [...filtered, entry] };
+      return { scores: [...filtered, entry], scoreHistory: history };
     });
   },
 
   /** 移除缓存的成绩 */
   removeCachedScore: (userId, songName) => {
-    set((state) => ({
-      scores: state.scores.filter(
-        (s) => !(s.userId === userId && s.songName === songName)
-      ),
-    }));
+    set((state) => {
+      const history = [...state.scoreHistory, [...state.scores]];
+      return {
+        scores: state.scores.filter(
+          (s) => !(s.userId === userId && s.songName === songName)
+        ),
+        scoreHistory: history,
+      };
+    });
   },
 
   /** 清空成绩缓存 */
-  clearCachedScores: () => set({ scores: [] }),
+  clearCachedScores: () => set({ scores: [], scoreHistory: [] }),
 
   /** SSE: 处理排名更新事件 */
   handleQualifierUpdate: (event) => {
@@ -116,6 +142,7 @@ export const useQualifierStore = create((set, get) => ({
     set({
       songs: [],
       scores: [],
+      scoreHistory: [],
       rankings: [],
       songBreakdown: [],
       cutoff: 0,

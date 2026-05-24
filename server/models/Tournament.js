@@ -26,7 +26,8 @@ const registrationSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   formData: { type: Object, default: {} },           // 动态报名表填写的数据
   registeredAt: { type: Date, default: Date.now },
-  modifyCount: { type: Number, default: 0 }           // 报名信息修改次数上限 1
+  modifyCount: { type: Number, default: 0 },          // 报名信息修改次数上限 1
+  token: { type: String, default: '' }                 // 随机令牌 001-999
 });
 
 // 选手预选赛成绩
@@ -36,7 +37,14 @@ const qualifierScoreEntrySchema = new mongoose.Schema({
   achievement: { type: Number, default: 0 },
   dxScore: { type: Number, default: 0 },
   entryBy: { type: String, default: '' },            // 录入者
-  entryTime: { type: Date, default: Date.now }
+  entryTime: { type: Date, default: Date.now },
+  history: [{                                          // 操作回退历史（修改前快照）
+    achievement: { type: Number },
+    dxScore: { type: Number },
+    entryBy: { type: String },
+    entryTime: { type: Date },
+    revertedAt: { type: Date, default: Date.now }
+  }]
 });
 
 // Note: unique index on array subdocuments conflicts with empty arrays (null, null) across documents
@@ -89,10 +97,15 @@ const tournamentSchema = new mongoose.Schema({
   rules: { type: String, default: '' },              // 比赛规则 (支持 BBCode)
 
   // 时间控制
+  // 阶段时间窗口
   registrationStart: { type: Date },
   registrationEnd: { type: Date },
-  startTime: { type: Date },                         // 比赛开始时间
-  endTime: { type: Date },                           // 比赛结束时间
+  qualifierStart: { type: Date },
+  qualifierEnd: { type: Date },
+  matchesStart: { type: Date },
+  matchesEnd: { type: Date },
+  startTime: { type: Date },                         // 赛事整体开始时间
+  endTime: { type: Date },                           // 赛事整体结束时间
   timeApproved: { type: Boolean, default: false },   // 管理员是否审核通过时间
 
   // 状态

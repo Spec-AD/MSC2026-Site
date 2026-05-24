@@ -54,10 +54,15 @@ const TournamentDetail = () => {
 
   const esRef = useRef(null);
 
+  // ---- 参赛令牌（从后端 myRegistration.token 读取） ----
+  const playerToken = myRegistration?.token || null;
+
   // ---- Derived state ----
   const now = new Date();
-  const regOpen = tournament && tournament.registrationStart && tournament.registrationEnd &&
-    now >= new Date(tournament.registrationStart) && now <= new Date(tournament.registrationEnd);
+  const regOpen = tournament?.timeWindows?.registration?.isOpen ?? (
+    tournament && tournament.registrationStart && tournament.registrationEnd &&
+    now >= new Date(tournament.registrationStart) && now <= new Date(tournament.registrationEnd)
+  );
   const alreadyRegistered = user && tournament?.registrations?.some(r =>
     (r.userId?._id || r.userId) === user._id || (r.userId?._id || r.userId)?.toString() === user._id
   );
@@ -305,14 +310,29 @@ const TournamentDetail = () => {
                 </button>
               )}
             </div>
+            {/* 🎫 参赛令牌 */}
+            {playerToken && (
+              <div className="bg-black/30 border border-orange-500/20 rounded-xl p-4 mb-3 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+                  <span className="text-2xl font-bold text-orange-400">{playerToken}</span>
+                </div>
+                <div>
+                  <p className="text-[10px] text-orange-400/60 font-bold uppercase tracking-wider">参赛令牌</p>
+                  <p className="text-xs text-zinc-500">在预选赛阶段使用此令牌标识你的身份</p>
+                </div>
+              </div>
+            )}
+
             {/* 报名表预览 */}
-            {myRegistration?.formData && Object.keys(myRegistration.formData).length > 0 && (
+            {myRegistration === null ? (
+              <p className="text-zinc-500 text-sm py-2">报名数据加载中...</p>
+            ) : myRegistration?.formData && Object.keys(myRegistration.formData).length > 0 ? (
               <div className="bg-black/30 border border-white/[0.05] rounded-xl p-4 mb-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {Object.entries(myRegistration.formData).map(([label, value]) => (
                     <div key={label}>
                       <span className="text-[10px] text-zinc-500 font-bold uppercase block mb-0.5">{label}</span>
-                      <span className="text-zinc-200 text-sm">{String(value) || '-'}</span>
+                      <span className="text-zinc-200 text-sm">{String(value ?? '') || '-'}</span>
                     </div>
                   ))}
                 </div>
@@ -320,6 +340,8 @@ const TournamentDetail = () => {
                   修改次数: {myRegistration.modifyCount ?? 0} / 1
                 </div>
               </div>
+            ) : (
+              <p className="text-zinc-500 text-sm py-2">该赛事暂无自定义报名信息</p>
             )}
             {/* 编辑按钮（modifyCount < 1 且窗口开放时显示） */}
             {regOpen && (myRegistration?.modifyCount ?? 0) < 1 && (
@@ -395,8 +417,8 @@ const TournamentDetail = () => {
                       advanceCount={tournament.advanceCount || 8}
                       isManager={canManage}
                       qualifierSongs={tournament.qualifierSongs || []}
-                      qualifierStart={tournament.registrationStart}
-                      qualifierEnd={tournament.endTime}
+                      qualifierStart={tournament.qualifierStart || tournament.registrationStart || tournament.timeWindows?.qualifier?.start}
+                      qualifierEnd={tournament.qualifierEnd || tournament.endTime || tournament.timeWindows?.qualifier?.end}
                     />
                   </div>
                 )}
@@ -543,7 +565,7 @@ const TournamentDetail = () => {
                     setIsEditing(true);
                     try {
                       const res = await updateMyRegistration(id, editFormAnswers);
-                      setMyRegistration(res.data.registration);
+                      setMyRegistration(prev => ({ ...prev, ...res.data.registration }));
                       addToast(res.data.msg || '报名信息已更新', 'success');
                       setEditModalOpen(false);
                     } catch (err) {
