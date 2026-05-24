@@ -362,7 +362,7 @@ const TournamentManage = () => {
                     </div>
                   )}
                 </div>
-              )
+              )}
 
               {/* 回退操作 */}
               {isAdm && availableTransitions.filter(t => STATUS_ORDER.indexOf(t) < STATUS_ORDER.indexOf(tournament.status)).length > 0 && (

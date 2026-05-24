@@ -16,16 +16,6 @@ router.get('/api/announcements', async (req, res) => {
   } catch (err) { res.status(500).json({ msg: '获取失败' }); }
 });
 
-// 获取公告列表
-router.get('/api/announcements', async (req, res) => {
-  try {
-    const announcements = await Announcement.find()
-      .populate('author', 'username avatarUrl role')
-      .sort({ createdAt: -1 });
-    res.json(announcements);
-  } catch (err) { res.status(500).json({ msg: '获取失败' }); }
-});
-
 // 获取单个公告详情
 router.get('/api/announcements/:id', async (req, res) => {
   try {
