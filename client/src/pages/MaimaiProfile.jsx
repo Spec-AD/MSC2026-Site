@@ -189,6 +189,30 @@ const MaimaiProfile = () => {
   const isOwnProfile = profile && currentUser && (profile.username.toLowerCase() === currentUser.username.toLowerCase());
 
   const oauthCalled = useRef(false);
+
+  // 🔥 必须定义在 useEffect 之前，否则 const TDZ 导致 ReferenceError
+  const executeLuoxueOAuthSync = async (code) => {
+    setIsSyncing(true);
+    setSyncSource('lx'); 
+    try {
+      const token = localStorage.getItem('token');
+      const currentRedirectUri = `${window.location.origin}/profile`;
+      
+      const res = await axios.post('/api/users/sync-luoxue-oauth', 
+        { code, redirectUri: currentRedirectUri }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      addToast(res.data.msg || '落雪数据同步成功！', 'success');
+      const profileRes = await axios.get(`/api/users/${username}?t=${Date.now()}`);
+      setProfile(profileRes.data);
+    } catch (err) {
+      addToast(err.response?.data?.msg || '授权同步失败，可能是授权码已过期', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -259,28 +283,6 @@ const MaimaiProfile = () => {
       setProfile(profileRes.data);
     } catch (err) {
       addToast(err.response?.data?.msg || '同步失败，请检查输入或网络', 'error');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const executeLuoxueOAuthSync = async (code) => {
-    setIsSyncing(true);
-    setSyncSource('lx'); 
-    try {
-      const token = localStorage.getItem('token');
-      const currentRedirectUri = `${window.location.origin}/profile`;
-      
-      const res = await axios.post('/api/users/sync-luoxue-oauth', 
-        { code, redirectUri: currentRedirectUri }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      addToast(res.data.msg || '落雪数据同步成功！', 'success');
-      const profileRes = await axios.get(`/api/users/${username}?t=${Date.now()}`);
-      setProfile(profileRes.data);
-    } catch (err) {
-      addToast(err.response?.data?.msg || '授权同步失败，可能是授权码已过期', 'error');
     } finally {
       setIsSyncing(false);
     }

@@ -58,6 +58,29 @@ export default function ChunithmProfile() {
     }
   }, [isOwnProfile, username]);
 
+  // 🔥 必须定义在 useEffect 之前，否则 const TDZ 导致 ReferenceError
+  const executeLuoxueOAuthSync = async (code) => {
+    setIsSyncing(true);
+    setSyncSource('lx');
+    try {
+      const token = localStorage.getItem('token');
+      const currentRedirectUri = `${window.location.origin}/profile`;
+      
+      const res = await axios.post('/api/users/sync-chunithm-oauth', 
+        { code, redirectUri: currentRedirectUri }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      addToast(res.data.msg || 'CHUNITHM 数据同步成功！', 'success');
+      const scoresRes = await axios.get(`/api/users/${username}/chunithm-scores`);
+      setChuniScores(scoresRes.data);
+    } catch (err) {
+      addToast(err.response?.data?.msg || '授权同步失败', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   useEffect(() => {
     const initData = async () => {
       setLoading(true);
@@ -88,28 +111,6 @@ export default function ChunithmProfile() {
     };
     initData();
   }, [username]);
-
-  const executeLuoxueOAuthSync = async (code) => {
-    setIsSyncing(true);
-    setSyncSource('lx');
-    try {
-      const token = localStorage.getItem('token');
-      const currentRedirectUri = `${window.location.origin}/profile`;
-      
-      const res = await axios.post('/api/users/sync-chunithm-oauth', 
-        { code, redirectUri: currentRedirectUri }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      addToast(res.data.msg || 'CHUNITHM 数据同步成功！', 'success');
-      const scoresRes = await axios.get(`/api/users/${username}/chunithm-scores`);
-      setChuniScores(scoresRes.data);
-    } catch (err) {
-      addToast(err.response?.data?.msg || '授权同步失败', 'error');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const handleLuoxueOAuthLogin = () => {
     const redirectUri = encodeURIComponent(`${window.location.origin}/profile`);
