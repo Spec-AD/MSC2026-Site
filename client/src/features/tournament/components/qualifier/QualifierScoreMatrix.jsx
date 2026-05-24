@@ -491,26 +491,31 @@ const QualifierScoreMatrix = ({
   // 计算每位选手的录入进度
   const playerProgress = {};
   const playerDX = {}; // { [userId]: totalDX }
+  const playerAchievement = {}; // { [userId]: totalAchievement% }
   registrations.forEach(reg => {
     const userId = reg.userId?._id || reg.userId;
     let done = 0;
     let totalDX = 0;
+    let totalAch = 0;
     songs.forEach(s => {
       const cached = cachedScores.find(c => c.userId === userId && c.songName === s.songName);
       const submitted = submittedScores[userId]?.[s.songName];
       if (cached) {
         done++;
         totalDX += Number(cached.dxScore) || 0;
+        totalAch += Number(cached.achievement) || 0;
       } else if (submitted) {
         done++;
-        // 已提交的 DX 分从 matrixData 取
+        // 已提交的成绩从 matrixData 取
         const entry = matrixData.entries?.find(e => (e.userId?._id || e.userId) === userId);
         const score = entry?.scores?.[s.songName];
         totalDX += Number(score?.dxScore) || 0;
+        totalAch += Number(score?.achievement) || 0;
       }
     });
     playerProgress[userId] = { done, total: songs.length };
     playerDX[userId] = totalDX;
+    playerAchievement[userId] = totalAch;
   });
 
   // ---- 空状态 ----
@@ -722,8 +727,11 @@ const QualifierScoreMatrix = ({
                         </div>
                       </div>
 
-                      {/* DX 总分 */}
+                      {/* 完成率 + DX 总分 */}
                       <div className="text-right flex-shrink-0">
+                        {playerAchievement[userId] > 0 && (
+                          <div className="text-xs font-bold text-emerald-400">{playerAchievement[userId].toFixed(4)}%</div>
+                        )}
                         <div className="text-xs font-bold text-amber-400">{playerDX[userId] || 0}</div>
                         <div className="text-[9px] text-zinc-600 uppercase tracking-wider">DX</div>
                       </div>
