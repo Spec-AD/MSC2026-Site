@@ -178,7 +178,10 @@ router.post('/api/users/sync-luoxue-oauth', authMiddleware, async (req, res) => 
       'https://maimai.lxns.net/api/v0/user/maimai/player/scores',
       { headers: { 'Authorization': `Bearer ${userAccessToken}` }, timeout: 30000 }
     );
-    const allRecords = scoreResponse.data?.data?.records || scoreResponse.data?.records || [];
+    // LXNS Personal API 返回 { data: Score[] }，直接解构 data 即是数组
+    // 同时兼容旧格式 { data: { records: Score[] } }
+    const scoresPayload = scoreResponse.data?.data || scoreResponse.data;
+    const allRecords = Array.isArray(scoresPayload) ? scoresPayload : (scoresPayload?.records || []);
     if (!allRecords.length) {
       return res.status(200).json({ msg: '落雪返回的成绩列表为空' });
     }

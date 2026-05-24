@@ -15,7 +15,9 @@ router.post('/api/users/sync-chunithm-oauth', authMiddleware, async (req, res) =
     const tokenResponse = await axios.post('https://maimai.lxns.net/api/v0/oauth/token', { grant_type: 'authorization_code', client_id: process.env.LXNS_CLIENT_ID, client_secret: process.env.LXNS_CLIENT_SECRET, code, redirect_uri: redirectUri }, { headers: { 'Content-Type': 'application/json' } });
     const userAccessToken = tokenResponse.data.access_token || tokenResponse.data.data?.access_token;
     const scoreResponse = await axios.get('https://maimai.lxns.net/api/v0/user/chunithm/player/scores', { headers: { 'Authorization': `Bearer ${userAccessToken}` }, timeout: 30000 });
-    const allRecords = scoreResponse.data?.data?.records || scoreResponse.data?.records || [];
+    // LXNS Personal API 返回 { data: Score[] }，直接解构 data 即是数组
+    const scoresPayload = scoreResponse.data?.data || scoreResponse.data;
+    const allRecords = Array.isArray(scoresPayload) ? scoresPayload : (scoresPayload?.records || []);
 
     const allSongsArray = await ChunithmSong.find({}, 'id title ds basic_info').lean();
     const processedScores = [];
