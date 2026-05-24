@@ -345,19 +345,39 @@ const QualifierScoreMatrix = ({
   const [submitResult, setSubmitResult] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFullMatrix, setShowFullMatrix] = useState(false);
+  // 已提交成功的成绩映射，用于外层进度条展示
+  const [submittedScores, setSubmittedScores] = useState({}); // { [userId]: { [songName]: true } }
   // 全量矩阵数据（从后端 /qualifier/matrix 获取）
   const [matrixData, setMatrixData] = useState({ songs: [], entries: [] });
   const [matrixLoading, setMatrixLoading] = useState(false);
 
-  // 展开全量矩阵时 从后端拉取完整数据
+  // 从后端加载已提交的预选成绩，用于进度展示
+  const [matrixLoaded, setMatrixLoaded] = useState(false);
   useEffect(() => {
-    if (!showFullMatrix || !tournamentId) return;
-    setMatrixLoading(true);
+    if (!tournamentId || !registrations.length || !songs.length || matrixLoaded) return;
     getQualifierMatrix(tournamentId)
-      .then(res => setMatrixData(res.data || { songs: [], entries: [] }))
-      .catch(() => setMatrixData({ songs: [], entries: [] }))
-      .finally(() => setMatrixLoading(false));
-  }, [showFullMatrix, tournamentId]);
+      .then(res => {
+        const data = res.data || { entries: [] };
+        setMatrixData(data);
+        // 将已有成绩同步到 submittedScores
+        const existing = {};
+        (data.entries || []).forEach(entry => {
+          const uid = entry.userId?._id || entry.userId;
+          if (!existing[uid]) existing[uid] = {};
+          Object.entries(entry.scores || {}).forEach(([songName, score]) => {
+            if (score && (Number(score.achievement) > 0 || Number(score.dxScore) > 0)) {
+              existing[uid][songName] = true;
+            }
+          });
+        });
+        setSubmittedScores(existing);
+        setMatrixLoaded(true);
+      })
+      .catch(() => {
+        // matrix 端点暂不可用（后端未上线），不影响功能
+        setMatrixLoaded(true);
+      });
+  }, [tournamentId, registrations.length, songs.length, matrixLoaded]);
 
   // CSV 导入
   const [csvErrors, setCsvErrors] = useState([]);
@@ -378,19 +398,43 @@ const QualifierScoreMatrix = ({
   const handleRemoveCachedScore = (userId, songName) => removeCachedScore(userId, songName);
 
   // ---- 提交 ----
-  const handleSubmit = async (targetUserId = null) => {
+  const handleSubmit = async (targetUserId = null, closeModal = false) => {
     const toSubmit = targetUserId
       ? cachedScores.filter(s => s.userId === targetUserId)
       : cachedScores;
 
-    if (toSubmit.length === 0) return;
+    if (toSubmit.length === 0) {
+      if (closeModal) setSelectedPlayer(null);
+      return;
+    }
     setSubmitting(true);
     setSubmitResult(null);
     try {
       const res = await submitScores(tournamentId, toSubmit);
-      setSubmitResult(res.data);
+      // 更新 submittedScores 标记
+      if (res.data?.updated > 0) {
+        const newSubmitted = { ...submittedScores };
+        toSubmit.forEach(s => {
+          if (!newSubmitted[s.userId]) newSubmitted[s.userId] = {};
+          newSubmitted[s.userId][s.songName] = true;
+        });
+        setSubmittedScores(newSubmitted);
+      }
+      // 成功后关闭弹窗
+      if (closeModal) {
+        setSelectedPlayer(null);
+        setSubmitResult(null);
+      } else {
+        setSubmitResult(res.data);
+      }
     } catch (err) {
-      setSubmitResult({ updated: 0, skipped: 0, errors: [err.msg || '提交失败'] });
+      const errData = { updated: 0, errors: [err.response?.data?.msg || err.msg || '提交失败'] };
+      if (closeModal) {
+        // 弹窗模式：出错留在弹窗显示
+        setSubmitResult(errData);
+      } else {
+        setSubmitResult(errData);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -446,14 +490,27 @@ const QualifierScoreMatrix = ({
 
   // 计算每位选手的录入进度
   const playerProgress = {};
+  const playerDX = {}; // { [userId]: totalDX }
   registrations.forEach(reg => {
     const userId = reg.userId?._id || reg.userId;
     let done = 0;
+    let totalDX = 0;
     songs.forEach(s => {
       const cached = cachedScores.find(c => c.userId === userId && c.songName === s.songName);
-      if (cached) done++;
+      const submitted = submittedScores[userId]?.[s.songName];
+      if (cached) {
+        done++;
+        totalDX += Number(cached.dxScore) || 0;
+      } else if (submitted) {
+        done++;
+        // 已提交的 DX 分从 matrixData 取
+        const entry = matrixData.entries?.find(e => (e.userId?._id || e.userId) === userId);
+        const score = entry?.scores?.[s.songName];
+        totalDX += Number(score?.dxScore) || 0;
+      }
     });
     playerProgress[userId] = { done, total: songs.length };
+    playerDX[userId] = totalDX;
   });
 
   // ---- 空状态 ----
@@ -664,6 +721,12 @@ const QualifierScoreMatrix = ({
                         </div>
                       </div>
 
+                      {/* DX 总分 */}
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-xs font-bold text-amber-400">{playerDX[userId] || 0}</div>
+                        <div className="text-[9px] text-zinc-600 uppercase tracking-wider">DX</div>
+                      </div>
+
                       {/* 展开箭头 */}
                       <FaChevronRight className="text-zinc-600 group-hover:text-zinc-400 transition-colors text-xs" />
                     </button>
@@ -701,7 +764,7 @@ const QualifierScoreMatrix = ({
           onCacheScore={handleCacheScore}
           onRemoveCachedScore={handleRemoveCachedScore}
           onClose={() => { setSelectedPlayer(null); setSubmitResult(null); }}
-          onSubmit={(userId) => handleSubmit(userId)}
+          onSubmit={(userId) => handleSubmit(userId, true)}
           submitting={submitting}
           submitResult={submitResult}
           onRollback={async (songName) => {
