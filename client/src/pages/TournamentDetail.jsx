@@ -54,6 +54,15 @@ const TournamentDetail = () => {
 
   const esRef = useRef(null);
 
+  // ---- Derived state ----
+  const now = new Date();
+  const regOpen = tournament && tournament.registrationStart && tournament.registrationEnd &&
+    now >= new Date(tournament.registrationStart) && now <= new Date(tournament.registrationEnd);
+  const alreadyRegistered = user && tournament?.registrations?.some(r =>
+    (r.userId?._id || r.userId) === user._id || (r.userId?._id || r.userId)?.toString() === user._id
+  );
+  const canManage = user && ['ADM', 'CHM', 'TO'].includes(user.role);
+
   // ---- Data load ----
   const loadData = useCallback(async () => {
     await fetchTournament(id);
@@ -143,14 +152,6 @@ const TournamentDetail = () => {
   if (loading || !tournament) {
     return <div className="min-h-screen flex items-center justify-center"><FaSpinner className="animate-spin text-4xl text-cyan-500" /></div>;
   }
-
-  const now = new Date();
-  const regOpen = tournament.registrationStart && tournament.registrationEnd &&
-    now >= new Date(tournament.registrationStart) && now <= new Date(tournament.registrationEnd);
-  const alreadyRegistered = user && tournament.registrations?.some(r =>
-    (r.userId?._id || r.userId) === user._id || (r.userId?._id || r.userId)?.toString() === user._id
-  );
-  const canManage = user && ['ADM', 'CHM', 'TO'].includes(user.role);
 
   const handleRegister = async () => {
     if (!user) return navigate('/login');
