@@ -718,6 +718,7 @@ const QualifierScoreMatrix = ({
                             />
                           </div>
                           <span className="text-[10px] text-zinc-500">{progress.done}/{progress.total}</span>
+                          <span className="text-[10px] font-bold text-zinc-400">{percent}%</span>
                         </div>
                       </div>
 
