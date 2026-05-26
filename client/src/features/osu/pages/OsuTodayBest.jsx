@@ -1,5 +1,6 @@
 // ============================================================
 // OsuTodayBest — 今日最佳成绩
+// b1.7.07: 新增轻量同步刷新按钮 + 60s 冷却
 // GET /api/osu/todaybest?mode=
 // ============================================================
 
@@ -10,15 +11,26 @@ import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import OsuStarBadge from '../components/OsuStarBadge';
-import { FaSpinner, FaSun, FaFire } from 'react-icons/fa';
+import useLightSync from '../hooks/useLightSync';
+import { FaSpinner, FaSun, FaFire, FaSyncAlt } from 'react-icons/fa';
 
 const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
+
+function formatElapsed(timestamp) {
+  if (!timestamp) return '';
+  const diff = Date.now() - timestamp;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} 小时前`;
+  return `${Math.floor(diff / 86400_000)} 天前`;
+}
 
 export default function OsuTodayBest() {
   const [activeMode, setActiveMode] = useState('standard');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { refresh, refreshing, cooldown, lastRefreshTime } = useLightSync(activeMode);
 
   const fetchData = async () => {
     setLoading(true);
@@ -38,6 +50,16 @@ export default function OsuTodayBest() {
     fetchData();
   }, [activeMode]);
 
+  const handleRefresh = async () => {
+    try {
+      const result = await refresh();
+      if (result?.todaybest) setData(result.todaybest);
+      else fetchData();
+    } catch (err) {
+      setError(err.userMessage || '同步失败');
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -50,7 +72,28 @@ export default function OsuTodayBest() {
             </span>
           )}
         </div>
-        <OsuModeTabs activeMode={activeMode} onModeChange={setActiveMode} />
+        <div className="flex items-center gap-2">
+          {lastRefreshTime && (
+            <span className="text-[10px] text-zinc-600">
+              上次更新: {formatElapsed(lastRefreshTime)}
+            </span>
+          )}
+          <button
+            onClick={handleRefresh}
+            disabled={cooldown > 0 || refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50
+              bg-pink-600 hover:bg-pink-500 text-white disabled:bg-pink-600/30"
+          >
+            {refreshing ? (
+              <><FaSpinner className="animate-spin" /> 同步中...</>
+            ) : cooldown > 0 ? (
+              <><FaSyncAlt className="opacity-50" /> 冷却中 ({Math.ceil(cooldown / 1000)}s)</>
+            ) : (
+              <><FaSyncAlt /> 同步最近成绩</>
+            )}
+          </button>
+          <OsuModeTabs activeMode={activeMode} onModeChange={setActiveMode} />
+        </div>
       </div>
 
       {data?.bp200Threshold !== undefined && (

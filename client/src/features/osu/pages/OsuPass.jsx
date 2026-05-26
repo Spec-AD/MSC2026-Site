@@ -1,5 +1,6 @@
 // ============================================================
 // OsuPass — 最近通过的成绩（四模式各一条）
+// b1.7.07: 新增轻量同步刷新按钮 + 60s 冷却
 // GET /api/osu/pass   GET /api/osu/pass/all
 // ============================================================
 
@@ -10,16 +11,27 @@ import OsuCoverImage from '../components/OsuCoverImage';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import OsuStarBadge from '../components/OsuStarBadge';
-import { FaSpinner, FaCheckCircle } from 'react-icons/fa';
+import useLightSync from '../hooks/useLightSync';
+import { FaSpinner, FaCheckCircle, FaSyncAlt } from 'react-icons/fa';
 import { MODE_LABELS } from '../../../constants/osuModes';
 
 const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
+
+function formatElapsed(timestamp) {
+  if (!timestamp) return '';
+  const diff = Date.now() - timestamp;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} 小时前`;
+  return `${Math.floor(diff / 86400_000)} 天前`;
+}
 
 export default function OsuPass() {
   const [activeMode, setActiveMode] = useState('standard');
   const [passData, setPassData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { refresh, refreshing, cooldown, lastRefreshTime } = useLightSync(activeMode);
 
   const fetchPass = async (mode) => {
     setLoading(true);
@@ -39,6 +51,16 @@ export default function OsuPass() {
     fetchPass(activeMode);
   }, [activeMode]);
 
+  const handleRefresh = async () => {
+    try {
+      const data = await refresh();
+      if (data?.pass) setPassData(data.pass);
+      else fetchPass(activeMode);
+    } catch (err) {
+      setError(err.userMessage || '同步失败');
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -46,7 +68,28 @@ export default function OsuPass() {
           <div className="w-1 h-6 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
           <h2 className="text-xl font-bold text-zinc-100 tracking-tight">最近通过</h2>
         </div>
-        <OsuModeTabs activeMode={activeMode} onModeChange={setActiveMode} />
+        <div className="flex items-center gap-2">
+          {lastRefreshTime && (
+            <span className="text-[10px] text-zinc-600">
+              上次更新: {formatElapsed(lastRefreshTime)}
+            </span>
+          )}
+          <button
+            onClick={handleRefresh}
+            disabled={cooldown > 0 || refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50
+              bg-pink-600 hover:bg-pink-500 text-white disabled:bg-pink-600/30"
+          >
+            {refreshing ? (
+              <><FaSpinner className="animate-spin" /> 同步中...</>
+            ) : cooldown > 0 ? (
+              <><FaSyncAlt className="opacity-50" /> 冷却中 ({Math.ceil(cooldown / 1000)}s)</>
+            ) : (
+              <><FaSyncAlt /> 同步最近成绩</>
+            )}
+          </button>
+          <OsuModeTabs activeMode={activeMode} onModeChange={setActiveMode} />
+        </div>
       </div>
 
       <p className="text-sm text-zinc-500 mb-6">

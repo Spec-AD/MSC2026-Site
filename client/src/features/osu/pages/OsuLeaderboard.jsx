@@ -1,10 +1,10 @@
 // ============================================================
-// OsuLeaderboard — 谱面全球排行榜（b1.7 第二轮优化）
+// OsuLeaderboard — 谱面全球排行榜（b1.7.07: Zustand 迁移 + 搜索历史）
 // GET /api/osu/leaderboard/:bid?legacy=1&limit=50
 // 响应结构：{ beatmap, scores, currentUserRank, userScore, availableTypes }
 // ============================================================
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getLeaderboard } from '../api/osuApi';
 import OsuGrade from '../components/OsuGrade';
@@ -13,23 +13,16 @@ import { getStarBgColor, getStarTextColor } from '../utils/osuColors';
 import ScrollToTopButton from '../components/ScrollToTopButton';
 import OsuLeaderboardRow from '../components/OsuLeaderboardRow';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
+import OsuSearchHistory from '../components/OsuSearchHistory';
+import useOsuCache from '../store/osuCache';
 import {
   FaSpinner, FaArrowLeft, FaGlobeAsia, FaMedal,
   FaSearch, FaStar, FaClock, FaMusic,
   FaBolt
 } from 'react-icons/fa';
 
-function useOsuCache() {
-  const [cache, setCache] = useState(() => ({
-    leaderboardBid: sessionStorage.getItem('osu_leaderboard_bid') || '',
-    leaderboardData: null,
-    setLeaderboard(bid, data) {
-      sessionStorage.setItem('osu_leaderboard_bid', bid);
-      setCache(prev => ({ ...prev, leaderboardBid: bid, leaderboardData: data }));
-    },
-  }));
-  return cache;
-}
+// sessionStorage 持久化键名
+const HISTORY_STORAGE_KEY = 'osu_leaderboard_history';
 
 const modeIcons = {
   standard: '/osu-resources/RulesetOsu.png',
@@ -54,6 +47,31 @@ export default function OsuLeaderboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [filterType, setFilterType] = useState('all');
+  const [isFocused, setIsFocused] = useState(false);
+  const blurTimerRef = useRef(null);
+
+  // sessionStorage 持久化 leaderboardHistory
+  const initHistoryRef = useRef(false);
+  useEffect(() => {
+    if (initHistoryRef.current) return;
+    initHistoryRef.current = true;
+    try {
+      const stored = sessionStorage.getItem(HISTORY_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0 && cache.leaderboardHistory.length === 0) {
+          parsed.forEach(e => cache.addLeaderboardHistory(e));
+        }
+      }
+    } catch (_) {}
+  }, []);
+
+  // leaderboardHistory 变更时同步写 sessionStorage
+  useEffect(() => {
+    if (cache.leaderboardHistory.length > 0) {
+      sessionStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(cache.leaderboardHistory));
+    }
+  }, [cache.leaderboardHistory]);
 
   // 过滤后的成绩
   const filteredScores = useMemo(() => {
@@ -76,6 +94,20 @@ export default function OsuLeaderboard() {
       const { data: res } = await getLeaderboard(effectiveBid, { limit: 50 });
       setData(res);
       cache.setLeaderboard(effectiveBid, res);
+      // 搜索成功后记录历史
+      if (res?.beatmap) {
+        const bm = res.beatmap;
+        cache.addLeaderboardHistory({
+          bid: Number(effectiveBid),
+          coverUrl: bm.coverUrl,
+          title: bm.titleUnicode || bm.title || '',
+          version: bm.version || '',
+          mode: bm.mode || 'standard',
+          modeIcon: modeIcons[bm.mode || 'standard'],
+          starRating: bm.starRating,
+          beatmapStatus: bm.status,
+        });
+      }
     } catch (err) {
       setError(err.response?.data?.message || err.message || '拉取排行榜失败');
     } finally {
@@ -88,8 +120,32 @@ export default function OsuLeaderboard() {
     if (bidInput === effectiveBid) {
       fetchLeaderboard();
     } else {
-      navigate(`/leaderboard/${bidInput}`, { replace: true });
+      navigate(`/osu/leaderboard/${bidInput}`, { replace: true });
     }
+  };
+
+  // 历史条目实时过滤
+  const filteredHistory = useMemo(() => {
+    if (!bidInput.trim()) return cache.leaderboardHistory;
+    return cache.leaderboardHistory.filter(e =>
+      String(e.bid).startsWith(bidInput.trim())
+    );
+  }, [cache.leaderboardHistory, bidInput]);
+
+  // 点击历史条目
+  const handleHistorySelect = (entry) => {
+    setBidInput(String(entry.bid));
+    setIsFocused(false);
+    navigate(`/osu/leaderboard/${entry.bid}`, { replace: true });
+  };
+
+  // 搜索框 focus/blur
+  const handleFocus = () => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    setIsFocused(true);
+  };
+  const handleBlur = () => {
+    blurTimerRef.current = setTimeout(() => setIsFocused(false), 200);
   };
 
   // 路由 bid 变化时自动拉取
@@ -125,6 +181,8 @@ export default function OsuLeaderboard() {
             value={bidInput}
             onChange={e => setBidInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
             placeholder="输入谱面 ID 或 URL..."
             className="w-full pl-9 pr-3 py-2 bg-[#15151e] border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-600 transition-colors"
           />
@@ -137,6 +195,21 @@ export default function OsuLeaderboard() {
           {loading ? <FaSpinner className="animate-spin" /> : '搜索'}
         </button>
       </div>
+
+      {/* 搜索历史面板 — 搜索框 focus 时展开 */}
+      {isFocused && filteredHistory.length > 0 && (
+        <div className="mb-4">
+          <OsuSearchHistory
+            items={filteredHistory}
+            type="bid"
+            onSelect={handleHistorySelect}
+            onClear={() => {
+              cache.clearLeaderboardHistory();
+              sessionStorage.removeItem(HISTORY_STORAGE_KEY);
+            }}
+          />
+        </div>
+      )}
 
       {/* 谱面信息卡 — b1.7 R3 修复：使用扁平字段 + 图标 + 进度条 */}
       {beatmap && (
@@ -260,7 +333,7 @@ export default function OsuLeaderboard() {
               key={t}
               onClick={() => {
                 setBidInput('');
-                navigate(`/leaderboard/${bid}?type=${t}`, { replace: true });
+                navigate(`/osu/leaderboard/${bid}?type=${t}`, { replace: true });
               }}
               className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border transition-all
                 border-zinc-800 text-zinc-500 hover:border-pink-600/40 hover:text-pink-400"

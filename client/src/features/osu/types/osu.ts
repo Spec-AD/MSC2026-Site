@@ -276,6 +276,16 @@ export interface SyncProgress {
   failed: number;
 }
 
+// ----- b1.7.07 新增类型 -----
+
+/** POST /api/osu/refresh-light 响应 */
+export interface RefreshLightResponse {
+  msg: string;
+  pass: OsuScoreData | null;
+  todaybest: TodayBestResponse;
+  merged: number;
+}
+
 // ----- 通用 -----
 
 /** API 错误响应格式 */

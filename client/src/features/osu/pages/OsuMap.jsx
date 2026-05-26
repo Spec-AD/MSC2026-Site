@@ -3,12 +3,20 @@
 // GET /api/osu/map/:bid
 // ============================================================
 
-import { useState } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getBeatmap } from '../api/osuApi';
 import OsuMapCard from '../components/OsuMapCard';
+import OsuSearchHistory from '../components/OsuSearchHistory';
 import { FaSpinner, FaSearch, FaMusic, FaMap as FaMapIcon } from 'react-icons/fa';
 import useOsuCache from '../store/osuCache';
+
+const modeIcons = {
+  standard: '/osu-resources/RulesetOsu.png',
+  taiko: '/osu-resources/RulesetTaiko.png',
+  catch: '/osu-resources/RulesetCatch.png',
+  mania: '/osu-resources/RulesetMania.png',
+};
 
 export default function OsuMap() {
   const cache = useOsuCache();
@@ -17,7 +25,17 @@ export default function OsuMap() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(!!cache.mapData);
+  const [isFocused, setIsFocused] = useState(false);
+  const blurTimerRef = useRef(null);
   const navigate = useNavigate();
+
+  // 历史条目实时过滤
+  const filteredHistory = useMemo(() => {
+    if (!bid.trim()) return cache.mapHistory;
+    return cache.mapHistory.filter(e =>
+      String(e.bid).startsWith(bid.trim())
+    );
+  }, [cache.mapHistory, bid]);
 
   const handleSearch = async () => {
     if (!bid.trim() || isNaN(Number(bid))) return;
@@ -28,12 +46,53 @@ export default function OsuMap() {
       const { data } = await getBeatmap(bid.trim());
       setBeatmap(data);
       cache.setMap(bid.trim(), data);
+      // 搜索成功后记录历史
+      if (data) {
+        cache.addMapHistory({
+          bid: Number(bid.trim()),
+          coverUrl: data.coverUrl || data.covers?.cover,
+          title: data.titleUnicode || data.title || '',
+          version: data.version || '',
+          mode: data.mode || 'standard',
+          modeIcon: modeIcons[data.mode || 'standard'],
+          starRating: data.starRating,
+          beatmapStatus: data.status,
+        });
+      }
     } catch (err) {
       setError(err.userMessage || '未找到该谱面');
       setBeatmap(null);
     } finally {
       setLoading(false);
     }
+  };
+
+  // 点击历史条目
+  const handleHistorySelect = async (entry) => {
+    setBid(String(entry.bid));
+    setIsFocused(false);
+    setLoading(true);
+    setError(null);
+    setSearched(true);
+    try {
+      const { data } = await getBeatmap(String(entry.bid));
+      setBeatmap(data);
+      cache.setMap(String(entry.bid), data);
+    } catch (err) {
+      setError(err.userMessage || '未找到该谱面');
+      setBeatmap(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 搜索框 focus/blur
+  const handleFocus = () => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    setIsFocused(true);
+  };
+  const handleBlur = () => {
+    blurTimerRef.current = setTimeout(() => setIsFocused(false), 200);
   };
 
   const handleKeyDown = (e) => {
@@ -56,6 +115,8 @@ export default function OsuMap() {
             value={bid}
             onChange={(e) => setBid(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
             placeholder="输入谱面 ID（beatmapId）..."
             className="w-full bg-[#15151e] border border-white/[0.08] rounded-lg pl-10 pr-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 transition-colors"
           />
@@ -77,6 +138,18 @@ export default function OsuMap() {
           </button>
         )}
       </div>
+
+      {/* 搜索历史面板 — 搜索框 focus 时展开 */}
+      {isFocused && filteredHistory.length > 0 && (
+        <div className="mb-4">
+          <OsuSearchHistory
+            items={filteredHistory}
+            type="bid"
+            onSelect={handleHistorySelect}
+            onClear={() => cache.clearMapHistory()}
+          />
+        </div>
+      )}
 
       {/* 加载 */}
       {loading && (

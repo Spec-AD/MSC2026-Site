@@ -29,6 +29,7 @@ const useOsuCache = create((set, get) => ({
     const filtered = state.leaderboardHistory.filter(e => e.bid !== entry.bid);
     return { leaderboardHistory: [entry, ...filtered].slice(0, MAX_HISTORY) };
   }),
+  clearLeaderboardHistory: () => set({ leaderboardHistory: [] }),
 
   // --- 玩家搜索历史 (max 10, 去重) ---
   playerHistory: [],
@@ -36,6 +37,15 @@ const useOsuCache = create((set, get) => ({
     const filtered = state.playerHistory.filter(e => e.username !== entry.username);
     return { playerHistory: [entry, ...filtered].slice(0, MAX_HISTORY) };
   }),
+  clearPlayerHistory: () => set({ playerHistory: [] }),
+
+  // --- 谱面查询历史 (max 10, 去重) ---
+  mapHistory: [],
+  addMapHistory: (entry) => set((state) => {
+    const filtered = state.mapHistory.filter(e => e.bid !== entry.bid);
+    return { mapHistory: [entry, ...filtered].slice(0, MAX_HISTORY) };
+  }),
+  clearMapHistory: () => set({ mapHistory: [] }),
 
   // --- 清除全部 ---
   clearAll: () => set({
@@ -44,6 +54,7 @@ const useOsuCache = create((set, get) => ({
     mapQuery: '', mapData: null,
     leaderboardHistory: [],
     playerHistory: [],
+    mapHistory: [],
   }),
 }));
 

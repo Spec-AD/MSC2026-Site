@@ -218,8 +218,8 @@ export default function OsuProfile() {
                   <span className="text-sm font-medium text-zinc-400">
                     {profile.osuUsername || profile.username}
                   </span>
-                  {profile.countryCode && (
-                    <CountryFlag code={profile.countryCode} size="sm" />
+                  {profile.osuCountryCode && (
+                    <CountryFlag code={profile.osuCountryCode} size="sm" />
                   )}
                   {profile.osuId && (
                     <span className="bg-pink-500/10 text-pink-400 border border-pink-500/20 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">
@@ -310,8 +310,8 @@ export default function OsuProfile() {
                   <h2 className="text-lg md:text-2xl font-bold text-zinc-100 truncate min-w-0">
                     {profile.osuUsername || profile.username}
                   </h2>
-                  {profile.countryCode && (
-                    <CountryFlag code={profile.countryCode} size="sm" className="shrink-0" />
+                  {profile.osuCountryCode && (
+                    <CountryFlag code={profile.osuCountryCode} size="sm" className="shrink-0" />
                   )}
                 </div>
               </div>

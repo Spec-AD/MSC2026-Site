@@ -1,9 +1,11 @@
 // ============================================================
 // OsuSearchHistory — 搜索历史通用组件
-// 支持 BID 历史（曲绘+曲名+难度+模式）和玩家历史（头像+名+国旗+ID）
+// b1.7.07: bid 类型新增星标/状态/ID; player 国旗左移
 // ============================================================
 
 import { FaHistory, FaTrash } from 'react-icons/fa';
+import OsuStarBadge from './OsuStarBadge';
+import OsuBeatmapStatusBadge from './OsuBeatmapStatusBadge';
 
 /**
  * @param {Object} props
@@ -43,10 +45,21 @@ export default function OsuSearchHistory({ items, type, onSelect, onClear }) {
                       onError={(e) => { e.target.style.display = 'none'; }} />
                   ) : null}
                 </div>
-                {/* 曲名 + 难度 */}
+                {/* 曲名 + BID + 版本 */}
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold text-zinc-300 truncate">{entry.title}</div>
-                  <div className="text-[9px] text-zinc-600 truncate">{entry.version}</div>
+                  <div className="text-xs font-bold text-zinc-300 truncate">
+                    {entry.title}
+                    <span className="text-[9px] text-zinc-600 ml-1.5 font-normal">(BID: {entry.bid})</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {(entry.starRating ?? 0) > 0 && (
+                      <OsuStarBadge starRating={entry.starRating} size="sm" />
+                    )}
+                    <span className="text-[9px] text-zinc-600 truncate">{entry.version}</span>
+                    {entry.beatmapStatus && (
+                      <OsuBeatmapStatusBadge status={entry.beatmapStatus} />
+                    )}
+                  </div>
                 </div>
                 {/* 模式 PNG */}
                 {entry.modeIcon && (
@@ -55,26 +68,27 @@ export default function OsuSearchHistory({ items, type, onSelect, onClear }) {
               </>
             ) : (
               <>
-                {/* 头像 */}
-                <div className="w-7 h-7 shrink-0 rounded-full overflow-hidden bg-zinc-800">
-                  {entry.avatarUrl ? (
-                    <img src={entry.avatarUrl} alt="" className="w-full h-full object-cover"
+                {/* 国旗 + 头像 */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {entry.countryCode && (
+                    <img src={`/osu-resources/Flags/${entry.countryCode}.png`} alt=""
+                      className="w-4 h-3 shrink-0 rounded-sm opacity-70"
                       onError={(e) => { e.target.style.display = 'none'; }} />
-                  ) : (
-                    <div className="w-full h-full bg-zinc-700" />
                   )}
+                  <div className="w-7 h-7 rounded-full overflow-hidden bg-zinc-800">
+                    {entry.avatarUrl ? (
+                      <img src={entry.avatarUrl} alt="" className="w-full h-full object-cover"
+                        onError={(e) => { e.target.style.display = 'none'; }} />
+                    ) : (
+                      <div className="w-full h-full bg-zinc-700" />
+                    )}
+                  </div>
                 </div>
                 {/* 用户名 */}
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-zinc-300 truncate">{entry.username}</div>
                   <div className="text-[9px] text-zinc-600">ID: {entry.osuId || '—'}</div>
                 </div>
-                {/* 国旗 */}
-                {entry.countryCode && (
-                  <img src={`/osu-resources/Flags/${entry.countryCode}.png`} alt=""
-                    className="w-4 h-3 shrink-0 rounded-sm opacity-70"
-                    onError={(e) => { e.target.style.display = 'none'; }} />
-                )}
               </>
             )}
           </button>

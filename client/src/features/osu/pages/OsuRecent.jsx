@@ -1,16 +1,22 @@
 // ============================================================
 // OsuRecent — 最近所有成绩（含 F）
+// b1.7.07: 防抖自动刷新 + 模式持久化 + 自动 refresh + showTime
 // GET /api/osu/recent?mode=&from=&to=&page=&limit=
 // ============================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getRecent } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuScoreCard from '../components/OsuScoreCard';
+import useDebounce from '../hooks/useDebounce';
 import { FaSpinner, FaChevronLeft, FaChevronRight, FaFilter, FaExclamationCircle } from 'react-icons/fa';
 
+const PREFERRED_MODE_KEY = 'osu_recent_mode';
+
 export default function OsuRecent() {
-  const [activeMode, setActiveMode] = useState('standard');
+  const [activeMode, setActiveMode] = useState(() => {
+    return localStorage.getItem(PREFERRED_MODE_KEY) || 'standard';
+  });
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,15 +24,32 @@ export default function OsuRecent() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [hasRefreshed, setHasRefreshed] = useState(false);
+  const initialLoadDoneRef = useRef(false);
+  const RECENT_REFRESH_KEY = 'osu_re_…fresh';
 
-  const fetchRecent = async () => {
-    setLoading(true);
+  // 从 sessionStorage 恢复冷却状态
+  const isCoolingDown = () => {
     try {
-      const params = { mode: activeMode, page, limit: 20 };
-      if (dateFrom) params.from = dateFrom;
-      if (dateTo) params.to = dateTo;
+      const stored = sessionStorage.getItem(RECENT_REFRESH_KEY);
+      return stored && (Date.now() - parseInt(stored, 10)) < 60000;
+    } catch (_) { return false; }
+  };
+
+  // 所有筛选条件统一防抖
+  const debouncedFilters = useDebounce({ mode: activeMode, page, from: dateFrom, to: dateTo }, 500);
+
+  const fetchRecent = async (refresh = false) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = { mode: debouncedFilters.mode, page: debouncedFilters.page, limit: 20 };
+      if (debouncedFilters.from) params.from = debouncedFilters.from;
+      if (debouncedFilters.to) params.to = debouncedFilters.to;
+      if (refresh) params.refresh = true;
       const { data: res } = await getRecent(params);
       setData(res);
+      if (refresh) setHasRefreshed(true);
     } catch (err) {
       setData(null);
       setError(err?.userMessage || '加载失败，请稍后重试');
@@ -35,18 +58,32 @@ export default function OsuRecent() {
     }
   };
 
+  // 防抖值变化时自动触发查询（跳过首屏，由 auto-refresh effect 接管）
   useEffect(() => {
-    setPage(1);
-  }, [activeMode]);
+    if (!initialLoadDoneRef.current) return;
+    fetchRecent(false);
+  }, [debouncedFilters]);
 
-  useEffect(() => {
-    fetchRecent();
-  }, [activeMode, page]);
-
-  const handleSearch = () => {
+  // 模式切换：重置页码 + 持久化
+  const handleModeChange = (mode) => {
+    setActiveMode(mode);
     setPage(1);
-    fetchRecent();
+    localStorage.setItem(PREFERRED_MODE_KEY, mode);
   };
+
+  // 页面首次加载时自动触发一次 refresh（60s 冷却，跨挂载持久化）
+  // 这是首屏唯一的查询触发，debounce effect 跳过首屏
+  useEffect(() => {
+    initialLoadDoneRef.current = false;
+    if (isCoolingDown()) {
+      // 冷却中，只做本地查询
+      fetchRecent(false);
+    } else {
+      sessionStorage.setItem(RECENT_REFRESH_KEY, String(Date.now()));
+      fetchRecent(true);
+    }
+    initialLoadDoneRef.current = true;
+  }, []);
 
   const defaultFrom = () => {
     const d = new Date();
@@ -68,7 +105,7 @@ export default function OsuRecent() {
           >
             <FaFilter /> 筛选
           </button>
-          <OsuModeTabs activeMode={activeMode} onModeChange={setActiveMode} />
+          <OsuModeTabs activeMode={activeMode} onModeChange={handleModeChange} />
         </div>
       </div>
 
@@ -95,12 +132,7 @@ export default function OsuRecent() {
                 className="bg-black/30 border border-white/[0.08] rounded px-2 py-1.5 text-xs text-zinc-200 w-36"
               />
             </div>
-            <button
-              onClick={handleSearch}
-              className="px-4 py-1.5 bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold rounded-lg transition-colors"
-            >
-              查询
-            </button>
+            {/* 筛选条件变更后自动 500ms 防抖刷新，无需查询按钮 */}
           </div>
         </div>
       )}
@@ -116,7 +148,11 @@ export default function OsuRecent() {
         </div>
       ) : !data || data.scores?.length === 0 ? (
         <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">
-          近期无游玩记录
+          {dateFrom || dateTo
+            ? '当前筛选条件下无匹配记录'
+            : hasRefreshed
+              ? '近期无游玩记录'
+              : '暂无记录，首次加载正在同步最新数据...'}
         </div>
       ) : (
         <>
@@ -130,7 +166,7 @@ export default function OsuRecent() {
               <span className="w-20 text-right hidden sm:block">Acc</span>
             </div>
             {data.scores.map((score, i) => (
-              <OsuScoreCard key={i} score={score} rank={(page - 1) * 20 + i + 1} />
+              <OsuScoreCard key={i} score={score} rank={(page - 1) * 20 + i + 1} showTime={true} />
             ))}
           </div>
 

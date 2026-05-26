@@ -4,7 +4,7 @@
 // 响应结构: { username, osuUsername, avatarUrl, coverUrl, country, joinDate, defaultMode, statistics: { standard, taiko, catch, mania } }
 // ============================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getOsuInfo } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
@@ -24,6 +24,8 @@ export default function OsuInfo() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(!!cache.infoData);
+  const [isFocused, setIsFocused] = useState(false);
+  const blurTimerRef = useRef(null);
 
   // 从 URL ?q= 参数自动触发搜索
   useEffect(() => {
@@ -88,6 +90,46 @@ export default function OsuInfo() {
     if (e.key === 'Enter') handleSearch();
   };
 
+  // 搜索框 focus/blur
+  const handleFocus = () => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    setIsFocused(true);
+  };
+  const handleBlur = () => {
+    blurTimerRef.current = setTimeout(() => setIsFocused(false), 200);
+  };
+
+  // 历史条目实时过滤
+  const filteredHistory = useMemo(() => {
+    if (!query.trim()) return cache.playerHistory;
+    return cache.playerHistory.filter(e =>
+      e.username.toLowerCase().includes(query.trim().toLowerCase())
+    );
+  }, [cache.playerHistory, query]);
+
+  // 点击历史条目
+  const handleHistorySelect = async (entry) => {
+    setQuery(entry.username);
+    setLoading(true);
+    setError(null);
+    setPlayer(null);
+    setSearched(true);
+    setIsFocused(false);
+    try {
+      const { data } = await getOsuInfo(entry.username);
+      setPlayer(data);
+      recordPlayerHistory(data);
+      cache.setInfo(entry.username, data);
+      if (data?.defaultMode && MODE_IDS.includes(data.defaultMode)) {
+        setActiveMode(data.defaultMode);
+      }
+    } catch (err) {
+      setError(err.userMessage || '未找到该玩家');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // 当前模式的统计数据
   const currentStats = player?.statistics?.[activeMode] || null;
 
@@ -107,6 +149,8 @@ export default function OsuInfo() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
             placeholder="输入 osu! 用户名 或 UID..."
             className="w-full bg-[#15151e] border border-white/[0.08] rounded-lg pl-10 pr-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 transition-colors"
           />
@@ -121,24 +165,13 @@ export default function OsuInfo() {
         </button>
       </div>
 
-      {/* 搜索历史 */}
-      {!searchParams.get('q') && cache.playerHistory?.length > 0 && (
+      {/* 搜索历史 — 仅搜索框 focus 时展开 */}
+      {isFocused && filteredHistory.length > 0 && (
         <OsuSearchHistory
-          items={cache.playerHistory}
+          items={filteredHistory}
           type="player"
-          onSelect={(entry) => {
-            setQuery(entry.username);
-            getOsuInfo(entry.username).then(({ data }) => {
-              setPlayer(data);
-              recordPlayerHistory(data);
-              cache.setInfo(entry.username, data);
-              setSearched(true);
-              if (data?.defaultMode && MODE_IDS.includes(data.defaultMode)) {
-                setActiveMode(data.defaultMode);
-              }
-            }).catch(() => {});
-          }}
-          onClear={() => cache.clearAll()}
+          onSelect={handleHistorySelect}
+          onClear={() => cache.clearPlayerHistory()}
         />
       )}
 

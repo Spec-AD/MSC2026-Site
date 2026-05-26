@@ -61,6 +61,7 @@ function mapScoreToDoc(userId, apiScore) {
     // catch: lazer 大果/小果 miss
     countLDrp:     apiScore.statistics?.large_tick_miss ?? apiScore.statistics?.count_large_droplet ?? null,
     countSDrpMiss: apiScore.statistics?.small_tick_miss ?? apiScore.statistics?.count_small_droplet_miss ?? null,
+    source: 'bp',
   };
 }
 
@@ -106,10 +107,11 @@ async function syncBP(user, frontendMode) {
     });
   }
 
-  // 删除掉出 BP 200 的旧成绩
+  // 删除掉出 BP 200 的旧成绩（仅清理 BP 来源，不动 refresh-light 写入的 recent 数据）
   const deleteResult = await OsuScore.deleteMany({
     userId: user._id,
     mode: frontendMode,
+    source: { $ne: 'recent' },
     beatmapId: { $nin: [...incomingIds] }
   });
 
@@ -201,6 +203,7 @@ async function syncStats(user, frontendMode) {
     user.osuPp          = stats.pp || 0;
     user.osuGlobalRank  = stats.global_rank || 0;
     user.osuCountryRank = stats.country_rank || 0;
+    user.osuCountryCode = osuStats.country?.code || user.osuCountryCode || '';
   }
 
   await user.save();

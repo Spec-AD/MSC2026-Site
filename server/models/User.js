@@ -31,6 +31,7 @@ const UserSchema = new mongoose.Schema({
     osuGlobalRank: { type: Number, default: 0 }, 
     osuCountryRank: { type: Number, default: 0 },
     osuMode: { type: String, default: 'osu' },
+    osuCountryCode: { type: String, default: '' },     // ISO 3166-1 alpha-2
     osuAccessToken: { type: String, default: '' },     // b1.7 OAuth 访问令牌
     osuRefreshToken: { type: String, default: '' },    // b1.7 OAuth 刷新令牌
     osuTokenExpiresAt: { type: Date, default: null },  // b1.7 Token 过期时间,

@@ -60,6 +60,7 @@ router.post('/api/osu/bind', authMiddleware, async (req, res) => {
     user.osuId = osuUser.id;
     user.osuUsername = osuUser.username;
     user.osuAvatarUrl = osuUser.avatar_url;
+    user.osuCountryCode = osuUser.country?.code || '';
     user.osuAccessToken = access_token;
     user.osuRefreshToken = refresh_token;
     user.osuTokenExpiresAt = new Date(Date.now() + expires_in * 1000);
@@ -190,6 +191,49 @@ router.get('/api/osu/recent', authMiddleware, async (req, res) => {
     if (err.status === 401) return res.status(401).json({ msg: err.message });
     if (err.status === 429) return res.status(429).json({ msg: err.message, retryAfter: err.retryAfter });
     res.status(500).json({ msg: '查询失败' });
+  }
+});
+
+/**
+ * POST /api/osu/refresh-light
+ *
+ * 轻量同步：调 osu! API recent scores + 返回 pass + todaybest
+ * 比 sync-all（BP 200 + stats×4）轻很多，建议前端冷却 60s
+ */
+router.post('/api/osu/refresh-light', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const mode = req.body.mode || 'standard';
+
+    const user = await User.findById(userId).select('osuId osuUsername osuAccessToken osuRefreshToken osuTokenExpiresAt');
+    if (!user || !user.osuId) {
+      return res.status(400).json({ msg: '请先绑定 osu! 账号' });
+    }
+
+    // 1. 轻量同步（调 osu! API recent + upsert OsuScore）
+    const mergeResult = await osuServices.recent.refreshFromApi(user, mode);
+
+    // 2. 获取该模式最新 pass 成绩
+    const passResult = await osuServices.pass.getPass(userId, mode);
+
+    // 3. 获取今日最佳
+    const todaybestResult = await osuServices.todaybest.getTodayBest(userId, mode);
+
+    res.json({
+      msg: '同步成功',
+      pass: passResult || null,
+      todaybest: todaybestResult,
+      merged: mergeResult.merged,
+    });
+  } catch (err) {
+    console.error('[osu refresh-light error]', err.message);
+    if (err.status === 401 || (err.message && err.message.includes('expired'))) {
+      return res.status(401).json({ msg: 'osu! Token 已过期，请重新绑定' });
+    }
+    if (err.status === 429 || (err.message && err.message.includes('rate limit'))) {
+      return res.status(429).json({ msg: 'osu! API 繁忙，请稍后重试' });
+    }
+    res.status(500).json({ msg: '同步失败，请稍后重试' });
   }
 });
 

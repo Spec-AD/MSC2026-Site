@@ -110,6 +110,13 @@ export function getLeaderboard(bid, params = {}) {
 
 // ----- 用户数据（现有） -----
 
+// ----- b1.7.07 新增端点 -----
+
+/** 轻量同步：只拉 recent scores（Pass/TodayBest 使用） */
+export function refreshLight(mode) {
+  return api.post('/osu/refresh-light', { mode });
+}
+
 /** 获取用户资料（含 osuScores） */
 export function getUserProfile(username) {
   return api.get(`/users/${username}?t=${Date.now()}`);

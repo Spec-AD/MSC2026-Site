@@ -4,32 +4,13 @@
 // ============================================================
 
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
 import { FaGamepad, FaTrophy, FaHistory, FaStar, FaList, FaSun, FaSearch, FaMap, FaGlobeAsia, FaUser } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext';
-import { getOsuInfo, getUserProfile } from '../api/osuApi';
-import CountryFlag from '../components/CountryFlag';
-
-const COUNTRY_NAMES = new Intl.DisplayNames(['zh'], { type: 'region' });
 
 export default function OsuHome() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: currentUser } = useAuth();
-  const [osuCountry, setOsuCountry] = useState(null);
-
-  // 获取当前用户已同步的 osu! 国家信息（从数据库，不搜公开 API）
-  useEffect(() => {
-    if (!currentUser) return;
-    const username = currentUser.nickname || currentUser.username;
-    if (!username) return;
-    getUserProfile(username)
-      .then(({ data }) => {
-        const countryCode = data?.osuDetails?.countryCode || data?.osuDefault?.countryCode;
-        if (countryCode) setOsuCountry(countryCode);
-      })
-      .catch(() => {});
-  }, [currentUser]);
 
   const isActive = (item) => {
     if (item.exact) return location.pathname === '/osu';
@@ -70,28 +51,18 @@ export default function OsuHome() {
                 }
               `}
             >
-              {/* 第一个 nav item（我的档案）显示用户头像 + 昵称 + 国旗+国家 */}
+              {/* 第一个 nav item（我的档案）显示用户头像 + 昵称 */}
               {idx === 0 && currentUser ? (
-                <div className="flex flex-col items-start gap-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-800 shrink-0">
-                      {currentUser.avatarUrl ? (
-                        <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover"
-                          onError={(e) => { e.target.style.display = 'none'; }} />
-                      ) : (
-                        <FaUser className="w-full h-full p-1 text-zinc-600" />
-                      )}
-                    </div>
-                    <span className="truncate max-w-[100px]">{item.label}</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-800 shrink-0">
+                    {currentUser.avatarUrl ? (
+                      <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover"
+                        onError={(e) => { e.target.style.display = 'none'; }} />
+                    ) : (
+                      <FaUser className="w-full h-full p-1 text-zinc-600" />
+                    )}
                   </div>
-                  {osuCountry && (
-                    <div className="flex items-center gap-1 pl-7">
-                      <CountryFlag code={osuCountry} size="sm" />
-                      <span className="text-[9px] text-zinc-500">
-                        {COUNTRY_NAMES.of(osuCountry) || osuCountry}
-                      </span>
-                    </div>
-                  )}
+                  <span className="truncate max-w-[100px]">{item.label}</span>
                 </div>
               ) : (
                 <>

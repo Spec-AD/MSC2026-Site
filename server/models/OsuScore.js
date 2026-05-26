@@ -35,6 +35,8 @@ const OsuScoreSchema = new mongoose.Schema({
   countSDrpMiss: { type: Number, default: null },
   // 客户端来源
   isLazer: { type: Boolean, default: null },        // null=未知，true=lazer，false=stable
+  // 数据来源 — bp / recent / 空（旧数据兼容）
+  source: { type: String, enum: ['', 'bp', 'recent'], default: '' },
 });
 
 // b1.7 复合索引 — best / BP 200 查询

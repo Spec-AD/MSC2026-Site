@@ -21,7 +21,26 @@ function toRetinaCover(url = '') {
   return url;
 }
 
-export default function OsuScoreCard({ score, rank, onClick, compact = false }) {
+// 最近游玩时间格式化
+function formatRecentTime(playedAt) {
+  if (!playedAt) return '';
+  const date = new Date(playedAt);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor((today - target) / (1000 * 60 * 60 * 24));
+  const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+  if (diffDays === 0) return `今天 ${timeStr}`;
+  if (diffDays === 1) return `昨天 ${timeStr}`;
+  if (diffDays < 7) {
+    const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    return `${days[date.getDay()]} ${timeStr}`;
+  }
+  return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${timeStr}`;
+}
+
+export default function OsuScoreCard({ score, rank, onClick, compact = false, showTime = false }) {
   const [bgError, setBgError] = useState(false);
   const modsStr = score.mods?.length > 0 ? `+${score.mods.join('')}` : '';
   const accuracy = typeof score.accuracy === 'number'
@@ -122,6 +141,11 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false }) 
           </div>
         )}
       </div>
+      {showTime && score.playedAt && (
+        <div className="relative z-10 text-[9px] text-zinc-600 mt-0.5 ml-12">
+          {formatRecentTime(score.playedAt)}
+        </div>
+      )}
     </motion.div>
   );
 }
