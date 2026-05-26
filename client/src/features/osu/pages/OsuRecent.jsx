@@ -36,16 +36,19 @@ export default function OsuRecent() {
     } catch (_) { return false; }
   };
 
-  // 所有筛选条件统一防抖
-  const debouncedFilters = useDebounce({ mode: activeMode, page, from: dateFrom, to: dateTo }, 500);
+  // 各筛选条件独立防抖（避免对象引用问题导致无限循环）
+  const debouncedMode = useDebounce(activeMode, 500);
+  const debouncedPage = useDebounce(page, 500);
+  const debouncedFrom = useDebounce(dateFrom, 500);
+  const debouncedTo = useDebounce(dateTo, 500);
 
   const fetchRecent = async (refresh = false) => {
     setLoading(true);
     setError(null);
     try {
-      const params = { mode: debouncedFilters.mode, page: debouncedFilters.page, limit: 20 };
-      if (debouncedFilters.from) params.from = debouncedFilters.from;
-      if (debouncedFilters.to) params.to = debouncedFilters.to;
+      const params = { mode: debouncedMode, page: debouncedPage, limit: 20 };
+      if (debouncedFrom) params.from = debouncedFrom;
+      if (debouncedTo) params.to = debouncedTo;
       if (refresh) params.refresh = true;
       const { data: res } = await getRecent(params);
       setData(res);
@@ -62,7 +65,7 @@ export default function OsuRecent() {
   useEffect(() => {
     if (!initialLoadDoneRef.current) return;
     fetchRecent(false);
-  }, [debouncedFilters]);
+  }, [debouncedMode, debouncedPage, debouncedFrom, debouncedTo]);
 
   // 模式切换：重置页码 + 持久化
   const handleModeChange = (mode) => {

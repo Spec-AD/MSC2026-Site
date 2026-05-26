@@ -3,8 +3,9 @@
 // GET /api/osu/map/:bid
 // ============================================================
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getBeatmap } from '../api/osuApi';
 import OsuMapCard from '../components/OsuMapCard';
 import OsuSearchHistory from '../components/OsuSearchHistory';
@@ -29,13 +30,7 @@ export default function OsuMap() {
   const blurTimerRef = useRef(null);
   const navigate = useNavigate();
 
-  // 历史条目实时过滤
-  const filteredHistory = useMemo(() => {
-    if (!bid.trim()) return cache.mapHistory;
-    return cache.mapHistory.filter(e =>
-      String(e.bid).startsWith(bid.trim())
-    );
-  }, [cache.mapHistory, bid]);
+  // 历史条目实时过滤（由 OsuSearchHistory 内部处理，此处不再预过滤）
 
   const handleSearch = async () => {
     if (!bid.trim() || isNaN(Number(bid))) return;
@@ -139,17 +134,27 @@ export default function OsuMap() {
         )}
       </div>
 
-      {/* 搜索历史面板 — 搜索框 focus 时展开 */}
-      {isFocused && filteredHistory.length > 0 && (
-        <div className="mb-4">
-          <OsuSearchHistory
-            items={filteredHistory}
-            type="bid"
-            onSelect={handleHistorySelect}
-            onClear={() => cache.clearMapHistory()}
-          />
-        </div>
-      )}
+      {/* 搜索历史面板 — 搜索框 focus 时展开（含动画） */}
+      <AnimatePresence mode="popLayout">
+        {isFocused && cache.mapHistory.length > 0 && (
+          <motion.div
+            key="map-history"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="mb-4"
+          >
+            <OsuSearchHistory
+              items={cache.mapHistory}
+              filterQuery={bid}
+              type="bid"
+              onSelect={handleHistorySelect}
+              onClear={() => cache.clearMapHistory()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 加载 */}
       {loading && (

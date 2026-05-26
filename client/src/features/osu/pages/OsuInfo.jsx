@@ -4,11 +4,12 @@
 // 响应结构: { username, osuUsername, avatarUrl, coverUrl, country, joinDate, defaultMode, statistics: { standard, taiko, catch, mania } }
 // ============================================================
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getOsuInfo } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuSearchHistory from '../components/OsuSearchHistory';
+import { motion, AnimatePresence } from 'framer-motion';
 import { FaSpinner, FaSearch, FaUser, FaGlobe, FaCalendar } from 'react-icons/fa';
 import { MODE_LABELS } from '../../../constants/osuModes';
 import useOsuCache from '../store/osuCache';
@@ -99,13 +100,7 @@ export default function OsuInfo() {
     blurTimerRef.current = setTimeout(() => setIsFocused(false), 200);
   };
 
-  // 历史条目实时过滤
-  const filteredHistory = useMemo(() => {
-    if (!query.trim()) return cache.playerHistory;
-    return cache.playerHistory.filter(e =>
-      e.username.toLowerCase().includes(query.trim().toLowerCase())
-    );
-  }, [cache.playerHistory, query]);
+  // 历史条目实时过滤（由 OsuSearchHistory 内部处理，此处不再预过滤）
 
   // 点击历史条目
   const handleHistorySelect = async (entry) => {
@@ -165,15 +160,26 @@ export default function OsuInfo() {
         </button>
       </div>
 
-      {/* 搜索历史 — 仅搜索框 focus 时展开 */}
-      {isFocused && filteredHistory.length > 0 && (
-        <OsuSearchHistory
-          items={filteredHistory}
-          type="player"
-          onSelect={handleHistorySelect}
-          onClear={() => cache.clearPlayerHistory()}
-        />
-      )}
+      {/* 搜索历史 — 仅搜索框 focus 时展开（含动画） */}
+      <AnimatePresence mode="popLayout">
+        {isFocused && cache.playerHistory.length > 0 && (
+          <motion.div
+            key="info-history"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+          >
+            <OsuSearchHistory
+              items={cache.playerHistory}
+              filterQuery={query}
+              type="player"
+              onSelect={handleHistorySelect}
+              onClear={() => cache.clearPlayerHistory()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 加载中 */}
       {loading && (

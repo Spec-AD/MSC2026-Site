@@ -13,12 +13,12 @@ export default function OsuHome() {
   const { user: currentUser } = useAuth();
 
   const isActive = (item) => {
-    if (item.exact) return location.pathname === '/osu';
+    if (item.exact) return location.pathname.startsWith('/osu/profile');
     return location.pathname.startsWith(item.path);
   };
 
   const NAV_ITEMS = [
-    { path: '/osu', label: currentUser ? (currentUser.nickname || currentUser.username) : 'osu!', icon: null, exact: true },
+    { path: '/osu/profile', label: currentUser ? (currentUser.nickname || currentUser.username) : 'osu!', icon: null, exact: true },
     { path: '/osu/best', label: 'BP 排行', icon: <FaTrophy /> },
     { path: '/osu/pass', label: '最近通过', icon: <FaStar /> },
     { path: '/osu/recent', label: '最近游玩', icon: <FaHistory /> },

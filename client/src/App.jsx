@@ -81,7 +81,8 @@ function App() {
               <Route path="/profile/:username/chunithm" element={<ChunithmProfile />} />
               <Route path="/profile/:username/osu" element={<OsuProfileRedirect />} />
               <Route path="/osu" element={<OsuHome />}>
-                <Route index element={<OsuProfile />} />
+                <Route index element={<Navigate to="/osu/profile" replace />} />
+                <Route path="profile" element={<OsuProfile />} />
                 <Route path="pass" element={<OsuPass />} />
                 <Route path="recent" element={<OsuRecent />} />
                 <Route path="best" element={<OsuBest />} />

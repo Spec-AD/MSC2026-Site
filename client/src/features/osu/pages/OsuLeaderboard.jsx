@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getLeaderboard } from '../api/osuApi';
 import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
@@ -36,6 +37,16 @@ function ModeIcon({ mode }) {
   return <img src={src} alt="" className="w-3.5 h-3.5 inline-block" />;
 }
 
+// 排序选项
+const SORT_OPTIONS = [
+  { value: 'pp_desc', label: 'PP ↓' },
+  { value: 'pp_asc', label: 'PP ↑' },
+  { value: 'score_desc', label: '分数 ↓' },
+  { value: 'score_asc', label: '分数 ↑' },
+  { value: 'acc_desc', label: 'Acc ↓' },
+  { value: 'acc_asc', label: 'Acc ↑' },
+];
+
 // ----- 组件 -----
 
 export default function OsuLeaderboard() {
@@ -48,6 +59,7 @@ export default function OsuLeaderboard() {
   const [error, setError] = useState(null);
   const [filterType, setFilterType] = useState('all');
   const [isFocused, setIsFocused] = useState(false);
+  const [sortBy, setSortBy] = useState('pp_desc');
   const blurTimerRef = useRef(null);
 
   // sessionStorage 持久化 leaderboardHistory
@@ -83,6 +95,22 @@ export default function OsuLeaderboard() {
       return true;
     });
   }, [data, filterType]);
+
+  // 排序：筛选后应用，纯前端排序，不调 API
+  const sortedScores = useMemo(() => {
+    if (!filteredScores.length) return [];
+    const sorted = [...filteredScores];
+    switch (sortBy) {
+      case 'pp_desc':   sorted.sort((a, b) => (b.pp || 0) - (a.pp || 0)); break;
+      case 'pp_asc':    sorted.sort((a, b) => (a.pp || 0) - (b.pp || 0)); break;
+      case 'score_desc': sorted.sort((a, b) => (b.score || 0) - (a.score || 0)); break;
+      case 'score_asc':  sorted.sort((a, b) => (a.score || 0) - (b.score || 0)); break;
+      case 'acc_desc':   sorted.sort((a, b) => (b.accuracy || 0) - (a.accuracy || 0)); break;
+      case 'acc_asc':    sorted.sort((a, b) => (a.accuracy || 0) - (b.accuracy || 0)); break;
+      default: break;
+    }
+    return sorted;
+  }, [filteredScores, sortBy]);
 
   const effectiveBid = bid || bidInput;
 
@@ -123,14 +151,6 @@ export default function OsuLeaderboard() {
       navigate(`/osu/leaderboard/${bidInput}`, { replace: true });
     }
   };
-
-  // 历史条目实时过滤
-  const filteredHistory = useMemo(() => {
-    if (!bidInput.trim()) return cache.leaderboardHistory;
-    return cache.leaderboardHistory.filter(e =>
-      String(e.bid).startsWith(bidInput.trim())
-    );
-  }, [cache.leaderboardHistory, bidInput]);
 
   // 点击历史条目
   const handleHistorySelect = (entry) => {
@@ -196,20 +216,30 @@ export default function OsuLeaderboard() {
         </button>
       </div>
 
-      {/* 搜索历史面板 — 搜索框 focus 时展开 */}
-      {isFocused && filteredHistory.length > 0 && (
-        <div className="mb-4">
-          <OsuSearchHistory
-            items={filteredHistory}
-            type="bid"
-            onSelect={handleHistorySelect}
-            onClear={() => {
-              cache.clearLeaderboardHistory();
-              sessionStorage.removeItem(HISTORY_STORAGE_KEY);
-            }}
-          />
-        </div>
-      )}
+      {/* 搜索历史面板 — 搜索框 focus 时展开（含动画） */}
+      <AnimatePresence mode="popLayout">
+        {isFocused && cache.leaderboardHistory.length > 0 && (
+          <motion.div
+            key="leaderboard-history"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="mb-4"
+          >
+            <OsuSearchHistory
+              items={cache.leaderboardHistory}
+              filterQuery={bidInput}
+              type="bid"
+              onSelect={handleHistorySelect}
+              onClear={() => {
+                cache.clearLeaderboardHistory();
+                sessionStorage.removeItem(HISTORY_STORAGE_KEY);
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 谱面信息卡 — b1.7 R3 修复：使用扁平字段 + 图标 + 进度条 */}
       {beatmap && (
@@ -325,25 +355,7 @@ export default function OsuLeaderboard() {
         </div>
       )}
 
-      {/* 模式筛选（availableTypes） */}
-      {data?.availableTypes?.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          {data.availableTypes.map(t => (
-            <button
-              key={t}
-              onClick={() => {
-                setBidInput('');
-                navigate(`/osu/leaderboard/${bid}?type=${t}`, { replace: true });
-              }}
-              className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border transition-all
-                border-zinc-800 text-zinc-500 hover:border-pink-600/40 hover:text-pink-400"
-            >
-              <ModeIcon mode={t} />
-              {t}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 来源筛选（availableTypes 功能从未正常工作，已移除 */}
 
       {/* 未上榜用户成绩 */}
       {data?.userScore && !data?.currentUserRank && (
@@ -391,11 +403,12 @@ export default function OsuLeaderboard() {
 
       {/* Stable / Lazer 筛选器 */}
       {data?.scores?.length > 0 && (
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex items-center gap-2 flex-wrap">
           <div className="flex bg-[#15151e]/60 rounded-lg border border-white/[0.05] p-0.5">
             {[
               { key: 'all', label: '全部', icon: null },
               { key: 'lazer', label: 'LAZER', icon: FaBolt },
+              { key: 'stable', label: 'Stable', icon: null },
             ].map(opt => (
               <button key={opt.key} onClick={() => setFilterType(opt.key)}
                 className={`text-xs font-bold rounded-md transition-all flex items-center gap-1 px-3 py-1.5 ${
@@ -409,8 +422,24 @@ export default function OsuLeaderboard() {
             ))}
           </div>
           <span className="text-[10px] text-zinc-600">
-            {filteredScores.length} / {data.scores.length} 条
+            {sortedScores.length} / {data.scores.length} 条
           </span>
+          {/* 排序按钮组 */}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider">排序</span>
+            <div className="flex bg-[#15151e]/60 rounded-lg border border-white/[0.05] p-0.5">
+              {SORT_OPTIONS.map(opt => (
+                <button key={opt.value} onClick={() => setSortBy(opt.value)}
+                  className={`text-[10px] font-bold rounded-md transition-all px-2 py-1 ${
+                    sortBy === opt.value
+                      ? 'bg-pink-600 text-white shadow-sm'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -419,21 +448,20 @@ export default function OsuLeaderboard() {
         <div className="flex items-center justify-center py-20"><FaSpinner className="animate-spin text-2xl text-pink-500/50" /></div>
       ) : error ? (
         <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">{error}</div>
-      ) : filteredScores.length > 0 ? (
+      ) : sortedScores.length > 0 ? (
         <>
           <div className="bg-[#15151e]/40 rounded-xl border border-white/[0.05] overflow-hidden">
-            {/* 表头 */}
+            {/* 表头（对齐 OsuLeaderboardRow 列宽） */}
             <div className="hidden sm:flex items-center px-4 py-2 text-xs text-zinc-500 font-bold uppercase tracking-wider border-b border-white/[0.05] bg-[#15151e]/95">
-              <span className="w-12 text-center">#</span>
-              <span className="w-8" />
+              <span className="w-10 text-center">#</span>
+              <span className="w-8 shrink-0" />
               <span className="flex-1 min-w-0">玩家</span>
-              <span className="w-12 text-center">评级</span>
-              <span className="w-24 text-right">分数</span>
-              <span className="w-16 text-right">Acc</span>
-              <span className="w-14 text-right">PP</span>
+              <span className="shrink-0">评级</span>
+              <span className="w-32 text-right">分数 / Acc</span>
+              <span className="w-16 text-right">PP</span>
             </div>
 
-            {filteredScores.map((entry, i) => {
+            {sortedScores.map((entry, i) => {
               const rankNum = i + 1;
               const isHighlighted = data.currentUserRank?.highlight && rankNum === data.currentUserRank.rank;
 
@@ -467,7 +495,7 @@ export default function OsuLeaderboard() {
             </div>
           )}
         </>
-      ) : data?.scores?.length > 0 && filteredScores.length === 0 ? (
+      ) : data?.scores?.length > 0 && sortedScores.length === 0 ? (
         <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">
           <FaBolt className="mx-auto text-2xl text-zinc-700 mb-3" />
           无匹配的筛选成绩
