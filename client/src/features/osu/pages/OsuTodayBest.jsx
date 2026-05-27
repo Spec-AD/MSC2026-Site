@@ -63,6 +63,11 @@ export default function OsuTodayBest() {
     fetchData();
   }, [activeMode]);
 
+  // Debug: 打印数据确认 bp200Threshold
+  useEffect(() => {
+    if (data) console.log('[TodayBest] data:', JSON.stringify(data, null, 2));
+  }, [data]);
+
   const handleRefresh = async () => {
     try {
       const result = await refresh();

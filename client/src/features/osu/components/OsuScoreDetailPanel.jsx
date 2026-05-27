@@ -163,38 +163,34 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
           </div>
         </div>
 
-        {/* 判定详情 — 按模式区分，支持新旧字段名 */}
+        {/* 判定详情 — 按模式区分，使用 score.mode 决定判定名 */}
         {(score?.count300 != null || score?.count100 != null || score?.count50 != null || score?.countMiss != null
           || score?.countGreat != null || score?.countOk != null || score?.countMeh != null || score?.countPerf != null) && (
           <div className="bg-white/[0.02] rounded-lg p-3">
             <div className="text-[10px] text-zinc-600 uppercase tracking-wider mb-2">判定详情</div>
             <div className="grid grid-cols-6 gap-2 text-center">
               {(() => {
-                // 新旧字段 fallback
-                const gVal = score.countGreat ?? score.count300;
-                const oVal = score.countOk ?? score.count100;
-                const mVal = score.countMeh ?? score.count50;
-                const missVal = score.countMiss;
-                const perfVal = score.countPerf;
+                const mode = score?.mode || 'standard';
 
-                // Mania: 6 档 Perf/Great/Good/Ok/Meh/Miss
-                if (perfVal != null && gVal != null && oVal != null) {
-                  return [
-                    { label: 'Perf', value: perfVal, color: 'text-yellow-400' },
-                    { label: 'Great', value: gVal, color: 'text-emerald-400' },
-                    { label: 'Good', value: score.countGood, color: 'text-green-400' },
-                    { label: 'Ok', value: oVal, color: 'text-blue-400' },
-                    { label: 'Meh', value: mVal, color: 'text-amber-400' },
-                    { label: 'Miss', value: missVal, color: 'text-red-400' },
-                  ];
-                }
-                // 标准/其他模式: 4 档
-                return [
-                  { label: score.countMeh != null ? 'Meh' : '300', value: gVal, color: 'text-emerald-400' },
-                  { label: score.countMeh != null ? (score.countGood ? 'Good' : 'Ok') : '100', value: oVal, color: 'text-blue-400' },
-                  { label: '50', value: mVal, color: 'text-amber-400' },
-                  { label: 'Miss', value: missVal, color: 'text-red-400' },
-                ].filter(j => j.value != null);
+                // 按模式定义判定名（lazer 新字段 fallback 到 legacy 旧字段）
+                const entries = mode === 'mania'
+                  ? [
+                      { label: 'Perf', value: score.countPerf, color: 'text-yellow-400' },
+                      { label: 'Great', value: score.countGreat ?? score.count300, color: 'text-emerald-400' },
+                      { label: 'Good', value: score.countGood, color: 'text-green-400' },
+                      { label: 'Ok', value: score.countOk ?? score.count100, color: 'text-blue-400' },
+                      { label: 'Meh', value: score.countMeh ?? score.count50, color: 'text-amber-400' },
+                      { label: 'Miss', value: score.countMiss, color: 'text-red-400' },
+                    ]
+                  : [
+                      { label: '300', value: score.countGreat ?? score.count300, color: 'text-emerald-400' },
+                      { label: '100', value: score.countOk ?? score.count100, color: 'text-blue-400' },
+                      { label: '50', value: score.countMeh ?? score.count50, color: 'text-amber-400' },
+                      { label: 'Miss', value: score.countMiss, color: 'text-red-400' },
+                    ];
+
+                // 全部显示，缺失的判定在渲染层显示 -
+                return entries;
               })().map(({ label, value, color }) => {
                 const valueClass = value == null
                   ? 'text-zinc-600'
