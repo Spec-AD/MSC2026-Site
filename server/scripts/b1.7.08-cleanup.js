@@ -1,13 +1,21 @@
 /**
- * b1.7.08 Hotfix — 数据清理脚本
+ * b1.7.08 Hotfix — 数据清理脚本 v2
+ *
+ * 背景：
+ *   hotfix v1 在 OsuScore 模型加了全局唯一索引 { userId, mode, beatmapId }
+ *   导致 BP sync 的 upsert 误匹配到同 beatmapId 的 recent 记录
+ *   → 覆盖 source 为 'bp' + 错误数据
+ *   后改为 partial unique index (source: 'bp')
+ *
+ * 本脚本修复：
+ *   1. 清理全局唯一索引（如有）
+ *   2. 删除被污染的 source='bp' 数据（含被误覆盖的 recent）
+ *   3. 清理重复记录
+ *   4. 创建 partial unique index (source: 'bp')
  *
  * 用法: node server/scripts/b1.7.08-cleanup.js
- *
- * 步骤:
- *   1. 删除所有 source='bp' 的记录（playedAt 错乱）
- *   2. 删除重复记录（同 userId+mode+beatmapId 保留最新一条）
- *   3. 创建唯一复合索引
- *   4. 打印统计
+ * 注意：会删除所有 BP 源数据 + 被 BP 覆盖的 recent 数据，
+ *       用户需重新触发 syncBP + refresh-light 恢复。
  */
 
 const mongoose = require('mongoose');
@@ -18,16 +26,31 @@ const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb:/
 async function cleanup() {
   console.log('[cleanup] 连接数据库...');
   await mongoose.connect(MONGO_URI);
-  const db = mongoose.connection.db;
   const OsuScore = mongoose.model('OsuScore', require('../models/OsuScore').schema);
+  const collection = OsuScore.collection;
+
+  // ── Step 0: 清理旧索引 ──
+  // 必须先删全局唯一索引再操作数据，否则后续写入可能继续触发 duplicate key
+  console.log('[cleanup] Step 0: 清理旧索引...');
+  const existingIndexes = await collection.indexes();
+  const fullUniqueIdx = existingIndexes.find(
+    (idx) => idx.name === 'userId_1_mode_1_beatmapId_1' && idx.unique === true && !idx.partialFilterExpression
+  );
+  if (fullUniqueIdx) {
+    await collection.dropIndex('userId_1_mode_1_beatmapId_1');
+    console.log('  ✓ 已删除全局唯一索引');
+  } else {
+    console.log('  ℹ️ 未发现全局唯一索引，跳过');
+  }
 
   // ── Step 1: 删除所有 BP 源数据 ──
-  console.log('[cleanup] Step 1: 删除 source=bp 的记录...');
+  // 包括：原本 source='bp' 的记录 + 被 BP upsert 误覆盖的 recent 记录
+  console.log('[cleanup] Step 1: 删除 source=bp 的记录（含误覆盖的 recent 数据）...');
   const delResult = await OsuScore.deleteMany({ source: 'bp' });
-  console.log('  ✓ 已删除 %d 条 BP 记录', delResult.deletedCount);
+  console.log('  ✓ 已删除 %d 条（用户需重新 syncBP / refresh-light 恢复）', delResult.deletedCount);
 
   // ── Step 2: 删除重复记录 ──
-  console.log('[cleanup] Step 2: 删除重复记录（保留最新一条）...');
+  console.log('[cleanup] Step 2: 删除重复记录（保留最早一条）...');
   const dupPipeline = [
     {
       $group: {
@@ -41,7 +64,6 @@ async function cleanup() {
   const duplicates = await OsuScore.aggregate(dupPipeline);
   let removedDupCount = 0;
   for (const dup of duplicates) {
-    // 保留第一条（按字符串排序最小 _id = 最早插入），删其余
     const [keep, ...remove] = dup.ids.sort();
     await OsuScore.deleteMany({ _id: { $in: remove } });
     removedDupCount += remove.length;
@@ -49,13 +71,9 @@ async function cleanup() {
   console.log('  ✓ 发现 %d 组重复, 已删除 %d 条', duplicates.length, removedDupCount);
 
   // ── Step 3: 创建唯一索引（仅 BP 来源） ──
-  // 不用全局唯一：同一谱面多次游玩（recent / pass / todaybest）允许重复
-  console.log('[cleanup] Step 3: 创建 BP-only 唯一索引 { userId, mode, beatmapId }...');
+  console.log('[cleanup] Step 3: 创建 BP-only partial unique index...');
   try {
-    // 先删可能的旧全局唯一索引
-    await OsuScore.collection.dropIndex('userId_1_mode_1_beatmapId_1').catch(() => {});
-    // 建 partial unique index
-    await OsuScore.collection.createIndex(
+    await collection.createIndex(
       { userId: 1, mode: 1, beatmapId: 1 },
       {
         unique: true,
@@ -80,9 +98,10 @@ async function cleanup() {
   console.log('  总记录数: %d', totalCount);
   console.log('  source=bp:  %d', bpCount);
   console.log('  source=recent: %d', recentCount);
+  console.log('\n⚠️ 用户需手动触发全量同步 BP + 各页面 refresh-light 恢复数据');
 
   await mongoose.disconnect();
-  console.log('[cleanup] ✅ 清理完成');
+  console.log('[cleanup] ✅ 完成');
 }
 
 cleanup().catch((err) => {
