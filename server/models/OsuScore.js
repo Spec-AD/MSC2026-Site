@@ -46,4 +46,7 @@ OsuScoreSchema.index({ userId: 1, mode: 1, playedAt: -1 });
 // b1.7 复合索引 — score 查询
 OsuScoreSchema.index({ userId: 1, beatmapId: 1 });
 
+// b1.7.08 Hotfix: 唯一索引，防止 BP sync 写入重复记录
+OsuScoreSchema.index({ userId: 1, mode: 1, beatmapId: 1 }, { unique: true });
+
 module.exports = mongoose.model('OsuScore', OsuScoreSchema);

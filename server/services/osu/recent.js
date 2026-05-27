@@ -111,7 +111,7 @@ async function refreshFromApi(user, mode) {
       userId: user._id,
       mode,
       beatmapId: beatmap.id,
-      playedAt: apiScore.created_at
+      playedAt: apiScore.ended_at ?? apiScore.created_at
     });
 
     if (!existing) {
@@ -128,7 +128,7 @@ async function refreshFromApi(user, mode) {
         pp: apiScore.pp || 0,
         grade: apiScore.rank || '',
         coverUrl: apiScore.beatmapset?.covers?.list || '',
-        playedAt: apiScore.created_at || new Date(),
+        playedAt: apiScore.ended_at ?? apiScore.created_at ?? new Date(),
         isLazer:   apiScore.legacy_score_id == null,
         maxCombo:  apiScore.max_combo ?? null,
         combo:     apiScore.max_combo ?? null,

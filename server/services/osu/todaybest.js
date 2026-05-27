@@ -26,12 +26,20 @@ function getTodayMidnight() {
 async function getTodayBest(userId, mode) {
   const todayMidnight = getTodayMidnight();
 
-  // 今日通过的成绩（仅 Ranked/Approved, 排除 F）
+  // Bug 3 debug: 检查 beatmapStatus 实际值
+  const sampleStatuses = await OsuScore.find({ userId, mode })
+    .limit(5)
+    .select('beatmapStatus pp playedAt')
+    .lean();
+  console.log('[todaybest debug] mode=%s, todayMidnight=%s, sample statuses:', mode, todayMidnight.toISOString(),
+    JSON.stringify(sampleStatuses.map(s => ({ status: s.beatmapStatus, pp: s.pp, playedAt: s.playedAt }))));
+
+  // 今日玩 BP 成绩（仅 Ranked/Approved, 排除 F）
   const todayScores = await OsuScore.find({
     userId,
     mode,
     grade: { $ne: 'F' },
-    beatmapStatus: { $in: ['ranked', 'approved'] },
+    beatmapStatus: { $in: [/^ranked$/i, /^approved$/i] },
     playedAt: { $gte: todayMidnight }
   })
     .sort({ pp: -1 })
@@ -41,12 +49,14 @@ async function getTodayBest(userId, mode) {
   const bp200 = await OsuScore.find({
     userId,
     mode,
-    beatmapStatus: { $in: ['ranked', 'approved'] }
+    beatmapStatus: { $in: [/^ranked$/i, /^approved$/i] }
   })
     .sort({ pp: -1 })
     .limit(200)
     .select('pp')
     .lean();
+
+  console.log('[todaybest debug] bp200 count=%d, threshold=%d', bp200.length, bp200[199]?.pp || 0);
 
   const bp200Threshold = bp200.length >= 200
     ? (bp200[199]?.pp || 0)

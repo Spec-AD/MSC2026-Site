@@ -22,8 +22,10 @@ function mapScoreToDoc(userId, apiScore) {
   const beatmap = apiScore.beatmap;
   const beatmapset = apiScore.beatmapset;
   const mode = MODE_MAP_REVERSE[beatmap.mode] || beatmap.mode;
+  const stats = apiScore.statistics || {};
 
-  return {
+  // 通用基础字段
+  const base = {
     userId,
     mode,
     beatmapId: beatmap.id,
@@ -35,33 +37,59 @@ function mapScoreToDoc(userId, apiScore) {
     pp: apiScore.pp || 0,
     grade: apiScore.rank || '',
     coverUrl: beatmapset?.covers?.list || '',
-    playedAt: apiScore.created_at || new Date(),
-    // b1.7 新字段 — lazer 原生名(great/ok/meh/miss/perfect/good)优先，legacy 兜底
-    // osu! API v2 (x-api-version: 20220705) 返回 lazer 字段名
-    isLazer:  apiScore.legacy_score_id == null,         // null=原生lazer，非null=stable导入
+    // API v2 (x-api-version: 20220705) 使用 ended_at，旧版使用 created_at
+    playedAt: apiScore.ended_at ?? apiScore.created_at ?? new Date(),
+    isLazer:  apiScore.legacy_score_id == null,
     maxCombo:  apiScore.max_combo ?? null,
-    combo:     apiScore.max_combo ?? null,    // max_combo 即 combo
-    count300:  apiScore.statistics?.great ?? apiScore.statistics?.count_300 ?? null,
-    count100:  apiScore.statistics?.ok ?? apiScore.statistics?.count_100 ?? null,
-    count50:   apiScore.statistics?.meh ?? apiScore.statistics?.count_50 ?? null,
-    countMiss: apiScore.statistics?.miss ?? apiScore.statistics?.count_miss ?? null,
-    // b1.7 新增: 总分与曲目状态
+    combo:     apiScore.max_combo ?? null,
     starRating:    beatmap.difficulty_rating || 0,
     score:         apiScore.legacy_total_score || apiScore.total_score || apiScore.score || 0,
     beatmapStatus: beatmap.status || '',
-    // b1.7 第二轮: Aim/Speed + 多模式判定
-    aim:          apiScore.statistics?.aim ?? null,
-    speed:        apiScore.statistics?.speed ?? null,
-    // mania: lazer perfect/good → 通用名 countGeki/countKatu
-    countGeki:   apiScore.statistics?.perfect ?? apiScore.statistics?.count_geki ?? null,
-    countKatu:   apiScore.statistics?.good ?? apiScore.statistics?.count_katu ?? null,
-    // 旧名向后兼容（OsuScoreDetailPanel 等直接读取）
-    countPerf:   apiScore.statistics?.perfect ?? apiScore.statistics?.count_geki ?? null,
-    countGood:   apiScore.statistics?.good ?? apiScore.statistics?.count_katu ?? null,
-    // catch: lazer 大果/小果 miss
-    countLDrp:     apiScore.statistics?.large_tick_miss ?? apiScore.statistics?.count_large_droplet ?? null,
-    countSDrpMiss: apiScore.statistics?.small_tick_miss ?? apiScore.statistics?.count_small_droplet_miss ?? null,
+    aim:          stats.aim ?? null,
+    speed:        stats.speed ?? null,
     source: 'bp',
+  };
+
+  // 按模式写入判定字段
+  if (mode === 'mania') {
+    // Mania: lazer 名优先（count_great/ok/meh/perfect/good），legacy 兜底
+    return {
+      ...base,
+      count300:  stats.count_great ?? stats.count_300 ?? null,
+      count100:  stats.count_ok ?? stats.count_100 ?? null,
+      count50:   stats.count_meh ?? stats.count_50 ?? null,
+      countMiss: stats.count_miss ?? null,
+      // Mania 专有判定：lazer 才有 perfect/good
+      countPerf: stats.count_perfect ?? stats.count_geki ?? null,
+      countGood: stats.count_good ?? stats.count_katu ?? null,
+      countGeki: stats.count_perfect ?? stats.count_geki ?? null,
+      countKatu: stats.count_good ?? stats.count_katu ?? null,
+      // 通用名兜底（OsuScoreDetailPanel 用 300/100/50/Miss 显示）
+      countGreat: stats.count_great ?? stats.count_300 ?? null,
+      countOk:    stats.count_ok ?? stats.count_100 ?? null,
+      countMeh:   stats.count_meh ?? stats.count_50 ?? null,
+      countLDrp:  stats.large_tick_miss ?? stats.count_large_droplet ?? null,
+      countSDrpMiss: stats.small_tick_miss ?? stats.count_small_droplet_miss ?? null,
+    };
+  }
+
+  // Standard / Taiko / Catch: lazer 名(great/ok/meh/miss)优先，legacy(count_300)兜底
+  return {
+    ...base,
+    count300:  stats.great ?? stats.count_300 ?? null,
+    count100:  stats.ok ?? stats.count_100 ?? null,
+    count50:   stats.meh ?? stats.count_50 ?? null,
+    countMiss: stats.miss ?? stats.count_miss ?? null,
+    // 以下一般不设，但保留旧名向后兼容
+    countPerf:   stats.count_perfect ?? stats.count_geki ?? null,
+    countGood:   stats.count_good ?? stats.count_katu ?? null,
+    countGeki:   stats.count_perfect ?? stats.count_geki ?? null,
+    countKatu:   stats.count_good ?? stats.count_katu ?? null,
+    countGreat:  stats.great ?? stats.count_300 ?? null,
+    countOk:     stats.ok ?? stats.count_100 ?? null,
+    countMeh:    stats.meh ?? stats.count_50 ?? null,
+    countLDrp:     stats.large_tick_miss ?? stats.count_large_droplet ?? null,
+    countSDrpMiss: stats.small_tick_miss ?? stats.count_small_droplet_miss ?? null,
   };
 }
 
@@ -78,6 +106,14 @@ async function syncBP(user, frontendMode) {
 
   // 从 osu! API 获取 BP 200
   const apiScores = await osuApi.getBestScores(user.osuId, apiMode, 200, user);
+
+  // Bug 1 debug: 检查 API 响应字段名
+  if (apiScores.length > 0) {
+    console.log('[sync debug] API score keys:', Object.keys(apiScores[0]));
+    console.log('[sync debug] sample ended_at:', apiScores[0].ended_at, 'created_at:', apiScores[0].created_at);
+    console.log('[sync debug] sample beatmap.status:', apiScores[0].beatmap?.status);
+    console.log('[sync debug] sample statistics keys:', Object.keys(apiScores[0].statistics || {}));
+  }
 
   // 已有本地成绩
   const localScores = await OsuScore.find({ userId: user._id, mode: frontendMode }).lean();
