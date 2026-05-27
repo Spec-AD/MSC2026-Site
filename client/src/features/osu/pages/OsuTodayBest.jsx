@@ -35,8 +35,8 @@ export default function OsuTodayBest() {
   const [selectedScore, setSelectedScore] = useState(null);
   const { refresh, refreshing, cooldown, lastRefreshTime } = useLightSync(activeMode);
 
-  // BP200 底线 + Ranked 筛选
-  const baseline = data?.bp200Threshold ?? null;
+  // BP100 底线 + Ranked 筛选
+  const baseline = data?.bpThreshold ?? null;
   const filteredScores = useMemo(() => {
     return (data?.scores || []).filter(s => {
       const isRanked = s.beatmapStatus === 'ranked';
@@ -116,11 +116,11 @@ export default function OsuTodayBest() {
 
       {baseline !== null && (
         <div className="mb-6 text-xs text-zinc-500 bg-[#15151e]/40 border border-white/[0.05] rounded-lg px-4 py-2 flex items-center gap-3">
-          <span>BP 200 底线：<span className="text-pink-400 font-bold">{baseline.toFixed(2)} pp</span></span>
+          <span>BP 100 底线：<span className="text-pink-400 font-bold">{baseline.toFixed(2)} pp</span></span>
           <span className="text-zinc-600">|</span>
           <span>今日上榜：<span className="text-amber-400 font-bold">{filteredScores.length}</span> 首</span>
           {data.isNewRecord && (
-            <span className="text-amber-400 ml-auto">✨ 有新成绩进入 BP 200！</span>
+            <span className="text-amber-400 ml-auto">✨ 有新成绩进入 BP 100！</span>
           )}
         </div>
       )}

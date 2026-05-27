@@ -21,7 +21,7 @@ function getTodayMidnight() {
  * @param {string} userId
  * @param {string} mode
  * @returns {Promise<Object>}
- *   { scores: [...], bp200Threshold: number, isNewRecord: boolean }
+ *   { scores: [...], bpThreshold: number, isNewRecord: boolean }
  */
 async function getTodayBest(userId, mode) {
   const todayMidnight = getTodayMidnight();
@@ -46,26 +46,26 @@ async function getTodayBest(userId, mode) {
     .sort({ pp: -1 })
     .lean();
 
-  // 当前 BP 200 底线（仅 Ranked/Approved, 最后一名 PP 值）
-  // 这里仍允许 source=bp，因为 BP 底线需要参考用户的全部 BP
-  const bp200 = await OsuScore.find({
+  // 当前 BP 100 底线（仅 Ranked/Approved, 最后一名 PP 值）
+  const BP_LIMIT = 100;
+  const bpScores = await OsuScore.find({
     userId,
     mode,
     beatmapStatus: { $in: [/^ranked$/i, /^approved$/i] }
   })
     .sort({ pp: -1 })
-    .limit(200)
+    .limit(BP_LIMIT)
     .select('pp')
     .lean();
 
-  console.log('[todaybest debug] bp200 count=%d, threshold=%d', bp200.length, bp200[199]?.pp || 0);
+  console.log('[todaybest debug] bp count=%d, threshold=%d', bpScores.length, bpScores[BP_LIMIT - 1]?.pp || 0);
 
-  const bp200Threshold = bp200.length >= 200
-    ? (bp200[199]?.pp || 0)
+  const bpThreshold = bpScores.length >= BP_LIMIT
+    ? (bpScores[BP_LIMIT - 1]?.pp || 0)
     : 0;
 
   // 筛选今日成绩中 PP >= BP 底线的谱面
-  const qualifiedScores = todayScores.filter(s => s.pp >= bp200Threshold);
+  const qualifiedScores = todayScores.filter(s => s.pp >= bpThreshold);
 
   // 是否有新 record
   const isNewRecord = qualifiedScores.length > 0;
@@ -75,7 +75,7 @@ async function getTodayBest(userId, mode) {
       const { _id, userId: uid, ...rest } = s;
       return rest;
     }),
-    bp200Threshold,
+    bpThreshold,
     isNewRecord
   };
 }
