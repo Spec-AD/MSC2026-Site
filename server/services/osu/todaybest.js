@@ -26,18 +26,23 @@ function getTodayMidnight() {
 async function getTodayBest(userId, mode) {
   const todayMidnight = getTodayMidnight();
 
-  // 今日通过的成绩（排除 F）
+  // 今日通过的成绩（仅 Ranked/Approved, 排除 F）
   const todayScores = await OsuScore.find({
     userId,
     mode,
     grade: { $ne: 'F' },
+    beatmapStatus: { $in: ['ranked', 'approved'] },
     playedAt: { $gte: todayMidnight }
   })
     .sort({ pp: -1 })
     .lean();
 
-  // 当前 BP 200 底线（最后一名 PP 值）
-  const bp200 = await OsuScore.find({ userId, mode })
+  // 当前 BP 200 底线（仅 Ranked/Approved, 最后一名 PP 值）
+  const bp200 = await OsuScore.find({
+    userId,
+    mode,
+    beatmapStatus: { $in: ['ranked', 'approved'] }
+  })
     .sort({ pp: -1 })
     .limit(200)
     .select('pp')
@@ -47,8 +52,8 @@ async function getTodayBest(userId, mode) {
     ? (bp200[199]?.pp || 0)
     : 0;
 
-  // 筛选今日成绩中 PP 高于 BP 底线（或 BP 未满时所有今日 pass 成绩）
-  const qualifiedScores = todayScores.filter(s => s.pp > bp200Threshold || bp200.length < 200);
+  // 筛选今日成绩中 PP >= BP 底线的谱面
+  const qualifiedScores = todayScores.filter(s => s.pp >= bp200Threshold);
 
   // 是否有新 record
   const isNewRecord = qualifiedScores.length > 0;

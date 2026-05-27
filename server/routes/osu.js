@@ -223,6 +223,7 @@ router.post('/api/osu/refresh-light', authMiddleware, async (req, res) => {
       msg: '同步成功',
       pass: passResult || null,
       todaybest: todaybestResult,
+      recent: mergeResult.scores || [],
       merged: mergeResult.merged,
     });
   } catch (err) {

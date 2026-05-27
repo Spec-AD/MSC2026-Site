@@ -10,6 +10,40 @@ const osuApi = require('./api');
 const sync = require('./sync');
 
 const MODE_MAP = { standard: 'osu', taiko: 'taiko', catch: 'fruits', mania: 'mania' };
+const MODE_MAP_REVERSE = { osu: 'standard', taiko: 'taiko', fruits: 'catch', mania: 'mania' };
+
+/**
+ * Lazer/Stable 迁移遗产数据二次查询
+ *
+ * stable 来源且 pp=0 / acc=0 的成绩可能因迁移丢失实际值。
+ * 尝试从 legacy 端点获取真实 pp 和 accuracy。
+ *
+ * 限流保护：每次 refresh-light 最多触发 LEGACY_FALLBACK_MAX 次
+ */
+const LEGACY_FALLBACK_MAX = 3;
+
+async function tryLegacyFallback(apiScore, user) {
+  const beatmap = apiScore.beatmap;
+  if (!beatmap || !beatmap.id) return null;
+
+  try {
+    const legacyData = await osuApi.getUserScoreOnBeatmap(beatmap.id, user.osuId, {
+      mode: beatmap.mode,
+      legacy: true,
+      user,
+    });
+    if (legacyData && legacyData.score) {
+      return {
+        pp: legacyData.score.pp || 0,
+        accuracy: legacyData.score.accuracy ? legacyData.score.accuracy * 100 : 0,
+      };
+    }
+    return null;
+  } catch (err) {
+    // 查不到或失败 → 保持原有 0 值，不抛出异常
+    return null;
+  }
+}
 
 /**
  * 从本地 OsuScore 查询最近成绩（分页）
@@ -68,6 +102,7 @@ async function refreshFromApi(user, mode) {
   const apiScores = await osuApi.getRecentScores(user.osuId, apiMode, 50, true, user);
 
   let merged = 0;
+  let legacyFallbacks = 0;
   for (const apiScore of apiScores) {
     const beatmap = apiScore.beatmap;
     if (!beatmap) continue;
@@ -121,6 +156,22 @@ async function refreshFromApi(user, mode) {
         // 来源标记 — 保护此数据不被 BP 同步的 deleteMany 误删
         source: 'recent',
       };
+
+      // Lazer/Stable 迁移遗产数据二次查询
+      // stable 来源且 pp=0 / acc=0 时尝试获取真实值；每轮最多查 LEGACY_FALLBACK_MAX 次
+      if (legacyFallbacks < LEGACY_FALLBACK_MAX
+        && doc.isLazer === false
+        && !doc.pp
+        && !doc.accuracy
+      ) {
+        legacyFallbacks++;
+        const legacy = await tryLegacyFallback(apiScore, user);
+        if (legacy) {
+          doc.pp = legacy.pp;
+          doc.accuracy = legacy.accuracy;
+        }
+      }
+
       await OsuScore.create(doc);
       merged++;
     }
