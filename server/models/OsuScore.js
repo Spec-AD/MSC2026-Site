@@ -46,7 +46,11 @@ OsuScoreSchema.index({ userId: 1, mode: 1, playedAt: -1 });
 // b1.7 复合索引 — score 查询
 OsuScoreSchema.index({ userId: 1, beatmapId: 1 });
 
-// b1.7.08 Hotfix: 唯一索引，防止 BP sync 写入重复记录
-OsuScoreSchema.index({ userId: 1, mode: 1, beatmapId: 1 }, { unique: true });
+// b1.7.08 Hotfix: 唯一索引（仅 BP 来源），防止 BP sync 写入重复记录
+// 不设为全局唯一：同谱面多次游玩（Recent / pass / todaybest）允许重复
+OsuScoreSchema.index(
+  { userId: 1, mode: 1, beatmapId: 1 },
+  { unique: true, partialFilterExpression: { source: 'bp' } }
+);
 
 module.exports = mongoose.model('OsuScore', OsuScoreSchema);

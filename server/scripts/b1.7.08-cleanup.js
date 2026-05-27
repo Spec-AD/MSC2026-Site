@@ -48,19 +48,27 @@ async function cleanup() {
   }
   console.log('  ✓ 发现 %d 组重复, 已删除 %d 条', duplicates.length, removedDupCount);
 
-  // ── Step 3: 创建唯一索引 ──
-  console.log('[cleanup] Step 3: 创建唯一索引 { userId, mode, beatmapId }...');
+  // ── Step 3: 创建唯一索引（仅 BP 来源） ──
+  // 不用全局唯一：同一谱面多次游玩（recent / pass / todaybest）允许重复
+  console.log('[cleanup] Step 3: 创建 BP-only 唯一索引 { userId, mode, beatmapId }...');
   try {
+    // 先删可能的旧全局唯一索引
+    await OsuScore.collection.dropIndex('userId_1_mode_1_beatmapId_1').catch(() => {});
+    // 建 partial unique index
     await OsuScore.collection.createIndex(
       { userId: 1, mode: 1, beatmapId: 1 },
-      { unique: true, background: true }
+      {
+        unique: true,
+        partialFilterExpression: { source: 'bp' },
+        background: true,
+      }
     );
-    console.log('  ✓ 唯一索引创建成功');
+    console.log('  ✓ BP-only 唯一索引创建成功');
   } catch (err) {
     if (err.code === 85 || err.message?.includes('already exists')) {
       console.log('  ℹ️ 索引已存在');
     } else {
-      throw err;
+      console.log('  ⚠️ 索引创建异常:', err.message);
     }
   }
 

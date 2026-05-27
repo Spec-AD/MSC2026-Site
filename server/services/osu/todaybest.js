@@ -34,18 +34,20 @@ async function getTodayBest(userId, mode) {
   console.log('[todaybest debug] mode=%s, todayMidnight=%s, sample statuses:', mode, todayMidnight.toISOString(),
     JSON.stringify(sampleStatuses.map(s => ({ status: s.beatmapStatus, pp: s.pp, playedAt: s.playedAt }))));
 
-  // 今日玩 BP 成绩（仅 Ranked/Approved, 排除 F）
+  // 今日成绩（仅 Ranked/Approved, 排除 F, 排除 BP 陈旧数据）
   const todayScores = await OsuScore.find({
     userId,
     mode,
     grade: { $ne: 'F' },
     beatmapStatus: { $in: [/^ranked$/i, /^approved$/i] },
-    playedAt: { $gte: todayMidnight }
+    playedAt: { $gte: todayMidnight },
+    source: { $ne: 'bp' },  // 只统计 recent 来源的今日成绩
   })
     .sort({ pp: -1 })
     .lean();
 
   // 当前 BP 200 底线（仅 Ranked/Approved, 最后一名 PP 值）
+  // 这里仍允许 source=bp，因为 BP 底线需要参考用户的全部 BP
   const bp200 = await OsuScore.find({
     userId,
     mode,
