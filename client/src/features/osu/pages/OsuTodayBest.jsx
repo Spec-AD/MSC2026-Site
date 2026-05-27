@@ -1,16 +1,18 @@
 // ============================================================
 // OsuTodayBest — 今日最佳成绩
-// b1.7.07: 新增轻量同步刷新按钮 + 60s 冷却
+// b1.7.08: BP200 底线筛选 + PP 显示优化
 // GET /api/osu/todaybest?mode=
 // ============================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { getTodayBest } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import OsuStarBadge from '../components/OsuStarBadge';
+import OsuScoreDetailPanel from '../components/OsuScoreDetailPanel';
 import useLightSync from '../hooks/useLightSync';
 import { FaSpinner, FaSun, FaFire, FaSyncAlt } from 'react-icons/fa';
 
@@ -30,7 +32,18 @@ export default function OsuTodayBest() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedScore, setSelectedScore] = useState(null);
   const { refresh, refreshing, cooldown, lastRefreshTime } = useLightSync(activeMode);
+
+  // BP200 底线 + Ranked 筛选
+  const baseline = data?.bp200Threshold ?? null;
+  const filteredScores = useMemo(() => {
+    return (data?.scores || []).filter(s => {
+      const isRanked = s.beatmapStatus === 'ranked';
+      const aboveBaseline = baseline === null || s.pp >= baseline;
+      return isRanked && aboveBaseline;
+    });
+  }, [data?.scores, baseline]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -96,11 +109,13 @@ export default function OsuTodayBest() {
         </div>
       </div>
 
-      {data?.bp200Threshold !== undefined && (
-        <div className="mb-6 text-xs text-zinc-500 bg-[#15151e]/40 border border-white/[0.05] rounded-lg px-4 py-2">
-          BP 200 底线：<span className="text-pink-400 font-bold">{data.bp200Threshold.toFixed(2)} pp</span>
+      {baseline !== null && (
+        <div className="mb-6 text-xs text-zinc-500 bg-[#15151e]/40 border border-white/[0.05] rounded-lg px-4 py-2 flex items-center gap-3">
+          <span>BP 200 底线：<span className="text-pink-400 font-bold">{baseline.toFixed(2)} pp</span></span>
+          <span className="text-zinc-600">|</span>
+          <span>今日上榜：<span className="text-amber-400 font-bold">{filteredScores.length}</span> 首</span>
           {data.isNewRecord && (
-            <span className="text-amber-400 ml-2">✨ 有新成绩进入 BP 200！</span>
+            <span className="text-amber-400 ml-auto">✨ 有新成绩进入 BP 200！</span>
           )}
         </div>
       )}
@@ -113,17 +128,18 @@ export default function OsuTodayBest() {
         <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">
           {error}
         </div>
-      ) : !data?.scores?.length ? (
+      ) : !filteredScores.length ? (
         <div className="py-12 text-center text-zinc-600 bg-[#15151e]/40 rounded-xl border border-white/[0.05]">
           <FaSun className="mx-auto text-2xl text-zinc-700 mb-3" />
-          今日暂无通过成绩
+          {data?.scores?.length > 0 ? '今天还没有上榜成绩喵' : '今日暂无通过成绩'}
         </div>
       ) : (
         <div className="space-y-3">
-          {data.scores.map((score, i) => (
+          {filteredScores.map((score, i) => (
             <div
               key={i}
-              className="flex items-center gap-4 p-4 bg-[#15151e]/60 border border-white/[0.05] rounded-xl hover:border-amber-500/20 transition-colors"
+              onClick={() => setSelectedScore(score)}
+              className="flex items-center gap-4 p-4 bg-[#15151e]/60 border border-white/[0.05] rounded-xl hover:border-amber-500/20 transition-colors cursor-pointer"
             >
               <div className="w-16 h-12 rounded-lg overflow-hidden shrink-0">
                 <OsuCoverImage src={score.coverUrl} alt={score.title} className="w-full h-full" />
@@ -155,6 +171,15 @@ export default function OsuTodayBest() {
           ))}
         </div>
       )}
+
+      <AnimatePresence>
+        {selectedScore && (
+          <OsuScoreDetailPanel
+            score={selectedScore}
+            onClose={() => setSelectedScore(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

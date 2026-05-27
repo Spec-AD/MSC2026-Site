@@ -113,7 +113,13 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
           <OsuGrade grade={score?.grade} size="lg" />
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-3">
-              <span className="text-2xl font-bold text-pink-400">{Math.round(score?.pp || 0)}pp</span>
+              {/* PP — 非 Ranked/Approved 显示短杠；Stable 0pp 加问号 */}
+              <span className={`text-2xl font-bold ${score?.beatmapStatus === 'ranked' || score?.beatmapStatus === 'approved' ? 'text-pink-400' : 'text-zinc-600'}`}>
+                {(score?.beatmapStatus === 'ranked' || score?.beatmapStatus === 'approved')
+                  ? (score?.isLazer === false && score?.pp === 0 && score?.accuracy === 0 ? '0 (?)' : Math.round(score?.pp || 0))
+                  : '-'}
+                {(score?.beatmapStatus === 'ranked' || score?.beatmapStatus === 'approved') && <span>pp</span>}
+              </span>
               <span className="text-lg font-bold text-zinc-300">
                 {typeof score?.accuracy === 'number' ? score.accuracy.toFixed(2) : (score?.accuracy ?? '-')}%
               </span>
@@ -126,6 +132,12 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
             <div className="flex items-center gap-2 mt-1">
               {score?.mods?.length > 0 && (
                 <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500/15 text-rose-400 rounded">{score.mods.join('')}</span>
+              )}
+              {/* Lazer/Stable 客户端标签 */}
+              {score?.isLazer !== null && score?.isLazer !== undefined && (
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${score.isLazer ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                  {score.isLazer ? 'LAZER' : 'STABLE'}
+                </span>
               )}
               <span className="text-[11px] text-zinc-600">{formatDate(score?.playedAt)}</span>
             </div>

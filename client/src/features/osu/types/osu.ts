@@ -31,6 +31,7 @@ export interface OsuScoreData {
   accuracy: number;
   pp: number;
   grade: string;
+  isLazer?: boolean | null;  // b1.7.08: Lazer/Stable 标识
   mods: string[];
   coverUrl: string;
   playedAt: string; // ISO 日期
@@ -283,6 +284,7 @@ export interface RefreshLightResponse {
   msg: string;
   pass: OsuScoreData | null;
   todaybest: TodayBestResponse;
+  recent?: RecentResponse;  // b1.7.08: 刷新后的 recent 第一页
   merged: number;
 }
 

@@ -5,12 +5,14 @@
 // ============================================================
 
 import { useState, useEffect } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { getPass } from '../api/osuApi';
 import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import OsuStarBadge from '../components/OsuStarBadge';
+import OsuScoreDetailPanel from '../components/OsuScoreDetailPanel';
 import useLightSync from '../hooks/useLightSync';
 import { FaSpinner, FaCheckCircle, FaSyncAlt } from 'react-icons/fa';
 import { MODE_LABELS } from '../../../constants/osuModes';
@@ -31,6 +33,7 @@ export default function OsuPass() {
   const [passData, setPassData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedScore, setSelectedScore] = useState(null);
   const { refresh, refreshing, cooldown, lastRefreshTime } = useLightSync(activeMode);
 
   const fetchPass = async (mode) => {
@@ -111,16 +114,28 @@ export default function OsuPass() {
         </div>
       ) : (
         <div className="bg-[#15151e]/40 rounded-xl border border-white/[0.05] overflow-hidden">
-          <PassItem score={passData} />
+          <PassItem score={passData} onClick={setSelectedScore} />
         </div>
       )}
+
+      <AnimatePresence>
+        {selectedScore && (
+          <OsuScoreDetailPanel
+            score={selectedScore}
+            onClose={() => setSelectedScore(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function PassItem({ score }) {
+function PassItem({ score, onClick }) {
   return (
-    <div className="flex items-center gap-4 p-4">
+    <div
+      onClick={() => onClick?.(score)}
+      className="flex items-center gap-4 p-4 cursor-pointer hover:bg-white/[0.02] transition-colors"
+    >
       <div className="w-20 h-15 rounded-lg overflow-hidden shrink-0">
         <OsuCoverImage src={score.coverUrl} alt={score.title} className="w-full h-full" />
       </div>
@@ -144,7 +159,12 @@ function PassItem({ score }) {
         <OsuGrade grade={score.grade} size="lg" />
       </div>
       <div className="text-right shrink-0">
-        <div className="text-xl font-bold text-pink-400">{Math.round(score.pp)}<span className="text-xs text-pink-500/60 ml-1">pp</span></div>
+        <div className={`text-xl font-bold ${score.beatmapStatus === 'ranked' || score.beatmapStatus === 'approved' ? 'text-pink-400' : 'text-zinc-600'}`}>
+          {score.beatmapStatus === 'ranked' || score.beatmapStatus === 'approved' ? Math.round(score.pp || 0) : '-'}
+          {(score.beatmapStatus === 'ranked' || score.beatmapStatus === 'approved') && (
+            <span className="text-xs text-pink-500/60 ml-1">pp</span>
+          )}
+        </div>
         <div className="text-xs text-zinc-400">{score.accuracy?.toFixed(2)}%</div>
       </div>
     </div>

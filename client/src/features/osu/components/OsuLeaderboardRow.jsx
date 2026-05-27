@@ -210,13 +210,17 @@ export default function OsuLeaderboardRow({
           )}
         </div>
 
-        {/* PP */}
+        {/* PP — 非 Ranked/Approved 显示短杠 */}
         {entry.pp != null && (
           <div className={`text-right shrink-0 ${compact ? 'w-12' : 'w-16'}`}>
-            <span className={`font-bold text-pink-400 ${compact ? 'text-xs' : 'text-sm'}`}>
-              {Math.round(entry.pp)}
+            <span className={`font-bold ${compact ? 'text-xs' : 'text-sm'} ${entry.beatmapStatus === 'ranked' || entry.beatmapStatus === 'approved' ? 'text-pink-400' : 'text-zinc-600'}`}>
+              {entry.beatmapStatus === 'ranked' || entry.beatmapStatus === 'approved'
+                ? Math.round(entry.pp)
+                : '-'}
             </span>
-            <span className="text-[9px] text-pink-500/60 ml-0.5">pp</span>
+            {(entry.beatmapStatus === 'ranked' || entry.beatmapStatus === 'approved') && (
+              <span className="text-[9px] text-pink-500/60 ml-0.5">pp</span>
+            )}
           </div>
         )}
       </div>

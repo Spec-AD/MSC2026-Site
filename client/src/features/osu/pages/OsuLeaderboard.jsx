@@ -477,6 +477,7 @@ export default function OsuLeaderboard() {
                       countryCode: entry.countryCode,
                       avatarUrl: entry.avatarUrl,
                       coverUrl: entry.coverUrl,
+                      beatmapStatus: beatmap?.status,
                     }}
                     showDetails={true}
                     showCover={false}

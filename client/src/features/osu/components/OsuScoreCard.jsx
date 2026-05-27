@@ -121,22 +121,34 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false, sh
                 {modsStr}
               </span>
             )}
+            {/* Lazer/Stable 客户端标签 */}
+            {score.isLazer !== null && score.isLazer !== undefined && (
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                score.isLazer ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
+              }`}>
+                {score.isLazer ? 'LAZER' : 'STABLE'}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* PP */}
+        {/* PP — 非 Ranked/Approved 显示短杠；Stable 0pp 加问号 */}
         <div className="w-24 text-right shrink-0">
-          <span className="text-base font-bold text-pink-400">
-            {Math.round(score.pp)}
+          <span className={`text-base font-bold ${score.beatmapStatus === 'ranked' || score.beatmapStatus === 'approved' ? 'text-pink-400' : 'text-zinc-600'}`}>
+            {(score.beatmapStatus === 'ranked' || score.beatmapStatus === 'approved')
+              ? (score.isLazer === false && score.pp === 0 && score.accuracy === 0 ? '0 (?)' : Math.round(score.pp))
+              : '-'}
           </span>
-          <span className="text-[9px] text-pink-500/60 ml-0.5">pp</span>
+          {(score.beatmapStatus === 'ranked' || score.beatmapStatus === 'approved') && (
+            <span className="text-[9px] text-pink-500/60 ml-0.5">pp</span>
+          )}
         </div>
 
         {/* Acc — 非 compact 时显示 */}
         {!compact && (
           <div className="w-20 text-right shrink-0 hidden sm:block">
-            <span className="text-xs text-zinc-400 font-medium">
-              {accuracy}%
+            <span className={`text-xs font-medium ${score.isLazer === false && score.pp === 0 && score.accuracy === 0 ? 'text-zinc-500' : 'text-zinc-400'}`}>
+              {score.isLazer === false && score.pp === 0 && score.accuracy === 0 ? '0% (?)' : `${accuracy}%`}
             </span>
           </div>
         )}

@@ -5,13 +5,24 @@
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { getRecent } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuScoreCard from '../components/OsuScoreCard';
+import OsuScoreDetailPanel from '../components/OsuScoreDetailPanel';
 import useDebounce from '../hooks/useDebounce';
-import { FaSpinner, FaChevronLeft, FaChevronRight, FaFilter, FaExclamationCircle } from 'react-icons/fa';
+import { FaSpinner, FaChevronLeft, FaChevronRight, FaFilter, FaExclamationCircle, FaSyncAlt } from 'react-icons/fa';
 
 const PREFERRED_MODE_KEY = 'osu_recent_mode';
+
+function formatElapsed(timestamp) {
+  if (!timestamp) return '';
+  const diff = Date.now() - timestamp;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} 小时前`;
+  return `${Math.floor(diff / 86400_000)} 天前`;
+}
 
 export default function OsuRecent() {
   const [activeMode, setActiveMode] = useState(() => {
@@ -25,6 +36,10 @@ export default function OsuRecent() {
   const [dateTo, setDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [hasRefreshed, setHasRefreshed] = useState(false);
+  const [selectedScore, setSelectedScore] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
   const initialLoadDoneRef = useRef(false);
   const RECENT_REFRESH_KEY = 'osu_re_…fresh';
 
@@ -35,6 +50,13 @@ export default function OsuRecent() {
       return stored && (Date.now() - parseInt(stored, 10)) < 60000;
     } catch (_) { return false; }
   };
+
+  // 冷却倒计时
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => setCooldown(p => Math.max(0, p - 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   // 各筛选条件独立防抖（避免对象引用问题导致无限循环）
   const debouncedMode = useDebounce(activeMode, 500);
@@ -74,6 +96,17 @@ export default function OsuRecent() {
     localStorage.setItem(PREFERRED_MODE_KEY, mode);
   };
 
+  // 同步刷新
+  const handleSync = async () => {
+    if (cooldown > 0 || syncing) return;
+    setSyncing(true);
+    sessionStorage.setItem(RECENT_REFRESH_KEY, String(Date.now()));
+    setCooldown(60000);
+    setLastSyncTime(Date.now());
+    await fetchRecent(true);
+    setSyncing(false);
+  };
+
   // 页面首次加载时自动触发一次 refresh（60s 冷却，跨挂载持久化）
   // 这是首屏唯一的查询触发，debounce effect 跳过首屏
   useEffect(() => {
@@ -102,6 +135,25 @@ export default function OsuRecent() {
           <h2 className="text-xl font-bold text-zinc-100 tracking-tight">最近游玩</h2>
         </div>
         <div className="flex items-center gap-2">
+          {lastSyncTime && (
+            <span className="text-[10px] text-zinc-600">
+              同步: {formatElapsed(lastSyncTime)}
+            </span>
+          )}
+          <button
+            onClick={handleSync}
+            disabled={cooldown > 0 || syncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50
+              bg-pink-600 hover:bg-pink-500 text-white disabled:bg-pink-600/30"
+          >
+            {syncing ? (
+              <><FaSpinner className="animate-spin" /> 同步中...</>
+            ) : cooldown > 0 ? (
+              <><FaSyncAlt className="opacity-50" /> 冷却中 ({Math.ceil(cooldown / 1000)}s)</>
+            ) : (
+              <><FaSyncAlt /> 同步最新</>
+            )}
+          </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zinc-400 hover:text-zinc-200 bg-[#15151e] border border-white/[0.05] rounded-lg transition-colors"
@@ -169,30 +221,84 @@ export default function OsuRecent() {
               <span className="w-20 text-right hidden sm:block">Acc</span>
             </div>
             {data.scores.map((score, i) => (
-              <OsuScoreCard key={i} score={score} rank={(page - 1) * 20 + i + 1} showTime={true} />
+              <OsuScoreCard key={i} score={score} rank={(page - 1) * 20 + i + 1} showTime={true} onClick={setSelectedScore} />
             ))}
           </div>
 
-          {/* 分页 */}
+          <AnimatePresence>
+            {selectedScore && (
+              <OsuScoreDetailPanel
+                score={selectedScore}
+                onClose={() => setSelectedScore(null)}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* 分页 — 页码按钮组 + 跳转输入 */}
           {data.totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 text-sm">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="flex items-center gap-1 px-3 py-1.5 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                <FaChevronLeft /> 上一页
-              </button>
-              <span className="text-zinc-500">
-                {page} / {data.totalPages}
-              </span>
-              <button
-                onClick={() => setPage(p => Math.min(data.totalPages, p + 1))}
-                disabled={page >= data.totalPages}
-                className="flex items-center gap-1 px-3 py-1.5 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                下一页 <FaChevronRight />
-              </button>
+            <div className="flex flex-col items-center gap-3 text-sm">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="flex items-center gap-1 px-3 py-1.5 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <FaChevronLeft /> 上一页
+                </button>
+                {(function getPageNumbers() {
+                  const tp = data.totalPages;
+                  if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+                  if (page <= 4) return [1, 2, 3, 4, 5, '...', tp];
+                  if (page >= tp - 3) return [1, '...', tp - 4, tp - 3, tp - 2, tp - 1, tp];
+                  return [1, '...', page - 1, page, page + 1, '...', tp];
+                })().map((p, i) =>
+                  p === '...' ? (
+                    <span key={`e-${i}`} className="px-1 text-zinc-600">...</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
+                        p === page
+                          ? 'bg-pink-600 text-white'
+                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05]'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={() => setPage(p => Math.min(data.totalPages, p + 1))}
+                  disabled={page >= data.totalPages}
+                  className="flex items-center gap-1 px-3 py-1.5 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  下一页 <FaChevronRight />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
+                <span>第 {page} 页 / 共 {data.totalPages} 页</span>
+                <span className="text-zinc-700">|</span>
+                <span>
+                  跳转到：
+                  <input
+                    type="number"
+                    min={1}
+                    max={data.totalPages}
+                    onKeyDown={e => {
+                      if (e.key !== 'Enter') return;
+                      const target = parseInt(e.target.value, 10);
+                      if (target >= 1 && target <= data.totalPages) {
+                        setPage(target);
+                        e.target.value = '';
+                      }
+                    }}
+                    className="w-14 h-7 text-center bg-zinc-800 border border-zinc-600 rounded text-xs text-zinc-200 ml-1"
+                    placeholder="页码"
+                  />
+                  页
+                </span>
+              </div>
             </div>
           )}
         </>
