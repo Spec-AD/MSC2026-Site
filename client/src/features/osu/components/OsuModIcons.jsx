@@ -31,7 +31,7 @@ function getModIconPath(acronym) {
 export default function OsuModIcons({ mods = [], size = 'sm' }) {
   if (!mods || mods.length === 0) return null;
 
-  const frameClass = 'w-10 h-[30px]';
+  const frameClass = 'w-[30px] h-5';
 
   return (
     <div className="flex items-center">
@@ -42,7 +42,7 @@ export default function OsuModIcons({ mods = [], size = 'sm' }) {
             <div
               key={i}
               title={mod}
-              className={`${frameClass} ${i > 0 ? '-ml-0.5' : ''} bg-[#15151e]/80 border border-white/[0.12] rounded flex items-center justify-center relative shrink-0`}
+              className={`${frameClass} ${i > 0 ? '-ml-0.5' : ''} bg-[#15151e]/80 border border-white/[0.12] rounded-lg flex items-center justify-center relative shrink-0`}
               style={{ zIndex: mods.length - i }}
             >
               <img
@@ -57,7 +57,7 @@ export default function OsuModIcons({ mods = [], size = 'sm' }) {
         return (
           <span
             key={i}
-            className={`${frameClass} ${i > 0 ? '-ml-0.5' : ''} bg-[#15151e]/80 border border-white/[0.12] rounded flex items-center justify-center text-[9px] font-bold text-rose-400 tracking-widest shrink-0`}
+            className={`${frameClass} ${i > 0 ? '-ml-0.5' : ''} bg-[#15151e]/80 border border-white/[0.12] rounded-lg flex items-center justify-center text-[9px] font-bold text-rose-400 tracking-widest shrink-0`}
             title={mod}
           >
             {mod}
