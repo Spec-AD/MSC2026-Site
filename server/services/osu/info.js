@@ -52,13 +52,23 @@ function formatStats(statistics, modeData = null) {
     totalHits:   statistics.total_hits || 0,
     level:       statistics.level?.current || 0,
     maxCombo:    statistics.maximum_combo || 0,
-    rankedScore: statistics.ranked_score || 0,
-    totalScore:  statistics.total_score || 0,
+    // b1.7.10 统一字段名（与 syncStats osuDetails 一致）
+    maximumCombo: statistics.maximum_combo || 0,
+    rankedScore:  statistics.ranked_score || 0,
+    totalScore:   statistics.total_score || 0,
     // 第三轮新增
     playTime:        statistics.play_time || 0,
     replaysWatched:  statistics.replays_watched_by_others || 0,
     replaysWatchedByOthers: statistics.replays_watched_by_others || 0,  // 前端用名
     rankHistory:     modeData?.rank_history?.data || [],
+    // b1.7.10 Grade 计数（同步到 osuDetails 时用，实时查询也提供）
+    gradeCounts: {
+      ssh: statistics.grade_counts?.ssh || 0,
+      ss:  statistics.grade_counts?.ss || 0,
+      sh:  statistics.grade_counts?.sh || 0,
+      s:   statistics.grade_counts?.s || 0,
+      a:   statistics.grade_counts?.a || 0,
+    },
   };
   return result;
 }

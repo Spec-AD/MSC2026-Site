@@ -231,6 +231,18 @@ async function syncStats(user, frontendMode) {
     playCount:    stats.play_count || 0,
     totalHits:    stats.total_hits || 0,
     level:        stats.level?.current || 0,
+
+    // b1.7.10 Profile 统计面板字段
+    rankedScore:  stats.ranked_score || 0,
+    totalScore:   stats.total_score || 0,
+    maximumCombo: stats.maximum_combo || 0,
+    gradeCounts: {
+      ssh: stats.grade_counts?.ssh || 0,
+      ss:  stats.grade_counts?.ss || 0,
+      sh:  stats.grade_counts?.sh || 0,
+      s:   stats.grade_counts?.s || 0,
+      a:   stats.grade_counts?.a || 0,
+    },
   };
   user.markModified('osuDetails');
 

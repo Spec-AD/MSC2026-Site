@@ -19,6 +19,7 @@ import useOsuSync from '../hooks/useOsuSync';
 import OsuModeTabs from '../components/OsuModeTabs';
 import RankHistoryChart from '../components/RankHistoryChart';
 import CountryFlag from '../components/CountryFlag';
+import OsuGrade from '../components/OsuGrade';
 import { getOsuInfo } from '../api/osuApi';
 
 // ====== 全球排名颜色分层 (清音 §14.1) ======
@@ -115,6 +116,13 @@ export default function OsuProfile() {
                   playTime: oi.statistics[mode].playTime,
                   replaysWatched: oi.statistics[mode].replaysWatched,
                   rankHistory: oi.statistics[mode].rankHistory,
+                  rankedScore: oi.statistics[mode].rankedScore,
+                  accuracy: oi.statistics[mode].accuracy,
+                  totalScore: oi.statistics[mode].totalScore,
+                  totalHits: oi.statistics[mode].totalHits,
+                  playCount: oi.statistics[mode].playCount,
+                  maximumCombo: oi.statistics[mode].maximumCombo,
+                  gradeCounts: oi.statistics[mode].gradeCounts,
                 });
               }
             }
@@ -188,11 +196,7 @@ export default function OsuProfile() {
     <>
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-osu selection:bg-pink-500/30 relative pb-24 overflow-x-hidden">
 
-      {/* 环境光 */}
-      <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-pink-900/10 rounded-full blur-[140px] mix-blend-screen" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-fuchsia-900/10 rounded-full blur-[140px] mix-blend-screen" />
-      </div>
+
 
       <div className="max-w-7xl mx-auto px-4 md:px-6 pt-20 relative z-10">
 
@@ -468,10 +472,8 @@ export default function OsuProfile() {
                 ) : null}
               </div>
 
-              {/* 右侧占位面板（按要求先占位） */}
-              <div className="min-h-[160px] rounded-lg border border-white/[0.05] bg-[#15151e]/60 flex items-center justify-center">
-                <span className="text-xs text-zinc-600">右侧占位区域</span>
-              </div>
+              {/* 右侧统计面板 */}
+              <StatsPanel stats={modeStats} emptyState={statsDisplay?.state} />
             </div>
 
           </>
@@ -513,3 +515,64 @@ function StatCard({ icon, label, value, emptyState, accent = false }) {
   );
 }
 
+/** 右侧统计面板 */
+function StatsPanel({ stats, emptyState }) {
+  if (!stats || emptyState !== 'loaded') {
+    return (
+      <div className="min-h-[160px] rounded-lg border border-white/[0.05] bg-[#15151e]/60 flex items-center justify-center">
+        <span className="text-xs text-zinc-600">
+          {emptyState === 'unsynced' ? '数据未同步' : '暂无数据'}
+        </span>
+      </div>
+    );
+  }
+
+  const hitsPerPlay = stats.playCount > 0 ? Math.round(stats.totalHits / stats.playCount) : 0;
+  const gradeCounts = stats.gradeCounts || {};
+
+  const rows = [
+    { label: '计分成绩总分', value: stats.rankedScore?.toLocaleString('en-US') },
+    { label: '准确率', value: stats.accuracy != null ? `${Number(stats.accuracy).toFixed(2)}%` : null },
+    { label: '总分', value: stats.totalScore?.toLocaleString('en-US') },
+    { label: '总命中次数', value: stats.totalHits?.toLocaleString('en-US') },
+    { label: '每次游玩击打数', value: hitsPerPlay.toLocaleString('en-US') },
+    { label: '最大连击', value: stats.maximumCombo?.toLocaleString('en-US') },
+  ];
+
+  const gradeEntries = [
+    { grade: 'XH', count: gradeCounts.ssh },
+    { grade: 'X', count: gradeCounts.ss },
+    { grade: 'SH', count: gradeCounts.sh },
+    { grade: 'S', count: gradeCounts.s },
+    { grade: 'A', count: gradeCounts.a },
+  ];
+
+  return (
+    <div className="min-h-[160px] rounded-lg border border-white/[0.05] bg-[#15151e]/60 p-4 flex flex-col justify-between">
+      <div className="space-y-2">
+        {rows.map((row) => (
+          <div key={row.label} className="flex justify-between items-center">
+            <span className="text-xs text-zinc-500">{row.label}</span>
+            <span className="text-sm font-osu font-light text-zinc-200 ml-4">
+              {row.value ?? '-'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Grade 统计 */}
+      <div className="border-t border-white/[0.05] pt-3 mt-3">
+        <div className="flex items-center justify-between">
+          {gradeEntries.map((entry) => (
+            <div key={entry.grade} className="flex flex-col items-center gap-1">
+              <OsuGrade grade={entry.grade} size="sm" />
+              <span className="text-xs font-osu font-semibold text-zinc-400">
+                {entry.count ?? 0}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

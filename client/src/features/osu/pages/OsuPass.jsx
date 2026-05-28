@@ -156,7 +156,7 @@ function PassItem({ score, onClick }) {
                 <img src={iconPath} className="w-3.5 h-3.5" alt={score.mode} />
               ) : null;
             })()}
-            <span className="text-sm text-zinc-400 whitespace-normal break-words">{score.version}</span>
+            <span className="text-sm font-medium text-zinc-400 whitespace-normal break-words">{score.version}</span>
           </div>
           <OsuBeatmapStatusBadge status={score.beatmapStatus} />
         </div>

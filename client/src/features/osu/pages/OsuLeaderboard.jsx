@@ -454,16 +454,6 @@ export default function OsuLeaderboard() {
       ) : sortedScores.length > 0 ? (
         <>
           <div className="bg-[#15151e]/40 rounded-xl border border-white/[0.05] overflow-hidden">
-            {/* 表头（对齐 OsuLeaderboardRow 列宽） */}
-            <div className="hidden sm:flex items-center px-4 py-2 text-xs text-zinc-500 font-bold uppercase tracking-wider border-b border-white/[0.05] bg-[#15151e]/95">
-              <span className="w-10 text-center">#</span>
-              <span className="w-8 shrink-0" />
-              <span className="flex-1 min-w-0">玩家</span>
-              <span className="shrink-0">评级</span>
-              <span className="w-32 text-right">分数 / Acc</span>
-              <span className="w-16 text-right">PP</span>
-            </div>
-
             {sortedScores.map((entry, i) => {
               const rankNum = i + 1;
               const isHighlighted = data.currentUserRank?.highlight && rankNum === data.currentUserRank.rank;

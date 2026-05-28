@@ -1,40 +1,41 @@
 // ============================================================
-// OsuGrade — osu! 评级渲染组件（SS/S/A/B/C/D/F）
-// 遵循 osu! 官方风格的颜色+发光效果
+// OsuGrade — osu! 评级渲染组件（b1.7.10 SVG 版）
+// 使用官方 score-ranks-v2019 SVG 图标替代 CSS 文字
 // ============================================================
 
-const GRADE_STYLES = {
-  XH: { text: 'SS', color: 'text-zinc-200', glow: 'rgba(255,255,255,0.8)', isItalic: true },
-  SH: { text: 'S', color: 'text-zinc-200', glow: 'rgba(255,255,255,0.6)', isItalic: true },
-  X:  { text: 'SS', color: 'text-yellow-400', glow: 'rgba(250,204,21,0.6)', isItalic: true },
-  S:  { text: 'S', color: 'text-yellow-400', glow: 'rgba(250,204,21,0.5)', isItalic: true },
-  A:  { text: 'A', color: 'text-emerald-400', glow: null, isItalic: true },
-  B:  { text: 'B', color: 'text-blue-400', glow: null, isItalic: true },
-  C:  { text: 'C', color: 'text-purple-400', glow: null, isItalic: true },
-  D:  { text: 'D', color: 'text-rose-500', glow: null, isItalic: true },
-  F:  { text: 'F', color: 'text-zinc-600', glow: null, isItalic: false },
+const GRADE_SVG_MAP = {
+  XH: 'GradeSmall-SS-Silver',
+  SH: 'GradeSmall-S-Silver',
+  X: 'GradeSmall-SS',
+  S: 'GradeSmall-S',
+  A: 'GradeSmall-A',
+  B: 'GradeSmall-B',
+  C: 'GradeSmall-C',
+  D: 'GradeSmall-D',
+  F: 'GradeSmall-F',
+};
+
+const SIZE_MAP = {
+  sm: 'w-6 h-6',
+  md: 'w-8 h-8',
+  lg: 'w-10 h-10',
 };
 
 export default function OsuGrade({ grade, size = 'md', className = '' }) {
   const g = (grade || '').toUpperCase();
-  const style = GRADE_STYLES[g] || GRADE_STYLES.D;
+  const svgName = GRADE_SVG_MAP[g];
+  const sizeClass = SIZE_MAP[size] || SIZE_MAP.md;
+  const svgPath = svgName ? `/osu-resources/score-ranks-v2019/${svgName}.svg` : null;
 
-  const sizeClasses = {
-    sm: 'text-sm',
-    md: 'text-xl',
-    lg: 'text-3xl',
-  };
-
-  const shadow = style.glow
-    ? { textShadow: `0 0 8px ${style.glow}` }
-    : {};
+  if (!svgPath) return null;
 
   return (
-    <span
-      className={`font-black italic leading-none ${style.color} ${sizeClasses[size] || sizeClasses.md} ${className}`}
-      style={shadow}
-    >
-      {style.text}
-    </span>
+    <img
+      src={svgPath}
+      alt={g}
+      className={`inline-block object-contain max-h-full ${sizeClass} ${className}`}
+      style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.3))' }}
+      loading="lazy"
+    />
   );
 }

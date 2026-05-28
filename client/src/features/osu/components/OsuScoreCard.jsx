@@ -121,7 +121,7 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false, sh
                   <img src={iconPath} className="w-3.5 h-3.5" alt={score.mode} />
                 ) : null;
               })()}
-              <span className="text-[10px] font-bold text-zinc-400 whitespace-normal break-words">
+              <span className="text-[10px] font-medium text-zinc-400 whitespace-normal break-words">
                 {score.version}
               </span>
             </div>

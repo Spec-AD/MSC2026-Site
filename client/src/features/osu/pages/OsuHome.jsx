@@ -1,16 +1,14 @@
 // ============================================================
-// OsuHome — osu! 模块入口 / 导航
-// b1.7 R3: 顶部导航显示用户头像+昵称（H1 fix）
+// OsuHome — osu! 模块入口 / 导航（b1.7.10 重构版）
+// 纯文字 Tab + nav2 装饰图 + 下划线 active
+// 可交互 lazer logo 背景
 // ============================================================
 
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { FaGamepad, FaTrophy, FaHistory, FaStar, FaList, FaSun, FaSearch, FaMap, FaGlobeAsia, FaUser } from 'react-icons/fa';
-import { useAuth } from '../../../context/AuthContext';
 
 export default function OsuHome() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user: currentUser } = useAuth();
 
   const isActive = (item) => {
     if (item.exact) return location.pathname.startsWith('/osu/profile');
@@ -18,71 +16,62 @@ export default function OsuHome() {
   };
 
   const NAV_ITEMS = [
-    { path: '/osu/profile', label: currentUser ? (currentUser.nickname || currentUser.username) : 'osu!', icon: null, exact: true },
-    { path: '/osu/best', label: 'BP 排行', icon: <FaTrophy /> },
-    { path: '/osu/pass', label: '最近通过', icon: <FaStar /> },
-    { path: '/osu/recent', label: '最近游玩', icon: <FaHistory /> },
-    { path: '/osu/todaybest', label: '今日最佳', icon: <FaSun /> },
-    { path: '/osu/info', label: '玩家查询', icon: <FaSearch /> },
-    { path: '/osu/map', label: '谱面查询', icon: <FaMap /> },
-    { path: '/osu/leaderboard', label: '排行榜', icon: <FaGlobeAsia /> },
+    { path: '/osu/profile', label: '我的档案', exact: true },
+    { path: '/osu/best', label: 'BP 排行' },
+    { path: '/osu/pass', label: '最近通过' },
+    { path: '/osu/recent', label: '最近游玩' },
+    { path: '/osu/todaybest', label: '今日最佳' },
+    { path: '/osu/info', label: '玩家查询' },
+    { path: '/osu/map', label: '谱面查询' },
+    { path: '/osu/leaderboard', label: '排行榜' },
   ];
 
   return (
     <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-osu">
-      {/* 环境光 */}
-      <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-pink-900/10 rounded-full blur-[140px] mix-blend-screen" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-fuchsia-900/10 rounded-full blur-[140px] mix-blend-screen" />
-        {/* osu!lazer 品牌水印 */}
-        <div
-          className="absolute inset-0 bg-no-repeat bg-fixed"
-          style={{
-            backgroundImage: 'url(/osu-resources/lazer.png)',
-            backgroundPosition: '85% 90%',
-            backgroundSize: '180px auto',
-            opacity: 0.04,
-          }}
+      {/* 可交互 lazer logo（右下角） */}
+      <a
+        href="https://osu.ppy.sh"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-0 right-0 z-50 pointer-events-auto"
+      >
+        <img
+          src="/osu-resources/lazer.png"
+          alt="osu!"
+          className="lazer-logo w-[140px] h-auto opacity-30 transition-all duration-300 hover:opacity-90"
+          style={{ objectFit: 'contain' }}
         />
-      </div>
+      </a>
 
-      <div className="max-w-7xl mx-auto px-4 pt-20 relative z-10">
-        {/* 顶部导航 */}
-        <div className="flex items-center gap-1 mb-8 overflow-x-auto pb-2 scrollbar-none border-b border-white/[0.05]">
-          {NAV_ITEMS.map((item, idx) => (
+      <div className="max-w-7xl mx-auto px-4 pt-4 relative z-10">
+        {/* nav2 顶部装饰图 */}
+        <div className="w-full h-[120px] overflow-hidden relative rounded-xl mb-4">
+          <img
+            src="/osu-resources/nav2-background-hue0.png"
+            alt=""
+            className="w-full h-full object-cover opacity-40"
+          />
+        </div>
+
+        {/* 纯文字导航 Tab */}
+        <nav className="flex items-center gap-0 border-b border-white/[0.05] mb-6 overflow-x-auto scrollbar-none">
+          {NAV_ITEMS.map((item) => (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
               className={`
-                flex items-center gap-1.5 px-3 py-2 text-xs font-bold whitespace-nowrap rounded-lg transition-all shrink-0
+                px-4 py-3 text-sm font-bold whitespace-nowrap shrink-0 transition-colors
+                border-b-2 border-transparent
                 ${isActive(item)
-                  ? 'bg-pink-500/15 text-pink-400 border border-pink-500/20'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5 border border-transparent'
+                  ? 'text-pink-400 border-pink-500'
+                  : 'text-zinc-500 hover:text-zinc-300'
                 }
               `}
             >
-              {/* 第一个 nav item（我的档案）显示用户头像 + 昵称 */}
-              {idx === 0 && currentUser ? (
-                <div className="flex items-center gap-1.5">
-                  <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-800 shrink-0">
-                    {currentUser.avatarUrl ? (
-                      <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover"
-                        onError={(e) => { e.target.style.display = 'none'; }} />
-                    ) : (
-                      <FaUser className="w-full h-full p-1 text-zinc-600" />
-                    )}
-                  </div>
-                  <span className="truncate max-w-[100px]">{item.label}</span>
-                </div>
-              ) : (
-                <>
-                  {item.icon && <span className="text-[10px]">{item.icon}</span>}
-                  <span>{item.label}</span>
-                </>
-              )}
+              {item.label}
             </button>
           ))}
-        </div>
+        </nav>
 
         {/* 内容区 */}
         <Outlet />

@@ -162,7 +162,7 @@ export default function OsuTodayBest() {
                         <img src={iconPath} className="w-3 h-3" alt={score.mode} />
                       ) : null;
                     })()}
-                    <span className="text-xs text-zinc-500">{score.version}</span>
+                    <span className="text-xs font-medium text-zinc-500">{score.version}</span>
                   </div>
                   <OsuBeatmapStatusBadge status={score.beatmapStatus} />
                 </div>
