@@ -121,3 +121,13 @@ export function refreshLight(mode) {
 export function getUserProfile(username) {
   return api.get(`/users/${username}?t=${Date.now()}`);
 }
+
+/** search/players — 玩家搜索 */
+export function searchPlayers(query, params = {}) {
+  return api.get('/osu/search/players', { params: { q: query, ...params } });
+}
+
+/** search/beatmaps — 谱面搜索 */
+export function searchBeatmaps(params = {}) {
+  return api.get('/osu/search/beatmaps', { params });
+}

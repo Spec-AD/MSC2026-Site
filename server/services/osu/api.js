@@ -435,6 +435,39 @@ async function getUserScoreOnBeatmap(beatmapId, osuId, opts = {}) {
   }
 }
 
+/**
+ * 搜索谱面集
+ *
+ * 透传 osu! API v2 GET /beatmapsets/search
+ *
+ * @param {Object} opts
+ * @param {string} [opts.q] - 搜索关键词
+ * @param {string} [opts.mode] - 模式 'osu'|'taiko'|'fruits'|'mania'
+ * @param {string} [opts.status] - 状态 'ranked'|'qualified'|'loved'|'graveyard'|'pending'|'wip'
+ * @param {Object} [opts.cursor] - 游标分页标记
+ * @param {number} [opts.limit=20] - 每页条数，最大 50
+ * @param {string} [opts.sort] - 排序
+ * @param {string} [opts.genre] - 曲风
+ * @param {string} [opts.language] - 语言
+ * @param {string} [opts.extra] - 额外筛选
+ * @returns {Promise<Object>} { beatmapsets, cursor, total, recommended_difficulty }
+ */
+async function searchBeatmapsets(opts = {}) {
+  const { q, mode, status, cursor, limit, sort, genre, language, extra } = opts;
+  const params = {};
+  if (q) params.q = q;
+  if (mode) params.m = mode;
+  if (status) params.s = status;
+  if (cursor) params.cursor = typeof cursor === 'string' ? cursor : JSON.stringify(cursor);
+  if (limit) params.limit = Math.min(limit, 50);
+  if (sort) params.sort = sort;
+  if (genre) params.g = genre;
+  if (language) params.l = language;
+  if (extra) params.e = extra;
+
+  return await request('GET', '/beatmapsets/search', { params });
+}
+
 module.exports = {
   // Token 管理
   getClientToken,
@@ -448,6 +481,7 @@ module.exports = {
   getBeatmap,
   getBeatmapScores,
   getUserScoreOnBeatmap,
+  searchBeatmapsets,
 
   // 工具
   request,

@@ -78,10 +78,9 @@ export default function OsuTodayBest() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-1 h-6 bg-amber-500 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+        <div className="flex items-center gap-2">
           <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
-            <img src="/osu-resources/lazer-nuget.png" className="w-4 h-4 inline-block" alt="osu!" />
+            <img src="/osu-resources/lazer-nuget.png" className="w-10 h-10 inline-block" alt="osu!" />
             今日最佳
           </h2>
           {data?.isNewRecord && (

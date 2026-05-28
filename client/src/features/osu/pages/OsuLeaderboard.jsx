@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getLeaderboard } from '../api/osuApi';
+import { getLeaderboard, searchBeatmaps } from '../api/osuApi';
 import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
 import { getStarBgColor, getStarTextColor } from '../utils/osuColors';
@@ -57,6 +57,10 @@ export default function OsuLeaderboard() {
   const [data, setData] = useState(bid ? null : cache.leaderboardData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const searchDropdownRef = useRef(null);
   const [filterType, setFilterType] = useState('all');
   const [isFocused, setIsFocused] = useState(false);
   const [sortBy, setSortBy] = useState('pp_desc');
@@ -168,6 +172,48 @@ export default function OsuLeaderboard() {
     blurTimerRef.current = setTimeout(() => setIsFocused(false), 200);
   };
 
+  // 热搜索 debounce ref
+  const searchTimerRef = useRef(null);
+
+  const handleSearchInput = (value) => {
+    setBidInput(value);
+    setShowSearchDropdown(true);
+
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    if (!value.trim() || !isNaN(Number(value))) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const { data } = await searchBeatmaps({ q: value.trim(), limit: 10 });
+        setSearchResults(data?.beatmapsets || []);
+      } catch (_) {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 200);
+  };
+
+  const selectBeatmap = (beatmapset) => {
+    setSearchResults([]);
+    setShowSearchDropdown(false);
+    const bid = beatmapset.beatmaps?.[0]?.id || beatmapset.difficulties?.[0]?.id;
+    if (bid) navigate(`/osu/leaderboard/${bid}`, { replace: true });
+  };
+
+  // ESC 关闭
+  useEffect(() => {
+    const handleEsc = (e) => { if (e.key === 'Escape') setShowSearchDropdown(false); };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, []);
+
   // 路由 bid 变化时自动拉取
   useEffect(() => {
     if (bid && bid !== cache.leaderboardBid) {
@@ -189,34 +235,64 @@ export default function OsuLeaderboard() {
           <FaArrowLeft className="w-4 h-4" />
         </button>
         <h1 className="text-lg font-bold text-zinc-200 flex items-center gap-2">
-          <img src="/osu-resources/lazer-nuget.png" className="w-4 h-4 inline-block" alt="osu!" />
+          <img src="/osu-resources/lazer-nuget.png" className="w-10 h-10 inline-block" alt="osu!" />
           全球排行榜
         </h1>
         <span className="text-[10px] text-zinc-600 tracking-wider bg-zinc-800/50 px-2 py-0.5 rounded">BETA</span>
       </div>
 
       {/* 谱面搜索栏 */}
-      <div className="mb-6 flex gap-2">
-        <div className="flex-1 relative">
-          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 text-xs" />
-          <input
-            type="text"
-            value={bidInput}
-            onChange={e => setBidInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            placeholder="输入谱面 ID 或 URL..."
-            className="w-full pl-9 pr-3 py-2 bg-[#15151e] border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-600 transition-colors"
-          />
+      <div className="mb-6">
+        <div className="flex gap-2">
+          <div className="flex-1 relative" ref={searchDropdownRef}>
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 text-xs" />
+            <input
+              type="text"
+              value={bidInput}
+              onChange={e => handleSearchInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              onFocus={() => { handleFocus(); setShowSearchDropdown(true); }}
+              onBlur={handleBlur}
+              placeholder="输入谱面 ID、URL 或搜索曲名..."
+              className="w-full pl-9 pr-3 py-2 bg-[#15151e] border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-600 transition-colors"
+            />
+            {showSearchDropdown && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[#15151e] border border-white/[0.08] rounded-lg shadow-xl z-50 max-h-[300px] overflow-y-auto">
+                {searchResults.map((bms) => (
+                  <div
+                    key={bms.id}
+                    onClick={() => selectBeatmap(bms)}
+                    className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/[0.03] cursor-pointer transition-colors"
+                  >
+                    <img
+                      src={bms.covers?.list || bms.covers?.card}
+                      alt=""
+                      className="w-10 h-8 rounded object-cover bg-zinc-800"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-zinc-200 truncate">{bms.title}</div>
+                      <div className="text-[10px] text-zinc-500 truncate">{bms.artist} · by {bms.creator}</div>
+                    </div>
+                    <OsuBeatmapStatusBadge status={bms.status} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {showSearchDropdown && searchLoading && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[#15151e] border border-white/[0.08] rounded-lg shadow-xl z-50 flex items-center justify-center py-4">
+                <FaSpinner className="animate-spin text-zinc-500" />
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleSearch}
+            disabled={loading || !bidInput.trim()}
+            className="px-4 py-2 bg-pink-600 hover:bg-pink-500 disabled:bg-pink-600/50 text-white text-sm font-bold rounded-lg transition-colors"
+          >
+            {loading ? <FaSpinner className="animate-spin" /> : '搜索'}
+          </button>
         </div>
-        <button
-          onClick={handleSearch}
-          disabled={loading}
-          className="px-4 py-2 bg-pink-600 hover:bg-pink-500 disabled:bg-pink-600/50 text-white text-sm font-bold rounded-lg transition-colors"
-        >
-          {loading ? <FaSpinner className="animate-spin" /> : '搜索'}
-        </button>
       </div>
 
       {/* 搜索历史面板 — 搜索框 focus 时展开（含动画） */}

@@ -3,6 +3,8 @@ const router = express.Router();
 const User = require('../models/User');
 const { authMiddleware, optionalAuth } = require('../middleware/auth');
 const osuServices = require('../services/osu');
+const osuSearch = require('../services/osu/search');
+const osuApi = require('../services/osu/api');
 
 /*
  * MODE_MAP — frontendId → osu! API mode 映射
@@ -353,6 +355,19 @@ router.get('/api/osu/info', async (req, res) => {
     if (!q) return res.status(400).json({ msg: '请提供查询参数 q（用户名或 UID）' });
 
     const data = await osuServices.info.getInfo(q);
+
+    // b1.7.11: 查询成功后写入搜索缓存
+    if (data && data.osuId) {
+      const defaultMode = data.defaultMode || Object.keys(data.statistics || {}).find(k => data.statistics[k]) || 'standard';
+      // 写入搜索缓存（不阻塞响应）
+      void osuSearch.cachePlayer(
+        data.osuId,
+        data.username,
+        data.avatarUrl,
+        data.countryCode || ''
+      );
+    }
+
     res.json(data);
   } catch (err) {
     if (err.status === 429) return res.status(429).json({ msg: err.message, retryAfter: err.retryAfter });
@@ -417,6 +432,62 @@ router.get('/api/osu/leaderboard/:bid', optionalAuth, async (req, res) => {
     if (err.status === 404) return res.status(404).json({ msg: '谱面未找到' });
     if (err.status === 429) return res.status(429).json({ msg: err.message, retryAfter: err.retryAfter });
     res.status(500).json({ msg: '查询失败' });
+  }
+});
+
+// ─── b1.7.11 搜索路由 ─────────────────────────────────────────────────────
+
+/**
+ * GET /api/osu/search/beatmaps — 谱面搜索
+ *
+ * 透传 osu! API v2 beatmapsets/search，支持高级筛选 + 游标分页
+ */
+router.get('/api/osu/search/beatmaps', async (req, res) => {
+  try {
+    // 兼容 snake_case 和 camelCase 参数名（前端 URL 用 star_min/star_max，后端读 starMin/starMax）
+    const starMinRaw = req.query.starMin ?? req.query.star_min;
+    const starMaxRaw = req.query.starMax ?? req.query.star_max;
+
+    const data = await osuSearch.searchBeatmaps({
+      q: req.query.q,
+      mode: req.query.mode,
+      status: req.query.status,
+      cursor: req.query.cursor || undefined,
+      limit: parseInt(req.query.limit) || 20,
+      starMin: starMinRaw !== undefined ? parseFloat(starMinRaw) : undefined,
+      starMax: starMaxRaw !== undefined ? parseFloat(starMaxRaw) : undefined,
+      creator: req.query.creator,
+      sort: req.query.sort,
+      genre: req.query.genre,
+      language: req.query.language,
+      artist: req.query.artist,
+      title: req.query.title,
+    });
+
+    res.json(data);
+  } catch (err) {
+    if (err.status === 429) return res.status(429).json({ msg: err.message, retryAfter: err.retryAfter });
+    res.status(500).json({ msg: '谱面搜索失败' });
+  }
+});
+
+/**
+ * GET /api/osu/search/players — 玩家搜索
+ *
+ * 基于本地绑定用户 + 历史缓存，支持模糊匹配 + 区域筛选
+ */
+router.get('/api/osu/search/players', optionalAuth, async (req, res) => {
+  try {
+    const { q, region, limit } = req.query;
+
+    const data = await osuSearch.searchPlayers(q || '', {
+      region: region || undefined,
+      limit: parseInt(limit) || 10,
+    });
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ msg: '玩家搜索失败' });
   }
 });
 

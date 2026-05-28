@@ -1,14 +1,16 @@
 // ============================================================
-// OsuInfo — 玩家信息查询（b1.7 多模式展示）
-// GET /api/osu/info?q=
-// 响应结构: { username, osuUsername, avatarUrl, coverUrl, country, joinDate, defaultMode, statistics: { standard, taiko, catch, mania } }
+// OsuInfo — 玩家信息查询（b1.7.11 热搜索版）
+// 热搜索 + 候选框 + 历史记录 + 区域筛选
+// GET /api/osu/info?q=    GET /api/osu/search/players?q=
 // ============================================================
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getOsuInfo } from '../api/osuApi';
+import { getOsuInfo, searchPlayers } from '../api/osuApi';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuSearchHistory from '../components/OsuSearchHistory';
+import SearchInput from '../components/SearchInput';
+import CountryFlag from '../components/CountryFlag';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaSpinner, FaSearch, FaUser, FaGlobe, FaCalendar } from 'react-icons/fa';
 import { MODE_LABELS } from '../../../constants/osuModes';
@@ -23,6 +25,9 @@ export default function OsuInfo() {
   const [player, setPlayer] = useState(cache.infoData);
   const [activeMode, setActiveMode] = useState('standard');
   const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchReqRef = useRef(0);
+  const [candidates, setCandidates] = useState([]);
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(!!cache.infoData);
   const [isFocused, setIsFocused] = useState(false);
@@ -33,7 +38,6 @@ export default function OsuInfo() {
     const q = searchParams.get('q');
     if (q && q.trim() && !searched) {
       setQuery(q.trim());
-      // 延迟一下让 query state 更新后再搜索
       const timer = setTimeout(() => {
         getOsuInfo(q.trim()).then(({ data }) => {
           setPlayer(data);
@@ -62,7 +66,6 @@ export default function OsuInfo() {
       setPlayer(data);
       recordPlayerHistory(data);
       cache.setInfo(query.trim(), data);
-      // 默认选中该用户游玩最多的模式
       if (data?.defaultMode && MODE_IDS.includes(data.defaultMode)) {
         setActiveMode(data.defaultMode);
       } else {
@@ -71,6 +74,49 @@ export default function OsuInfo() {
     } catch (err) {
       setError(err.userMessage || '未找到该玩家');
       setPlayer(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 热搜索：实时搜索候选
+  const handleHotSearch = useCallback(async (q) => {
+    const reqId = ++searchReqRef.current;
+    setQuery(q);
+    if (!q.trim()) {
+      setCandidates([]);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const { data } = await searchPlayers(q.trim());
+      if (reqId !== searchReqRef.current) return;
+      setCandidates(data?.results || []);
+    } catch (_) {
+      if (reqId === searchReqRef.current) setCandidates([]);
+    } finally {
+      if (reqId === searchReqRef.current) setSearchLoading(false);
+    }
+  }, []);
+
+  // 选择候选
+  const selectCandidate = async (p) => {
+    setQuery(p.username);
+    setCandidates([]);
+    setLoading(true);
+    setError(null);
+    setPlayer(null);
+    setSearched(true);
+    try {
+      const { data } = await getOsuInfo(p.username);
+      setPlayer(data);
+      recordPlayerHistory(data);
+      cache.setInfo(p.username, data);
+      if (data?.defaultMode && MODE_IDS.includes(data.defaultMode)) {
+        setActiveMode(data.defaultMode);
+      }
+    } catch (err) {
+      setError(err.userMessage || '未找到该玩家');
     } finally {
       setLoading(false);
     }
@@ -87,10 +133,6 @@ export default function OsuInfo() {
     });
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') handleSearch();
-  };
-
   // 搜索框 focus/blur
   const handleFocus = () => {
     if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
@@ -99,8 +141,6 @@ export default function OsuInfo() {
   const handleBlur = () => {
     blurTimerRef.current = setTimeout(() => setIsFocused(false), 200);
   };
-
-  // 历史条目实时过滤（由 OsuSearchHistory 内部处理，此处不再预过滤）
 
   // 点击历史条目
   const handleHistorySelect = async (entry) => {
@@ -130,37 +170,59 @@ export default function OsuInfo() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-1 h-6 bg-cyan-500 rounded-full shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+      <div className="flex items-center gap-2 mb-6">
         <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
-          <img src="/osu-resources/lazer-nuget.png" className="w-4 h-4 inline-block" alt="osu!" />
+          <img src="/osu-resources/lazer-nuget.png" className="w-10 h-10 inline-block" alt="osu!" />
           玩家查询
         </h2>
       </div>
 
-      {/* 搜索框 */}
-      <div className="flex items-center gap-2 mb-8">
-        <div className="flex-1 relative">
-          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 text-sm" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            placeholder="输入 osu! 用户名 或 UID..."
-            className="w-full bg-[#15151e] border border-white/[0.08] rounded-lg pl-10 pr-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 transition-colors"
-          />
-        </div>
-        <button
-          onClick={handleSearch}
-          disabled={loading || !query.trim()}
-          className="px-6 py-3 bg-pink-600 hover:bg-pink-500 text-white text-sm font-bold rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
-        >
-          {loading ? <FaSpinner className="animate-spin" /> : <FaSearch />}
-          查询
-        </button>
+      {/* 热搜索 */}
+      <div className="mb-8">
+        <SearchInput
+          value={query}
+          onChange={handleHotSearch}
+          onSearch={handleSearch}
+          placeholder="输入 osu! 用户名 或 UID..."
+          loading={searchLoading}
+          history={cache.playerHistory}
+          onClearHistory={() => cache.clearPlayerHistory()}
+          renderCandidate={() => (
+            <div>
+              {candidates.length === 0 ? (
+                <div className="px-3 py-4 text-center text-xs text-zinc-600">未找到匹配的玩家</div>
+              ) : (
+                candidates.map((p) => (
+                  <div
+                    key={p.osuId}
+                    onClick={() => selectCandidate(p)}
+                    className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/[0.03] cursor-pointer transition-colors"
+                  >
+                    <img
+                      src={p.avatarUrl}
+                      alt=""
+                      className="w-8 h-8 rounded-full object-cover bg-zinc-800"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                    {p.countryCode && <CountryFlag code={p.countryCode} size="sm" />}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-zinc-200 truncate block">{p.username}</span>
+                      <span className="text-[10px] text-zinc-600">UID {p.osuId}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          renderHistoryItem={(item) => (
+            <div
+              onClick={() => handleHistorySelect(item)}
+              className="px-3 py-2 text-sm text-zinc-400 hover:bg-white/[0.03] cursor-pointer truncate"
+            >
+              {item}
+            </div>
+          )}
+        />
       </div>
 
       {/* 搜索历史 — 仅搜索框 focus 时展开（含动画） */}
