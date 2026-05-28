@@ -95,67 +95,7 @@ export default function OsuMap() {
   }, [buildSearchParams, cursor]);
 
   // 从输入中提取 beatmap ID（BID 或 URL）
-  const extractBid = (input) => {
-    if (!input) return null;
-    // 纯数字 BID
-    if (/^\d+$/.test(input.trim())) return Number(input.trim());
-    // osu beatmap URL: https://osu.ppy.sh/beatmaps/123456 或 beatmapsets/xxx#osu/123456
-    const match = input.match(/beatmaps\/(\d+)|#osu\/(\d+)|#taiko\/(\d+)|#fruits\/(\d+)|#mania\/(\d+)/i);
-    if (match) return Number(match[1] || match[2] || match[3] || match[4] || match[5]);
-    return null;
-  };
-
-  // Hot search: debounced by SearchInput, then execute search
-  const handleHotSearch = useCallback((q) => {
-    setQuery(q);
-    if (!q.trim()) {
-      setResults([]);
-      setCursor(null);
-      setHasSearched(false);
-      return;
-    }
-    // BID / URL 直查
-    const bid = extractBid(q);
-    if (bid) {
-      setCursor(null);
-      setResults([]);
-      setLoading(true);
-      getBeatmap(String(bid)).then(({ data }) => {
-        setSelectedBeatmap(data);
-        setHasSearched(true);
-        setLoading(false);
-      }).catch(() => {
-        setError('未找到该谱面');
-        setLoading(false);
-      });
-      return;
-    }
-    // 直接触发搜索，SearchInput 已做 200ms debounce
-    setCursor(null);
-    setResults([]);
-    doSearchWithQ(q);
-  }, [doSearchWithQ]);
-
-  // Trigger search on Enter or when query/filters change
-  // (SearchInput's onSearch for Enter key)
-  const handleSearch = useCallback(() => {
-    if (!query.trim()) return;
-    setCursor(null);
-    setResults([]);
-    // Use setTimeout to ensure state is flushed
-    setTimeout(() => doSearch(false), 0);
-  }, [query, doSearch]);
-
-  // Also search when filters change (with Enter on creator, or toggle status)
-  useEffect(() => {
-    if (!hasSearched) return;
-    setCursor(null);
-    setResults([]);
-    const timer = setTimeout(() => doSearch(false), 0);
-    return () => clearTimeout(timer);
-  }, [statusFilter, starMin, starMax, creatorFilter, artistFilter, titleFilter]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // URL 参数初始化：自动搜索
+  // 搜索词直搜（绕过 buildSearchParams 闭包问题）
   const doSearchWithQ = useCallback(async (searchQuery) => {
     searchKeyRef.current++;
     const currentKey = searchKeyRef.current;
@@ -182,6 +122,44 @@ export default function OsuMap() {
       if (currentKey === searchKeyRef.current) setLoading(false);
     }
   }, [statusFilter, starMin, starMax, creatorFilter, artistFilter, titleFilter]);
+
+  // BID / URL 提取
+  const extractBid = (input) => {
+    if (!input) return null;
+    if (/^\d+$/.test(input.trim())) return Number(input.trim());
+    const match = input.match(/beatmaps\/(\d+)|#osu\/(\d+)|#taiko\/(\d+)|#fruits\/(\d+)|#mania\/(\d+)/i);
+    if (match) return Number(match[1] || match[2] || match[3] || match[4] || match[5]);
+    return null;
+  };
+
+  // 热搜索入口（SearchInput debounce 200ms 后调用）
+  const handleHotSearch = useCallback((q) => {
+    setQuery(q);
+    if (!q.trim()) {
+      setResults([]);
+      setCursor(null);
+      setHasSearched(false);
+      return;
+    }
+    const bid = extractBid(q);
+    if (bid) {
+      setCursor(null);
+      setResults([]);
+      setLoading(true);
+      getBeatmap(String(bid)).then(({ data }) => {
+        setSelectedBeatmap(data);
+        setHasSearched(true);
+        setLoading(false);
+      }).catch(() => {
+        setError('未找到该谱面');
+        setLoading(false);
+      });
+      return;
+    }
+    setCursor(null);
+    setResults([]);
+    doSearchWithQ(q);
+  }, [doSearchWithQ]);
 
   const [initialized, setInitialized] = useState(false);
   useEffect(() => {
