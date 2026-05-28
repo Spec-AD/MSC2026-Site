@@ -117,11 +117,10 @@ export default function OsuModIcons({ mods = [] }) {
 
       {tooltip && (
         <div
-          className="fixed z-[9999] px-2.5 py-1.5 text-xs font-semibold text-zinc-200 bg-[#1a1a24]/95 border border-white/[0.08] rounded-lg pointer-events-none whitespace-nowrap shadow-lg"
+          className="fixed z-[9999] px-2.5 py-1.5 text-xs font-semibold text-zinc-200 bg-[#1a1a24]/95 border border-white/[0.08] rounded-lg pointer-events-none whitespace-nowrap shadow-lg font-osu"
           style={{
             left: tooltip.x,
             top: tooltip.y - 32,
-            fontFamily: "'Torus Pro', 'Nunito', sans-serif",
             transform: 'translateX(-50%)',
           }}
         >

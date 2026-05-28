@@ -115,7 +115,7 @@ export default function RankHistoryChart({ data, width = 400 }) {
     }
 
     ctx.fillStyle = TEXT_COLOR;
-    ctx.font = '10px "Torus Pro", monospace';
+    ctx.font = '10px "Torus", monospace';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     yTicks.forEach(({ y, label }) => {
@@ -212,10 +212,10 @@ export default function RankHistoryChart({ data, width = 400 }) {
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#f4f4f5';
-      ctx.font = 'bold 11px "Torus Pro", monospace';
+      ctx.font = 'bold 11px "Torus", monospace';
       ctx.fillText(rankLabel, tx + 10, ty + 18);
       ctx.fillStyle = TEXT_COLOR;
-      ctx.font = '10px "Torus Pro", monospace';
+      ctx.font = '10px "Torus", monospace';
       ctx.fillText(relativeDate, tx + 10, ty + 38);
     }
   }, [points, width, innerHeight, minRank, maxRank, hoveredIdx]);
