@@ -31,29 +31,34 @@ function getModIconPath(acronym) {
 export default function OsuModIcons({ mods = [], size = 'sm' }) {
   if (!mods || mods.length === 0) return null;
 
-  const sizeClass = size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4';
+  const frameClass = 'w-10 h-[30px]';
 
   return (
-    <div className="flex items-center gap-0">
+    <div className="flex items-center">
       {mods.map((mod, i) => {
         const iconPath = getModIconPath(mod);
         if (iconPath) {
           return (
-            <img
+            <div
               key={i}
-              src={iconPath}
               title={mod}
-              alt={mod}
-              className={`${sizeClass} -ml-1 first:ml-0 bg-[#15151e]/80 border border-white/[0.12] rounded p-0.5 relative inline-block`}
+              className={`${frameClass} ${i > 0 ? '-ml-0.5' : ''} bg-[#15151e]/80 border border-white/[0.12] rounded flex items-center justify-center relative shrink-0`}
               style={{ zIndex: mods.length - i }}
-              loading="lazy"
-            />
+            >
+              <img
+                src={iconPath}
+                alt={mod}
+                className="max-w-full max-h-full object-contain"
+                loading="lazy"
+              />
+            </div>
           );
         }
         return (
           <span
             key={i}
-            className="text-[9px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1 py-0.5 rounded text-nowrap"
+            className={`${frameClass} ${i > 0 ? '-ml-0.5' : ''} bg-[#15151e]/80 border border-white/[0.12] rounded flex items-center justify-center text-[9px] font-bold text-rose-400 tracking-widest shrink-0`}
+            title={mod}
           >
             {mod}
           </span>

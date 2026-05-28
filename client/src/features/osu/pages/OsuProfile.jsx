@@ -8,7 +8,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaArrowLeft, FaSpinner, FaSyncAlt,
-  FaLock, FaGlobe, FaMapMarkerAlt, FaPlay, FaUser,
+  FaLock, FaGlobe, FaMapMarkerAlt, FaPlay,
   FaExclamationCircle, FaRedo, FaTimes,
   FaClock, FaEye,
 } from 'react-icons/fa';
@@ -207,38 +207,7 @@ export default function OsuProfile() {
               <FaArrowLeft /> 返回主页
             </button>
 
-            <div className="flex items-center gap-3">
-              <div className="w-1 h-8 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]" />
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-zinc-100 tracking-tight flex items-center gap-3">
-                  <img src="/osu-resources/lazer-nuget.png" className="w-6 h-6 md:w-7 md:h-7" alt="osu!" />
-                </h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <FaUser className="text-zinc-600 text-xs" />
-                  <span className="text-sm font-medium text-zinc-400">
-                    {profile.osuUsername || profile.username}
-                  </span>
-                  {profile.osuCountryCode && (
-                    <CountryFlag code={profile.osuCountryCode} size="sm" />
-                  )}
-                  {profile.osuId && (
-                    <span className="bg-pink-500/10 text-pink-400 border border-pink-500/20 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">
-                      已绑定
-                    </span>
-                  )}
-                </div>
-                {(profile.followerCount != null || profile.friendsCount != null) && (
-                  <div className="flex items-center gap-3 mt-1 text-[10px] text-zinc-600 font-medium">
-                    {profile.followerCount != null && (
-                      <span>{profile.followerCount.toLocaleString()} 关注者</span>
-                    )}
-                    {profile.friendsCount != null && (
-                      <span>{profile.friendsCount.toLocaleString()} 好友</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+            <img src="/osu-resources/lazer-nuget.png" className="w-[95px] h-[95px]" alt="osu!" />
           </div>
 
           {/* 右侧：模式切换 + 绑定/同步按钮 */}
