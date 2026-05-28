@@ -133,20 +133,17 @@ body {
   font-family: 'Torus', 'Nunito', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* lazer logo 心跳动画（BPM 120 — lub-dub 双段心跳） */
+/* lazer logo 心跳动画（BPM 60 = 1000ms — 平滑单搏） */
 @keyframes lazer-heartbeat {
-  0%, 100% { opacity: 0.3; transform: translate(25%, 25%) scale(1); }
-  10%      { opacity: 1;   transform: translate(25%, 25%) scale(1.35); }  /* lub — 快 */
-  20%      { opacity: 0.7; transform: translate(25%, 25%) scale(1.08); }  /* 回弹 */
-  30%      { opacity: 0.9; transform: translate(25%, 25%) scale(1.25); }  /* dub — 缓 */
-  45%      { opacity: 0.4; transform: translate(25%, 25%) scale(1); }     /* 静默 */
+  0%, 100% { transform: translate(25%, 25%) scale(1);   opacity: 0.95; }
+  50%      { transform: translate(25%, 25%) scale(1.2);  opacity: 1; }
 }
 .lazer-logo {
   transform: translate(25%, 25%);
   will-change: transform, opacity;
 }
 .lazer-logo:hover {
-  animation: lazer-heartbeat 0.5s ease-in-out infinite;
+  animation: lazer-heartbeat 1s ease-in-out infinite;
 }
 
 /* 自定义滚动条 */
