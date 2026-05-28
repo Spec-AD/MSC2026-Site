@@ -108,7 +108,7 @@ export default function SearchInput({
                   <div key={i} onClick={() => { setLocalValue(''); renderHistoryItem?.(item); }}>
                     {renderHistoryItem ? renderHistoryItem(item) : (
                       <div className="px-3 py-2 text-sm text-zinc-400 hover:bg-white/[0.03] cursor-pointer truncate">
-                        {item}
+                        {item?.username || (typeof item === 'string' ? item : '')}
                       </div>
                     )}
                   </div>
