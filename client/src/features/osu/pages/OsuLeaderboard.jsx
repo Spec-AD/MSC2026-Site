@@ -207,11 +207,20 @@ export default function OsuLeaderboard() {
     if (bid) navigate(`/osu/leaderboard/${bid}`, { replace: true });
   };
 
-  // ESC 关闭
+  // ESC 与点击外部关闭搜索下拉
   useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(e.target)) {
+        setShowSearchDropdown(false);
+      }
+    };
     const handleEsc = (e) => { if (e.key === 'Escape') setShowSearchDropdown(false); };
+    document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
   }, []);
 
   // 路由 bid 变化时自动拉取

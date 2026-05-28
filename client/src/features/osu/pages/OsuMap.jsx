@@ -161,6 +161,23 @@ export default function OsuMap() {
     doSearchWithQ(q);
   }, [doSearchWithQ]);
 
+  // Enter 键搜索 / 筛选条件变更触发
+  const handleSearch = useCallback(() => {
+    if (!query.trim()) return;
+    setCursor(null);
+    setResults([]);
+    setTimeout(() => doSearch(false), 0);
+  }, [query, doSearch]);
+
+  // 筛选条件变更自动刷新
+  useEffect(() => {
+    if (!hasSearched) return;
+    setCursor(null);
+    setResults([]);
+    const timer = setTimeout(() => doSearch(false), 0);
+    return () => clearTimeout(timer);
+  }, [statusFilter, starMin, starMax, creatorFilter, artistFilter, titleFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [initialized, setInitialized] = useState(false);
   useEffect(() => {
     if (initialized) return;
