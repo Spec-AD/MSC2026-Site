@@ -10,6 +10,8 @@ import OsuGrade from './OsuGrade';
 import OsuCoverImage from './OsuCoverImage';
 import OsuBeatmapStatusBadge from './OsuBeatmapStatusBadge';
 import OsuStarBadge from './OsuStarBadge';
+import OsuModIcons from './OsuModIcons';
+import { getRulesetIconPath } from '../../../constants/osuModes';
 
 function toRetinaCover(url = '') {
   if (!url) return '';
@@ -42,7 +44,6 @@ function formatRecentTime(playedAt) {
 
 export default function OsuScoreCard({ score, rank, onClick, compact = false, showTime = false }) {
   const [bgError, setBgError] = useState(false);
-  const modsStr = score.mods?.length > 0 ? `+${score.mods.join('')}` : '';
   const accuracy = typeof score.accuracy === 'number'
     ? score.accuracy.toFixed(2)
     : score.accuracy;
@@ -72,6 +73,7 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false, sh
             <img
               src={score.coverUrl}
               srcSet={bgSrcSet}
+              loading="lazy"
               alt=""
               className="w-full h-full object-cover"
               style={{ filter: 'brightness(0.55)', objectPosition: 'center center', imageRendering: 'auto' }}
@@ -112,15 +114,19 @@ export default function OsuScoreCard({ score, rank, onClick, compact = false, sh
             {(score.starRating ?? 0) > 0 && (
               <OsuStarBadge starRating={score.starRating} size="sm" />
             )}
-            <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 px-1.5 py-0.5 rounded whitespace-normal break-words">
-              {score.version}
-            </span>
-            <OsuBeatmapStatusBadge status={score.beatmapStatus} />
-            {modsStr && (
-              <span className="text-[9px] font-bold text-rose-400 tracking-widest bg-rose-500/10 px-1 py-0.5 rounded">
-                {modsStr}
+            <div className="flex items-center gap-1">
+              {(() => {
+                const iconPath = getRulesetIconPath(score.mode);
+                return iconPath ? (
+                  <img src={iconPath} className="w-3.5 h-3.5" alt={score.mode} />
+                ) : null;
+              })()}
+              <span className="text-[10px] font-bold text-zinc-400 whitespace-normal break-words">
+                {score.version}
               </span>
-            )}
+            </div>
+            <OsuBeatmapStatusBadge status={score.beatmapStatus} />
+            <OsuModIcons mods={score.mods} />
             {/* Lazer/Stable 客户端标签 */}
             {score.isLazer !== null && score.isLazer !== undefined && (
               <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${

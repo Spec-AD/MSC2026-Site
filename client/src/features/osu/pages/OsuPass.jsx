@@ -12,10 +12,11 @@ import OsuCoverImage from '../components/OsuCoverImage';
 import OsuModeTabs from '../components/OsuModeTabs';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import OsuStarBadge from '../components/OsuStarBadge';
+import OsuModIcons from '../components/OsuModIcons';
 import OsuScoreDetailPanel from '../components/OsuScoreDetailPanel';
 import useLightSync from '../hooks/useLightSync';
 import { FaSpinner, FaCheckCircle, FaSyncAlt } from 'react-icons/fa';
-import { MODE_LABELS } from '../../../constants/osuModes';
+import { MODE_LABELS, getRulesetIconPath } from '../../../constants/osuModes';
 
 const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
 
@@ -69,7 +70,10 @@ export default function OsuPass() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-1 h-6 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
-          <h2 className="text-xl font-bold text-zinc-100 tracking-tight">最近通过</h2>
+          <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+            <img src="/osu-resources/lazer-nuget.png" className="w-4 h-4 inline-block" alt="osu!" />
+            最近通过
+          </h2>
         </div>
         <div className="flex items-center gap-2">
           {lastRefreshTime && (
@@ -145,13 +149,19 @@ function PassItem({ score, onClick }) {
           {score.starRating != null && (
             <OsuStarBadge starRating={score.starRating} size="sm" />
           )}
-          <span className="text-sm text-zinc-400 whitespace-normal break-words">{score.version}</span>
+          <div className="flex items-center gap-1">
+            {(() => {
+              const iconPath = getRulesetIconPath(score.mode);
+              return iconPath ? (
+                <img src={iconPath} className="w-3.5 h-3.5" alt={score.mode} />
+              ) : null;
+            })()}
+            <span className="text-sm text-zinc-400 whitespace-normal break-words">{score.version}</span>
+          </div>
           <OsuBeatmapStatusBadge status={score.beatmapStatus} />
         </div>
         <div className="flex items-center gap-2 mt-1 text-xs text-zinc-500">
-          {score.mods?.length > 0 && (
-            <span className="text-rose-400 font-bold">+{score.mods.join('')}</span>
-          )}
+          <OsuModIcons mods={score.mods} />
           <span>{score.playedAt ? new Date(score.playedAt).toLocaleDateString() : ''}</span>
         </div>
       </div>

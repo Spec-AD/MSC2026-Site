@@ -12,9 +12,11 @@ import OsuGrade from '../components/OsuGrade';
 import OsuCoverImage from '../components/OsuCoverImage';
 import OsuBeatmapStatusBadge from '../components/OsuBeatmapStatusBadge';
 import OsuStarBadge from '../components/OsuStarBadge';
+import OsuModIcons from '../components/OsuModIcons';
 import OsuScoreDetailPanel from '../components/OsuScoreDetailPanel';
 import useLightSync from '../hooks/useLightSync';
 import { FaSpinner, FaSun, FaFire, FaSyncAlt } from 'react-icons/fa';
+import { getRulesetIconPath } from '../../../constants/osuModes';
 
 const MODE_IDS = ['standard', 'taiko', 'catch', 'mania'];
 
@@ -63,11 +65,6 @@ export default function OsuTodayBest() {
     fetchData();
   }, [activeMode]);
 
-  // Debug: 打印数据确认 bp200Threshold
-  useEffect(() => {
-    if (data) console.log('[TodayBest] data:', JSON.stringify(data, null, 2));
-  }, [data]);
-
   const handleRefresh = async () => {
     try {
       const result = await refresh();
@@ -83,7 +80,10 @@ export default function OsuTodayBest() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-1 h-6 bg-amber-500 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-          <h2 className="text-xl font-bold text-zinc-100 tracking-tight">今日最佳</h2>
+          <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+            <img src="/osu-resources/lazer-nuget.png" className="w-4 h-4 inline-block" alt="osu!" />
+            今日最佳
+          </h2>
           {data?.isNewRecord && (
             <span className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
               <FaFire /> New PB!
@@ -155,13 +155,19 @@ export default function OsuTodayBest() {
                   {score.starRating != null && (
                     <OsuStarBadge starRating={score.starRating} size="sm" />
                   )}
-                  <span className="text-xs text-zinc-500">{score.version}</span>
+                  <div className="flex items-center gap-1">
+                    {(() => {
+                      const iconPath = getRulesetIconPath(score.mode);
+                      return iconPath ? (
+                        <img src={iconPath} className="w-3 h-3" alt={score.mode} />
+                      ) : null;
+                    })()}
+                    <span className="text-xs text-zinc-500">{score.version}</span>
+                  </div>
                   <OsuBeatmapStatusBadge status={score.beatmapStatus} />
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  {score.mods?.length > 0 && (
-                    <span className="text-[10px] font-bold text-rose-400">+{score.mods.join('')}</span>
-                  )}
+                  <OsuModIcons mods={score.mods} size="sm" />
                 </div>
               </div>
               <OsuGrade grade={score.grade} size="md" />

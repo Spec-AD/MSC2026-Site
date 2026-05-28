@@ -188,7 +188,10 @@ export default function OsuLeaderboard() {
         <button onClick={() => navigate('/osu')} className="text-zinc-500 hover:text-zinc-300 transition-colors">
           <FaArrowLeft className="w-4 h-4" />
         </button>
-        <h1 className="text-lg font-bold text-zinc-200">全球排行榜</h1>
+        <h1 className="text-lg font-bold text-zinc-200 flex items-center gap-2">
+          <img src="/osu-resources/lazer-nuget.png" className="w-4 h-4 inline-block" alt="osu!" />
+          全球排行榜
+        </h1>
         <span className="text-[10px] text-zinc-600 tracking-wider bg-zinc-800/50 px-2 py-0.5 rounded">BETA</span>
       </div>
 

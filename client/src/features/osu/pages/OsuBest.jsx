@@ -41,7 +41,10 @@ export default function OsuBest() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-1 h-6 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]" />
-          <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Best Performance</h2>
+          <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+            <img src="/osu-resources/lazer-nuget.png" className="w-4 h-4 inline-block" alt="osu!" />
+            Best Performance
+          </h2>
           {data && (
             <span className="text-xs text-zinc-600 font-medium">BP {data.total || data.scores?.length || 0}</span>
           )}

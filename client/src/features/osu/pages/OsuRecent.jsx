@@ -132,7 +132,10 @@ export default function OsuRecent() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-1 h-6 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-          <h2 className="text-xl font-bold text-zinc-100 tracking-tight">最近游玩</h2>
+          <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+            <img src="/osu-resources/lazer-nuget.png" className="w-4 h-4 inline-block" alt="osu!" />
+            最近游玩
+          </h2>
         </div>
         <div className="flex items-center gap-2">
           {lastSyncTime && (

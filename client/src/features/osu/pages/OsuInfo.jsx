@@ -132,7 +132,10 @@ export default function OsuInfo() {
     <div>
       <div className="flex items-center gap-3 mb-6">
         <div className="w-1 h-6 bg-cyan-500 rounded-full shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
-        <h2 className="text-xl font-bold text-zinc-100 tracking-tight">玩家查询</h2>
+        <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+          <img src="/osu-resources/lazer-nuget.png" className="w-4 h-4 inline-block" alt="osu!" />
+          玩家查询
+        </h2>
       </div>
 
       {/* 搜索框 */}

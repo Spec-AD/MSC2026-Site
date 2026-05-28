@@ -49,3 +49,22 @@ const FALLBACK_MAP = {
 export function getApiModeSync(id) {
   return FALLBACK_MAP[id] || 'osu';
 }
+
+// ====== Ruleset 图标路径映射（b1.7.09） ======
+
+const RULESET_ICON_MAP = {
+  standard: 'RulesetOsu',
+  taiko: 'RulesetTaiko',
+  catch: 'RulesetCatch',
+  mania: 'RulesetMania',
+};
+
+/**
+ * 根据 mode id 获取 Ruleset 图标路径
+ * @param {string} mode - standard | taiko | catch | mania
+ * @returns {string|null} 图片路径或 null
+ */
+export function getRulesetIconPath(mode) {
+  const name = RULESET_ICON_MAP[mode];
+  return name ? `/osu-resources/${name}.png` : null;
+}

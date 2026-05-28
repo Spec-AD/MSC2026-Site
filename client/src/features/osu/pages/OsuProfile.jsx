@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FaArrowLeft, FaGamepad, FaSpinner, FaSyncAlt,
+  FaArrowLeft, FaSpinner, FaSyncAlt,
   FaLock, FaGlobe, FaMapMarkerAlt, FaPlay, FaUser,
   FaExclamationCircle, FaRedo, FaTimes,
   FaClock, FaEye,
@@ -211,7 +211,7 @@ export default function OsuProfile() {
               <div className="w-1 h-8 bg-pink-500 rounded-full shadow-[0_0_8px_rgba(236,72,153,0.5)]" />
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold text-zinc-100 tracking-tight flex items-center gap-3">
-                  <FaGamepad className="text-pink-500 text-xl md:text-2xl" /> osu!
+                  <img src="/osu-resources/lazer-nuget.png" className="w-6 h-6 md:w-7 md:h-7" alt="osu!" />
                 </h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   <FaUser className="text-zinc-600 text-xs" />
@@ -279,6 +279,7 @@ export default function OsuProfile() {
             <img
               src={profile.coverUrl}
               alt="osu profile banner"
+              loading="lazy"
               className="absolute inset-0 w-full h-full object-cover object-center"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
@@ -382,7 +383,7 @@ export default function OsuProfile() {
         {/* ====== 未绑定状态 ====== */}
         {!profile.osuId ? (
           <div className="py-20 flex flex-col items-center justify-center bg-[#15151e]/40 border border-white/[0.05] rounded-xl mt-6">
-            <FaGamepad className="text-5xl text-zinc-700 mb-4" />
+            <img src="/osu-resources/lazer-nuget.png" className="w-14 h-14 mb-4 opacity-40" alt="osu!" />
             <p className="text-zinc-500 font-medium mb-6">
               {isOwnProfile ? '你尚未绑定 osu! 官方账号' : '该玩家尚未绑定 osu! 官方账号'}
             </p>

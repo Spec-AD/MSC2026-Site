@@ -34,6 +34,16 @@ export default function OsuHome() {
       <div className="fixed inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-pink-900/10 rounded-full blur-[140px] mix-blend-screen" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-fuchsia-900/10 rounded-full blur-[140px] mix-blend-screen" />
+        {/* osu!lazer 品牌水印 */}
+        <div
+          className="absolute inset-0 bg-no-repeat bg-fixed"
+          style={{
+            backgroundImage: 'url(/osu-resources/lazer.png)',
+            backgroundPosition: '85% 90%',
+            backgroundSize: '180px auto',
+            opacity: 0.04,
+          }}
+        />
       </div>
 
       <div className="max-w-7xl mx-auto px-4 pt-20 relative z-10">
