@@ -562,10 +562,10 @@ function StatsPanel({ stats, emptyState }) {
 
       {/* Grade 统计 */}
       <div className="border-t border-white/[0.05] pt-3 mt-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-center gap-2">
           {gradeEntries.map((entry) => (
-            <div key={entry.grade} className="flex flex-col items-center gap-1">
-              <OsuGrade grade={entry.grade} size="sm" />
+            <div key={entry.grade} className="flex flex-col items-center gap-0.5">
+              <OsuGrade grade={entry.grade} className="w-[50px] h-5" />
               <span className="text-xs font-osu font-semibold text-zinc-400">
                 {entry.count ?? 0}
               </span>

@@ -27,7 +27,16 @@ export default function OsuHome() {
   ];
 
   return (
-    <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-osu">
+    <div className="w-full min-h-screen bg-[#0c0c11] text-zinc-200 font-osu relative">
+      {/* nav2 全宽装饰（最底层，延展到页面左右边缘） */}
+      <div className="fixed top-0 left-0 w-full h-[200px] z-0 pointer-events-none overflow-hidden">
+        <img
+          src="/osu-resources/nav2-background-hue0.png"
+          alt=""
+          className="w-full h-full object-cover opacity-40"
+        />
+      </div>
+
       {/* 可交互 lazer logo（右下角） */}
       <a
         href="https://osu.ppy.sh"
@@ -38,21 +47,12 @@ export default function OsuHome() {
         <img
           src="/osu-resources/lazer.png"
           alt="osu!"
-          className="lazer-logo w-[140px] h-auto opacity-30 transition-all duration-300 hover:opacity-90"
+          className="lazer-logo w-[200px] h-auto opacity-30"
           style={{ objectFit: 'contain' }}
         />
       </a>
 
-      <div className="max-w-7xl mx-auto px-4 pt-4 relative z-10">
-        {/* nav2 顶部装饰图 */}
-        <div className="w-full h-[120px] overflow-hidden relative rounded-xl mb-4">
-          <img
-            src="/osu-resources/nav2-background-hue0.png"
-            alt=""
-            className="w-full h-full object-cover opacity-40"
-          />
-        </div>
-
+      <div className="max-w-7xl mx-auto px-4 pt-20 relative z-10">
         {/* 纯文字导航 Tab */}
         <nav className="flex items-center gap-0 border-b border-white/[0.05] mb-6 overflow-x-auto scrollbar-none">
           {NAV_ITEMS.map((item) => (

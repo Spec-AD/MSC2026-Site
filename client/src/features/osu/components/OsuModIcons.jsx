@@ -24,6 +24,7 @@ const MOD_FULL_NAMES = {
   RX: 'Relax',
   CL: 'Classic',
   TD: 'Touch Device',
+  MR: 'Mirror',
 };
 
 const MOD_ICON_MAP = {
@@ -43,6 +44,7 @@ const MOD_ICON_MAP = {
   RX: 'mod-relax',
   CL: 'mod-classic',
   TD: 'mod-touch-device',
+  MR: 'mod-mirror',
 };
 
 function getModIconPath(acronym) {

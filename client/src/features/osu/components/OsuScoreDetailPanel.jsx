@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { getBeatmap } from '../api/osuApi';
 import OsuGrade from './OsuGrade';
 import OsuCoverImage from './OsuCoverImage';
+import OsuModIcons from './OsuModIcons';
 import { FaTimes, FaExternalLinkAlt, FaSpinner } from 'react-icons/fa';
 import useWindowSize from '../../../hooks/useWindowSize';
 import OsuStarBadge from './OsuStarBadge';
@@ -130,9 +131,7 @@ export default function OsuScoreDetailPanel({ score, onClose }) {
               )}
             </div>
             <div className="flex items-center gap-2 mt-1">
-              {score?.mods?.length > 0 && (
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500/15 text-rose-400 rounded">{score.mods.join('')}</span>
-              )}
+              <OsuModIcons mods={score?.mods} />
               {/* Lazer/Stable 客户端标签 */}
               {score?.isLazer !== null && score?.isLazer !== undefined && (
                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${score.isLazer ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>
