@@ -27,35 +27,35 @@ export default function RacePage({ stage }) {
   const [myItems, setMyItems] = useState([]);
   const [showMyItems, setShowMyItems] = useState(false);
 
-  // 初始加载
+  // 初始加载（仅 stage 变化时重载，不依赖整个 store）
   useEffect(() => {
     race.fetchRaceState().catch(() => {});
-  }, [stage, race]);
+  }, [stage]);
 
-  // SSE 实时同步
+  // SSE 实时同步（action 函数引用稳定）
   useMSCSSE({
-    turn_change: useCallback((data) => race.sseTurnChange(data), [race]),
-    turn_timeout: useCallback((data) => race.sseTurnTimeout(data), [race]),
-    player_moved: useCallback((data) => race.ssePlayerMoved(data), [race]),
-    timer_tick: useCallback((data) => race.sseTimerTick(data), [race]),
-    item_collected: useCallback(() => race.fetchRaceMap(), [race]),
-    item_used: useCallback(() => race.fetchRaceMap(), [race]),
-    challenge_revealed: useCallback(() => race.fetchChallenge(), [race]),
+    turn_change: useCallback((data) => race.sseTurnChange(data), [race.sseTurnChange]),
+    turn_timeout: useCallback((data) => race.sseTurnTimeout(data), [race.sseTurnTimeout]),
+    player_moved: useCallback((data) => race.ssePlayerMoved(data), [race.ssePlayerMoved]),
+    timer_tick: useCallback((data) => race.sseTimerTick(data), [race.sseTimerTick]),
+    item_collected: useCallback(() => race.fetchRaceMap(), [race.fetchRaceMap]),
+    item_used: useCallback(() => race.fetchRaceMap(), [race.fetchRaceMap]),
+    challenge_revealed: useCallback(() => race.fetchChallenge(), [race.fetchChallenge]),
     challenge_resolved: useCallback(() => {
       race.dismissChallenge();
       race.fetchRaceMap();
-    }, [race]),
-    wall_broken: useCallback(() => race.fetchRaceMap(), [race]),
-    player_bounced: useCallback(() => race.fetchRaceMap(), [race]),
-    match_finished: useCallback(() => race.fetchRaceState(), [race]),
-    map_timeout: useCallback(() => race.fetchRaceState(), [race]),
+    }, [race.dismissChallenge, race.fetchRaceMap]),
+    wall_broken: useCallback(() => race.fetchRaceMap(), [race.fetchRaceMap]),
+    player_bounced: useCallback(() => race.fetchRaceMap(), [race.fetchRaceMap]),
+    match_finished: useCallback(() => race.fetchRaceState(), [race.fetchRaceState]),
+    map_timeout: useCallback(() => race.fetchRaceState(), [race.fetchRaceState]),
   }, { enabled: true });
 
-  // 地图数据 15s 轮询作为 SSE 兜底
+  // 地图数据 15s 轮询作为 SSE 兜底（自执行不依赖外部变量）
   useEffect(() => {
     const interval = setInterval(() => race.fetchRaceMap().catch(() => {}), 15000);
     return () => clearInterval(interval);
-  }, [race]);
+  }, []);
 
   const isMyTurn = false; // TODO: 对接当前用户 session
 

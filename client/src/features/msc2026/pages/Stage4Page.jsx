@@ -15,14 +15,14 @@ export default function Stage4Page() {
   useEffect(() => {
     store.fetchStatus().catch(() => {});
     store.fetchStage4State().catch(() => {});
-  }, [store]);
+  }, []);
 
   useMSCSSE({
-    score_updated: useCallback(() => store.fetchStage4State(), [store]),
+    score_updated: useCallback(() => store.fetchStage4State(), [store.fetchStage4State]),
     match_finished: useCallback(() => {
       store.fetchStage4State();
       store.fetchStatus();
-    }, [store]),
+    }, [store.fetchStage4State, store.fetchStatus]),
   }, { enabled: store.status === 'stage4' });
 
   const { stage4 } = store;

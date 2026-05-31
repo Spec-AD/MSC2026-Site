@@ -15,24 +15,24 @@ export default function Stage1Page() {
   const [view, setView] = useState('bracket'); // bracket | match | admin
   const [selectedGroupId, setSelectedGroupId] = useState(null);
 
-  // 初始加载
+  // 初始加载（仅挂载时执行一次）
   useEffect(() => {
     store.fetchStatus().catch(() => {});
     store.fetchStage1State().catch(() => {});
-  }, [store]);
+  }, []);
 
-  // SSE 实时同步
+  // SSE 实时同步（action 函数引用稳定，不依赖整个 store）
   useMSCSSE({
     score_updated: useCallback(() => {
       store.fetchStage1State();
-    }, [store]),
+    }, [store.fetchStage1State]),
     match_finished: useCallback(() => {
       store.fetchStage1State();
       store.fetchStatus();
-    }, [store]),
+    }, [store.fetchStage1State, store.fetchStatus]),
     stage_advanced: useCallback(() => {
       store.fetchStatus();
-    }, [store]),
+    }, [store.fetchStatus]),
   }, { enabled: store.status === 'stage1' });
 
   const selectedGroup = selectedGroupId !== null
