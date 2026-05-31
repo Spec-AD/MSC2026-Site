@@ -173,10 +173,26 @@ const MSC2026TournamentSchema = new Schema({
     default: 'pending'
   },
 
+  // ── 旧赛事关联（patch-02: 从旧 Tournament 拉取选手/预选赛数据） ──
+  oldTournamentId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Tournament',
+    default: null
+  },
+
   // 全局配置
   stage1SongPool: [{ type: Schema.Types.ObjectId, ref: 'Song' }],
-  // patch-02: 管理员录入的注册选手列表（供 GET /players 返回）
+  // ⚠️ 已废弃：不再手动录入选手，改为从旧赛事拉取。保留字段仅向下兼容
   registeredPlayers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+
+  // 预选赛晋级排名快照（init-from-qualifier 时写入）
+  qualifierRankings: [{
+    rank: { type: Number },
+    userId: { type: Schema.Types.ObjectId, ref: 'User' },
+    totalAchievement: { type: Number },
+    totalDxScore: { type: Number },
+    qualified: { type: Boolean, default: true }
+  }],
 
   // 阶段一
   stage1: {

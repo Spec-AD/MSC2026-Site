@@ -4,10 +4,13 @@
  *
  * b1.7.11.patch-02
  * - P0-3: 强制P1/P2成绩均完整后才推进
+ * - P1-8: 阶段完成自动推进 status → stage2
+ * - 旧赛事同步：全部组完成时回写 groups/matches
  */
 
 const { shuffle, validateScore, determineWinner } = require('./utils');
 const { broadcast } = require('./ssePool');
+const { syncToOldTournament } = require('./oldTournamentSync');
 
 /**
  * 初始化12进6分组
@@ -309,6 +312,17 @@ async function advance(tournament) {
     tournament.status = 'stage2';
 
     await tournament.save();
+
+    // 旧赛事同步：回写 groups + matches
+    await syncToOldTournament(tournament, 'stage1_complete', {
+      groups: stage1.groups.map(g => ({
+        order: g.order,
+        p1: g.p1,
+        p2: g.p2,
+        winner: g.winner
+      })),
+      operatedBy: null
+    });
 
     broadcast('stage_advanced', {
       stage: 'stage1',

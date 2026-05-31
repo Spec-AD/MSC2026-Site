@@ -16,14 +16,16 @@ const express = require('express');
 const router = express.Router();
 const { authMiddleware, optionalAuth } = require('../middleware/auth');
 const MSC2026Tournament = require('../models/MSC2026Tournament');
+const Tournament = require('../models/Tournament');
 const Song = require('../models/Song');
 const User = require('../models/User');
 
-const { loadTournament, checkPermission, calculateRaceRankings } = require('../services/msc2026/utils');
+const { loadTournament, checkPermission, calculateRaceRankings, shuffle } = require('../services/msc2026/utils');
 const { initStage1, startFirstGroup, selectSong, submitScore, advance: advanceStage1, forfeitPlayer } = require('../services/msc2026/stage1');
 const { initRace, currentRace, playerAction, useItem, challengeResult, skipTurn, getRaceConfig } = require('../services/msc2026/raceEngine');
 const { initStage4, selectSong: selectSong4, submitScore: submitScore4, advance: advanceStage4 } = require('../services/msc2026/stage4');
 const { addClient, broadcast } = require('../services/msc2026/ssePool');
+const { syncToOldTournament } = require('../services/msc2026/oldTournamentSync');
 const { getItem } = require('../services/msc2026/itemDefinitions');
 const { CHALLENGE_TASKS } = require('../services/msc2026/challengeDefinitions');
 const { getTaskById, getFallbackTask } = require('../services/msc2026/raceEngine');
@@ -136,28 +138,24 @@ router.put('/config', authMiddleware, async (req, res) => {
   }
 });
 
-// ── 选手列表（patch-02） ──
+// ── 选手列表（patch-02 v2：从旧赛事拉取 + 新阶段状态叠加） ──
 router.get('/players', async (req, res) => {
   try {
     const t = await MSC2026Tournament.findOne()
-      .populate('registeredPlayers', 'username avatarUrl')
+      .populate('oldTournamentId')
+      .populate('qualifiedStage1', 'username avatarUrl')
+      .populate('qualifiedStage2', 'username avatarUrl')
+      .populate('qualifiedStage3', 'username avatarUrl')
       .populate('stage1.groups.p1', 'username avatarUrl')
       .populate('stage1.groups.p2', 'username avatarUrl')
-      .populate('stage1.groups.winner', 'username avatarUrl')
       .populate('stage2.players.userId', 'username avatarUrl')
       .populate('stage3.players.userId', 'username avatarUrl')
       .populate('stage4.p1', 'username avatarUrl')
-      .populate('stage4.p2', 'username avatarUrl')
-      .populate('stage4.winner', 'username avatarUrl')
-      .populate('qualifiedStage1', 'username avatarUrl')
-      .populate('qualifiedStage2', 'username avatarUrl')
-      .populate('qualifiedStage3', 'username avatarUrl');
+      .populate('stage4.p2', 'username avatarUrl');
 
     if (!t) return res.status(404).json({ msg: '赛事不存在' });
 
-    // 收集选手：优先从当前阶段取，fallback 到 registeredPlayers
     const playerSet = new Map();
-
     const addPlayer = (p) => {
       if (!p) return;
       const id = String(p._id || p);
@@ -170,7 +168,27 @@ router.get('/players', async (req, res) => {
       }
     };
 
-    // 从各阶段收集选手
+    // 基准集：从旧赛事 registrations 拉取（优先于 registeredPlayers）
+    let oldRegistrations = [];
+    if (t.oldTournamentId) {
+      try {
+        const oldT = await Tournament.findById(t.oldTournamentId)
+          .populate('registrations.userId', 'username avatarUrl')
+          .lean();
+        if (oldT && oldT.registrations) {
+          oldRegistrations = oldT.registrations;
+          oldT.registrations.forEach(r => addPlayer(r.userId));
+        }
+      } catch { /* 旧赛事读取失败不阻塞 */ }
+    }
+
+    // fallback: 没有旧赛事时用 registeredPlayers
+    if (playerSet.size === 0 && t.registeredPlayers) {
+      const users = await User.find({ _id: { $in: t.registeredPlayers } }).select('username avatarUrl').lean();
+      users.forEach(addPlayer);
+    }
+
+    // 叠加新赛事各阶段选手
     if (t.stage1?.groups) {
       t.stage1.groups.forEach(g => { addPlayer(g.p1); addPlayer(g.p2); });
     }
@@ -184,31 +202,39 @@ router.get('/players', async (req, res) => {
       addPlayer(t.stage4.p1);
       addPlayer(t.stage4.p2);
     }
-
-    // 晋级列表
     (t.qualifiedStage1 || []).forEach(addPlayer);
     (t.qualifiedStage2 || []).forEach(addPlayer);
     (t.qualifiedStage3 || []).forEach(addPlayer);
 
-    // registeredPlayers 作为兜底（pending 阶段全靠这个）
-    (t.registeredPlayers || []).forEach(addPlayer);
-
     const players = Array.from(playerSet.values());
 
-    // 附加各阶段状态
-    const stage2PlayerIds = new Set((t.stage2?.players || []).map(p => String(p.userId?._id || p.userId)));
-    const stage3PlayerIds = new Set((t.stage3?.players || []).map(p => String(p.userId?._id || p.userId)));
-    const finishedIds = new Set((t.stage2?.finishOrder || []).map(f => String(f.userId?._id || f.userId)));
+    // 附加阶段状态
+    const stage2Ids = new Set((t.stage2?.players || []).map(p => String(p.userId?._id || p.userId)));
+    const stage3Ids = new Set((t.stage3?.players || []).map(p => String(p.userId?._id || p.userId)));
+    const finishedIds = new Set([
+      ...(t.stage2?.finishOrder || []).map(f => String(f.userId?._id || f.userId)),
+      ...(t.stage3?.finishOrder || []).map(f => String(f.userId?._id || f.userId))
+    ]);
     const q1Ids = new Set((t.qualifiedStage1 || []).map(id => String(id._id || id)));
     const q2Ids = new Set((t.qualifiedStage2 || []).map(id => String(id._id || id)));
     const q3Ids = new Set((t.qualifiedStage3 || []).map(id => String(id._id || id)));
+
+    // 旧赛事报名信息映射
+    const regMap = {};
+    oldRegistrations.forEach(r => {
+      regMap[String(r.userId?._id || r.userId)] = {
+        token: r.token || '',
+        formData: r.formData || {},
+        registeredAt: r.registeredAt
+      };
+    });
 
     players.forEach(p => {
       p.inStage1 = t.stage1?.groups?.some(g =>
         String(g.p1?._id || g.p1) === p.userId || String(g.p2?._id || g.p2) === p.userId
       ) || false;
-      p.inStage2 = stage2PlayerIds.has(p.userId);
-      p.inStage3 = stage3PlayerIds.has(p.userId);
+      p.inStage2 = stage2Ids.has(p.userId);
+      p.inStage3 = stage3Ids.has(p.userId);
       p.inStage4 = t.stage4 && (
         String(t.stage4.p1?._id || t.stage4.p1) === p.userId ||
         String(t.stage4.p2?._id || t.stage4.p2) === p.userId
@@ -217,18 +243,277 @@ router.get('/players', async (req, res) => {
       p.isQualifiedStage2 = q2Ids.has(p.userId);
       p.isQualifiedStage3 = q3Ids.has(p.userId);
       p.isFinished = finishedIds.has(p.userId);
+      // 附带旧赛事报名信息
+      const reg = regMap[p.userId];
+      if (reg) {
+        p.token = reg.token;
+        p.formData = reg.formData;
+        p.registeredAt = reg.registeredAt;
+      }
     });
 
     res.json({
       msg: 'ok',
       data: {
         total: players.length,
+        source: t.oldTournamentId ? '旧赛事registrations' : 'registeredPlayers',
         players
       }
     });
   } catch (err) {
     console.error('获取选手列表失败:', err);
     res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+// ── 旧赛事数据接口（patch-02） ──
+
+/** 获取旧赛事注册选手列表（含预选赛成绩） */
+router.get('/old/registrations', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+    if (!t.oldTournamentId) return res.status(404).json({ msg: '未关联旧赛事' });
+
+    const oldT = await Tournament.findById(t.oldTournamentId)
+      .populate('registrations.userId', 'username avatarUrl')
+      .lean();
+    if (!oldT) return res.status(404).json({ msg: '旧赛事不存在' });
+
+    // 聚合预选赛成绩
+    const scoresByUser = {};
+    (oldT.qualifierScores || []).forEach(s => {
+      const uid = String(s.userId);
+      if (!scoresByUser[uid]) scoresByUser[uid] = [];
+      scoresByUser[uid].push(s);
+    });
+
+    const registrations = (oldT.registrations || []).map(r => {
+      const userId = String(r.userId?._id || r.userId);
+      const scores = scoresByUser[userId] || [];
+      return {
+        userId,
+        username: r.userId?.username || null,
+        avatarUrl: r.userId?.avatarUrl || null,
+        token: r.token || '',
+        formData: r.formData || {},
+        registeredAt: r.registeredAt,
+        qualifierProgress: {
+          completed: scores.length,
+          total: oldT.qualifierSongs?.length || 0
+        },
+        qualifierTotalAchievement: scores.reduce((sum, s) => sum + (s.achievement || 0), 0),
+        qualifierTotalDxScore: scores.reduce((sum, s) => sum + (s.dxScore || 0), 0)
+      };
+    });
+
+    res.json({
+      msg: 'ok',
+      data: {
+        totalRegistered: registrations.length,
+        tournamentTitle: oldT.title,
+        qualifierSongCount: oldT.qualifierSongs?.length || 0,
+        registrations
+      }
+    });
+  } catch (err) {
+    console.error('获取旧赛事注册列表失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+/** 获取预选赛排名 */
+router.get('/old/qualifier-rankings', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+    if (!t.oldTournamentId) return res.status(404).json({ msg: '未关联旧赛事' });
+
+    const oldT = await Tournament.findById(t.oldTournamentId)
+      .populate('registrations.userId', 'username avatarUrl')
+      .lean();
+    if (!oldT) return res.status(404).json({ msg: '旧赛事不存在' });
+    if (!oldT.qualifierScores || oldT.qualifierScores.length === 0) {
+      return res.status(400).json({ msg: '预选赛尚无成绩数据' });
+    }
+
+    const advanceCount = req.query.advance || 12;
+
+    // 按 userId 聚合 scores
+    const byUser = {};
+    oldT.qualifierScores.forEach(s => {
+      const uid = String(s.userId);
+      if (!byUser[uid]) byUser[uid] = [];
+      byUser[uid].push(s);
+    });
+
+    // 构建所有报名选手的排名列表
+    const registrationMap = {};
+    (oldT.registrations || []).forEach(r => {
+      registrationMap[String(r.userId?._id || r.userId)] = r;
+    });
+
+    const rankings = Object.keys(byUser).map(uid => {
+      const scores = byUser[uid];
+      return {
+        userId: uid,
+        username: null,
+        avatarUrl: null,
+        totalAchievement: scores.reduce((sum, s) => sum + (s.achievement || 0), 0),
+        totalDxScore: scores.reduce((sum, s) => sum + (s.dxScore || 0), 0),
+        qualifierCount: scores.length
+      };
+    });
+
+    // 无成绩选手
+    (oldT.registrations || []).forEach(r => {
+      const uid = String(r.userId?._id || r.userId);
+      if (!byUser[uid]) {
+        rankings.push({
+          userId: uid,
+          username: r.userId?.username || null,
+          avatarUrl: r.userId?.avatarUrl || null,
+          totalAchievement: 0,
+          totalDxScore: 0,
+          qualifierCount: 0
+        });
+      }
+    });
+
+    // 排序
+    rankings.sort((a, b) => {
+      if (b.totalAchievement !== a.totalAchievement) return b.totalAchievement - a.totalAchievement;
+      if (b.totalDxScore !== a.totalDxScore) return b.totalDxScore - a.totalDxScore;
+      // 无成绩选手按报名时间
+      const ra = registrationMap[a.userId];
+      const rb = registrationMap[b.userId];
+      const ta = ra ? new Date(ra.registeredAt).getTime() : 0;
+      const tb = rb ? new Date(rb.registeredAt).getTime() : 0;
+      return ta - tb;
+    });
+
+    // 补全用户信息 + 分配 rank
+    rankings.forEach((r, i) => {
+      r.rank = i + 1;
+      r.qualified = i < advanceCount;
+      const reg = registrationMap[r.userId];
+      if (reg) {
+        r.username = reg.userId?.username || r.username;
+        r.avatarUrl = reg.userId?.avatarUrl || r.avatarUrl;
+      }
+    });
+
+    res.json({
+      msg: 'ok',
+      data: {
+        rankings,
+        qualifiedCount: rankings.filter(r => r.qualified).length,
+        totalPlayers: rankings.length,
+        advanceThreshold: Number(advanceCount),
+        qualifierSongCount: oldT.qualifierSongs?.length || 0
+      }
+    });
+  } catch (err) {
+    console.error('获取预选赛排名失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+/** 从预选赛排名自动初始化阶段一 */
+router.post('/stage1/init-from-qualifier', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+    if (!t.oldTournamentId) return res.status(404).json({ msg: '未关联旧赛事' });
+    if (t.stage1?.status === 'done' || (t.stage1?.groups?.length || 0) > 0) {
+      return res.status(400).json({ msg: '阶段一已初始化，如需重置请先手动清理' });
+    }
+
+    const { songPoolIds, advanceCount = 12 } = req.body;
+    if (!songPoolIds || songPoolIds.length < 3) {
+      return res.status(400).json({ msg: '图池至少需要 3 首歌' });
+    }
+
+    const oldT = await Tournament.findById(t.oldTournamentId)
+      .populate('registrations.userId', 'username avatarUrl')
+      .lean();
+    if (!oldT) return res.status(404).json({ msg: '旧赛事不存在' });
+
+    const registrations = oldT.registrations || [];
+    if (registrations.length < advanceCount) {
+      return res.status(400).json({ msg: `报名人数不足 ${advanceCount} 人，当前仅有 ${registrations.length} 人报名` });
+    }
+
+    // 聚合成绩 + 排名
+    const byUser = {};
+    (oldT.qualifierScores || []).forEach(s => {
+      const uid = String(s.userId);
+      if (!byUser[uid]) byUser[uid] = [];
+      byUser[uid].push(s);
+    });
+
+    const regMap = {};
+    registrations.forEach(r => { regMap[String(r.userId?._id || r.userId)] = r; });
+
+    const allPlayers = registrations.map(r => ({
+      userId: String(r.userId?._id || r.userId),
+      totalAchievement: (byUser[String(r.userId?._id || r.userId)] || []).reduce((s, sc) => s + (sc.achievement || 0), 0),
+      totalDxScore: (byUser[String(r.userId?._id || r.userId)] || []).reduce((s, sc) => s + (sc.dxScore || 0), 0),
+      registeredAt: r.registeredAt
+    }));
+
+    allPlayers.sort((a, b) => {
+      if (b.totalAchievement !== a.totalAchievement) return b.totalAchievement - a.totalAchievement;
+      if (b.totalDxScore !== a.totalDxScore) return b.totalDxScore - a.totalDxScore;
+      return new Date(a.registeredAt).getTime() - new Date(b.registeredAt).getTime();
+    });
+
+    const selected = allPlayers.slice(0, advanceCount);
+    const playerIds = selected.map(p => p.userId);
+    const autoFilled = selected.filter(p => p.totalAchievement === 0 && p.totalDxScore === 0);
+
+    // 写入排名快照
+    t.qualifierRankings = selected.map((p, i) => ({
+      rank: i + 1,
+      userId: p.userId,
+      totalAchievement: p.totalAchievement,
+      totalDxScore: p.totalDxScore,
+      qualified: true
+    }));
+
+    // 初始化阶段一
+    await initStage1(t, playerIds, songPoolIds);
+
+    // 同步旧赛事状态
+    await syncToOldTournament(t, 'status_sync', { newStatus: 'stage1', operatedBy: req.user.id });
+
+    res.json({
+      msg: '阶段一已从预选赛初始化',
+      data: {
+        qualifiedFromQualifier: advanceCount,
+        autoFilledCount: autoFilled.length,
+        autoFilledPlayerIds: autoFilled.map(p => p.userId),
+        groups: t.stage1.groups.map(g => ({
+          order: g.order,
+          p1: String(g.p1),
+          p2: String(g.p2),
+          status: g.status
+        })),
+        currentGroupIndex: t.stage1.currentGroupIndex
+      }
+    });
+  } catch (err) {
+    console.error('init-from-qualifier 失败:', err);
+    res.status(400).json({ msg: err.message });
   }
 });
 

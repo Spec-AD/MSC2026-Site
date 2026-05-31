@@ -12,6 +12,7 @@
 
 const { shuffle, validateScore, determineWinner } = require('./utils');
 const { broadcast } = require('./ssePool');
+const { syncToOldTournament } = require('./oldTournamentSync');
 
 /**
  * 初始化决赛
@@ -259,6 +260,14 @@ async function advance(tournament) {
     tournament.status = 'finished';
 
     await tournament.save();
+
+    // 旧赛事同步：回写 results + status=finished
+    const runnerUp = winner ? (String(winner) === String(s4.p1) ? s4.p2 : s4.p1) : null;
+    await syncToOldTournament(tournament, 'stage4_complete', {
+      winner: winner ? String(winner) : null,
+      runnerUp: runnerUp ? String(runnerUp) : null,
+      operatedBy: null
+    });
 
     broadcast('match_finished', {
       type: 'final',

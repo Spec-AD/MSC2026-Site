@@ -23,6 +23,7 @@ const { shuffle, calculateRaceRankings } = require('./utils');
 const { CHALLENGE_TASKS } = require('./challengeDefinitions');
 const { getItemPool, getItem, applyItemEffects } = require('./itemDefinitions');
 const { broadcast } = require('./ssePool');
+const { syncToOldTournament } = require('./oldTournamentSync');
 
 // ── 阶段配置映射 ──
 const RACE_CONFIGS = {
@@ -798,6 +799,13 @@ async function _terminateRace(tournament, race, stageKey, reason) {
   }
 
   await tournament.save();
+
+  // 旧赛事同步：回写跑图排名
+  const eventType = stageKey === 'stage2' ? 'stage2_complete' : 'stage3_complete';
+  await syncToOldTournament(tournament, eventType, {
+    rankings: rankings.map(r => ({ userId: String(r.userId), rank: r.rank })),
+    qualifiedIds
+  });
 
   broadcast('map_timeout', {
     terminated: true,
