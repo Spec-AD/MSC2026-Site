@@ -32,6 +32,13 @@ import TournamentManage from './pages/TournamentManage';
 import TournamentDetail from './pages/TournamentDetail';
 import ComplaintForm from './pages/ComplaintForm';
 
+// MSC 2026
+import MSC2026Layout from './features/msc2026/pages/MSC2026Layout';
+import TournamentHome from './features/msc2026/pages/TournamentHome';
+import Stage1Page from './features/msc2026/pages/Stage1Page';
+import Stage4Page from './features/msc2026/pages/Stage4Page';
+import RacePage from './features/msc2026/pages/RacePage';
+
 // 引入页面组件
 import Home from './pages/Home';
 import Intro from './pages/Intro';
@@ -93,6 +100,14 @@ function App() {
                 <Route path="map/:bid" element={<OsuMap />} />
                 <Route path="leaderboard" element={<OsuLeaderboard />} />
                 <Route path="leaderboard/:bid" element={<OsuLeaderboard />} />
+              </Route>
+              {/* MSC 2026 独立路由 */}
+              <Route path="/matches/msc2026" element={<MSC2026Layout />}>
+                <Route index element={<TournamentHome />} />
+                <Route path="stage1" element={<Stage1Page />} />
+                <Route path="stage2" element={<RacePage stage="stage2" />} />
+                <Route path="stage3" element={<RacePage stage="stage3" />} />
+                <Route path="stage4" element={<Stage4Page />} />
               </Route>
               <Route path="/daily-history" element={<DailyHistory />} />
               <Route path="/letter-game" element={<LetterGame />} />

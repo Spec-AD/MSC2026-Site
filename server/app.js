@@ -62,6 +62,7 @@ app.use(require('./routes/scoreLeaderboard'));
 app.use(require('./routes/chunithm'));
 app.use(require('./routes/tournament'));
 app.use(require('./routes/admin'));
+app.use('/api/msc2026', require('./routes/msc2026'));
 
 // ===== 定时任务 =====
 const { startSyncAliases } = require('./tasks/syncAliases');

@@ -1,0 +1,1075 @@
+/**
+ * MSC 2026 特殊赛制 — 路由模块
+ * b1.7.11.patch-02
+ * 独立于现有 tournament.js，前缀 /api/msc2026
+ *
+ * patch-02 修复：
+ * - P0-4: stage2→stage3 超时终止允许按排名自动推进
+ * - P1-2: /stage2/* /stage3/* 别名路由 → 内部转发 /race/*
+ * - P1-3: stage1/stage4 端点统一 userId 序列化
+ * - P2-3: Song populate 嵌套 basic_info.artist
+ * - P2-4: SSE 角色分级广播 (addClient 携带 role)
+ * - P2-5: /race/map 墙 perPlayer breached 标记
+ */
+
+const express = require('express');
+const router = express.Router();
+const { authMiddleware, optionalAuth } = require('../middleware/auth');
+const MSC2026Tournament = require('../models/MSC2026Tournament');
+const Song = require('../models/Song');
+const User = require('../models/User');
+
+const { loadTournament, checkPermission, calculateRaceRankings } = require('../services/msc2026/utils');
+const { initStage1, startFirstGroup, selectSong, submitScore, advance: advanceStage1, forfeitPlayer } = require('../services/msc2026/stage1');
+const { initRace, currentRace, playerAction, useItem, challengeResult, skipTurn, getRaceConfig } = require('../services/msc2026/raceEngine');
+const { initStage4, selectSong: selectSong4, submitScore: submitScore4, advance: advanceStage4 } = require('../services/msc2026/stage4');
+const { addClient, broadcast } = require('../services/msc2026/ssePool');
+const { getItem } = require('../services/msc2026/itemDefinitions');
+const { CHALLENGE_TASKS } = require('../services/msc2026/challengeDefinitions');
+const { getTaskById, getFallbackTask } = require('../services/msc2026/raceEngine');
+
+// ── 辅助 ──
+async function requireTournament(res) {
+  const t = await loadTournament(res);
+  return t;
+}
+
+// ==========================================
+// 🌐 全局状态
+// ==========================================
+
+router.get('/status', async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne().select('-stage2.players -stage3.players');
+    if (!t) return res.json({ msg: 'ok', data: { status: 'pending' } });
+
+    res.json({
+      msg: 'ok',
+      data: {
+        status: t.status,
+        stage1: t.stage1 ? {
+          totalGroups: t.stage1.groups?.length || 0,
+          completedGroups: t.stage1.groups?.filter(g => g.status === 'done').length || 0,
+          status: t.stage1.status
+        } : null,
+        stage2: t.stage2 ? {
+          shape: t.stage2.mapConfig?.shape,
+          finishCount: t.stage2.finishOrder?.length || 0,
+          totalPlayers: t.stage2.players?.length || 0,
+          terminated: t.stage2.terminated
+        } : null,
+        stage3: t.stage3 ? {
+          shape: t.stage3.mapConfig?.shape,
+          finishCount: t.stage3.finishOrder?.length || 0,
+          totalPlayers: t.stage3.players?.length || 0,
+          terminated: t.stage3.terminated
+        } : null,
+        stage4: t.stage4 ? {
+          winner: t.stage4.winner,
+          needTiebreak: t.stage4.needTiebreak
+        } : null,
+        qualifiedStage1: t.qualifiedStage1?.length || 0,
+        qualifiedStage2: t.qualifiedStage2?.length || 0,
+        qualifiedStage3: t.qualifiedStage3?.length || 0
+      }
+    });
+  } catch (err) {
+    console.error('MSC 状态查询失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+// ── 配置 ──
+router.get('/config', authMiddleware, async (req, res) => {
+  try {
+    const { allowed, msg } = await checkPermission(req.user, null, 'admin');
+    if (!allowed) return res.status(403).json({ msg });
+
+    const t = await MSC2026Tournament.findOne()
+      // P2-3: artist 在 basic_info.artist 嵌套字段
+      .populate('stage1SongPool', 'title basic_info.artist ds level')
+      .populate('stage4.songPool', 'title basic_info.artist ds level')
+      .populate('stage4.designatedSongId', 'title basic_info.artist ds level');
+
+    if (!t) return res.status(404).json({ msg: '赛事不存在' });
+
+    res.json({
+      msg: 'ok',
+      data: {
+        stage1SongPool: t.stage1SongPool || [],
+        stage4SongPool: t.stage4?.songPool || [],
+        designatedSong: t.stage4?.designatedSongId || null
+      }
+    });
+  } catch (err) {
+    console.error('获取配置失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.put('/config', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { poolType, songPoolIds, designatedSongId } = req.body;
+
+    if (poolType === 'stage1') {
+      t.stage1SongPool = songPoolIds;
+    } else if (poolType === 'stage4') {
+      if (!t.stage4) t.stage4 = {};
+      t.stage4.songPool = songPoolIds;
+      if (designatedSongId) t.stage4.designatedSongId = designatedSongId;
+    }
+
+    await t.save();
+    res.json({ msg: '配置已更新', data: { count: songPoolIds?.length || 0 } });
+  } catch (err) {
+    console.error('更新配置失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+// ── 曲库搜索 ──
+router.get('/songs/search', authMiddleware, async (req, res) => {
+  try {
+    const { q, limit = 30 } = req.query;
+    if (!q) return res.status(400).json({ msg: '缺少搜索关键词 q' });
+
+    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+    const songs = await Song.find({
+      $or: [
+        { title: regex },
+        { aliases: regex }
+      ]
+    })
+      .select('id title type ds level basic_info')
+      .limit(Math.min(Number(limit), 50))
+      .lean();
+
+    const data = songs.map(s => ({
+      _id: s._id,
+      id: s.id,
+      title: s.title,
+      type: s.type,
+      ds: s.ds || [],
+      level: s.level || [],
+      artist: s.basic_info?.artist || '',
+      genre: s.basic_info?.genre || '',
+      coverUrl: s.id ? `https://www.diving-fish.com/covers/${String(s.id).padStart(5, '0')}.png` : ''
+    }));
+
+    res.json({ msg: 'ok', data });
+  } catch (err) {
+    console.error('曲库搜索失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+// ==========================================
+// 🏆 阶段一：12进6
+// ==========================================
+
+router.post('/stage1/init', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { songPoolIds, playerIds } = req.body;
+
+    t.status = 'stage1';
+    t.stage1SongPool = songPoolIds || [];
+
+    const stage1 = await initStage1(t, playerIds, songPoolIds);
+    await startFirstGroup(t);
+
+    // populate
+    const populated = await MSC2026Tournament.findById(t._id)
+      .populate('stage1.groups.p1', 'username avatarUrl')
+      .populate('stage1.groups.p2', 'username avatarUrl');
+
+    res.json({ msg: '分组初始化完成', data: { groups: populated.stage1.groups } });
+  } catch (err) {
+    console.error('阶段一初始化失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.get('/stage1/state', async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne()
+      // P2-3: artist 在 basic_info.artist 嵌套字段
+      .populate('stage1.songPool', 'title basic_info.artist ds level')
+      .populate('stage1.groups.p1', 'username avatarUrl')
+      .populate('stage1.groups.p2', 'username avatarUrl')
+      .populate('stage1.groups.winner', 'username avatarUrl')
+      .populate('stage1.groups.songs.songId', 'title basic_info.artist');
+
+    if (!t || !t.stage1) return res.status(404).json({ msg: '阶段一未初始化' });
+
+    const s1 = t.stage1;
+    const currentGroup = s1.currentGroupIndex >= 0 ? s1.groups[s1.currentGroupIndex] : null;
+    let currentTurn = null;
+
+    if (currentGroup && currentGroup.status !== 'done') {
+      if (currentGroup.status === 'p1_pick') {
+        currentTurn = { pickPhase: 'p1_pick', currentPicker: currentGroup.p1?._id?.toString() };
+      } else if (currentGroup.status === 'p2_pick') {
+        currentTurn = { pickPhase: 'p2_pick', currentPicker: currentGroup.p2?._id?.toString() };
+      } else if (currentGroup.status === 'playing') {
+        currentTurn = { pickPhase: 'playing', currentPicker: null };
+      }
+    }
+
+    // P1-3: 统一序列化 userId 字段，前端用 .userId 而非 ._id
+    const serializeGroup = (g) => ({
+      order: g.order,
+      p1: g.p1 ? { userId: String(g.p1._id), username: g.p1.username, avatarUrl: g.p1.avatarUrl } : null,
+      p2: g.p2 ? { userId: String(g.p2._id), username: g.p2.username, avatarUrl: g.p2.avatarUrl } : null,
+      songs: g.songs,
+      status: g.status,
+      winner: g.winner ? String(g.winner._id || g.winner) : null,
+      forfait: g.forfait ? String(g.forfait._id || g.forfait) : null,
+      needTiebreak: g.needTiebreak
+    });
+
+    res.json({
+      msg: 'ok',
+      data: {
+        status: s1.status,
+        currentGroupIndex: s1.currentGroupIndex,
+        songPool: s1.songPool,
+        totalGroups: s1.groups.length,
+        completedGroups: s1.groups.filter(g => g.status === 'done').length,
+        groups: s1.groups.map(serializeGroup),
+        currentTurn
+      }
+    });
+  } catch (err) {
+    console.error('获取阶段一状态失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.get('/stage1/group/:groupId', async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne()
+      .populate('stage1.groups.p1', 'username avatarUrl')
+      .populate('stage1.groups.p2', 'username avatarUrl')
+      // P2-3
+      .populate('stage1.groups.songs.songId', 'title basic_info.artist');
+
+    if (!t || !t.stage1) return res.status(404).json({ msg: '阶段一未初始化' });
+
+    const idx = Number(req.params.groupId);
+    const g = t.stage1.groups[idx];
+    if (!g) return res.status(404).json({ msg: '组不存在' });
+
+    // P1-3: 统一序列化 userId
+    res.json({ msg: 'ok', data: {
+      order: g.order,
+      p1: g.p1 ? { userId: String(g.p1._id), username: g.p1.username, avatarUrl: g.p1.avatarUrl } : null,
+      p2: g.p2 ? { userId: String(g.p2._id), username: g.p2.username, avatarUrl: g.p2.avatarUrl } : null,
+      songs: g.songs,
+      status: g.status,
+      winner: g.winner ? String(g.winner._id || g.winner) : null,
+      forfait: g.forfait ? String(g.forfait._id || g.forfait) : null,
+      needTiebreak: g.needTiebreak
+    }});
+  } catch (err) {
+    console.error('获取组详情失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.post('/stage1/select-song', authMiddleware, async (req, res) => {
+  try {
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { songId } = req.body;
+    const result = await selectSong(t, req.user.id, songId);
+
+    // populate song info
+    // P2-3
+    const populated = await MSC2026Tournament.findById(t._id)
+      .populate('stage1.songPool', 'title basic_info.artist ds level');
+
+    const songs = populated.stage1.groups[populated.stage1.currentGroupIndex].songs;
+    const lastSong = songs[songs.length - 1];
+    const songRef = populated.stage1.songPool.find(s => s._id.toString() === lastSong.songId.toString());
+
+    res.json({
+      msg: '选曲完成',
+      data: {
+        song: songRef || { _id: lastSong.songId, title: '???' },
+        pickType: lastSong.pickType,
+        nextStep: result.nextStep
+      }
+    });
+  } catch (err) {
+    console.error('选曲失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/stage1/submit-score', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const result = await submitScore(t, req.user.id, req.body);
+
+    res.json({
+      msg: '成绩已录入',
+      data: { nextStep: result.nextStep }
+    });
+  } catch (err) {
+    console.error('提交成绩失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/stage1/advance', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const result = await advanceStage1(t);
+
+    if (result.nextStep === 'stage_done') {
+      res.json({ msg: '阶段一完成，6 人晋级', data: { qualifiedIds: result.qualifiedIds.map(String) } });
+    } else if (result.song) {
+      res.json({ msg: '系统已抽取随机曲目', data: result });
+    } else {
+      res.json({ msg: '推进成功', data: result });
+    }
+  } catch (err) {
+    console.error('阶段推进失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/stage1/forfait', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { playerId } = req.body;
+    const group = await forfeitPlayer(t, playerId);
+
+    res.json({
+      msg: `选手弃权，对手晋级`,
+      data: { winner: group.winner.toString(), forfaitBy: playerId }
+    });
+  } catch (err) {
+    console.error('弃权处理失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+// ==========================================
+// 🗺️ 跑图：阶段二 & 三
+// ==========================================
+
+router.post('/race/init', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { playerIds } = req.body;
+
+    // 构建 songMap（从 stage1SongPool 中匹配挑战任务的 songTitle）
+    const songMap = {};
+    const songs = await Song.find({ _id: { $in: t.stage1SongPool || [] } }).select('_id title').lean();
+    // 也搜索所有舞萌曲库
+    const allChallengeSongs = await Song.find({
+      title: { $in: CHALLENGE_TASKS.map(ct => ct.songTitle) }
+    }).select('_id title').lean();
+
+    for (const s of songs) songMap[s.title] = s._id;
+    for (const s of allChallengeSongs) {
+      if (!songMap[s.title]) songMap[s.title] = s._id;
+    }
+
+    const race = await initRace(t, playerIds, songMap);
+
+    const populated = await MSC2026Tournament.findById(t._id)
+      .populate(`${t.status}.players.userId`, 'username avatarUrl');
+
+    res.json({
+      msg: '跑图已初始化',
+      data: {
+        stage: t.status,
+        mapConfig: race.mapConfig,
+        timeLimitMs: race.timeLimitMs,
+        turnTimeLimitMs: race.turnTimeLimitMs,
+        players: populated[t.status].players.map(p => ({
+          userId: String(p.userId._id || p.userId),
+          username: p.userId.username,
+          avatarUrl: p.userId.avatarUrl,
+          startVertex: p.startVertex,
+          currentLayer: p.currentLayer
+        })),
+        currentTurn: race.currentTurn,
+        currentPlayerIndex: race.currentPlayerIndex,
+        currentPlayerId: String(race.players[race.currentPlayerIndex].userId._id || race.players[race.currentPlayerIndex].userId),
+        totalItemsOnMap: race.itemsOnMap.length,
+        totalTasks: 25
+      }
+    });
+  } catch (err) {
+    console.error('跑图初始化失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.get('/race/state', async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne()
+      .populate('stage2.players.userId', 'username avatarUrl')
+      .populate('stage3.players.userId', 'username avatarUrl')
+      .populate('stage2.finishOrder.userId', 'username avatarUrl')
+      .populate('stage3.finishOrder.userId', 'username avatarUrl');
+
+    if (!t) return res.status(404).json({ msg: '赛事不存在' });
+
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+
+    const now = Date.now();
+    const totalElapsed = now - new Date(race.totalTimeStartedAt).getTime();
+    const turnElapsed = race.turnStartedAt ? now - new Date(race.turnStartedAt).getTime() : 0;
+
+    res.json({
+      msg: 'ok',
+      data: {
+        stage: t.status,
+        status: race.terminated ? 'terminated' : 'racing',
+        mapConfig: race.mapConfig,
+        timeLimitMs: race.timeLimitMs,
+        turnTimeLimitMs: race.turnTimeLimitMs,
+        totalTimeStartedAt: race.totalTimeStartedAt,
+        turnStartedAt: race.turnStartedAt,
+        currentTurn: race.currentTurn,
+        currentPlayerIndex: race.currentPlayerIndex,
+        currentPlayerId: String(race.players[race.currentPlayerIndex]?.userId?._id || race.players[race.currentPlayerIndex]?.userId),
+        players: race.players.map(p => ({
+          userId: String(p.userId._id || p.userId),
+          username: p.userId.username,
+          avatarUrl: p.userId.avatarUrl,
+          startVertex: p.startVertex,
+          currentLayer: p.currentLayer,
+          itemCount: p.items.length,
+          itemUsedCount: p.items.filter(i => i.status === 'consumed' || i.status === 'armed').length,
+          silentUntilTurn: p.silentUntilTurn,
+          disableItemsUntilTurn: p.disableItemsUntilTurn,
+          status: p.finishOrder ? 'finished' : 'racing',
+          finishOrder: p.finishOrder,
+          finishTimestamp: p.finishTimestamp
+        })),
+        finishOrder: race.finishOrder,
+        actionLog: race.actionLog.slice(-50),
+        turnRemainingMs: Math.max(0, race.turnTimeLimitMs - turnElapsed),
+        totalRemainingMs: Math.max(0, race.timeLimitMs - totalElapsed),
+        terminated: race.terminated,
+        terminatedReason: race.terminatedReason
+      }
+    });
+  } catch (err) {
+    console.error('获取跑图状态失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.get('/race/map', async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne()
+      .populate('stage2.players.userId', 'username avatarUrl')
+      .populate('stage3.players.userId', 'username avatarUrl');
+
+    if (!t) return res.status(404).json({ msg: '赛事不存在' });
+
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+
+    // P2-5: 墙状态改为按选手分别标记（每人各自破墙，非全局共享）
+    const wallsBroken = [];
+    for (let i = 0; i < race.mapConfig.layers - 1; i++) {
+      const breachedBy = race.challengeHistory
+        .filter(ch => ch.wallIndex === i && ch.passed === true)
+        .map(ch => ch.playerId.toString());
+      wallsBroken.push({
+        wallIndex: i,
+        label: race.mapConfig.wallLabels[i],
+        breachedBy: [...new Set(breachedBy)],
+        // 按选手标记各自是否已破此墙
+        perPlayer: race.players.map(p => ({
+          userId: String(p.userId._id || p.userId),
+          breached: race.challengeHistory.some(
+            ch => ch.wallIndex === i && ch.passed === true && ch.playerId.toString() === String(p.userId._id || p.userId)
+          )
+        }))
+      });
+    }
+
+    res.json({
+      msg: 'ok',
+      data: {
+        players: race.players.map(p => ({
+          userId: String(p.userId._id || p.userId),
+          username: p.userId.username,
+          avatarUrl: p.userId.avatarUrl,
+          startVertex: p.startVertex,
+          currentLayer: p.currentLayer,
+          status: p.finishOrder ? 'finished' : 'racing',
+          finishOrder: p.finishOrder
+        })),
+        itemsOnMap: race.itemsOnMap.map(i => {
+          const def = getItem(i.itemRef);
+          return {
+            itemRef: i.itemRef,
+            zoneIndex: i.zoneIndex,
+            collected: i.collected,
+            name: def ? def.name : '???',
+            type: def ? def.type : '???'
+          };
+        }),
+        wallsBroken,
+        currentTurn: race.currentTurn,
+        currentPlayerId: String(race.players[race.currentPlayerIndex]?.userId?._id || race.players[race.currentPlayerIndex]?.userId)
+      }
+    });
+  } catch (err) {
+    console.error('获取地图失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.post('/race/action', authMiddleware, async (req, res) => {
+  try {
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { actionType, zoneIndex } = req.body;
+    const result = await playerAction(t, req.user.id, actionType, zoneIndex);
+
+    res.json(result.action === 'advance' ? { msg: '进入挑战', data: result } : { msg: '拾取道具', data: result });
+  } catch (err) {
+    console.error('跑图行动失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/race/use-item', authMiddleware, async (req, res) => {
+  try {
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { itemRef } = req.body;
+    const result = await useItem(t, req.user.id, itemRef);
+
+    res.json({ msg: `已使用 ${result.name}`, data: result });
+  } catch (err) {
+    console.error('道具使用失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.get('/race/challenge', authMiddleware, async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne();
+    if (!t) return res.status(404).json({ msg: '赛事不存在' });
+
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+
+    // 找最近被揭晓但未判定的挑战
+    const pending = race.challengeHistory.find(ch => ch.passed === null);
+    if (!pending) return res.status(400).json({ msg: '无待判定的挑战' });
+
+    // P1-4: 优先返回 resolvedChallenge 快照（含道具修改后的挑战条件）
+    // P0-1: 不再依赖 race._taskMap，转用快照或 CHALLENGE_TASKS
+    if (pending.resolvedChallenge) {
+      res.json({
+        msg: 'ok',
+        data: {
+          playerId: pending.playerId.toString(),
+          taskId: pending.taskId,
+          ...pending.resolvedChallenge,
+          wallLabel: race.mapConfig.wallLabels[pending.wallIndex],
+          wallIndex: pending.wallIndex,
+          activeItemEffects: pending.activeItemEffects || [],
+          pendingJudgement: true
+        }
+      });
+      return;
+    }
+
+    // 无快照回退：从 CHALLENGE_TASKS / fallbackTasks 读取
+    let task = getTaskById(pending.taskId);
+    if (!task) task = getFallbackTask(pending.taskId, race.taskPool.fallbackTasks);
+    if (!task) return res.status(404).json({ msg: '挑战任务不存在' });
+
+    res.json({
+      msg: 'ok',
+      data: {
+        playerId: pending.playerId.toString(),
+        taskId: pending.taskId,
+        taskName: task.name,
+        description: task.description,
+        type: task.type,
+        evalRequirement: task.evalRequirement || null,
+        threshold: task.threshold || null,
+        dxRequirement: task.dxRequirement || null,
+        toleranceType: task.toleranceType || null,
+        toleranceLimit: task.toleranceLimit || null,
+        greatMax: task.greatMax || null,
+        difficulty: task.difficulty,
+        songTitle: task.songTitle,
+        wallLabel: race.mapConfig.wallLabels[pending.wallIndex],
+        wallIndex: pending.wallIndex,
+        activeItemEffects: [],
+        pendingJudgement: true
+      }
+    });
+  } catch (err) {
+    console.error('获取挑战失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.post('/race/challenge-result', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { passed } = req.body;
+    const result = await challengeResult(t, req.user.id, passed);
+
+    if (passed) {
+      if (result.raceTerminated) {
+        res.json({ msg: '挑战成功，跑图结束', data: result });
+      } else {
+        res.json({ msg: '挑战成功', data: result });
+      }
+    } else {
+      res.json({ msg: '挑战失败，弹回', data: result });
+    }
+  } catch (err) {
+    console.error('挑战判定失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/race/skip-turn/manual', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const result = await skipTurn(t, 'skip_manual');
+
+    res.json({ msg: `已跳过当前选手回合`, data: result });
+  } catch (err) {
+    console.error('跳过回合失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.get('/race/my-items', authMiddleware, async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne();
+    if (!t) return res.status(404).json({ msg: '赛事不存在' });
+
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+
+    const player = race.players.find(p => p.userId.toString() === req.user.id.toString());
+    if (!player) return res.status(404).json({ msg: '你不在比赛中' });
+
+    const items = player.items.map(i => {
+      const def = getItem(i.itemRef);
+      return {
+        itemRef: i.itemRef,
+        name: def ? def.name : '???',
+        type: def ? def.type : '???',
+        description: def ? def.description : '',
+        penalty: def && def.penalty ? def.penalty : null,
+        status: i.status
+      };
+    });
+
+    res.json({
+      msg: 'ok',
+      data: {
+        items,
+        disableItemsUntilTurn: player.disableItemsUntilTurn
+      }
+    });
+  } catch (err) {
+    console.error('获取道具失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.post('/race/terminate', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+
+    const stageKey = t.status;
+    const config = getRaceConfig(stageKey);
+
+    race.terminated = true;
+    race.terminatedReason = 'admin';
+
+    const rankings = calculateRaceRankings(race.players);
+    const qualifiedIds = rankings.slice(0, config.advanceCount).map(r => r.userId.toString());
+
+    if (stageKey === 'stage2') t.qualifiedStage2 = qualifiedIds;
+    else if (stageKey === 'stage3') t.qualifiedStage3 = qualifiedIds;
+
+    await t.save();
+
+    broadcast('map_timeout', { terminated: true, reason: 'admin', rankings, qualifiedIds });
+
+    res.json({
+      msg: '跑图已终止',
+      data: { reason: 'admin', rankings, qualifiedIds }
+    });
+  } catch (err) {
+    console.error('终止跑图失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.get('/race/challenge-history', async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne();
+    if (!t) return res.status(404).json({ msg: '赛事不存在' });
+
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+
+    const history = race.challengeHistory.map(ch => {
+      // P0-1: 优先用快照，其次 CHALLENGE_TASKS
+      let taskName = ch.resolvedChallenge?.taskName || '???';
+      if (taskName === '???') {
+        const staticTask = getTaskById(ch.taskId);
+        if (staticTask) taskName = staticTask.name;
+        else {
+          const fbTask = getFallbackTask(ch.taskId, race.taskPool.fallbackTasks);
+          if (fbTask) taskName = fbTask.name;
+        }
+      }
+      return {
+        wallIndex: ch.wallIndex,
+        taskId: ch.taskId,
+        playerId: ch.playerId.toString(),
+        passed: ch.passed,
+        taskName,
+        timestamp: ch.judgedAt
+      };
+    });
+
+    res.json({ msg: 'ok', data: { history } });
+  } catch (err) {
+    console.error('获取挑战历史失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.get('/race/task-pool', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await MSC2026Tournament.findOne();
+    if (!t) return res.status(404).json({ msg: '赛事不存在' });
+
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+
+    res.json({
+      msg: 'ok',
+      data: {
+        used: race.taskPool.used,
+        remaining: race.taskPool.remaining,
+        fallbackCount: race.taskPool.fallbackCount
+      }
+    });
+  } catch (err) {
+    console.error('获取任务库失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+// ── 阶段二 → 阶段三 推进 ──
+router.post('/stage2/advance-to-stage3', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    if (t.status !== 'stage2') return res.status(400).json({ msg: '当前不在阶段二' });
+    if (!t.stage2) return res.status(400).json({ msg: '阶段二未初始化' });
+
+    // P0-4: 超时终止时允许不足4人到达，使用排名结果
+    if (!t.stage2.terminated && t.stage2.finishOrder.length < 4) {
+      return res.status(400).json({ msg: '阶段二未完成（需至少4人到达终点或等待地图超时终止）' });
+    }
+
+    let { qualifiedIds } = req.body;
+
+    // P0-4: 若未传 qualifiedIds，自动按排名推（地图已终止时）
+    if (!qualifiedIds || qualifiedIds.length !== 4) {
+      if (t.stage2.terminated) {
+        const { calculateRaceRankings } = require('../services/msc2026/utils');
+        const rankings = calculateRaceRankings(t.stage2.players);
+        qualifiedIds = rankings.slice(0, 4).map(r => r.userId.toString());
+      } else {
+        return res.status(400).json({ msg: '需提供恰好4名晋级选手' });
+      }
+    }
+
+    t.status = 'stage3';
+    t.qualifiedStage2 = qualifiedIds;
+
+    t.operationLogs.push({
+      action: 'stage_advance',
+      stage: 'stage2→stage3',
+      detail: { qualifiedIds },
+      operatedBy: req.user.id,
+      operatedAt: new Date()
+    });
+
+    await t.save();
+
+    broadcast('stage_advanced', { from: 'stage2', to: 'stage3', timestamp: Date.now() });
+
+    res.json({ msg: '已推进到阶段三', data: { status: 'stage3', qualifiedIds } });
+  } catch (err) {
+    console.error('推进阶段三失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+// ==========================================
+// 🏅 阶段四：决赛
+// ==========================================
+
+router.post('/stage4/init', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { songPoolIds, designatedSongId, playerIds } = req.body;
+
+    t.status = 'stage4';
+
+    const s4 = await initStage4(t, playerIds, songPoolIds, designatedSongId);
+
+    res.json({
+      msg: '决赛已初始化',
+      data: {
+        p1: { userId: s4.p1.toString() },
+        p2: { userId: s4.p2.toString() },
+        designatedSongId: s4.designatedSongId.toString(),
+        totalSongs: 4,
+        songs: []
+      }
+    });
+  } catch (err) {
+    console.error('决赛初始化失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.get('/stage4/state', async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne()
+      .populate('stage4.p1', 'username avatarUrl')
+      .populate('stage4.p2', 'username avatarUrl')
+      // P2-3
+      .populate('stage4.songPool', 'title basic_info.artist ds level')
+      .populate('stage4.designatedSongId', 'title basic_info.artist ds level')
+      .populate('stage4.songs.songId', 'title basic_info.artist');
+
+    if (!t || !t.stage4) return res.status(404).json({ msg: '决赛未初始化' });
+
+    const s4 = t.stage4;
+    let currentTurn = null;
+    if (s4.status === 'p1_pick') currentTurn = { phase: 'p1_pick', currentPicker: s4.p1?._id?.toString() };
+    else if (s4.status === 'p2_pick') currentTurn = { phase: 'p2_pick', currentPicker: s4.p2?._id?.toString() };
+
+    // P1-3: 统一序列化 userId
+    res.json({
+      msg: 'ok',
+      data: {
+        status: s4.status,
+        p1: s4.p1 ? { userId: String(s4.p1._id), username: s4.p1.username, avatarUrl: s4.p1.avatarUrl } : null,
+        p2: s4.p2 ? { userId: String(s4.p2._id), username: s4.p2.username, avatarUrl: s4.p2.avatarUrl } : null,
+        songPool: s4.songPool,
+        designatedSong: s4.designatedSongId,
+        songs: s4.songs,
+        currentTurn,
+        winner: s4.winner ? String(s4.winner._id || s4.winner) : null,
+        needTiebreak: s4.needTiebreak
+      }
+    });
+  } catch (err) {
+    console.error('获取决赛状态失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.post('/stage4/select-song', authMiddleware, async (req, res) => {
+  try {
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { songId } = req.body;
+    const result = await selectSong4(t, req.user.id, songId);
+
+    const lastSong = result.stage4.songs[result.stage4.songs.length - 1];
+    // P2-3
+    const songRef = await Song.findById(lastSong.songId).select('title basic_info.artist').lean();
+
+    res.json({
+      msg: '选曲完成',
+      data: {
+        song: songRef || { title: '???' },
+        pickType: lastSong.pickType,
+        nextStep: result.nextStep
+      }
+    });
+  } catch (err) {
+    console.error('决赛选曲失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/stage4/submit-score', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const result = await submitScore4(t, req.user.id, req.body);
+
+    res.json({ msg: '成绩已录入', data: { nextStep: result.nextStep } });
+  } catch (err) {
+    console.error('决赛成绩提交失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/stage4/advance', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const result = await advanceStage4(t);
+
+    if (result.nextStep === 'match_done') {
+      res.json({ msg: '决赛结束', data: result });
+    } else if (result.nextStep === 'random_pick') {
+      // P2-3
+      const song = await Song.findById(result.song?.songId).select('title basic_info.artist').lean();
+      res.json({
+        msg: '系统已抽取随机曲目',
+        data: { song, pickType: 'random', nextStep: 'waiting_play_result' }
+      });
+    } else if (result.nextStep === 'designated_pick') {
+      // P2-3
+      const song = await Song.findById(result.designatedSongId).select('title basic_info.artist').lean();
+      res.json({
+        msg: '课题曲阶段',
+        data: { song, pickType: 'designated', nextStep: 'waiting_play_result' }
+      });
+    } else {
+      res.json({ msg: '推进成功', data: result });
+    }
+  } catch (err) {
+    console.error('决赛推进失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+// ==========================================
+// 📡 SSE 实时推送
+// ==========================================
+
+router.get('/events', optionalAuth, async (req, res) => {
+  // P2-4: 根据用户角色分级订阅；已登录用户传角色，匿名用户仅接收公开事件
+  let role = 'anon';
+  if (req.user) {
+    try {
+      const u = await User.findById(req.user.id).select('role').lean();
+      if (u) role = u.role || 'user';
+    } catch { role = 'user'; }
+  }
+  const clientId = req.user ? req.user.id : `anon_${Date.now()}`;
+  const cleanup = addClient(clientId, res, role);
+  req.on('close', cleanup);
+});
+
+// ==========================================
+// 🔀 P1-2: /stage2/* 和 /stage3/* 别名 — 内部转发到 /race/*
+// 满足需求文档 API 约定，与前端 /race/* 均可使用
+// ==========================================
+['stage2', 'stage3'].forEach(stage => {
+  router.use(`/${stage}`, (req, _res, _next) => {
+    const origUrl = req.url;
+    req.url = '/race' + origUrl;
+    // router.handle 重新匹配 /race/* 路由
+    router.handle(req, _res, (err) => {
+      req.url = origUrl;
+      if (err) _next(err);
+    });
+  });
+});
+
+// ==========================================
+module.exports = router;

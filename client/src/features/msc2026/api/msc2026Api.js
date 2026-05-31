@@ -1,0 +1,135 @@
+// ============================================================
+// msc2026Api.js — MSC 2026 赛事 API 调用封装
+// 依据：琉璃 API 端点表 v1.0
+// ============================================================
+import axios from 'axios';
+
+const BASE = '/api/msc2026';
+
+const getToken = () => localStorage.getItem('token');
+const authHeaders = () => ({ Authorization: `Bearer ${getToken()}` });
+
+// ==================== 全局 ====================
+
+/** 获取赛事全局状态 */
+export const getStatus = () =>
+  axios.get(`${BASE}/status`);
+
+/** 获取赛事配置（管理员） */
+export const getConfig = () =>
+  axios.get(`${BASE}/config`, { headers: authHeaders() });
+
+/** 更新赛事配置（图池/课题曲） */
+export const updateConfig = (data) =>
+  axios.put(`${BASE}/config`, data, { headers: authHeaders() });
+
+/** 曲库搜索 */
+export const searchSongs = (q, limit = 30) =>
+  axios.get(`${BASE}/songs/search`, { params: { q, limit }, headers: authHeaders() });
+
+// ==================== 阶段一：12进6 ====================
+
+/** 初始化分组排位 */
+export const initStage1 = (data) =>
+  axios.post(`${BASE}/stage1/init`, data, { headers: authHeaders() });
+
+/** 获取阶段一完整状态 */
+export const getStage1State = () =>
+  axios.get(`${BASE}/stage1/state`);
+
+/** 获取单组详情 */
+export const getStage1Group = (groupId) =>
+  axios.get(`${BASE}/stage1/group/${groupId}`);
+
+/** 选手选曲 */
+export const selectStage1Song = (songId) =>
+  axios.post(`${BASE}/stage1/select-song`, { songId }, { headers: authHeaders() });
+
+/** 裁判提交成绩 */
+export const submitStage1Score = (data) =>
+  axios.post(`${BASE}/stage1/submit-score`, data, { headers: authHeaders() });
+
+/** 推进回合/阶段 */
+export const advanceStage1 = () =>
+  axios.post(`${BASE}/stage1/advance`, {}, { headers: authHeaders() });
+
+/** 标记弃权 */
+export const forfaitStage1 = (playerId) =>
+  axios.post(`${BASE}/stage1/forfait`, { playerId }, { headers: authHeaders() });
+
+// ==================== 跑图（阶段二 & 三） ====================
+
+/** 初始化跑图 */
+export const initRace = (data) =>
+  axios.post(`${BASE}/race/init`, data, { headers: authHeaders() });
+
+/** 获取跑图全量状态 */
+export const getRaceState = () =>
+  axios.get(`${BASE}/race/state`);
+
+/** 获取地图增量数据（适合轮询） */
+export const getRaceMap = () =>
+  axios.get(`${BASE}/race/map`);
+
+/** 选手回合行动 */
+export const raceAction = (data) =>
+  axios.post(`${BASE}/race/action`, data, { headers: authHeaders() });
+
+/** 使用道具（不占行动） */
+export const useRaceItem = (itemRef) =>
+  axios.post(`${BASE}/race/use-item`, { itemRef }, { headers: authHeaders() });
+
+/** 获取当前挑战详情 */
+export const getRaceChallenge = () =>
+  axios.get(`${BASE}/race/challenge`, { headers: authHeaders() });
+
+/** 裁判判定挑战结果 */
+export const submitChallengeResult = (passed) =>
+  axios.post(`${BASE}/race/challenge-result`, { passed }, { headers: authHeaders() });
+
+/** 裁判手动跳过回合 */
+export const skipTurnManual = () =>
+  axios.post(`${BASE}/race/skip-turn/manual`, {}, { headers: authHeaders() });
+
+/** 选手查看持有道具 */
+export const getMyRaceItems = () =>
+  axios.get(`${BASE}/race/my-items`, { headers: authHeaders() });
+
+/** 强制终止跑图 */
+export const terminateRace = () =>
+  axios.post(`${BASE}/race/terminate`, {}, { headers: authHeaders() });
+
+/** 获取挑战历史 */
+export const getChallengeHistory = () =>
+  axios.get(`${BASE}/race/challenge-history`);
+
+// ==================== 阶段四：决赛 ====================
+
+/** 初始化决赛 */
+export const initStage4 = (data) =>
+  axios.post(`${BASE}/stage4/init`, data, { headers: authHeaders() });
+
+/** 获取决赛状态 */
+export const getStage4State = () =>
+  axios.get(`${BASE}/stage4/state`);
+
+/** 选手选曲 */
+export const selectStage4Song = (songId) =>
+  axios.post(`${BASE}/stage4/select-song`, { songId }, { headers: authHeaders() });
+
+/** 裁判提交成绩 */
+export const submitStage4Score = (data) =>
+  axios.post(`${BASE}/stage4/submit-score`, data, { headers: authHeaders() });
+
+/** 推进回合/结束 */
+export const advanceStage4 = () =>
+  axios.post(`${BASE}/stage4/advance`, {}, { headers: authHeaders() });
+
+// ==================== SSE ====================
+
+/** 创建 SSE 连接（供组件中使用 EventSource） */
+export const createSSEUrl = (since) => {
+  let url = `${BASE}/events`;
+  if (since) url += `?since=${since}`;
+  return url;
+};
