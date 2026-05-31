@@ -184,9 +184,10 @@ function currentRace(tournament) {
 }
 
 /**
- * 选手行动
+ * 选手行动（裁判代理）
+ * @param {string} targetPlayerId - 目标选手 ID（裁判指定）
  */
-async function playerAction(tournament, userId, actionType, zoneIndex) {
+async function playerAction(tournament, targetPlayerId, actionType, zoneIndex) {
   const stageKey = tournament.status;
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
@@ -195,25 +196,27 @@ async function playerAction(tournament, userId, actionType, zoneIndex) {
   _checkMapTimeout(race);
   if (race.terminated) throw new Error('地图已终止');
 
-  // 查找当前选手
-  const player = race.players.find(p => p.userId.toString() === userId.toString());
+  const targetId = targetPlayerId.toString();
+
+  // 查找选手
+  const player = race.players.find(p => p.userId.toString() === targetId);
   if (!player) throw new Error('选手不在比赛中');
 
-  // 校验回合
+  // 校验回合：只能代当前回合选手操作
   const currentPlayer = race.players[race.currentPlayerIndex];
-  if (!currentPlayer || currentPlayer.userId.toString() !== userId.toString()) {
-    throw new Error('当前不是你的回合');
+  if (!currentPlayer || currentPlayer.userId.toString() !== targetId) {
+    throw new Error('当前不是该选手的回合');
   }
 
   if (player.currentLayer >= race.mapConfig.layers) {
-    throw new Error('你已经到达终点');
+    throw new Error('该选手已到达终点');
   }
 
   // 检查回合超时
   if (race.turnStartedAt) {
     const elapsed = Date.now() - new Date(race.turnStartedAt).getTime();
     if (elapsed > race.turnTimeLimitMs) {
-      await _skipTurn(tournament, race, 'skip_timeout', userId);
+      await _skipTurn(tournament, race, 'skip_timeout', targetPlayerId);
       throw new Error('回合已超时，已自动跳过');
     }
   }
@@ -221,12 +224,12 @@ async function playerAction(tournament, userId, actionType, zoneIndex) {
   // 处理静默
   if (player.silentUntilTurn != null && race.currentTurn <= player.silentUntilTurn) {
     await _advanceTurn(tournament, race, true);
-    throw new Error('你处于静默状态，回合已跳过');
+    throw new Error('该选手处于静默状态，回合已跳过');
   }
 
   // 处理行动
   if (actionType === 'advance') {
-    return await _handleAdvance(tournament, race, player, userId);
+    return await _handleAdvance(tournament, race, player, targetPlayerId);
   } else if (actionType === 'pickup') {
     return await _handlePickup(tournament, race, player, zoneIndex);
   } else {
@@ -235,21 +238,22 @@ async function playerAction(tournament, userId, actionType, zoneIndex) {
 }
 
 /**
- * 使用道具（不占行动）
+ * 使用道具（裁判代理，不占行动）
  */
-async function useItem(tournament, userId, itemRef) {
+async function useItem(tournament, targetPlayerId, itemRef) {
   const stageKey = tournament.status;
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
 
+  const targetId = targetPlayerId.toString();
   const player = race.players[race.currentPlayerIndex];
-  if (!player || player.userId.toString() !== userId.toString()) {
-    throw new Error('当前不是你的回合');
+  if (!player || player.userId.toString() !== targetId) {
+    throw new Error('当前不是该选手的回合');
   }
 
   // 检查禁用道具
   if (player.disableItemsUntilTurn != null && race.currentTurn <= player.disableItemsUntilTurn) {
-    throw new Error('你已被禁用道具');
+    throw new Error('该选手已被禁用道具');
   }
 
   // 查找未使用的道具（P1-5: 只能 status === 'unused' 的道具被使用）

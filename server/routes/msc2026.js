@@ -26,6 +26,12 @@ const { initRace, currentRace, playerAction, useItem, challengeResult, skipTurn,
 const { initStage4, selectSong: selectSong4, submitScore: submitScore4, advance: advanceStage4 } = require('../services/msc2026/stage4');
 const { addClient, broadcast } = require('../services/msc2026/ssePool');
 const { syncToOldTournament } = require('../services/msc2026/oldTournamentSync');
+const {
+  undoStage1LastSong, undoStage1LastScore, revertStage1Group, resetStage1,
+  undoRaceLastAction, undoRaceItemUse, undoRaceLastChallengeResult, resetRace,
+  undoStage4LastSong, undoStage4LastScore, resetStage4,
+  revertStage, resetAll
+} = require('../services/msc2026/rollback');
 const { getItem } = require('../services/msc2026/itemDefinitions');
 const { CHALLENGE_TASKS } = require('../services/msc2026/challengeDefinitions');
 const { getTaskById, getFallbackTask } = require('../services/msc2026/raceEngine');
@@ -678,8 +684,18 @@ router.post('/stage1/select-song', authMiddleware, async (req, res) => {
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { songId } = req.body;
-    const result = await selectSong(t, req.user.id, songId);
+    const { songId, playerId } = req.body;
+
+    // 代理操作：裁判指定目标选手；选手只能代自己
+    const role = req.user.role;
+    const targetPlayerId = (role === 'ADM' || role === 'TO' || role === 'CHM')
+      ? (playerId || req.user.id)
+      : req.user.id;
+    if ((role !== 'ADM' && role !== 'TO' && role !== 'CHM') && playerId && playerId !== req.user.id) {
+      return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+    }
+
+    const result = await selectSong(t, targetPlayerId, songId);
 
     // populate song info
     // P2-3
@@ -954,8 +970,17 @@ router.post('/race/action', authMiddleware, async (req, res) => {
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { actionType, zoneIndex } = req.body;
-    const result = await playerAction(t, req.user.id, actionType, zoneIndex);
+    const { actionType, zoneIndex, playerId } = req.body;
+
+    const role = req.user.role;
+    const targetPlayerId = (role === 'ADM' || role === 'TO' || role === 'CHM')
+      ? (playerId || req.user.id)
+      : req.user.id;
+    if ((role !== 'ADM' && role !== 'TO' && role !== 'CHM') && playerId && playerId !== req.user.id) {
+      return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+    }
+
+    const result = await playerAction(t, targetPlayerId, actionType, zoneIndex);
 
     res.json(result.action === 'advance' ? { msg: '进入挑战', data: result } : { msg: '拾取道具', data: result });
   } catch (err) {
@@ -969,8 +994,17 @@ router.post('/race/use-item', authMiddleware, async (req, res) => {
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { itemRef } = req.body;
-    const result = await useItem(t, req.user.id, itemRef);
+    const { itemRef, playerId } = req.body;
+
+    const role = req.user.role;
+    const targetPlayerId = (role === 'ADM' || role === 'TO' || role === 'CHM')
+      ? (playerId || req.user.id)
+      : req.user.id;
+    if ((role !== 'ADM' && role !== 'TO' && role !== 'CHM') && playerId && playerId !== req.user.id) {
+      return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+    }
+
+    const result = await useItem(t, targetPlayerId, itemRef);
 
     res.json({ msg: `已使用 ${result.name}`, data: result });
   } catch (err) {
@@ -1348,8 +1382,17 @@ router.post('/stage4/select-song', authMiddleware, async (req, res) => {
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { songId } = req.body;
-    const result = await selectSong4(t, req.user.id, songId);
+    const { songId, playerId } = req.body;
+
+    const role = req.user.role;
+    const targetPlayerId = (role === 'ADM' || role === 'TO' || role === 'CHM')
+      ? (playerId || req.user.id)
+      : req.user.id;
+    if ((role !== 'ADM' && role !== 'TO' && role !== 'CHM') && playerId && playerId !== req.user.id) {
+      return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+    }
+
+    const result = await selectSong4(t, targetPlayerId, songId);
 
     const lastSong = result.stage4.songs[result.stage4.songs.length - 1];
     // P2-3
@@ -1419,6 +1462,178 @@ router.post('/stage4/advance', authMiddleware, async (req, res) => {
     console.error('决赛推进失败:', err);
     res.status(400).json({ msg: err.message });
   }
+});
+
+// ==========================================
+// 🔙 回退端点（patch-02: 全链路可逆操作）
+// ==========================================
+
+const requireAdmin = async (req, res) => {
+  const perm = await checkPermission(req.user, null, 'admin');
+  if (!perm.allowed) { res.status(403).json({ msg: perm.msg }); return false; }
+  return true;
+};
+
+const loadAndCheck = async (req, res) => {
+  const ok = await requireAdmin(req, res);
+  if (!ok) return null;
+  return await requireTournament(res);
+};
+
+// ── 阶段一回退 ──
+
+router.post('/stage1/undo-last-song', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    undoStage1LastSong(t);
+    await t.save();
+    broadcast('score_updated', { stage: 'stage1', event: 'undo-last-song' });
+    res.json({ msg: '已撤销最后选曲' });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+router.post('/stage1/undo-last-score', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    const { player = 'both' } = req.body;
+    undoStage1LastScore(t, player);
+    await t.save();
+    broadcast('score_updated', { stage: 'stage1', event: 'undo-last-score', player });
+    res.json({ msg: '已撤销最后成绩' });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+router.post('/stage1/revert-group', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    const { groupId } = req.body;
+    revertStage1Group(t, Number(groupId));
+    await t.save();
+    broadcast('stage_advanced', { stage: 'stage1', event: 'revert-group', groupId });
+    res.json({ msg: `已回退到组 ${groupId}` });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+router.post('/stage1/reset', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    resetStage1(t);
+    await t.save();
+    t.operationLogs.push({ action: 'stage1_reset', stage: 'stage1', operatedBy: req.user.id, operatedAt: new Date() });
+    await t.save();
+    broadcast('stage_advanced', { stage: 'stage1', event: 'reset' });
+    res.json({ msg: '阶段一已重置' });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+// ── 跑图回退 ──
+
+router.post('/race/undo-last-action', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+    undoRaceLastAction(race);
+    await t.save();
+    broadcast('turn_change', { event: 'undo-last-action', turn: race.currentTurn });
+    res.json({ msg: '已撤销最后行动', data: { currentTurn: race.currentTurn } });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+router.post('/race/undo-item-use', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    const { itemRef } = req.body;
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+    undoRaceItemUse(race, Number(itemRef));
+    await t.save();
+    broadcast('item_used', { event: 'undo-item-use', itemRef });
+    res.json({ msg: `已撤销道具 ${itemRef} 的使用` });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+router.post('/race/revert-challenge', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+    undoRaceLastChallengeResult(race);
+    await t.save();
+    broadcast('challenge_resolved', { event: 'revert-challenge' });
+    res.json({ msg: '已翻转最后挑战判定' });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+router.post('/race/reset', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+    resetRace(race);
+    t.operationLogs.push({ action: 'race_reset', stage: t.status, operatedBy: req.user.id, operatedAt: new Date() });
+    await t.save();
+    broadcast('map_timeout', { event: 'reset' });
+    res.json({ msg: '跑图已重置' });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+// ── 决赛回退 ──
+
+router.post('/stage4/undo-last-song', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    undoStage4LastSong(t);
+    await t.save();
+    broadcast('score_updated', { stage: 'stage4', event: 'undo-last-song' });
+    res.json({ msg: '已撤销决赛最后选曲' });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+router.post('/stage4/undo-last-score', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    const { player = 'both' } = req.body;
+    undoStage4LastScore(t, player);
+    await t.save();
+    broadcast('score_updated', { stage: 'stage4', event: 'undo-last-score', player });
+    res.json({ msg: '已撤销决赛最后成绩' });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+router.post('/stage4/reset', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    resetStage4(t);
+    t.operationLogs.push({ action: 'stage4_reset', stage: 'stage4', operatedBy: req.user.id, operatedAt: new Date() });
+    await t.save();
+    broadcast('stage_advanced', { stage: 'stage4', event: 'reset' });
+    res.json({ msg: '决赛已重置' });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+// ── 全局回退 ──
+
+router.post('/revert-stage', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    await revertStage(t);
+    t.operationLogs.push({ action: 'revert_stage', stage: t.status, operatedBy: req.user.id, operatedAt: new Date() });
+    await t.save();
+    broadcast('stage_advanced', { from: 'rolled_back', to: t.status });
+    res.json({ msg: `已回退到 ${t.status}` });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
+});
+
+router.post('/reset', authMiddleware, async (req, res) => {
+  try {
+    const t = await loadAndCheck(req, res); if (!t) return;
+    await resetAll(t);
+    t.operationLogs.push({ action: 'full_reset', operatedBy: req.user.id, operatedAt: new Date() });
+    await t.save();
+    broadcast('stage_advanced', { from: 'reset', to: 'pending' });
+    res.json({ msg: '赛事已完全重置' });
+  } catch (err) { res.status(400).json({ msg: err.message }); }
 });
 
 // ==========================================

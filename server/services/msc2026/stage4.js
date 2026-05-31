@@ -62,14 +62,14 @@ async function initStage4(tournament, playerIds, songPoolIds, designatedSongId) 
 /**
  * 选手选曲
  */
-async function selectSong(tournament, userId, songId) {
+async function selectSong(tournament, targetPlayerId, songId) {
   const s4 = tournament.stage4;
   if (!s4) throw new Error('决赛未初始化');
 
-  const userIdStr = userId.toString();
+  const targetId = targetPlayerId.toString();
 
   if (s4.status === 'p1_pick') {
-    if (s4.p1.toString() !== userIdStr) throw new Error('当前是 P1 的选曲回合');
+    if (s4.p1.toString() !== targetId) throw new Error('指定的 playerId 不是本轮 P1');
     if (!s4.songPool.some(s => s.toString() === songId.toString())) {
       throw new Error('该曲目不在图池中');
     }
@@ -80,14 +80,14 @@ async function selectSong(tournament, userId, songId) {
     s4.songs.push({
       songId,
       pickType: 'p1_pick',
-      pickedBy: userId,
+      pickedBy: targetPlayerId,
       p1Score: null,
       p2Score: null,
       order: s4.songs.length
     });
     s4.status = 'playing';
   } else if (s4.status === 'p2_pick') {
-    if (s4.p2.toString() !== userIdStr) throw new Error('当前是 P2 的选曲回合');
+    if (s4.p2.toString() !== targetId) throw new Error('指定的 playerId 不是本轮 P2');
     if (!s4.songPool.some(s => s.toString() === songId.toString())) {
       throw new Error('该曲目不在图池中');
     }
@@ -98,7 +98,7 @@ async function selectSong(tournament, userId, songId) {
     s4.songs.push({
       songId,
       pickType: 'p2_pick',
-      pickedBy: userId,
+      pickedBy: targetPlayerId,
       p1Score: null,
       p2Score: null,
       order: s4.songs.length

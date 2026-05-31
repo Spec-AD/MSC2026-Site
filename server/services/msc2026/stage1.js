@@ -89,9 +89,12 @@ async function startFirstGroup(tournament) {
 }
 
 /**
- * 选手选曲
+ * 选手选曲（裁判代理）
+ * @param {object} tournament
+ * @param {string} targetPlayerId - 目标选手 ID（由裁判 body.playerId 传入）
+ * @param {string} songId
  */
-async function selectSong(tournament, userId, songId) {
+async function selectSong(tournament, targetPlayerId, songId) {
   const stage1 = tournament.stage1;
   if (stage1.status !== 'playing') {
     throw new Error('当前不在比赛阶段');
@@ -100,11 +103,11 @@ async function selectSong(tournament, userId, songId) {
   const group = stage1.groups[stage1.currentGroupIndex];
   if (!group) throw new Error('无效的组索引');
 
-  const userIdStr = userId.toString();
+  const targetId = targetPlayerId.toString();
 
-  // 确定当前选曲阶段和选曲者
+  // 确定当前选曲阶段和选曲者（业务校验，不限操作者身份）
   if (group.status === 'p1_pick') {
-    if (group.p1.toString() !== userIdStr) throw new Error('当前是 P1 的选曲回合');
+    if (group.p1.toString() !== targetId) throw new Error('指定的 playerId 不是本轮 P1');
     // 校验曲目在图池中且未在当前组被选过
     if (!stage1.songPool.some(s => s.toString() === songId.toString())) {
       throw new Error('该曲目不在图池中');
@@ -116,14 +119,14 @@ async function selectSong(tournament, userId, songId) {
     group.songs.push({
       songId,
       pickType: 'p1_pick',
-      pickedBy: userId,
+      pickedBy: targetPlayerId,
       p1Score: null,
       p2Score: null,
       order: group.songs.length
     });
     group.status = 'playing';
   } else if (group.status === 'p2_pick') {
-    if (group.p2.toString() !== userIdStr) throw new Error('当前是 P2 的选曲回合');
+    if (group.p2.toString() !== targetId) throw new Error('指定的 playerId 不是本轮 P2');
     if (!stage1.songPool.some(s => s.toString() === songId.toString())) {
       throw new Error('该曲目不在图池中');
     }
@@ -134,7 +137,7 @@ async function selectSong(tournament, userId, songId) {
     group.songs.push({
       songId,
       pickType: 'p2_pick',
-      pickedBy: userId,
+      pickedBy: targetPlayerId,
       p1Score: null,
       p2Score: null,
       order: group.songs.length
