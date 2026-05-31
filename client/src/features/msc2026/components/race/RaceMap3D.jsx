@@ -441,7 +441,7 @@ export default function RaceMap3D({
         {/* 道具 */}
         {itemsOnMap?.map((item, i) => (
           <ItemCrystal
-            key={i}
+            key={`${item.itemRef}-${item.zoneIndex}`}
             item={item}
             outerVertices={outerVertices}
             sectorCount={sectorCount}

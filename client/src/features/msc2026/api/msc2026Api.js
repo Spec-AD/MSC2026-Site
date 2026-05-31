@@ -141,3 +141,73 @@ export const createSSEUrl = (since) => {
   if (since) url += `?since=${since}`;
   return url;
 };
+
+// ==================== 旧赛事数据 ====================
+
+/** 获取旧赛事报名列表 + 预选赛成绩 */
+export const getOldRegistrations = () =>
+  axios.get(`${BASE}/old/registrations`, { headers: authHeaders() });
+
+/** 获取预选赛排名 */
+export const getQualifierRankings = () =>
+  axios.get(`${BASE}/old/qualifier-rankings`, { headers: authHeaders() });
+
+// ==================== 新初始化方式 ====================
+
+/** 从预选赛自动初始化阶段一 */
+export const initStage1FromQualifier = (data) =>
+  axios.post(`${BASE}/stage1/init-from-qualifier`, data, { headers: authHeaders() });
+
+// ==================== 撤销操作（全部 admin） ====================
+
+/** 撤销阶段一最后选曲 */
+export const undoStage1LastSong = () =>
+  axios.post(`${BASE}/stage1/undo-last-song`, {}, { headers: authHeaders() });
+
+/** 撤销阶段一最后成绩 */
+export const undoStage1LastScore = (player) =>
+  axios.post(`${BASE}/stage1/undo-last-score`, { player: player || 'both' }, { headers: authHeaders() });
+
+/** 回退阶段一到指定组 */
+export const revertStage1Group = (groupId) =>
+  axios.post(`${BASE}/stage1/revert-group`, { groupId }, { headers: authHeaders() });
+
+/** 重置阶段一 */
+export const resetStage1 = () =>
+  axios.post(`${BASE}/stage1/reset`, {}, { headers: authHeaders() });
+
+/** 撤销最后跑图行动 */
+export const undoRaceLastAction = () =>
+  axios.post(`${BASE}/race/undo-last-action`, {}, { headers: authHeaders() });
+
+/** 撤销道具使用 */
+export const undoRaceItemUse = (itemRef) =>
+  axios.post(`${BASE}/race/undo-item-use`, { itemRef }, { headers: authHeaders() });
+
+/** 翻转挑战判定 */
+export const revertChallengeResult = () =>
+  axios.post(`${BASE}/race/revert-challenge`, {}, { headers: authHeaders() });
+
+/** 重置跑图 */
+export const resetRace = () =>
+  axios.post(`${BASE}/race/reset`, {}, { headers: authHeaders() });
+
+/** 撤销决赛选曲 */
+export const undoStage4LastSong = () =>
+  axios.post(`${BASE}/stage4/undo-last-song`, {}, { headers: authHeaders() });
+
+/** 撤销决赛成绩 */
+export const undoStage4LastScore = (player) =>
+  axios.post(`${BASE}/stage4/undo-last-score`, { player: player || 'both' }, { headers: authHeaders() });
+
+/** 重置决赛 */
+export const resetStage4 = () =>
+  axios.post(`${BASE}/stage4/reset`, {}, { headers: authHeaders() });
+
+/** 全局回退阶段 */
+export const revertStage = () =>
+  axios.post(`${BASE}/revert-stage`, {}, { headers: authHeaders() });
+
+/** 完全重置 */
+export const resetAll = () =>
+  axios.post(`${BASE}/reset`, {}, { headers: authHeaders() });

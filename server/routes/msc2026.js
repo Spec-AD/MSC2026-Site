@@ -685,14 +685,22 @@ router.post('/stage1/select-song', authMiddleware, async (req, res) => {
     if (!t) return;
 
     const { songId, playerId } = req.body;
-
-    // 代理操作：裁判指定目标选手；选手只能代自己
     const role = req.user.role;
-    const targetPlayerId = (role === 'ADM' || role === 'TO' || role === 'CHM')
-      ? (playerId || req.user.id)
-      : req.user.id;
-    if ((role !== 'ADM' && role !== 'TO' && role !== 'CHM') && playerId && playerId !== req.user.id) {
-      return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+    const isReferee = role === 'ADM' || role === 'TO' || role === 'CHM';
+
+    // 裁判无 playerId 时自动从当前回合推断目标选手
+    let targetPlayerId;
+    if (isReferee && playerId) {
+      targetPlayerId = playerId;
+    } else if (isReferee) {
+      const group = t.stage1?.groups?.[t.stage1.currentGroupIndex];
+      if (group?.status === 'p1_pick') targetPlayerId = String(group.p1);
+      else if (group?.status === 'p2_pick') targetPlayerId = String(group.p2);
+      else return res.status(400).json({ msg: '当前不是选曲阶段，请手动指定 playerId' });
+    } else {
+      // 普通用户只能操作自己
+      if (playerId && playerId !== req.user.id) return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+      targetPlayerId = req.user.id;
     }
 
     const result = await selectSong(t, targetPlayerId, songId);
@@ -971,13 +979,22 @@ router.post('/race/action', authMiddleware, async (req, res) => {
     if (!t) return;
 
     const { actionType, zoneIndex, playerId } = req.body;
-
     const role = req.user.role;
-    const targetPlayerId = (role === 'ADM' || role === 'TO' || role === 'CHM')
-      ? (playerId || req.user.id)
-      : req.user.id;
-    if ((role !== 'ADM' && role !== 'TO' && role !== 'CHM') && playerId && playerId !== req.user.id) {
-      return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+    const isReferee = role === 'ADM' || role === 'TO' || role === 'CHM';
+
+    // 裁判无 playerId 时自动取当前回合选手
+    let targetPlayerId;
+    if (isReferee && playerId) {
+      targetPlayerId = playerId;
+    } else if (isReferee) {
+      const race = currentRace(t);
+      if (!race) return res.status(400).json({ msg: '不在跑图阶段' });
+      const cp = race.players[race.currentPlayerIndex];
+      if (!cp) return res.status(400).json({ msg: '无当前选手' });
+      targetPlayerId = String(cp.userId?._id || cp.userId);
+    } else {
+      if (playerId && playerId !== req.user.id) return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+      targetPlayerId = req.user.id;
     }
 
     const result = await playerAction(t, targetPlayerId, actionType, zoneIndex);
@@ -995,13 +1012,21 @@ router.post('/race/use-item', authMiddleware, async (req, res) => {
     if (!t) return;
 
     const { itemRef, playerId } = req.body;
-
     const role = req.user.role;
-    const targetPlayerId = (role === 'ADM' || role === 'TO' || role === 'CHM')
-      ? (playerId || req.user.id)
-      : req.user.id;
-    if ((role !== 'ADM' && role !== 'TO' && role !== 'CHM') && playerId && playerId !== req.user.id) {
-      return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+    const isReferee = role === 'ADM' || role === 'TO' || role === 'CHM';
+
+    let targetPlayerId;
+    if (isReferee && playerId) {
+      targetPlayerId = playerId;
+    } else if (isReferee) {
+      const race = currentRace(t);
+      if (!race) return res.status(400).json({ msg: '不在跑图阶段' });
+      const cp = race.players[race.currentPlayerIndex];
+      if (!cp) return res.status(400).json({ msg: '无当前选手' });
+      targetPlayerId = String(cp.userId?._id || cp.userId);
+    } else {
+      if (playerId && playerId !== req.user.id) return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+      targetPlayerId = req.user.id;
     }
 
     const result = await useItem(t, targetPlayerId, itemRef);
@@ -1383,13 +1408,20 @@ router.post('/stage4/select-song', authMiddleware, async (req, res) => {
     if (!t) return;
 
     const { songId, playerId } = req.body;
-
     const role = req.user.role;
-    const targetPlayerId = (role === 'ADM' || role === 'TO' || role === 'CHM')
-      ? (playerId || req.user.id)
-      : req.user.id;
-    if ((role !== 'ADM' && role !== 'TO' && role !== 'CHM') && playerId && playerId !== req.user.id) {
-      return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+    const isReferee = role === 'ADM' || role === 'TO' || role === 'CHM';
+
+    let targetPlayerId;
+    if (isReferee && playerId) {
+      targetPlayerId = playerId;
+    } else if (isReferee) {
+      const s4 = t.stage4;
+      if (s4?.status === 'p1_pick') targetPlayerId = String(s4.p1);
+      else if (s4?.status === 'p2_pick') targetPlayerId = String(s4.p2);
+      else return res.status(400).json({ msg: '当前不是选曲阶段，请手动指定 playerId' });
+    } else {
+      if (playerId && playerId !== req.user.id) return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
+      targetPlayerId = req.user.id;
     }
 
     const result = await selectSong4(t, targetPlayerId, songId);
