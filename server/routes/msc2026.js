@@ -115,7 +115,7 @@ router.put('/config', authMiddleware, async (req, res) => {
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { poolType, songPoolIds, designatedSongId } = req.body;
+    const { poolType, songPoolIds, designatedSongId, playerIds } = req.body;
 
     if (poolType === 'stage1') {
       t.stage1SongPool = songPoolIds;
@@ -123,12 +123,111 @@ router.put('/config', authMiddleware, async (req, res) => {
       if (!t.stage4) t.stage4 = {};
       t.stage4.songPool = songPoolIds;
       if (designatedSongId) t.stage4.designatedSongId = designatedSongId;
+    } else if (poolType === 'players') {
+      // patch-02: 管理员录入注册选手
+      t.registeredPlayers = playerIds;
     }
 
     await t.save();
-    res.json({ msg: '配置已更新', data: { count: songPoolIds?.length || 0 } });
+    res.json({ msg: '配置已更新', data: { count: (songPoolIds || playerIds)?.length || 0 } });
   } catch (err) {
     console.error('更新配置失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+// ── 选手列表（patch-02） ──
+router.get('/players', async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne()
+      .populate('registeredPlayers', 'username avatarUrl')
+      .populate('stage1.groups.p1', 'username avatarUrl')
+      .populate('stage1.groups.p2', 'username avatarUrl')
+      .populate('stage1.groups.winner', 'username avatarUrl')
+      .populate('stage2.players.userId', 'username avatarUrl')
+      .populate('stage3.players.userId', 'username avatarUrl')
+      .populate('stage4.p1', 'username avatarUrl')
+      .populate('stage4.p2', 'username avatarUrl')
+      .populate('stage4.winner', 'username avatarUrl')
+      .populate('qualifiedStage1', 'username avatarUrl')
+      .populate('qualifiedStage2', 'username avatarUrl')
+      .populate('qualifiedStage3', 'username avatarUrl');
+
+    if (!t) return res.status(404).json({ msg: '赛事不存在' });
+
+    // 收集选手：优先从当前阶段取，fallback 到 registeredPlayers
+    const playerSet = new Map();
+
+    const addPlayer = (p) => {
+      if (!p) return;
+      const id = String(p._id || p);
+      if (!playerSet.has(id)) {
+        playerSet.set(id, {
+          userId: id,
+          username: p.username || null,
+          avatarUrl: p.avatarUrl || null
+        });
+      }
+    };
+
+    // 从各阶段收集选手
+    if (t.stage1?.groups) {
+      t.stage1.groups.forEach(g => { addPlayer(g.p1); addPlayer(g.p2); });
+    }
+    if (t.stage2?.players) {
+      t.stage2.players.forEach(p => addPlayer(p.userId));
+    }
+    if (t.stage3?.players) {
+      t.stage3.players.forEach(p => addPlayer(p.userId));
+    }
+    if (t.stage4) {
+      addPlayer(t.stage4.p1);
+      addPlayer(t.stage4.p2);
+    }
+
+    // 晋级列表
+    (t.qualifiedStage1 || []).forEach(addPlayer);
+    (t.qualifiedStage2 || []).forEach(addPlayer);
+    (t.qualifiedStage3 || []).forEach(addPlayer);
+
+    // registeredPlayers 作为兜底（pending 阶段全靠这个）
+    (t.registeredPlayers || []).forEach(addPlayer);
+
+    const players = Array.from(playerSet.values());
+
+    // 附加各阶段状态
+    const stage2PlayerIds = new Set((t.stage2?.players || []).map(p => String(p.userId?._id || p.userId)));
+    const stage3PlayerIds = new Set((t.stage3?.players || []).map(p => String(p.userId?._id || p.userId)));
+    const finishedIds = new Set((t.stage2?.finishOrder || []).map(f => String(f.userId?._id || f.userId)));
+    const q1Ids = new Set((t.qualifiedStage1 || []).map(id => String(id._id || id)));
+    const q2Ids = new Set((t.qualifiedStage2 || []).map(id => String(id._id || id)));
+    const q3Ids = new Set((t.qualifiedStage3 || []).map(id => String(id._id || id)));
+
+    players.forEach(p => {
+      p.inStage1 = t.stage1?.groups?.some(g =>
+        String(g.p1?._id || g.p1) === p.userId || String(g.p2?._id || g.p2) === p.userId
+      ) || false;
+      p.inStage2 = stage2PlayerIds.has(p.userId);
+      p.inStage3 = stage3PlayerIds.has(p.userId);
+      p.inStage4 = t.stage4 && (
+        String(t.stage4.p1?._id || t.stage4.p1) === p.userId ||
+        String(t.stage4.p2?._id || t.stage4.p2) === p.userId
+      );
+      p.isQualifiedStage1 = q1Ids.has(p.userId);
+      p.isQualifiedStage2 = q2Ids.has(p.userId);
+      p.isQualifiedStage3 = q3Ids.has(p.userId);
+      p.isFinished = finishedIds.has(p.userId);
+    });
+
+    res.json({
+      msg: 'ok',
+      data: {
+        total: players.length,
+        players
+      }
+    });
+  } catch (err) {
+    console.error('获取选手列表失败:', err);
     res.status(500).json({ msg: '服务器错误' });
   }
 });

@@ -175,6 +175,8 @@ const MSC2026TournamentSchema = new Schema({
 
   // 全局配置
   stage1SongPool: [{ type: Schema.Types.ObjectId, ref: 'Song' }],
+  // patch-02: 管理员录入的注册选手列表（供 GET /players 返回）
+  registeredPlayers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 
   // 阶段一
   stage1: {

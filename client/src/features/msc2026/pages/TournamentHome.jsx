@@ -5,17 +5,20 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useMSC2026Store } from '../store';
+import PlayerList from '../components/PlayerList';
+import AdminPanel from '../components/admin/AdminPanel';
 import { STAGE_CONFIG } from '../constants/gameData';
 import { FaArrowRight, FaTrophy } from 'react-icons/fa';
 
 const STAGE_PHASES = ['stage1', 'stage2', 'stage3', 'stage4'];
 
 export default function TournamentHome() {
-  const { status, summary, fetchStatus } = useMSC2026Store();
+  const { status, summary, players, fetchStatus, fetchPlayers } = useMSC2026Store();
 
   useEffect(() => {
     fetchStatus().catch(() => {});
-  }, [fetchStatus]);
+    fetchPlayers().catch(() => {});
+  }, [fetchStatus, fetchPlayers]);
 
   const currentIdx = STAGE_PHASES.indexOf(status);
 
@@ -87,6 +90,16 @@ export default function TournamentHome() {
           })}
         </div>
       </div>
+
+      {/* 选手名单 */}
+      <PlayerList
+        players={players}
+        status={status}
+        winner={summary?.stage4?.winner || null}
+      />
+
+      {/* 管理员面板 */}
+      <AdminPanel />
 
       {/* 状态卡片（如果有数据） */}
       {summary && (

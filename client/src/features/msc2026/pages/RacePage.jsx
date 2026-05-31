@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRaceStore } from '../store';
 import { useMSCSSE } from '../hooks/useSSE';
 import { STAGE_CONFIG, getItemDef } from '../constants/gameData';
-import PolygonMap from '../components/race/PolygonMap';
+import RaceMap3D from '../components/race/RaceMap3D';
 import ChallengeCard from '../components/race/ChallengeCard';
 import ItemCard from '../components/race/ItemCard';
 import { FaPlay, FaSync, FaClock } from 'react-icons/fa';
@@ -131,7 +131,7 @@ export default function RacePage({ stage }) {
         </div>
 
         <div className="relative">
-          <PolygonMap
+          <RaceMap3D
             config={race.mapConfig}
             players={race.players}
             itemsOnMap={race.itemsOnMap}

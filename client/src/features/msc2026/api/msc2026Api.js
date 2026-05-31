@@ -27,6 +27,10 @@ export const updateConfig = (data) =>
 export const searchSongs = (q, limit = 30) =>
   axios.get(`${BASE}/songs/search`, { params: { q, limit }, headers: authHeaders() });
 
+/** 获取赛事选手列表 */
+export const getPlayers = () =>
+  axios.get(`${BASE}/players`);
+
 // ==================== 阶段一：12进6 ====================
 
 /** 初始化分组排位 */
@@ -98,6 +102,10 @@ export const getMyRaceItems = () =>
 /** 强制终止跑图 */
 export const terminateRace = () =>
   axios.post(`${BASE}/race/terminate`, {}, { headers: authHeaders() });
+
+/** 阶段二推进到阶段三 */
+export const advanceToStage3 = (data) =>
+  axios.post(`${BASE}/stage2/advance-to-stage3`, data, { headers: authHeaders() });
 
 /** 获取挑战历史 */
 export const getChallengeHistory = () =>

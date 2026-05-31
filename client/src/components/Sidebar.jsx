@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   FaHome, FaTrophy, FaUserCircle, FaSearch, FaSpinner, FaTimes, 
-  FaCompactDisc, FaBook, FaCrown
+  FaCompactDisc, FaBook, FaCrown, FaFlag
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -24,6 +24,7 @@ const Sidebar = () => {
   const navItems = [
     { path: '/', icon: <FaHome />, label: '枢纽' },
     { path: '/tournaments', icon: <FaTrophy />, label: '赛事' },
+    { path: '/matches/msc2026', icon: <FaFlag />, label: 'MSC' },
     { path: '/leaderboard', icon: <FaCrown />, label: '排行' },
     { path: '/songs', icon: <FaCompactDisc />, label: '曲目' },
     { path: '/wiki', icon: <FaBook />, label: '维基' },
@@ -86,7 +87,9 @@ const Sidebar = () => {
           
           {/* 渲染基础页面导航 */}
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = item.path === '/matches/msc2026'
+              ? location.pathname.startsWith('/matches/msc2026')
+              : location.pathname === item.path;
             return (
               <Link 
                 key={item.path} 

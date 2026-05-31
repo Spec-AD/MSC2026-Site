@@ -45,6 +45,10 @@ export const useMSC2026Store = create((set, get) => ({
     stage4: null,
   },
 
+  // ---- 选手 ----
+  players: [],
+  playersLoading: false,
+
   // ==================== 全局 Actions ====================
 
   /** 拉取赛事全局状态 */
@@ -209,6 +213,20 @@ export const useMSC2026Store = create((set, get) => ({
 
   // ==================== 工具 ====================
 
+  /** 获取赛事选手列表 */
+  fetchPlayers: async () => {
+    set({ playersLoading: true });
+    try {
+      const res = await api.getPlayers();
+      set({ players: res.data.data?.players || [], playersLoading: false });
+      return res.data.data;
+    } catch (err) {
+      console.error('[MSC2026] fetchPlayers failed', err);
+      set({ playersLoading: false });
+      throw err;
+    }
+  },
+
   /** 清除错误 */
   clearError: () => set({ error: null }),
 
@@ -218,6 +236,7 @@ export const useMSC2026Store = create((set, get) => ({
       status: 'pending',
       loading: false,
       error: null,
+      players: [],
       stage1: { status: 'pending', totalGroups: 6, completedGroups: 0, currentGroupIndex: -1, songPool: [], groups: [], currentTurn: null, loading: false },
       stage4: { status: 'pending', p1: null, p2: null, songPool: [], designatedSong: null, songs: [], currentTurn: null, winner: null, loading: false },
     }),
