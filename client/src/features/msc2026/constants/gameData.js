@@ -314,8 +314,8 @@ export const getItemDef = (itemRef) => ALL_ITEMS[itemRef] || null;
 
 export const STAGE_CONFIG = {
   stage1: { label: '12进6', desc: '淘汰赛', icon: '⚔️' },
-  stage2: { label: '6进4', desc: '跑图 · 六边形', icon: '⬡', mapShape: 'hexagon', layers: 3, wallLabels: ['密锁之墙', '准锁之墙'], totalTimeMs: 50 * 60 * 1000, turnTimeMs: 45 * 1000, playerCount: 6 },
-  stage3: { label: '4进2', desc: '跑图 · 正方形', icon: '⬜', mapShape: 'square', layers: 2, wallLabels: ['叹息之墙'], totalTimeMs: 30 * 60 * 1000, turnTimeMs: 45 * 1000, playerCount: 4 },
+  stage2: { label: '6进4', desc: '跑图 · 六边形', icon: '⬡', mapShape: 'hexagon', layers: 3, wallLabels: ['密锁之墙', '准锁之墙'], totalTimeMs: 45 * 60 * 1000, turnTimeMs: 45 * 1000, playerCount: 6 },
+  stage3: { label: '4进2', desc: '跑图 · 正方形', icon: '⬜', mapShape: 'square', layers: 2, wallLabels: ['叹息之墙'], totalTimeMs: 25 * 60 * 1000, turnTimeMs: 45 * 1000, playerCount: 4 },
   stage4: { label: '决赛', desc: '2进1', icon: '👑' },
 };
 

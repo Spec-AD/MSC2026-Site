@@ -1,5 +1,6 @@
 // ============================================================
 // RacePage.jsx — 跑图阶段页面（阶段二 & 三 共用）
+// 布局：顶部「小标签·大数字」数据条 + 中央 3D 地图 + 右侧榜单
 // ============================================================
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,9 +8,10 @@ import { useRaceStore } from '../store';
 import { useMSCSSE } from '../hooks/useSSE';
 import { STAGE_CONFIG, getItemDef } from '../constants/gameData';
 import RaceMap3D from '../components/race/RaceMap3D';
+import RaceStatBar from '../components/race/RaceStatBar';
 import ChallengeCard from '../components/race/ChallengeCard';
 import ItemCard from '../components/race/ItemCard';
-import { FaPlay, FaSync, FaClock } from 'react-icons/fa';
+import { FaPlay, FaSync } from 'react-icons/fa';
 import { HiOutlineCube } from 'react-icons/hi';
 
 /** 倒计时格式化 */
@@ -117,119 +119,181 @@ export default function RacePage({ stage }) {
   }, [race.players, race.currentPlayerId, config.mapShape]);
 
   const currentPlayer = race.players?.find((p) => (p._id || p.userId) === race.currentPlayerId);
+  const effectiveMapConfig = useMemo(() => ({
+    shape: race.mapConfig?.shape || config.mapShape || 'hexagon',
+    layers: race.mapConfig?.layers || config.layers || 3,
+    wallLabels: race.mapConfig?.wallLabels || config.wallLabels || [],
+  }), [race.mapConfig, config.mapShape, config.layers, config.wallLabels]);
+
+  // 派生统计
+  const advanceCount = stage === 'stage2' ? 4 : stage === 'stage3' ? 2 : 0;
+  const finishedCount = race.players?.filter((p) => p.finishOrder != null).length || 0;
+  // 榜单排序：已完成按名次，未完成按层数
+  const ranked = useMemo(() => {
+    const arr = [...(race.players || [])];
+    arr.sort((a, b) => {
+      if (a.finishOrder != null && b.finishOrder != null) return a.finishOrder - b.finishOrder;
+      if (a.finishOrder != null) return -1;
+      if (b.finishOrder != null) return 1;
+      return (b.currentLayer || 0) - (a.currentLayer || 0);
+    });
+    return arr;
+  }, [race.players]);
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
-      {/* 地图区 */}
-      <div className="flex-1 flex flex-col items-center">
-        {/* 总时间倒计时 */}
-        <div className={`text-lg font-mono font-bold mb-2 ${
-          (race.totalRemainingMs != null && race.totalRemainingMs < 300000) ? 'text-red-400 animate-pulse' : 'text-zinc-300'
-        }`}>
-          <FaClock className="inline text-xs mr-1.5 -mt-0.5" />
-          {fmtMs(race.totalRemainingMs)}
-        </div>
+    <div className="flex flex-col gap-5 md:gap-6">
+      {/* 顶部数据条 */}
+      <RaceStatBar
+        totalRemainingMs={race.totalRemainingMs}
+        turnRemainingMs={race.turnRemainingMs}
+        currentTurn={race.currentTurn}
+        finishedCount={finishedCount}
+        advanceCount={advanceCount}
+        playerCount={race.players?.length || 0}
+        stageLabel={config.label || ''}
+      />
 
-        <div className="relative">
-          <RaceMap3D
-            config={race.mapConfig}
-            players={race.players}
-            itemsOnMap={race.itemsOnMap}
-            wallsBroken={race.wallsBroken}
-            activePlayerId={race.currentPlayerId}
-            highlightSectors={adjacentSectors}
-            onSectorClick={handlePickup}
-            width={520}
-            height={520}
-          />
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_430px] gap-5 md:gap-6">
+        {/* 地图区 */}
+        <div className="min-w-0 flex flex-col">
+          <div className="relative h-[min(70vh,900px)] min-h-[620px] 2xl:min-h-[720px]">
+            <RaceMap3D
+              config={effectiveMapConfig}
+              players={race.players}
+              itemsOnMap={race.itemsOnMap}
+              wallsBroken={race.wallsBroken}
+              activePlayerId={race.currentPlayerId}
+              highlightSectors={adjacentSectors}
+              onSectorClick={handlePickup}
+              width="100%"
+              height="100%"
+            />
 
-          {/* 回合倒计时覆盖在行动选手旁 */}
-          {currentPlayer && race.turnRemainingMs != null && (
-            <div className={`absolute top-4 right-4 px-3 py-1.5 rounded-full font-mono text-sm font-bold border
-              ${race.turnRemainingMs < 10000
-                ? 'bg-red-500/20 border-red-500/30 text-red-400 animate-pulse'
-                : 'bg-zinc-800/80 border-white/10 text-zinc-300'
-              }`}>
-              ⏱ {fmtMs(race.turnRemainingMs)}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 右侧面板 */}
-      <div className="w-full lg:w-72 space-y-3">
-        {/* 选手排名 */}
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4">
-          <h3 className="text-xs text-zinc-500 uppercase tracking-wider mb-3">选手</h3>
-          <div className="space-y-1.5">
-            {race.players?.map((p) => {
-              const isActive = (p._id || p.userId) === race.currentPlayerId;
-              return (
-                <div
-                  key={p._id || p.userId}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-all
-                    ${isActive ? 'bg-amber-500/10 border border-amber-500/20' : 'border border-transparent'}
-                    ${p.status === 'finished' ? 'bg-green-500/5 border-green-500/20' : ''}`}
-                >
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold
-                    ${p.finishOrder ? 'bg-green-500/20 text-green-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                    {p.finishOrder || '-'}
-                  </span>
-                  <span className="flex-1 truncate text-white text-xs">{p.username}</span>
-                  <span className="text-zinc-600 text-[10px]">L{p.currentLayer}</span>
-                  {p.itemCount > 0 && (
-                    <span className="text-blue-400 text-[10px]">{p.itemCount}🎒</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 行动日志 */}
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4 max-h-48 overflow-y-auto">
-          <h3 className="text-xs text-zinc-500 uppercase tracking-wider mb-2">行动日志</h3>
-          <div className="space-y-1">
-            {race.actionLog?.slice(-8).map((log, i) => (
-              <div key={i} className="text-[10px] text-zinc-500 leading-relaxed">
-                <span className="text-zinc-600">#{log.turn}</span>{' '}
-                {log.actionType === 'advance' && '⚔️ 挑战墙壁'}
-                {log.actionType === 'pickup' && '🎒 拾取道具'}
-                {log.actionType === 'use_item' && '✨ 使用道具'}
-                {log.actionType === 'skip_timeout' && '⏰ 超时跳过'}
+            {/* 当前行动选手标识（左上） */}
+            {currentPlayer && (
+              <div className="absolute top-5 left-5 flex items-center gap-3 px-5 py-3 rounded-2xl bg-black/55 backdrop-blur-xl border border-amber-400/30 pointer-events-none shadow-[0_0_34px_rgba(245,158,11,0.12)]">
+                <span className="text-sm uppercase tracking-[0.16em] text-zinc-400">行动中</span>
+                <span className="text-2xl md:text-3xl font-bold text-amber-200 truncate max-w-[46vw]" style={{ fontFamily: 'Torus, sans-serif' }}>
+                  {currentPlayer.username}
+                </span>
+                <span className="w-3 h-3 rounded-full bg-amber-300 animate-pulse" />
               </div>
-            ))}
-            {(!race.actionLog || race.actionLog.length === 0) && (
-              <p className="text-[10px] text-zinc-600">等待开始...</p>
+            )}
+
+            {/* 回合倒计时（右上，大数字） */}
+            {currentPlayer && race.turnRemainingMs != null && (
+              <div className={`absolute top-5 right-5 flex flex-col items-end px-5 py-3 rounded-2xl border backdrop-blur-xl pointer-events-none
+                ${race.turnRemainingMs < 10000
+                  ? 'bg-red-500/20 border-red-400/40'
+                  : 'bg-black/55 border-white/10'}`}>
+                <span className="text-sm uppercase tracking-[0.16em] text-zinc-400">本回合</span>
+                <span className={`text-5xl md:text-6xl font-bold leading-none tabular-nums ${race.turnRemainingMs < 10000 ? 'text-red-300 animate-pulse' : 'text-zinc-100'}`}
+                  style={{ fontFamily: 'Torus, sans-serif' }}>
+                  {fmtMs(race.turnRemainingMs)}
+                </span>
+              </div>
             )}
           </div>
         </div>
 
-        {/* 操作按钮区（选手视角） */}
-        {isMyTurn && race.status === 'racing' && (
-          <div className="space-y-2">
-            <button
-              onClick={handleAdvance}
-              className="w-full py-3 px-4 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
-            >
-              <FaPlay className="text-xs" /> 前进攻挑战墙壁
-            </button>
-            <button
-              onClick={loadMyItems}
-              className="w-full py-3 px-4 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
-            >
-              <HiOutlineCube /> 查看/使用道具
-            </button>
+        {/* 右侧面板 */}
+        <div className="w-full space-y-4">
+          {/* 选手排名榜 */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.045] backdrop-blur-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl md:text-2xl font-bold text-white">实时榜单</h3>
+              <span className="text-base text-zinc-400">坐标进度</span>
+            </div>
+            <div className="space-y-3">
+              {ranked.map((p) => {
+                const isActive = (p._id || p.userId) === race.currentPlayerId;
+                const finished = p.finishOrder != null;
+                return (
+                  <div
+                    key={p._id || p.userId}
+                    className={`flex items-center gap-4 px-4 py-4 rounded-2xl border transition-all
+                      ${isActive ? 'bg-amber-500/10 border-amber-500/25'
+                        : finished ? 'bg-emerald-500/[0.06] border-emerald-500/20'
+                        : 'bg-transparent border-white/[0.06]'}`}
+                  >
+                    {/* 名次徽章 */}
+                    <span className={`shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-black tabular-nums
+                      ${finished ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-500'}`}>
+                      {finished ? p.finishOrder : '–'}
+                    </span>
+                    {/* 名字 + 状态 */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-2xl font-bold text-white truncate leading-tight">{p.username}</p>
+                      <p className={`text-base leading-tight mt-1 ${isActive ? 'text-amber-300' : 'text-zinc-500'}`}>
+                        {finished ? '已抵达中心' : isActive ? '行动中…' : '推进中'}
+                        {p.itemCount > 0 && <span className="text-sky-400/80 ml-1.5">道具 {p.itemCount}</span>}
+                      </p>
+                    </div>
+                    {/* 大数字：坐标 / ★ */}
+                    <div className="flex flex-col items-end shrink-0">
+                      <span className={`text-5xl font-bold leading-none tabular-nums
+                        ${finished ? 'text-emerald-400' : isActive ? 'text-amber-300' : 'text-zinc-300'}`}
+                        style={{ fontFamily: 'Torus, sans-serif' }}>
+                        {finished ? '★' : (p.currentLayer ?? 0)}
+                      </span>
+                      <span className="text-sm text-zinc-500 mt-1">{finished ? '完赛' : '坐标'}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {(!ranked || ranked.length === 0) && (
+                <p className="text-lg text-zinc-500 py-8 text-center">等待选手入场…</p>
+              )}
+            </div>
           </div>
-        )}
 
-        {/* 刷新 */}
-        <button
-          onClick={() => race.fetchRaceState()}
-          className="w-full py-2 rounded-xl border border-white/10 text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all text-xs flex items-center justify-center gap-1"
-        >
-          <FaSync className={race.loading ? 'animate-spin' : ''} /> 刷新
-        </button>
+          {/* 行动日志 */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-5 max-h-64 overflow-y-auto">
+            <h3 className="text-lg font-bold text-zinc-200 mb-3">行动日志</h3>
+            <div className="space-y-2">
+              {race.actionLog?.slice(-6).reverse().map((log, i) => (
+                <div key={i} className="text-base text-zinc-400 leading-relaxed flex items-center gap-2">
+                  <span className="text-zinc-600 font-mono tabular-nums">#{log.turn}</span>
+                  {log.actionType === 'advance' && <span>⚔️ 挑战墙壁</span>}
+                  {log.actionType === 'pickup' && <span>🎒 拾取道具</span>}
+                  {log.actionType === 'use_item' && <span>✨ 使用道具</span>}
+                  {log.actionType === 'challenge_passed' && <span className="text-emerald-500/70">✓ 突破成功</span>}
+                  {log.actionType === 'challenge_failed' && <span className="text-red-500/70">✗ 挑战失败</span>}
+                  {(log.actionType === 'skip_timeout' || log.actionType === 'skip_manual') && <span>⏰ 跳过回合</span>}
+                </div>
+              ))}
+              {(!race.actionLog || race.actionLog.length === 0) && (
+                <p className="text-base text-zinc-500">等待开始…</p>
+              )}
+            </div>
+          </div>
+
+          {/* 操作按钮区（选手视角） */}
+          {isMyTurn && race.status === 'racing' && (
+            <div className="space-y-2">
+              <button
+                onClick={handleAdvance}
+                className="w-full py-3 px-4 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <FaPlay className="text-xs" /> 前进 · 挑战墙壁
+              </button>
+              <button
+                onClick={loadMyItems}
+                className="w-full py-3 px-4 rounded-xl bg-sky-500/20 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <HiOutlineCube /> 查看 / 使用道具
+              </button>
+            </div>
+          )}
+
+          {/* 刷新 */}
+          <button
+            onClick={() => race.fetchRaceState()}
+            className="w-full py-3 rounded-xl border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 transition-all text-base flex items-center justify-center gap-2"
+          >
+            <FaSync className={race.loading ? 'animate-spin' : ''} /> 刷新数据
+          </button>
+        </div>
       </div>
 
       {/* 挑战弹窗 */}
@@ -238,6 +302,7 @@ export default function RacePage({ stage }) {
           <ChallengeCard
             challenge={race.activeChallenge}
             pendingJudgement={race.pendingJudgement}
+            isJudge
             onPass={() => handleChallengeResult(true)}
             onFail={() => handleChallengeResult(false)}
             onDismiss={() => race.dismissChallenge()}
@@ -277,7 +342,7 @@ export default function RacePage({ stage }) {
                 道具背包
               </h3>
               {myItems.length === 0 ? (
-                <p className="text-xs text-zinc-500">暂无道具</p>
+                <p className="text-xl text-zinc-500">暂无道具</p>
               ) : (
                 <div className="space-y-2">
                   {myItems.map((item) => {
@@ -285,19 +350,22 @@ export default function RacePage({ stage }) {
                     return (
                       <div key={item.itemRef} className="flex items-center justify-between p-3 rounded-xl border border-white/10 bg-zinc-800/50">
                         <div>
-                          <p className="text-sm text-white font-medium">{def?.name}</p>
-                          <p className="text-[10px] text-zinc-500">{def?.effect}</p>
+                          <p className="text-xl text-white font-bold">{def?.name}</p>
+                          <p className="text-base text-zinc-500 mt-1">{def?.effect}</p>
                         </div>
-                        {!item.used && (
+                        {item.status === 'unused' && (
                           <button
                             onClick={() => handleUseItem(item.itemRef)}
-                            className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 text-xs border border-amber-500/30 hover:bg-amber-500/30 transition-all"
+                            className="px-4 py-2 rounded-lg bg-amber-500/20 text-amber-200 text-base font-bold border border-amber-500/30 hover:bg-amber-500/30 transition-all"
                           >
                             使用
                           </button>
                         )}
-                        {item.used && (
-                          <span className="text-[10px] text-zinc-600">已使用</span>
+                        {item.status === 'armed' && (
+                          <span className="text-base font-bold text-amber-300">已激活</span>
+                        )}
+                        {item.status === 'consumed' && (
+                          <span className="text-base font-bold text-zinc-500">已使用</span>
                         )}
                       </div>
                     );

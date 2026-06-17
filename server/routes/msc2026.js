@@ -20,10 +20,10 @@ const Tournament = require('../models/Tournament');
 const Song = require('../models/Song');
 const User = require('../models/User');
 
-const { loadTournament, checkPermission, calculateRaceRankings, shuffle } = require('../services/msc2026/utils');
-const { initStage1, startFirstGroup, selectSong, submitScore, advance: advanceStage1, forfeitPlayer } = require('../services/msc2026/stage1');
+const { loadTournament, checkPermission, calculateRaceRankings, shuffle, assertObjectIdList } = require('../services/msc2026/utils');
+const { initStage1, startFirstGroup, selectSong, submitScore, advance: advanceStage1, forfeitPlayer, resolveGroupTie } = require('../services/msc2026/stage1');
 const { initRace, currentRace, playerAction, useItem, challengeResult, skipTurn, getRaceConfig } = require('../services/msc2026/raceEngine');
-const { initStage4, selectSong: selectSong4, submitScore: submitScore4, advance: advanceStage4 } = require('../services/msc2026/stage4');
+const { initStage4, selectSong: selectSong4, submitScore: submitScore4, advance: advanceStage4, resolveTie: resolveTie4 } = require('../services/msc2026/stage4');
 const { addClient, broadcast } = require('../services/msc2026/ssePool');
 const { syncToOldTournament } = require('../services/msc2026/oldTournamentSync');
 const {
@@ -40,6 +40,19 @@ const { getTaskById, getFallbackTask } = require('../services/msc2026/raceEngine
 async function requireTournament(res) {
   const t = await loadTournament(res);
   return t;
+}
+
+function parseBoolean(value, label = '布尔值') {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new Error(`${label}必须为 true 或 false`);
+}
+
+function assertSubsetIds(ids, allowedIds, label = 'ID列表') {
+  const allowed = new Set(allowedIds.map(String));
+  const invalid = ids.filter(id => !allowed.has(String(id)));
+  if (invalid.length) throw new Error(`${label}包含不在当前比赛中的选手`);
 }
 
 // ==========================================
@@ -126,14 +139,16 @@ router.put('/config', authMiddleware, async (req, res) => {
     const { poolType, songPoolIds, designatedSongId, playerIds } = req.body;
 
     if (poolType === 'stage1') {
-      t.stage1SongPool = songPoolIds;
+      t.stage1SongPool = assertObjectIdList(songPoolIds || [], null, '阶段一图池');
     } else if (poolType === 'stage4') {
       if (!t.stage4) t.stage4 = {};
-      t.stage4.songPool = songPoolIds;
-      if (designatedSongId) t.stage4.designatedSongId = designatedSongId;
+      t.stage4.songPool = assertObjectIdList(songPoolIds || [], null, '决赛图池');
+      if (designatedSongId) t.stage4.designatedSongId = assertObjectIdList([designatedSongId], 1, '课题曲')[0];
     } else if (poolType === 'players') {
       // patch-02: 管理员录入注册选手
-      t.registeredPlayers = playerIds;
+      t.registeredPlayers = assertObjectIdList(playerIds || [], null, '选手');
+    } else {
+      return res.status(400).json({ msg: '未知配置类型' });
     }
 
     await t.save();
@@ -444,8 +459,13 @@ router.post('/stage1/init-from-qualifier', authMiddleware, async (req, res) => {
       return res.status(400).json({ msg: '阶段一已初始化，如需重置请先手动清理' });
     }
 
-    const { songPoolIds, advanceCount = 12 } = req.body;
-    if (!songPoolIds || songPoolIds.length < 3) {
+    const { songPoolIds } = req.body;
+    const advanceCount = Number(req.body.advanceCount ?? 12);
+    if (!Number.isInteger(advanceCount) || advanceCount !== 12) {
+      return res.status(400).json({ msg: 'MSC 2026 阶段一晋级人数必须为 12' });
+    }
+    const normalizedSongPoolIds = assertObjectIdList(songPoolIds || [], null, '阶段一图池');
+    if (normalizedSongPoolIds.length < 3) {
       return res.status(400).json({ msg: '图池至少需要 3 首歌' });
     }
 
@@ -496,8 +516,11 @@ router.post('/stage1/init-from-qualifier', authMiddleware, async (req, res) => {
       qualified: true
     }));
 
-    // 初始化阶段一
-    await initStage1(t, playerIds, songPoolIds);
+    // 初始化阶段一（修复 #2：与 /stage1/init 一致——必须设状态 + 开第一组，
+    // 否则状态停留在 pending、currentGroupIndex=-1，首次 select-song 即抛"当前不在比赛阶段"）
+    t.status = 'stage1';
+    await initStage1(t, playerIds, normalizedSongPoolIds);
+    await startFirstGroup(t);
 
     // 同步旧赛事状态
     await syncToOldTournament(t, 'status_sync', { newStatus: 'stage1', operatedBy: req.user.id });
@@ -575,9 +598,9 @@ router.post('/stage1/init', authMiddleware, async (req, res) => {
     const { songPoolIds, playerIds } = req.body;
 
     t.status = 'stage1';
-    t.stage1SongPool = songPoolIds || [];
+    t.stage1SongPool = assertObjectIdList(songPoolIds || [], null, '阶段一图池');
 
-    const stage1 = await initStage1(t, playerIds, songPoolIds);
+    const stage1 = await initStage1(t, playerIds, t.stage1SongPool);
     await startFirstGroup(t);
 
     // populate
@@ -792,6 +815,28 @@ router.post('/stage1/forfait', authMiddleware, async (req, res) => {
   }
 });
 
+// 修复 #4：裁判加赛判定（三项全平的组，线下加赛后录入胜者）
+router.post('/stage1/resolve-tie', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { groupIndex, winnerId } = req.body;
+    if (groupIndex == null || !winnerId) {
+      return res.status(400).json({ msg: '需提供 groupIndex 与 winnerId' });
+    }
+
+    const group = await resolveGroupTie(t, Number(groupIndex), winnerId);
+    res.json({ msg: '加赛结果已录入', data: { groupIndex: Number(groupIndex), winner: String(group.winner) } });
+  } catch (err) {
+    console.error('阶段一加赛判定失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
 // ==========================================
 // 🗺️ 跑图：阶段二 & 三
 // ==========================================
@@ -806,20 +851,9 @@ router.post('/race/init', authMiddleware, async (req, res) => {
 
     const { playerIds } = req.body;
 
-    // 构建 songMap（从 stage1SongPool 中匹配挑战任务的 songTitle）
-    const songMap = {};
-    const songs = await Song.find({ _id: { $in: t.stage1SongPool || [] } }).select('_id title').lean();
-    // 也搜索所有舞萌曲库
-    const allChallengeSongs = await Song.find({
-      title: { $in: CHALLENGE_TASKS.map(ct => ct.songTitle) }
-    }).select('_id title').lean();
-
-    for (const s of songs) songMap[s.title] = s._id;
-    for (const s of allChallengeSongs) {
-      if (!songMap[s.title]) songMap[s.title] = s._id;
-    }
-
-    const race = await initRace(t, playerIds, songMap);
+    // 修复 #7：此前构建的 songMap 从未被 initRace 使用（挑战任务自带 songTitle），
+    // 移除两次无谓的全表查询。
+    const race = await initRace(t, playerIds);
 
     const populated = await MSC2026Tournament.findById(t._id)
       .populate(`${t.status}.players.userId`, 'username avatarUrl');
@@ -1047,7 +1081,7 @@ router.get('/race/challenge', authMiddleware, async (req, res) => {
     if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
 
     // 找最近被揭晓但未判定的挑战
-    const pending = race.challengeHistory.find(ch => ch.passed === null);
+    const pending = [...race.challengeHistory].reverse().find(ch => ch.passed === null);
     if (!pending) return res.status(400).json({ msg: '无待判定的挑战' });
 
     // P1-4: 优先返回 resolvedChallenge 快照（含道具修改后的挑战条件）
@@ -1109,7 +1143,7 @@ router.post('/race/challenge-result', authMiddleware, async (req, res) => {
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { passed } = req.body;
+    const passed = parseBoolean(req.body.passed, '挑战判定 passed');
     const result = await challengeResult(t, req.user.id, passed);
 
     if (passed) {
@@ -1204,6 +1238,13 @@ router.post('/race/terminate', authMiddleware, async (req, res) => {
     else if (stageKey === 'stage3') t.qualifiedStage3 = qualifiedIds;
 
     await t.save();
+
+    // 修复 #9：与引擎 _terminateRace 一致，手动终止也回写旧赛事排名
+    const syncEvent = stageKey === 'stage2' ? 'stage2_complete' : 'stage3_complete';
+    await syncToOldTournament(t, syncEvent, {
+      rankings: rankings.map(r => ({ userId: String(r.userId), rank: r.rank })),
+      qualifiedIds
+    });
 
     broadcast('map_timeout', { terminated: true, reason: 'admin', rankings, qualifiedIds });
 
@@ -1307,6 +1348,8 @@ router.post('/stage2/advance-to-stage3', authMiddleware, async (req, res) => {
         return res.status(400).json({ msg: '需提供恰好4名晋级选手' });
       }
     }
+    qualifiedIds = assertObjectIdList(qualifiedIds, 4, '阶段二晋级名单');
+    assertSubsetIds(qualifiedIds, (t.stage2.players || []).map(p => p.userId), '阶段二晋级名单');
 
     t.status = 'stage3';
     t.qualifiedStage2 = qualifiedIds;
@@ -1492,6 +1535,26 @@ router.post('/stage4/advance', authMiddleware, async (req, res) => {
     }
   } catch (err) {
     console.error('决赛推进失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+// 修复 #4：决赛加赛判定（四曲全平后，线下加赛录入胜者并收尾赛事）
+router.post('/stage4/resolve-tie', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+
+    const { winnerId } = req.body;
+    if (!winnerId) return res.status(400).json({ msg: '需提供 winnerId' });
+
+    const result = await resolveTie4(t, winnerId);
+    res.json({ msg: '决赛加赛结果已录入，赛事结束', data: result });
+  } catch (err) {
+    console.error('决赛加赛判定失败:', err);
     res.status(400).json({ msg: err.message });
   }
 });

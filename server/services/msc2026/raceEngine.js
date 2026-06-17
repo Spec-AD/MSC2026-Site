@@ -19,7 +19,7 @@
  * - P1-6: 双面道具惩罚仅对本次挑战绑定的 armed 道具触发
  */
 
-const { shuffle, calculateRaceRankings } = require('./utils');
+const { shuffle, calculateRaceRankings, assertObjectIdList } = require('./utils');
 const { CHALLENGE_TASKS } = require('./challengeDefinitions');
 const { getItemPool, getItem, applyItemEffects } = require('./itemDefinitions');
 const { broadcast } = require('./ssePool');
@@ -33,7 +33,7 @@ const RACE_CONFIGS = {
     wallLabels: ['密锁之墙', '准锁之墙'],
     itemPoolRefs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     zoneCount: 6,
-    timeLimitMs: 50 * 60 * 1000,      // 50min
+    timeLimitMs: 45 * 60 * 1000,      // 45min（赛制规定）
     turnTimeLimitMs: 45 * 1000,         // 45s
     advanceCount: 4
   },
@@ -43,7 +43,7 @@ const RACE_CONFIGS = {
     wallLabels: ['叹息之墙'],
     itemPoolRefs: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     zoneCount: 4,
-    timeLimitMs: 30 * 60 * 1000,       // 30min
+    timeLimitMs: 25 * 60 * 1000,       // 25min（赛制规定）
     turnTimeLimitMs: 45 * 1000,          // 45s
     advanceCount: 2
   }
@@ -62,23 +62,20 @@ function getFallbackTask(taskId, fallbackTasks) {
   return fallbackTasks ? fallbackTasks.find(t => t.id === taskId) || null : null;
 }
 
+function hasPendingChallenge(race) {
+  return !!race.challengeHistory?.some(ch => ch.passed === null);
+}
+
 /**
  * 初始化跑图
  */
-async function initRace(tournament, playerIds, songMap) {
+async function initRace(tournament, playerIds) {
   const stageKey = tournament.status; // 'stage2' | 'stage3'
   const config = RACE_CONFIGS[stageKey];
   if (!config) throw new Error(`无效的跑图阶段: ${stageKey}`);
 
-  if (!playerIds || playerIds.length === 0) throw new Error('选手列表为空');
-
-  // 验证选手数合理
-  if (stageKey === 'stage2' && playerIds.length !== 6) {
-    throw new Error(`阶段二需要 6 名选手，收到 ${playerIds.length}`);
-  }
-  if (stageKey === 'stage3' && playerIds.length !== 4) {
-    throw new Error(`阶段三需要 4 名选手，收到 ${playerIds.length}`);
-  }
+  const expectedCount = stageKey === 'stage2' ? 6 : 4;
+  playerIds = assertObjectIdList(playerIds || [], expectedCount, `${stageKey}跑图选手`);
 
   // 随机分配起点顶点
   const shuffled = shuffle(playerIds);
@@ -193,8 +190,9 @@ async function playerAction(tournament, targetPlayerId, actionType, zoneIndex) {
   if (!race) throw new Error('不在跑图阶段');
 
   // 超时检测
-  _checkMapTimeout(race);
+  await _checkMapTimeout(tournament, race, stageKey);
   if (race.terminated) throw new Error('地图已终止');
+  if (hasPendingChallenge(race)) throw new Error('当前有待判定挑战，请先由裁判判定成功或失败');
 
   const targetId = targetPlayerId.toString();
 
@@ -244,8 +242,14 @@ async function useItem(tournament, targetPlayerId, itemRef) {
   const stageKey = tournament.status;
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
+  if (race.terminated) throw new Error('地图已终止');
+  if (hasPendingChallenge(race)) throw new Error('当前有待判定挑战，判定前不可使用道具');
 
   const targetId = targetPlayerId.toString();
+  itemRef = Number(itemRef);
+  if (!Number.isInteger(itemRef)) throw new Error('道具编号非法');
+  // 修复 #1：此前 useItem 内的 broadcast 误用了未定义的 userId（函数形参是 targetPlayerId）
+  const userId = targetPlayerId;
   const player = race.players[race.currentPlayerIndex];
   if (!player || player.userId.toString() !== targetId) {
     throw new Error('当前不是该选手的回合');
@@ -335,6 +339,7 @@ function _drawTask(race) {
   }
 
   const taskId = race.taskPool.remaining.pop();
+  if (taskId == null) throw new Error('任务池为空且无法补充任务');
   race.taskPool.used.push(taskId);
 
   // P0-1: 纯函数读取任务定义
@@ -354,6 +359,7 @@ async function _handleAdvance(tournament, race, player, userId) {
   // 目标墙壁
   const wallIndex = player.currentLayer;
   const wallLabel = race.mapConfig.wallLabels[wallIndex];
+  if (!wallLabel) throw new Error('该坐标没有可挑战墙壁');
 
   // 从任务池中取一个任务（P0-1: 纯函数读取）
   const { taskId, task: rawChallenge } = _drawTask(race);
@@ -469,10 +475,13 @@ async function _handleAdvance(tournament, race, player, userId) {
  */
 async function _handlePickup(tournament, race, player, zoneIndex) {
   if (zoneIndex == null) throw new Error('需指定目标区域 (zoneIndex)');
+  zoneIndex = Number(zoneIndex);
+  if (!Number.isInteger(zoneIndex)) throw new Error('目标区域非法');
 
   // 验证相邻区域
   const config = RACE_CONFIGS[tournament.status];
   const zoneCount = config.zoneCount;
+  if (zoneIndex < 0 || zoneIndex >= zoneCount) throw new Error('目标区域越界');
   const isValidZone = _isAdjacentZone(player, zoneIndex, zoneCount);
   if (!isValidZone) throw new Error('该区域不可达');
 
@@ -532,8 +541,9 @@ async function challengeResult(tournament, judgeId, passed) {
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
 
-  _checkMapTimeout(race);
+  await _checkMapTimeout(tournament, race, stageKey);
   if (race.terminated) throw new Error('地图已终止');
+  if (typeof passed !== 'boolean') throw new Error('passed 必须是布尔值');
 
   // 找最后一个待判定的挑战（数组末尾即为最近插入）
   const pendingChallenges = race.challengeHistory.filter(ch => ch.passed === null);
@@ -579,7 +589,13 @@ async function challengeResult(tournament, judgeId, passed) {
     });
 
     // 检查是否到达终点
-    if (player.currentLayer >= race.mapConfig.layers) {
+    // 设计 D3：通过「最后一堵墙」后，最后一步（坐标 2→3 / 1→2，到中心）自动判定成功，无需再挑战。
+    // 即挑战次数 = 墙壁数（stage2 两堵、stage3 一堵），不再多产生一次无对应墙体的幽灵挑战。
+    const wallCount = race.mapConfig.wallLabels.length;
+    if (player.currentLayer >= wallCount) {
+      const breachedWallIndex = wallCount - 1;
+      // 自动推进到中心坐标（stage2 → 3，stage3 → 2）
+      player.currentLayer = race.mapConfig.layers;
       const order = race.finishOrder.length + 1;
       player.finishOrder = order;
       player.finishTimestamp = Date.now();
@@ -591,9 +607,9 @@ async function challengeResult(tournament, judgeId, passed) {
 
       broadcast('player_moved', {
         playerId: lastChallenge.playerId.toString(),
-        fromLayer: player.currentLayer - 1,
+        fromLayer: breachedWallIndex,
         toLayer: player.currentLayer,
-        wallIndex: player.currentLayer - 1,
+        wallIndex: breachedWallIndex,
         wallLabel,
         reachedEnd: true,
         finishOrder: order
@@ -633,16 +649,19 @@ async function challengeResult(tournament, judgeId, passed) {
       const itemDef = getItem(ref);
       if (itemDef && itemDef.penalty) {
         const penalty = itemDef.penalty;
+        // 修复 #5：currentTurn 是"逐人回合"全局计数，某选手下次行动在 playerCount 个回合后，
+        // 故惩罚回合需 × playerCount，否则 1~2 回合的静默/禁用在轮到本人前就已过期 = 完全失效。
+        const turnSpan = race.players.length;
         if (penalty.silentTurns) {
           player.silentUntilTurn = Math.max(
             player.silentUntilTurn || 0,
-            race.currentTurn + penalty.silentTurns
+            race.currentTurn + penalty.silentTurns * turnSpan
           );
         }
         if (penalty.disableItemsTurns) {
           player.disableItemsUntilTurn = Math.max(
             player.disableItemsUntilTurn || 0,
-            race.currentTurn + penalty.disableItemsTurns
+            race.currentTurn + penalty.disableItemsTurns * turnSpan
           );
         }
         if (penalty.backToLayer0) {
@@ -696,6 +715,8 @@ async function skipTurn(tournament, reason = 'skip_manual') {
   const stageKey = tournament.status;
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
+  if (race.terminated) throw new Error('地图已终止');
+  if (hasPendingChallenge(race)) throw new Error('当前有待判定挑战，不能跳过回合');
 
   return await _skipTurn(tournament, race, reason, race.players[race.currentPlayerIndex].userId);
 }
@@ -724,6 +745,7 @@ async function _skipTurn(tournament, race, reason, userId) {
  */
 async function _advanceTurn(tournament, race, skipAllFinished = false) {
   const playerCount = race.players.length;
+  if (playerCount <= 0) throw new Error('跑图选手为空');
   let attempts = 0;
 
   do {
@@ -776,12 +798,14 @@ async function _advanceTurn(tournament, race, skipAllFinished = false) {
 /**
  * 地图超时检查
  */
-function _checkMapTimeout(race) {
+async function _checkMapTimeout(tournament, race, stageKey) {
   if (race.terminated) return;
+  if (!race.totalTimeStartedAt) return;
   const elapsed = Date.now() - new Date(race.totalTimeStartedAt).getTime();
   if (elapsed >= race.timeLimitMs) {
-    race.terminated = true;
-    race.terminatedReason = 'timeout';
+    // 修复 #3：超时不再只置内存标志，而是正式结算（算排名 + 写晋级 + 落库 + 广播），
+    // 否则 terminated 永远不持久化，赛事会卡在"动一下就报错"的软死锁。
+    await _terminateRace(tournament, race, stageKey || tournament.status, 'timeout');
   }
 }
 
@@ -823,6 +847,7 @@ async function _terminateRace(tournament, race, stageKey, reason) {
  * 任务库补充机制（P0-1: 持久化到 fallbackTasks）
  */
 function _refillTaskPool(race) {
+  if (!race.taskPool.used.length) return;
   race.taskPool.fallbackCount++;
   // 从已使用的任务中随机挑选一条
   const srcId = race.taskPool.used[Math.floor(Math.random() * race.taskPool.used.length)];

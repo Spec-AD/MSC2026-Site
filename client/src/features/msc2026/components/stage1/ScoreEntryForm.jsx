@@ -35,10 +35,10 @@ function ScoreField({ label, field, value, onChange, ...limits }) {
     && parseFloat(value) >= min && parseFloat(value) <= max;
 
   return (
-    <div className="flex-1">
-      <label className="block text-[11px] text-zinc-500 mb-1.5 font-medium">
+    <div className="flex-1 min-w-[160px]">
+      <label className="block text-sm text-zinc-400 mb-2 font-semibold uppercase tracking-[0.12em]">
         {label}
-        <span className="text-zinc-600 ml-1">
+        <span className="text-zinc-600 ml-2 normal-case tracking-normal">
           ({min}-{max}{suffix})
         </span>
       </label>
@@ -49,7 +49,7 @@ function ScoreField({ label, field, value, onChange, ...limits }) {
         onChange={handleChange}
         onBlur={handleBlur}
         className={`
-          w-full px-3 py-2.5 rounded-xl text-sm font-mono border transition-all outline-none
+          w-full px-4 py-4 rounded-xl text-3xl font-mono border transition-all outline-none tabular-nums
           ${isValid
             ? 'bg-zinc-800/80 border-white/10 text-white focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20'
             : 'bg-zinc-800/80 border-red-500/30 text-red-300'
@@ -58,7 +58,7 @@ function ScoreField({ label, field, value, onChange, ...limits }) {
         placeholder={decimals > 0 ? `0.${'0'.repeat(decimals)}` : '0'}
       />
       {!isValid && value !== '' && (
-        <p className="text-[10px] text-red-400/70 mt-1">格式或范围不正确</p>
+        <p className="text-sm text-red-400/80 mt-2">格式或范围不正确</p>
       )}
     </div>
   );
@@ -67,16 +67,16 @@ function ScoreField({ label, field, value, onChange, ...limits }) {
 /** 选手成绩卡片 */
 function PlayerScoreCard({ player, prefix, scores, onChange }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
-          ${prefix === 'p1' ? 'bg-amber-500/20 text-amber-400' : 'bg-purple-500/20 text-purple-400'}`}>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-5">
+      <div className="flex items-center gap-3 mb-5">
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black
+          ${prefix === 'p1' ? 'bg-sky-500/15 text-sky-200' : 'bg-fuchsia-500/15 text-fuchsia-200'}`}>
           {prefix.toUpperCase()}
         </div>
-        <FaUser className="text-zinc-600 text-xs" />
-        <span className="text-sm text-white font-medium">{player?.username || '—'}</span>
+        <FaUser className="text-zinc-600 text-lg" />
+        <span className="text-3xl text-white font-black truncate">{player?.username || '—'}</span>
       </div>
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-4">
         <ScoreField
           label="完成率"
           field={`${prefix}Score.achievement`}
@@ -203,16 +203,16 @@ export default function ScoreEntryForm({
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="rounded-2xl border border-green-500/20 bg-green-500/5 p-6 text-center"
+        className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-8 text-center"
       >
-        <FaClipboardCheck className="text-2xl text-green-400 mx-auto mb-2" />
-        <p className="text-sm text-green-300 font-medium">成绩已录入 ✓</p>
+        <FaClipboardCheck className="text-4xl text-emerald-300 mx-auto mb-3" />
+        <p className="text-3xl text-emerald-200 font-black">成绩已录入</p>
         <button
           onClick={async () => {
             setSubmitted(false);
             if (onAdvance) await onAdvance();
           }}
-          className="mt-3 px-5 py-2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-sm hover:bg-amber-500/30 transition-all"
+          className="mt-5 px-8 py-3 rounded-xl bg-amber-500/20 text-amber-200 border border-amber-400/30 text-xl font-bold hover:bg-amber-500/30 transition-all"
         >
           推进下一轮
         </button>
@@ -221,8 +221,8 @@ export default function ScoreEntryForm({
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-6 space-y-5">
+      <h3 className="text-2xl font-bold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
         裁判成绩录入
       </h3>
 
@@ -233,7 +233,7 @@ export default function ScoreEntryForm({
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-xs text-red-400 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20"
+          className="text-lg text-red-300 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20"
         >
           {error}
         </motion.p>
@@ -243,7 +243,7 @@ export default function ScoreEntryForm({
         onClick={handleSubmit}
         disabled={submitting || disabled}
         className={`
-          w-full py-3 rounded-xl font-medium text-sm transition-all
+          w-full py-4 rounded-xl font-black text-2xl transition-all
           ${!submitting && !disabled
             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 shadow-lg shadow-amber-500/5'
             : 'bg-zinc-800 text-zinc-600 border border-white/5 cursor-not-allowed'

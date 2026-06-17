@@ -8,7 +8,7 @@
  * - 旧赛事同步：全部组完成时回写 groups/matches
  */
 
-const { shuffle, validateScore, determineWinner } = require('./utils');
+const { shuffle, validateScore, normalizeScoreInput, determineWinner, assertObjectIdList } = require('./utils');
 const { broadcast } = require('./ssePool');
 const { syncToOldTournament } = require('./oldTournamentSync');
 
@@ -16,10 +16,9 @@ const { syncToOldTournament } = require('./oldTournamentSync');
  * 初始化12进6分组
  */
 async function initStage1(tournament, playerIds, songPoolIds) {
-  if (!playerIds || playerIds.length !== 12) {
-    throw new Error('需要恰好12名选手');
-  }
-  if (!songPoolIds || songPoolIds.length < 3) {
+  playerIds = assertObjectIdList(playerIds, 12, '阶段一选手');
+  songPoolIds = assertObjectIdList(songPoolIds || [], null, '阶段一图池');
+  if (songPoolIds.length < 3) {
     throw new Error('图池至少需要3首歌');
   }
 
@@ -174,24 +173,26 @@ async function submitScore(tournament, userId, body) {
 
   // 校验并写入成绩
   if (body.p1Score) {
-    const errs = validateScore(body.p1Score);
+    const p1Score = normalizeScoreInput(body.p1Score);
+    const errs = validateScore(p1Score);
     if (errs.length) throw new Error(`P1成绩校验失败: ${errs.join('; ')}`);
     lastSong.p1Score = {
-      achievement: body.p1Score.achievement,
-      dxScore: body.p1Score.dxScore,
-      perfectRate: body.p1Score.perfectRate,
+      achievement: p1Score.achievement,
+      dxScore: p1Score.dxScore,
+      perfectRate: p1Score.perfectRate,
       recordedBy: userId,
       recordedAt: new Date(),
       locked: true
     };
   }
   if (body.p2Score) {
-    const errs = validateScore(body.p2Score);
+    const p2Score = normalizeScoreInput(body.p2Score);
+    const errs = validateScore(p2Score);
     if (errs.length) throw new Error(`P2成绩校验失败: ${errs.join('; ')}`);
     lastSong.p2Score = {
-      achievement: body.p2Score.achievement,
-      dxScore: body.p2Score.dxScore,
-      perfectRate: body.p2Score.perfectRate,
+      achievement: p2Score.achievement,
+      dxScore: p2Score.dxScore,
+      perfectRate: p2Score.perfectRate,
       recordedBy: userId,
       recordedAt: new Date(),
       locked: true
@@ -304,6 +305,15 @@ async function advance(tournament) {
   const nextIdx = stage1.currentGroupIndex + 1;
 
   if (nextIdx >= 6) {
+    // 修复 #4：存在未决平局（needTiebreak / winner 为空）时，绝不能带着不足 6 人的名单推进，
+    // 否则阶段二 initRace 会因"需要 6 名选手"而抛错卡死。要求先用 resolveGroupTie 决出胜者。
+    const unresolved = stage1.groups
+      .map((g, i) => ({ i, ok: !!g.winner }))
+      .filter(x => !x.ok);
+    if (unresolved.length > 0) {
+      throw new Error(`存在未决平局，需先加赛决出胜者再推进：组 ${unresolved.map(x => x.i + 1).join('、')}`);
+    }
+
     // 所有组完成
     stage1.status = 'done';
 
@@ -383,11 +393,47 @@ async function forfeitPlayer(tournament, playerId) {
   return group;
 }
 
+/**
+ * 修复 #4：裁判加赛判定 —— 解决三项全平的组
+ * 线下进行加赛后，由裁判录入胜者；对池耗尽 / 反复平局等情况均稳健。
+ * @param {object} tournament
+ * @param {number} groupIndex
+ * @param {string} winnerId - 必须是该组 p1 或 p2
+ */
+async function resolveGroupTie(tournament, groupIndex, winnerId) {
+  const stage1 = tournament.stage1;
+  if (!stage1) throw new Error('阶段一未初始化');
+  const group = stage1.groups[groupIndex];
+  if (!group) throw new Error('无效的组索引');
+  if (group.winner) throw new Error('该组已决出胜者，无需加赛');
+
+  const wid = String(winnerId);
+  const p1 = String(group.p1);
+  const p2 = String(group.p2);
+  if (wid !== p1 && wid !== p2) throw new Error('加赛胜者必须是该组双方之一');
+
+  group.winner = wid === p1 ? group.p1 : group.p2;
+  group.needTiebreak = false;
+  group.status = 'done';
+
+  await tournament.save();
+
+  broadcast('match_finished', {
+    type: 'group',
+    groupIndex,
+    winnerId: String(group.winner),
+    resolvedByTiebreak: true
+  });
+
+  return group;
+}
+
 module.exports = {
   initStage1,
   startFirstGroup,
   selectSong,
   submitScore,
   advance,
-  forfeitPlayer
+  forfeitPlayer,
+  resolveGroupTie
 };

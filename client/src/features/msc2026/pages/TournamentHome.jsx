@@ -25,32 +25,49 @@ export default function TournamentHome() {
   return (
     <div className="space-y-6">
       {/* Hero */}
-      <div className="rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-amber-950/20 border border-white/10 p-8">
-        <h2 className="text-sm font-medium text-amber-400/80 mb-1 uppercase tracking-wider" style={{ fontFamily: 'Torus, sans-serif' }}>
-          PureBeat 首届正式比赛
-        </h2>
-        <h1 className="text-3xl font-bold mb-4 tracking-tight" style={{ fontFamily: 'Torus, sans-serif' }}>
-          MSC 2026
-        </h1>
-        <p className="text-zinc-400 text-sm max-w-lg leading-relaxed">
-          从 12 名预选赛晋级选手中，经过淘汰赛对决、跑图竞技，最终决出 MSC 2026 冠军。
-          包含特殊赛制：六边形跑图、道具系统、25 项挑战任务。
-        </p>
+      <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-8 md:p-10 backdrop-blur-xl">
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-8 items-end">
+          <div>
+            <h2 className="text-sm md:text-base font-semibold text-amber-300/80 mb-3 uppercase tracking-[0.18em]" style={{ fontFamily: 'Torus, sans-serif' }}>
+              PureBeat 首届正式比赛
+            </h2>
+            <h1 className="text-6xl md:text-8xl font-black mb-5 tracking-tight" style={{ fontFamily: 'Torus, sans-serif' }}>
+              MSC 2026
+            </h1>
+            <p className="text-zinc-300 text-xl max-w-3xl leading-relaxed">
+              资格赛、12进6 小组赛、六边形与正方形跑图、最终四曲决赛。
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
+              <p className="text-5xl font-black text-white tabular-nums">12</p>
+              <p className="text-zinc-500 mt-1">正赛</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
+              <p className="text-5xl font-black text-white tabular-nums">4</p>
+              <p className="text-zinc-500 mt-1">阶段</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
+              <p className="text-5xl font-black text-white tabular-nums">1</p>
+              <p className="text-zinc-500 mt-1">冠军</p>
+            </div>
+          </div>
+        </div>
 
         {status !== 'pending' && status !== 'finished' && (
           <Link
             to={`/matches/msc2026/${status}`}
-            className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-all text-sm font-medium"
+            className="inline-flex items-center gap-3 mt-7 px-7 py-4 rounded-xl bg-amber-500/20 text-amber-200 border border-amber-400/30 hover:bg-amber-500/30 transition-all text-xl font-black"
           >
             进入当前阶段
-            <FaArrowRight className="text-xs" />
+            <FaArrowRight />
           </Link>
         )}
       </div>
 
       {/* 阶段进度条 */}
-      <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-6">
-        <h3 className="text-sm font-semibold text-zinc-300 mb-5" style={{ fontFamily: 'Torus, sans-serif' }}>
+      <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6">
+        <h3 className="text-2xl font-bold text-zinc-100 mb-6" style={{ fontFamily: 'Torus, sans-serif' }}>
           比赛进度
         </h3>
         <div className="flex items-start gap-0">
@@ -66,7 +83,7 @@ export default function TournamentHome() {
                 <div className="flex flex-col items-center flex-1">
                   <div
                     className={`
-                      w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all
+                      w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black border-2 transition-all
                       ${isDone ? 'bg-green-500/20 border-green-500 text-green-400' : ''}
                       ${isCurrent ? 'bg-amber-500/30 border-amber-500 text-amber-300 shadow-lg shadow-amber-500/10' : ''}
                       ${isPending ? 'bg-zinc-800 border-zinc-700 text-zinc-600' : ''}
@@ -75,7 +92,7 @@ export default function TournamentHome() {
                     {isDone ? '✓' : config.icon}
                   </div>
                   <span
-                    className={`text-xs mt-1.5 font-medium text-center leading-tight
+                    className={`text-base md:text-lg mt-2 font-bold text-center leading-tight
                       ${isCurrent ? 'text-amber-400' : isDone ? 'text-green-400/70' : 'text-zinc-600'}`}
                   >
                     {config.label}
@@ -83,7 +100,7 @@ export default function TournamentHome() {
                 </div>
                 {/* 连线 */}
                 {idx < STAGE_PHASES.length - 1 && (
-                  <div className={`h-0.5 mt-5 flex-1 min-w-[2rem] ${isDone ? 'bg-green-500/30' : 'bg-zinc-800'}`} />
+                  <div className={`h-1 mt-8 flex-1 min-w-[2rem] ${isDone ? 'bg-green-500/30' : 'bg-zinc-800'}`} />
                 )}
               </div>
             );
@@ -103,7 +120,7 @@ export default function TournamentHome() {
 
       {/* 状态卡片（如果有数据） */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {STAGE_PHASES.map((phase) => {
             const info = summary[phase];
             const config = STAGE_CONFIG[phase];
@@ -113,10 +130,10 @@ export default function TournamentHome() {
                 key={phase}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-xl border border-white/10 bg-zinc-900/40 p-4"
+                className="rounded-2xl border border-white/10 bg-white/[0.035] p-5"
               >
-                <div className="text-xs text-zinc-500 mb-1">{config.label}</div>
-                <div className="text-lg font-bold" style={{ fontFamily: 'Torus, sans-serif' }}>
+                <div className="text-base text-zinc-500 mb-2">{config.label}</div>
+                <div className="text-4xl font-black" style={{ fontFamily: 'Torus, sans-serif' }}>
                   {info?.completedGroups != null ? `${info.completedGroups}/${info.totalGroups}` : '-'}
                 </div>
               </motion.div>
@@ -127,12 +144,12 @@ export default function TournamentHome() {
 
       {/* 已结束状态 */}
       {status === 'finished' && (
-        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-8 text-center">
-          <FaTrophy className="text-3xl text-amber-400 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-amber-300 mb-1" style={{ fontFamily: 'Torus, sans-serif' }}>
+        <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-10 text-center">
+          <FaTrophy className="text-5xl text-amber-300 mx-auto mb-4" />
+          <h3 className="text-4xl font-black text-amber-200 mb-2" style={{ fontFamily: 'Torus, sans-serif' }}>
             比赛已结束
           </h3>
-          <p className="text-zinc-500 text-sm">MSC 2026 所有阶段已完成</p>
+          <p className="text-zinc-400 text-xl">MSC 2026 所有阶段已完成</p>
         </div>
       )}
     </div>
