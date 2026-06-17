@@ -5,6 +5,7 @@ import { FaUser, FaCrown, FaSkull } from 'react-icons/fa';
 
 /** 单个选手条目 */
 function PlayerCard({ player, status, isWinner }) {
+  const drawToken = player.token || '---';
   const stageLabel = (() => {
     if (player.isQualifiedStage3) return '决赛选手';
     if (player.isQualifiedStage2) return '晋级·阶段三';
@@ -26,7 +27,7 @@ function PlayerCard({ player, status, isWinner }) {
 
   return (
     <div
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all
         ${isWinner
           ? 'border-amber-500/30 bg-amber-500/5 ring-1 ring-amber-500/10'
           : isEliminated
@@ -36,15 +37,20 @@ function PlayerCard({ player, status, isWinner }) {
               : 'border-white/5 bg-zinc-800/40 hover:border-white/10 hover:bg-zinc-800/60'
         }`}
     >
+      <div className="w-20 flex-shrink-0 border-r border-white/10 pr-3">
+        <span className="block text-[10px] text-zinc-500 font-black uppercase tracking-wider">NO.</span>
+        <span className="block text-3xl leading-none font-black text-white font-mono">{drawToken}</span>
+      </div>
+
       {/* 头像 */}
       {player.avatarUrl ? (
         <img
           src={player.avatarUrl}
           alt={player.username}
-          className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-white/10"
+          className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-white/10"
         />
       ) : (
-        <div className="w-9 h-9 rounded-full bg-zinc-700 flex items-center justify-center flex-shrink-0">
+        <div className="w-11 h-11 rounded-full bg-zinc-700 flex items-center justify-center flex-shrink-0">
           <FaUser className="text-zinc-500 text-xs" />
         </div>
       )}
@@ -52,15 +58,15 @@ function PlayerCard({ player, status, isWinner }) {
       {/* 信息 */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm font-medium text-white truncate">{player.username}</span>
+          <span className="text-lg font-black text-white truncate">{player.username}</span>
           {isWinner && <FaCrown className="text-amber-400 text-[10px] flex-shrink-0" />}
           {isEliminated && <FaSkull className="text-zinc-600 text-[10px] flex-shrink-0" />}
         </div>
-        <span className={`text-[10px] ${stageColor}`}>{stageLabel}</span>
+        <span className={`text-xs font-bold ${stageColor}`}>{stageLabel}</span>
       </div>
 
       {/* 阶段指示器 */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         {['s1', 's2', 's3', 's4'].map((stage) => {
           const done = stage === 's1' ? player.isQualifiedStage1 :
                        stage === 's2' ? player.isQualifiedStage2 :
@@ -69,7 +75,7 @@ function PlayerCard({ player, status, isWinner }) {
           return (
             <div
               key={stage}
-              className={`w-1.5 h-1.5 rounded-full ${
+              className={`w-2 h-2 rounded-full ${
                 done ? 'bg-green-500' : 'bg-zinc-700'
               }`}
             />
@@ -101,17 +107,17 @@ export default function PlayerList({ players = [], status, winner }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
+        <h3 className="text-lg font-black text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
           参赛选手
         </h3>
-        <div className="flex items-center gap-3 text-xs text-zinc-500">
+        <div className="flex items-center gap-3 text-sm font-bold text-zinc-500">
           <span>共 {total} 人</span>
           {qualified > 0 && <span className="text-green-400">{qualified} 晋级</span>}
           {eliminated > 0 && <span className="text-red-400/70">{eliminated} 淘汰</span>}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[360px] overflow-y-auto pr-1">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-h-[520px] overflow-y-auto pr-1">
         {players.map((player) => (
           <PlayerCard
             key={player.userId}

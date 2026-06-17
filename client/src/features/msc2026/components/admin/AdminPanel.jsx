@@ -1,7 +1,7 @@
 // ============================================================
 // AdminPanel.jsx — MSC2026 管理员面板 (patch-02 重做)
 // 权限：ADM | TO | CHM
-// 选手数据源：旧赛事自动拉取（不再手动录入）
+// 选手数据源：同一比赛档案自动拉取（不再手动录入）
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../../context/AuthContext';
@@ -139,7 +139,7 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
 
-  // 旧赛事数据
+  // 比赛档案数据
   const [registrations, setRegistrations] = useState([]);
   const [qualifierRankings, setQualifierRankings] = useState(null);
   const [regLoading, setRegLoading] = useState(false);
@@ -167,7 +167,7 @@ export default function AdminPanel() {
       ]);
       setRegistrations(regRes.data.data?.registrations || []);
       setQualifierRankings(rankRes.data.data || null);
-    } catch (err) { console.error('加载旧赛事数据失败', err); }
+    } catch (err) { console.error('加载比赛档案数据失败', err); }
     finally { setRegLoading(false); }
   }, []);
 
@@ -215,6 +215,15 @@ export default function AdminPanel() {
     handleAction(
       () => api.advanceToStage3({ qualifiedIds: selectedPlayers }),
       '已推进到阶段三'
+    );
+
+  const handleBackfillTokens = () =>
+    handleAction(
+      async () => {
+        await api.backfillRegistrationTokens();
+        await loadRegistrations();
+      },
+      '选手三位数代号已补齐'
     );
 
   const tabs = [
@@ -277,10 +286,13 @@ export default function AdminPanel() {
         {activeTab === 'players' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs text-zinc-400 uppercase tracking-wider">旧赛事报名选手（{registrations.length} 人）</h4>
-              <button onClick={loadRegistrations} className="text-xs text-zinc-500 hover:text-white transition-colors">
-                <FaSpinner className={`inline mr-1 ${regLoading ? 'animate-spin' : ''}`} />刷新
-              </button>
+              <h4 className="text-xs text-zinc-400 uppercase tracking-wider">报名选手档案（{registrations.length} 人）</h4>
+              <div className="flex items-center gap-2">
+                <ActionButton onClick={handleBackfillTokens} loading={loading} icon={<FaCheck />} label="补齐代号" variant="undo" />
+                <button onClick={loadRegistrations} className="text-xs text-zinc-500 hover:text-white transition-colors">
+                  <FaSpinner className={`inline mr-1 ${regLoading ? 'animate-spin' : ''}`} />刷新
+                </button>
+              </div>
             </div>
             {qualifierRankings && (
               <div className="flex items-center gap-4 text-xs text-zinc-500 mb-2">
@@ -293,7 +305,7 @@ export default function AdminPanel() {
                 <RegistrationCard key={reg.userId} reg={reg} rank={i + 1} qualifiedUpTo={qualifierRankings?.qualifiedCount || 12} />
               ))}
               {registrations.length === 0 && !regLoading && (
-                <div className="col-span-full text-center py-8 text-zinc-500 text-xs">暂无旧赛事数据</div>
+                <div className="col-span-full text-center py-8 text-zinc-500 text-xs">暂无报名档案数据</div>
               )}
             </div>
           </div>

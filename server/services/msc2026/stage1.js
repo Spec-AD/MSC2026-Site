@@ -90,7 +90,7 @@ async function startFirstGroup(tournament) {
 /**
  * 选手选曲（裁判代理）
  * @param {object} tournament
- * @param {string} targetPlayerId - 目标选手 ID（由裁判 body.playerId 传入）
+ * @param {string} targetPlayerId - 已废弃，仅保留兼容；选曲归属由当前阶段自动确定
  * @param {string} songId
  */
 async function selectSong(tournament, targetPlayerId, songId) {
@@ -102,11 +102,9 @@ async function selectSong(tournament, targetPlayerId, songId) {
   const group = stage1.groups[stage1.currentGroupIndex];
   if (!group) throw new Error('无效的组索引');
 
-  const targetId = targetPlayerId.toString();
-
-  // 确定当前选曲阶段和选曲者（业务校验，不限操作者身份）
+  // 确定当前选曲阶段和选曲者。MSC 现场由 ADM/TO/CHM 代理操作，
+  // 因此不再信任请求体里的 playerId，避免代理误传导致流程卡死。
   if (group.status === 'p1_pick') {
-    if (group.p1.toString() !== targetId) throw new Error('指定的 playerId 不是本轮 P1');
     // 校验曲目在图池中且未在当前组被选过
     if (!stage1.songPool.some(s => s.toString() === songId.toString())) {
       throw new Error('该曲目不在图池中');
@@ -118,14 +116,13 @@ async function selectSong(tournament, targetPlayerId, songId) {
     group.songs.push({
       songId,
       pickType: 'p1_pick',
-      pickedBy: targetPlayerId,
+      pickedBy: group.p1,
       p1Score: null,
       p2Score: null,
       order: group.songs.length
     });
     group.status = 'playing';
   } else if (group.status === 'p2_pick') {
-    if (group.p2.toString() !== targetId) throw new Error('指定的 playerId 不是本轮 P2');
     if (!stage1.songPool.some(s => s.toString() === songId.toString())) {
       throw new Error('该曲目不在图池中');
     }
@@ -136,7 +133,7 @@ async function selectSong(tournament, targetPlayerId, songId) {
     group.songs.push({
       songId,
       pickType: 'p2_pick',
-      pickedBy: targetPlayerId,
+      pickedBy: group.p2,
       p1Score: null,
       p2Score: null,
       order: group.songs.length

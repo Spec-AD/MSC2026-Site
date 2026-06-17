@@ -69,10 +69,8 @@ async function selectSong(tournament, targetPlayerId, songId) {
   const s4 = tournament.stage4;
   if (!s4) throw new Error('决赛未初始化');
 
-  const targetId = targetPlayerId.toString();
-
+  // MSC 现场由 ADM/TO/CHM 代理操作，选曲归属由当前阶段自动确定。
   if (s4.status === 'p1_pick') {
-    if (s4.p1.toString() !== targetId) throw new Error('指定的 playerId 不是本轮 P1');
     if (!s4.songPool.some(s => s.toString() === songId.toString())) {
       throw new Error('该曲目不在图池中');
     }
@@ -83,14 +81,13 @@ async function selectSong(tournament, targetPlayerId, songId) {
     s4.songs.push({
       songId,
       pickType: 'p1_pick',
-      pickedBy: targetPlayerId,
+      pickedBy: s4.p1,
       p1Score: null,
       p2Score: null,
       order: s4.songs.length
     });
     s4.status = 'playing';
   } else if (s4.status === 'p2_pick') {
-    if (s4.p2.toString() !== targetId) throw new Error('指定的 playerId 不是本轮 P2');
     if (!s4.songPool.some(s => s.toString() === songId.toString())) {
       throw new Error('该曲目不在图池中');
     }
@@ -101,7 +98,7 @@ async function selectSong(tournament, targetPlayerId, songId) {
     s4.songs.push({
       songId,
       pickType: 'p2_pick',
-      pickedBy: targetPlayerId,
+      pickedBy: s4.p2,
       p1Score: null,
       p2Score: null,
       order: s4.songs.length

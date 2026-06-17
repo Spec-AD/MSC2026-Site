@@ -55,6 +55,56 @@ function assertSubsetIds(ids, allowedIds, label = 'ID列表') {
   if (invalid.length) throw new Error(`${label}包含不在当前比赛中的选手`);
 }
 
+function normalizeDrawToken(token) {
+  const value = String(token ?? '').trim();
+  return /^\d{3}$/.test(value) ? value : '';
+}
+
+async function ensureOldTournamentRegistrationTokens(oldTournamentId) {
+  if (!oldTournamentId) return { updatedCount: 0, total: 0 };
+
+  const oldT = await Tournament.findById(oldTournamentId);
+  if (!oldT) return { updatedCount: 0, total: 0 };
+
+  const registrations = oldT.registrations || [];
+  if (registrations.length > 1000) {
+    throw new Error('三位数代号池最多支持 1000 名选手');
+  }
+
+  const used = new Set();
+  const needsToken = [];
+  let changed = false;
+
+  registrations.forEach((reg) => {
+    const token = normalizeDrawToken(reg.token);
+    if (token && !used.has(token)) {
+      if (reg.token !== token) {
+        reg.token = token;
+        changed = true;
+      }
+      used.add(token);
+      return;
+    }
+    needsToken.push(reg);
+  });
+
+  if (needsToken.length === 0) return { updatedCount: 0, total: registrations.length };
+
+  const available = shuffle(
+    Array.from({ length: 1000 }, (_, i) => String(i).padStart(3, '0'))
+      .filter(token => !used.has(token))
+  );
+
+  needsToken.forEach((reg, i) => {
+    reg.token = available[i];
+    changed = true;
+  });
+
+  if (changed) await oldT.save();
+
+  return { updatedCount: needsToken.length, total: registrations.length };
+}
+
 // ==========================================
 // 🌐 全局状态
 // ==========================================
@@ -193,6 +243,7 @@ router.get('/players', async (req, res) => {
     let oldRegistrations = [];
     if (t.oldTournamentId) {
       try {
+        await ensureOldTournamentRegistrationTokens(t.oldTournamentId._id || t.oldTournamentId);
         const oldT = await Tournament.findById(t.oldTournamentId)
           .populate('registrations.userId', 'username avatarUrl')
           .lean();
@@ -299,6 +350,8 @@ router.get('/old/registrations', authMiddleware, async (req, res) => {
     if (!t) return;
     if (!t.oldTournamentId) return res.status(404).json({ msg: '未关联旧赛事' });
 
+    await ensureOldTournamentRegistrationTokens(t.oldTournamentId);
+
     const oldT = await Tournament.findById(t.oldTournamentId)
       .populate('registrations.userId', 'username avatarUrl')
       .lean();
@@ -346,6 +399,27 @@ router.get('/old/registrations', authMiddleware, async (req, res) => {
   }
 });
 
+/** 补齐旧赛事报名选手三位数代号（MSC 现场抽奖/身份展示用） */
+router.post('/old/registrations/backfill-tokens', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    const t = await requireTournament(res);
+    if (!t) return;
+    if (!t.oldTournamentId) return res.status(404).json({ msg: '未关联比赛档案' });
+
+    const result = await ensureOldTournamentRegistrationTokens(t.oldTournamentId);
+    res.json({
+      msg: result.updatedCount > 0 ? '三位数代号已补齐' : '所有选手已有唯一三位数代号',
+      data: result
+    });
+  } catch (err) {
+    console.error('补齐三位数代号失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
 /** 获取预选赛排名 */
 router.get('/old/qualifier-rankings', authMiddleware, async (req, res) => {
   try {
@@ -355,6 +429,8 @@ router.get('/old/qualifier-rankings', authMiddleware, async (req, res) => {
     const t = await requireTournament(res);
     if (!t) return;
     if (!t.oldTournamentId) return res.status(404).json({ msg: '未关联旧赛事' });
+
+    await ensureOldTournamentRegistrationTokens(t.oldTournamentId);
 
     const oldT = await Tournament.findById(t.oldTournamentId)
       .populate('registrations.userId', 'username avatarUrl')
@@ -468,6 +544,8 @@ router.post('/stage1/init-from-qualifier', authMiddleware, async (req, res) => {
     if (normalizedSongPoolIds.length < 3) {
       return res.status(400).json({ msg: '图池至少需要 3 首歌' });
     }
+
+    await ensureOldTournamentRegistrationTokens(t.oldTournamentId);
 
     const oldT = await Tournament.findById(t.oldTournamentId)
       .populate('registrations.userId', 'username avatarUrl')
@@ -704,27 +782,18 @@ router.get('/stage1/group/:groupId', async (req, res) => {
 
 router.post('/stage1/select-song', authMiddleware, async (req, res) => {
   try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { songId, playerId } = req.body;
-    const role = req.user.role;
-    const isReferee = role === 'ADM' || role === 'TO' || role === 'CHM';
-
-    // 裁判无 playerId 时自动从当前回合推断目标选手
+    const { songId } = req.body;
+    const group = t.stage1?.groups?.[t.stage1.currentGroupIndex];
     let targetPlayerId;
-    if (isReferee && playerId) {
-      targetPlayerId = playerId;
-    } else if (isReferee) {
-      const group = t.stage1?.groups?.[t.stage1.currentGroupIndex];
-      if (group?.status === 'p1_pick') targetPlayerId = String(group.p1);
-      else if (group?.status === 'p2_pick') targetPlayerId = String(group.p2);
-      else return res.status(400).json({ msg: '当前不是选曲阶段，请手动指定 playerId' });
-    } else {
-      // 普通用户只能操作自己
-      if (playerId && playerId !== req.user.id) return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
-      targetPlayerId = req.user.id;
-    }
+    if (group?.status === 'p1_pick') targetPlayerId = String(group.p1);
+    else if (group?.status === 'p2_pick') targetPlayerId = String(group.p2);
+    else return res.status(400).json({ msg: '当前不是选曲阶段' });
 
     const result = await selectSong(t, targetPlayerId, songId);
 
@@ -1009,27 +1078,18 @@ router.get('/race/map', async (req, res) => {
 
 router.post('/race/action', authMiddleware, async (req, res) => {
   try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { actionType, zoneIndex, playerId } = req.body;
-    const role = req.user.role;
-    const isReferee = role === 'ADM' || role === 'TO' || role === 'CHM';
-
-    // 裁判无 playerId 时自动取当前回合选手
-    let targetPlayerId;
-    if (isReferee && playerId) {
-      targetPlayerId = playerId;
-    } else if (isReferee) {
-      const race = currentRace(t);
-      if (!race) return res.status(400).json({ msg: '不在跑图阶段' });
-      const cp = race.players[race.currentPlayerIndex];
-      if (!cp) return res.status(400).json({ msg: '无当前选手' });
-      targetPlayerId = String(cp.userId?._id || cp.userId);
-    } else {
-      if (playerId && playerId !== req.user.id) return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
-      targetPlayerId = req.user.id;
-    }
+    const { actionType, zoneIndex } = req.body;
+    const race = currentRace(t);
+    if (!race) return res.status(400).json({ msg: '不在跑图阶段' });
+    const cp = race.players[race.currentPlayerIndex];
+    if (!cp) return res.status(400).json({ msg: '无当前选手' });
+    const targetPlayerId = String(cp.userId?._id || cp.userId);
 
     const result = await playerAction(t, targetPlayerId, actionType, zoneIndex);
 
@@ -1042,26 +1102,18 @@ router.post('/race/action', authMiddleware, async (req, res) => {
 
 router.post('/race/use-item', authMiddleware, async (req, res) => {
   try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { itemRef, playerId } = req.body;
-    const role = req.user.role;
-    const isReferee = role === 'ADM' || role === 'TO' || role === 'CHM';
-
-    let targetPlayerId;
-    if (isReferee && playerId) {
-      targetPlayerId = playerId;
-    } else if (isReferee) {
-      const race = currentRace(t);
-      if (!race) return res.status(400).json({ msg: '不在跑图阶段' });
-      const cp = race.players[race.currentPlayerIndex];
-      if (!cp) return res.status(400).json({ msg: '无当前选手' });
-      targetPlayerId = String(cp.userId?._id || cp.userId);
-    } else {
-      if (playerId && playerId !== req.user.id) return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
-      targetPlayerId = req.user.id;
-    }
+    const { itemRef } = req.body;
+    const race = currentRace(t);
+    if (!race) return res.status(400).json({ msg: '不在跑图阶段' });
+    const cp = race.players[race.currentPlayerIndex];
+    if (!cp) return res.status(400).json({ msg: '无当前选手' });
+    const targetPlayerId = String(cp.userId?._id || cp.userId);
 
     const result = await useItem(t, targetPlayerId, itemRef);
 
@@ -1447,25 +1499,18 @@ router.get('/stage4/state', async (req, res) => {
 
 router.post('/stage4/select-song', authMiddleware, async (req, res) => {
   try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { songId, playerId } = req.body;
-    const role = req.user.role;
-    const isReferee = role === 'ADM' || role === 'TO' || role === 'CHM';
-
+    const { songId } = req.body;
+    const s4 = t.stage4;
     let targetPlayerId;
-    if (isReferee && playerId) {
-      targetPlayerId = playerId;
-    } else if (isReferee) {
-      const s4 = t.stage4;
-      if (s4?.status === 'p1_pick') targetPlayerId = String(s4.p1);
-      else if (s4?.status === 'p2_pick') targetPlayerId = String(s4.p2);
-      else return res.status(400).json({ msg: '当前不是选曲阶段，请手动指定 playerId' });
-    } else {
-      if (playerId && playerId !== req.user.id) return res.status(403).json({ msg: '仅裁判/管理员可代选手操作' });
-      targetPlayerId = req.user.id;
-    }
+    if (s4?.status === 'p1_pick') targetPlayerId = String(s4.p1);
+    else if (s4?.status === 'p2_pick') targetPlayerId = String(s4.p2);
+    else return res.status(400).json({ msg: '当前不是选曲阶段' });
 
     const result = await selectSong4(t, targetPlayerId, songId);
 

@@ -148,6 +148,10 @@ export const createSSEUrl = (since) => {
 export const getOldRegistrations = () =>
   axios.get(`${BASE}/old/registrations`, { headers: authHeaders() });
 
+/** 补齐报名选手三位数代号 */
+export const backfillRegistrationTokens = () =>
+  axios.post(`${BASE}/old/registrations/backfill-tokens`, {}, { headers: authHeaders() });
+
 /** 获取预选赛排名 */
 export const getQualifierRankings = () =>
   axios.get(`${BASE}/old/qualifier-rankings`, { headers: authHeaders() });
