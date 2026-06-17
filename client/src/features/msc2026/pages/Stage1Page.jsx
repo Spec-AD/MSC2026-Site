@@ -38,16 +38,21 @@ export default function Stage1Page() {
   const selectedGroup = selectedGroupId !== null
     ? store.stage1.groups?.find((g) => g.groupId === selectedGroupId)
     : null;
+  const selectedWinnerId = selectedGroup?.winner?.toString?.() || selectedGroup?.winner;
+  const selectedP1Id = (selectedGroup?.p1?._id || selectedGroup?.p1?.userId)?.toString?.() || selectedGroup?.p1?._id || selectedGroup?.p1?.userId;
+  const selectedWinnerName = selectedWinnerId === selectedP1Id
+    ? selectedGroup?.p1?.username
+    : selectedGroup?.p2?.username;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* 顶部信息栏 */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold tracking-tight" style={{ fontFamily: 'Torus, sans-serif' }}>
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight" style={{ fontFamily: 'Torus, sans-serif' }}>
             12进6 · 淘汰赛
           </h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <p className="text-base md:text-xl text-zinc-400 mt-2">
             {store.stage1.status === 'done'
               ? '阶段已结束'
               : `${store.stage1.completedGroups}/${store.stage1.totalGroups} 组已完成`}
@@ -56,10 +61,10 @@ export default function Stage1Page() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => store.fetchStage1State()}
-            className="p-2 rounded-lg border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all"
+            className="p-4 rounded-xl border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 transition-all"
             title="刷新"
           >
-            <FaSync className={`text-xs ${store.stage1.loading ? 'animate-spin' : ''}`} />
+            <FaSync className={`text-lg ${store.stage1.loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
@@ -82,53 +87,53 @@ export default function Stage1Page() {
 
         {view === 'match' && selectedGroup && (
           <motion.div key="match" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-4 mb-6">
               <button
                 onClick={() => { setView('bracket'); setSelectedGroupId(null); }}
-                className="text-xs text-zinc-400 hover:text-white transition-colors"
+                className="text-base md:text-lg text-zinc-300 hover:text-white transition-colors"
               >
                 ← 返回对阵表
               </button>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-500 border border-white/10">
+              <span className="text-base md:text-lg px-4 py-1.5 rounded-full bg-white/[0.06] text-zinc-300 border border-white/10">
                 第 {selectedGroup.order + 1} 组
               </span>
             </div>
 
             {/* 比分展示 */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-6">
               {/* P1 */}
-              <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-xs">
+              <div className="rounded-2xl border border-sky-400/20 bg-white/[0.04] p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-14 h-14 rounded-2xl bg-sky-400/15 flex items-center justify-center text-sky-200 font-black text-xl">
                     P1
                   </div>
-                  <span className="font-medium text-sm text-white">
+                  <span className="font-bold text-3xl text-white truncate">
                     {selectedGroup.p1?.username || '—'}
                   </span>
                 </div>
                 {selectedGroup.songs?.map((song, i) => (
-                  <div key={i} className="text-xs py-1 border-b border-white/5 last:border-0 flex justify-between">
-                    <span className="text-zinc-500">{song.song?.title || `曲目 ${i + 1}`}</span>
-                    <span className="text-zinc-300 font-mono">
+                  <div key={i} className="text-lg py-3 border-b border-white/10 last:border-0 flex justify-between gap-5">
+                    <span className="text-zinc-300 truncate">{song.song?.title || `曲目 ${i + 1}`}</span>
+                    <span className="text-zinc-100 font-mono tabular-nums shrink-0">
                       {song.p1Score ? `${song.p1Score.achievement.toFixed(4)}%` : '—'}
                     </span>
                   </div>
                 ))}
               </div>
               {/* P2 */}
-              <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-bold text-xs">
+              <div className="rounded-2xl border border-fuchsia-400/20 bg-white/[0.04] p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-14 h-14 rounded-2xl bg-fuchsia-400/15 flex items-center justify-center text-fuchsia-200 font-black text-xl">
                     P2
                   </div>
-                  <span className="font-medium text-sm text-white">
+                  <span className="font-bold text-3xl text-white truncate">
                     {selectedGroup.p2?.username || '—'}
                   </span>
                 </div>
                 {selectedGroup.songs?.map((song, i) => (
-                  <div key={i} className="text-xs py-1 border-b border-white/5 last:border-0 flex justify-between">
-                    <span className="text-zinc-500">{song.song?.title || `曲目 ${i + 1}`}</span>
-                    <span className="text-zinc-300 font-mono">
+                  <div key={i} className="text-lg py-3 border-b border-white/10 last:border-0 flex justify-between gap-5">
+                    <span className="text-zinc-300 truncate">{song.song?.title || `曲目 ${i + 1}`}</span>
+                    <span className="text-zinc-100 font-mono tabular-nums shrink-0">
                       {song.p2Score ? `${song.p2Score.achievement.toFixed(4)}%` : '—'}
                     </span>
                   </div>
@@ -138,9 +143,9 @@ export default function Stage1Page() {
 
             {/* 胜者 */}
             {selectedGroup.winner && (
-              <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3 mb-4 text-center">
-                <span className="text-sm text-green-400">
-                  晋级: {selectedGroup.winner === (selectedGroup.p1?._id || selectedGroup.p1?.userId) ? selectedGroup.p1?.username : selectedGroup.p2?.username}
+              <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-5 mb-5 text-center">
+                <span className="text-2xl md:text-3xl font-bold text-emerald-200">
+                  晋级: {selectedWinnerName}
                 </span>
               </div>
             )}

@@ -63,7 +63,8 @@ function generateSingleElimination(playerIds) {
       round: 1,
       roundName: getRoundName(firstRoundMatchCount * 2),
       bracketPosition: i,
-      nextMatchIndex: firstRoundMatchCount + Math.floor(i / 2),
+      // 修复 #6b：当首轮即决赛（2 人 / size===2，totalRounds===1）时无下一轮，应为 -1
+      nextMatchIndex: totalRounds === 1 ? -1 : firstRoundMatchCount + Math.floor(i / 2),
       playerA: pA || null,
       playerB: pB || null,
       scoreA: 0,
@@ -84,13 +85,17 @@ function generateSingleElimination(playerIds) {
   for (let r = 2; r <= totalRounds; r++) {
     const matchesInRound = Math.pow(2, totalRounds - r);
     const playerCount = matchesInRound * 2;
+    const roundStart = matchIndex; // 修复 #6：本轮起始全局索引（整轮恒定）
     for (let i = 0; i < matchesInRound; i++) {
       const isFinal = matchesInRound === 1;
       matches.push({
         round: r,
         roundName: getRoundName(playerCount),
         bracketPosition: matchIndex,
-        nextMatchIndex: isFinal ? -1 : matchIndex + matchesInRound + Math.floor(i / 2),
+        // 修复 #6：下一轮位置 = (本轮起始 + 本轮场数) + floor(i/2)。
+        // 旧代码用逐场递增的 matchIndex 替代 roundStart，导致 i≥1 的 nextMatchIndex 越界，
+        // ≥8 人 bracket 的下半区胜者无法进入决赛，赛事卡在 ONGOING。
+        nextMatchIndex: isFinal ? -1 : roundStart + matchesInRound + Math.floor(i / 2),
         playerA: null,      // 由上级 match 胜者填入
         playerB: null,
         scoreA: 0,

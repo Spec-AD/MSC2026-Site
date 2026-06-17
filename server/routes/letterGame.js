@@ -7,7 +7,7 @@ const ArcaeaSong = require('../models/ArcaeaSong');
 const { GameRecord, ActiveSession } = require('../models/LetterGame');
 const { addXp, authMiddleware, optionalAuth } = require('../middleware/auth');
 const finishGameSession = require('../services/gameSession');
-const { normalizeTitle, calculateBaseOV, generateMaskedTitle, calculateActualOV, calculateSessionStarRating, distributeNonLinearOV } = require('../utils/gameEngine');
+const { normalizeTitle, calculateBaseOV, generateMaskedTitle, calculateActualOV, calculateSessionStarRating, distributeNonLinearOV, getRevealRatio, shuffleArray } = require('../utils/gameEngine');
 
 // ==================================================
 // 🎮 API 1：开始开字母游戏 (支持多曲库混合 & 目标星级匹配)
@@ -16,8 +16,9 @@ router.post('/api/letter-game/start', authMiddleware, async (req, res) => {
   try {
     let { mods = [], gameTypes = ['arcaea'], targetStar = 5.0 } = req.body;
 
-    if (mods.includes('Tenacity') && mods.includes('Fear')) {
-      mods = mods.filter(m => m !== 'Tenacity' && m !== 'Fear');
+    const modList = Array.isArray(mods) ? mods : [];
+    if (modList.includes('Tenacity') && modList.includes('Fear')) {
+      mods = modList.filter(m => m !== 'Tenacity' && m !== 'Fear');
       if (!mods.includes('Prudence')) mods.push('Prudence');
     }
 
@@ -39,7 +40,7 @@ router.post('/api/letter-game/start', authMiddleware, async (req, res) => {
       return res.status(400).json({ msg: '选中的曲库数据不足 5 首，无法生成对局' });
     }
 
-    poolSongs.sort(() => Math.random() - 0.5);
+    poolSongs = shuffleArray(poolSongs);
     const poolWithOvs = poolSongs.map(s => {
       const title = s.title || s.basic_info?.title || s.id || 'Unknown';
       return { ...s, _baseOv: calculateBaseOV(title) };
@@ -56,16 +57,16 @@ router.post('/api/letter-game/start', authMiddleware, async (req, res) => {
       if (diff < bestDiff) { bestDiff = diff; bestSubset = subset; }
     }
 
-    const finalSongs = bestSubset.sort(() => Math.random() - 0.5);
+    const finalSongs = shuffleArray(bestSubset);
     let initialOpenedChars = new Set();
     let baseTime = 60000;
     if (mods.includes('Tenacity')) baseTime = 30000;
     if (mods.includes('Easy')) baseTime = 120000;
 
-    if (mods.includes('Easy')) {
+    if (modList.includes('Easy')) {
       ['a','e','i','o','u','あ','い','う','え','お','ア','イ','ウ','エ','オ'].forEach(c => initialOpenedChars.add(c));
     }
-    if (mods.includes('Lucky')) {
+    if (modList.includes('Lucky')) {
       let globalChars = new Set();
       finalSongs.forEach(s => {
         for (let char of (s.title || s.basic_info?.title || s.id || '')) {
@@ -139,35 +140,45 @@ router.post('/api/letter-game/open', authMiddleware, async (req, res) => {
     const session = await ActiveSession.findById(sessionId);
     if (!session) return res.status(404).json({ msg: '对局不存在' });
 
-    if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
+    const sessionMods = session.mods || [];
+    if (session.expireAt <= Date.now() && !sessionMods.includes('Strength')) {
       const resultData = await finishGameSession(session);
       return res.json({ gameOver: true, ...resultData, msg: 'Time Out' });
     }
 
-    const targetChar = char.toLowerCase();
+    const targetChar = String(char || '').toLowerCase();
+    if (!targetChar) return res.status(400).json({ msg: '无效字符' });
+
     if (!session.openedChars.includes(targetChar)) {
       session.openedChars.push(targetChar);
     }
 
     let baseTime = 60000;
-    if (session.mods.includes('Tenacity')) baseTime = 30000;
-    if (session.mods.includes('Easy')) baseTime = 120000;
+    if (sessionMods.includes('Tenacity')) baseTime = 30000;
+    if (sessionMods.includes('Easy')) baseTime = 120000;
     session.expireAt = new Date(Date.now() + baseTime);
 
     session.songs.forEach(song => {
       if (song.status === 'PLAYING') {
-        const R_CheckMask = generateMaskedTitle(song.realTitle, session.openedChars, session.mods);
-        if (!R_CheckMask.includes('*') && !session.mods.includes('Puzzle')) {
+        const R_CheckMask = generateMaskedTitle(song.realTitle, session.openedChars, sessionMods);
+        if (!R_CheckMask.includes('*') && !sessionMods.includes('Puzzle')) {
           song.status = 'DEAD';
         }
       }
     });
 
+    // ⚡ 自动检测：所有歌曲都 DEAD 或 CLEARED → 自动结算
+    const anyPlaying = session.songs.some(s => s.status === 'PLAYING');
+    if (!anyPlaying) {
+      const resultData = await finishGameSession(session);
+      return res.json({ gameOver: true, ...resultData, msg: '所有曲目已揭晓，结算完成' });
+    }
+
     await session.save();
 
     const clientSongs = session.songs.map((song, idx) => ({
       index: idx,
-      maskedTitle: song.status === 'CLEARED' ? song.realTitle : generateMaskedTitle(song.realTitle, session.openedChars, session.mods),
+      maskedTitle: song.status === 'CLEARED' ? song.realTitle : generateMaskedTitle(song.realTitle, session.openedChars, sessionMods),
       status: song.status,
       hasKana: song.hasKana, hasKanji: song.hasKanji, hasSym: song.hasSym
     }));
@@ -187,33 +198,39 @@ router.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
     const session = await ActiveSession.findById(sessionId);
     if (!session) return res.status(404).json({ msg: '对局不存在' });
 
-    if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
+    const sessionMods = session.mods || [];
+    if (session.expireAt <= Date.now() && !sessionMods.includes('Strength')) {
       const resultData = await finishGameSession(session);
       return res.json({ gameOver: true, ...resultData, msg: '时间已耗尽' });
     }
 
+    if (songIndex === undefined || songIndex === null || typeof songIndex !== 'number') {
+      return res.status(400).json({ msg: '无效的曲目标引' });
+    }
     const song = session.songs[songIndex];
     if (!song || song.status !== 'PLAYING') return res.status(400).json({ msg: '该曲目无法作答' });
 
     const normalizedGuess = normalizeTitle(guess);
     const isCorrect =
       normalizedGuess === normalizeTitle(song.realTitle) ||
-      (song.aliases && song.aliases.some(alias => normalizeTitle(alias) === normalizedGuess));
+      (Array.isArray(song.aliases) && song.aliases.some(alias => normalizeTitle(alias) === normalizedGuess));
 
     if (isCorrect) {
       song.status = 'CLEARED';
-      song.actualOv = calculateActualOV(song.baseOv, song.realTitle, session.openedChars, song.mistakes, session.mods);
+      song.actualOv = calculateActualOV(song.baseOv, song.realTitle, session.openedChars, song.mistakes, sessionMods);
     } else {
       song.mistakes += 1;
       let penalty = 15000;
-      if (session.mods.includes('Fear')) penalty = 30000;
-      if (session.mods.includes('Brave')) penalty = 5000;
-      if (session.mods.includes('Prudence')) {
+      if (sessionMods.includes('Fear')) penalty = 30000;
+      if (sessionMods.includes('Brave')) penalty = 5000;
+      if (sessionMods.includes('Prudence')) {
         const resultData = await finishGameSession(session);
         return res.json({ gameOver: true, ...resultData, msg: 'Prudence! 猜错即死。' });
       }
-      session.expireAt = new Date(session.expireAt.getTime() - penalty);
-      if (session.expireAt <= Date.now() && !session.mods.includes('Strength')) {
+      const expireAt = session.expireAt;
+      const expireTime = expireAt && typeof expireAt.getTime === 'function' ? expireAt.getTime() : Date.now();
+      session.expireAt = new Date(expireTime - penalty);
+      if (session.expireAt <= Date.now() && !sessionMods.includes('Strength')) {
         const resultData = await finishGameSession(session);
         return res.json({ gameOver: true, ...resultData, msg: '惩罚导致时间耗尽。' });
       }
@@ -229,7 +246,7 @@ router.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
 
     const clientSongs = session.songs.map((s, idx) => ({
       index: idx,
-      maskedTitle: s.status === 'CLEARED' ? s.realTitle : generateMaskedTitle(s.realTitle, session.openedChars, session.mods),
+      maskedTitle: s.status === 'CLEARED' ? s.realTitle : generateMaskedTitle(s.realTitle, session.openedChars, sessionMods),
       status: s.status,
       actualOv: s.actualOv,
       hasKana: s.hasKana, hasKanji: s.hasKanji, hasSym: s.hasSym
@@ -237,6 +254,7 @@ router.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
 
     res.json({ isCorrect, expireAt: session.expireAt, songs: clientSongs });
   } catch (err) {
+    console.error('【Letter Decode 猜题错误】:', err);
     res.status(500).json({ msg: '校验失败' });
   }
 });
@@ -247,22 +265,27 @@ router.post('/api/letter-game/guess', authMiddleware, async (req, res) => {
 router.post('/api/letter-game/abort', authMiddleware, async (req, res) => {
   try {
     const { sessionId } = req.body;
+    if (!sessionId) return res.status(400).json({ msg: '缺少 sessionId' });
     const session = await ActiveSession.findById(sessionId);
     if (!session) return res.status(404).json({ msg: '对局不存在' });
 
-    const finalSongs = session.songs.map(song => ({
+    const finalSongs = (session.songs || []).map(song => ({
       songId: song.songId,
       title: song.realTitle,
       baseOv: song.baseOv,
       actualOv: 0,
-      mistakes: song.mistakes,
-      isCleared: false
+      mistakes: song.mistakes || 0,
+      isCleared: false,
+      revealRatio: getRevealRatio(song.realTitle, session.openedChars || [], session.mods || [])
     }));
 
     await ActiveSession.deleteOne({ _id: session._id });
 
     const user = await User.findById(session.userId);
-    const currentStats = user.letterGameStats ? user.letterGameStats.toObject() : {};
+    const currentStats = user && user.letterGameStats ? user.letterGameStats.toObject() : {};
+
+    const createdAt = session.createdAt && typeof session.createdAt.getTime === 'function'
+      ? session.createdAt.getTime() : Date.now();
 
     res.json({
       gameOver: true,
@@ -270,10 +293,11 @@ router.post('/api/letter-game/abort', authMiddleware, async (req, res) => {
       record: { isFullCombo: false, songs: finalSongs },
       oldStats: currentStats,
       newStats: currentStats,
-      timeUsed: Date.now() - session.createdAt.getTime(),
+      timeUsed: Date.now() - createdAt,
       msg: '行动已终止，未计入个人档案'
     });
   } catch (err) {
+    console.error('【Letter Decode 终止错误】:', err);
     res.status(500).json({ msg: '终止失败' });
   }
 });

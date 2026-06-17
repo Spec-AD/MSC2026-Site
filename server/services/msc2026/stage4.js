@@ -10,7 +10,7 @@
  * - P1-8: 决赛结束后设置 tournament.status = 'finished'
  */
 
-const { shuffle, validateScore, determineWinner } = require('./utils');
+const { shuffle, validateScore, normalizeScoreInput, determineWinner, assertObjectIdList } = require('./utils');
 const { broadcast } = require('./ssePool');
 const { syncToOldTournament } = require('./oldTournamentSync');
 
@@ -18,14 +18,17 @@ const { syncToOldTournament } = require('./oldTournamentSync');
  * 初始化决赛
  */
 async function initStage4(tournament, playerIds, songPoolIds, designatedSongId) {
-  if (!playerIds || playerIds.length !== 2) {
-    throw new Error('决赛需要恰好 2 名选手');
-  }
-  if (!songPoolIds || songPoolIds.length < 3) {
+  playerIds = assertObjectIdList(playerIds, 2, '决赛选手');
+  songPoolIds = assertObjectIdList(songPoolIds || [], null, '决赛图池');
+  if (songPoolIds.length < 3) {
     throw new Error('决赛图池至少需要 3 首歌');
   }
   if (!designatedSongId) {
     throw new Error('需要指定课题曲');
+  }
+  const [normalizedDesignatedSongId] = assertObjectIdList([designatedSongId], 1, '课题曲');
+  if (songPoolIds.includes(normalizedDesignatedSongId)) {
+    throw new Error('课题曲不能同时出现在决赛可选图池中');
   }
 
   // 随机抽签 P1/P2
@@ -35,7 +38,7 @@ async function initStage4(tournament, playerIds, songPoolIds, designatedSongId) 
     p1: shuffled[0],
     p2: shuffled[1],
     songPool: songPoolIds,
-    designatedSongId,
+    designatedSongId: normalizedDesignatedSongId,
     songs: [],
     status: 'p1_pick',
     winner: null,
@@ -132,24 +135,26 @@ async function submitScore(tournament, userId, body) {
   if (!lastSong) throw new Error('未找到待录入曲目');
 
   if (body.p1Score) {
-    const errs = validateScore(body.p1Score);
+    const p1Score = normalizeScoreInput(body.p1Score);
+    const errs = validateScore(p1Score);
     if (errs.length) throw new Error(`P1成绩校验失败: ${errs.join('; ')}`);
     lastSong.p1Score = {
-      achievement: body.p1Score.achievement,
-      dxScore: body.p1Score.dxScore,
-      perfectRate: body.p1Score.perfectRate,
+      achievement: p1Score.achievement,
+      dxScore: p1Score.dxScore,
+      perfectRate: p1Score.perfectRate,
       recordedBy: userId,
       recordedAt: new Date(),
       locked: true
     };
   }
   if (body.p2Score) {
-    const errs = validateScore(body.p2Score);
+    const p2Score = normalizeScoreInput(body.p2Score);
+    const errs = validateScore(p2Score);
     if (errs.length) throw new Error(`P2成绩校验失败: ${errs.join('; ')}`);
     lastSong.p2Score = {
-      achievement: body.p2Score.achievement,
-      dxScore: body.p2Score.dxScore,
-      perfectRate: body.p2Score.perfectRate,
+      achievement: p2Score.achievement,
+      dxScore: p2Score.dxScore,
+      perfectRate: p2Score.perfectRate,
       recordedBy: userId,
       recordedAt: new Date(),
       locked: true
@@ -245,53 +250,99 @@ async function advance(tournament) {
     // 四首全部完成 → 判定胜负
     const p1Scores = s4.songs.map(s => s.p1Score);
     const p2Scores = s4.songs.map(s => s.p2Score);
+    const p1Total = p1Scores.reduce((a, s) => a + (s ? s.achievement : 0), 0);
+    const p2Total = p2Scores.reduce((a, s) => a + (s ? s.achievement : 0), 0);
 
     const result = determineWinner(p1Scores, p2Scores);
 
-    let winner = null;
-    if (result === 'p1') winner = s4.p1;
-    else if (result === 'p2') winner = s4.p2;
-    else s4.needTiebreak = true;
+    // 修复 #4：平局绝不能直接 finished + 写空冠军，应保留可加赛状态等待裁判 resolveTie。
+    if (result === 'tie') {
+      s4.needTiebreak = true;
+      s4.winner = null;
+      s4.status = 'done';
+      await tournament.save();
 
-    s4.winner = winner;
-    s4.status = 'done';
+      broadcast('match_finished', {
+        type: 'final',
+        winnerId: null,
+        needTiebreak: true,
+        p1Total,
+        p2Total
+      });
 
-    // P1-8: 设置赛事状态为 finished
-    tournament.status = 'finished';
+      return {
+        nextStep: 'need_tiebreak',
+        needTiebreak: true,
+        p1Total: p1Total.toFixed(4),
+        p2Total: p2Total.toFixed(4)
+      };
+    }
 
-    await tournament.save();
-
-    // 旧赛事同步：回写 results + status=finished
-    const runnerUp = winner ? (String(winner) === String(s4.p1) ? s4.p2 : s4.p1) : null;
-    await syncToOldTournament(tournament, 'stage4_complete', {
-      winner: winner ? String(winner) : null,
-      runnerUp: runnerUp ? String(runnerUp) : null,
-      operatedBy: null
-    });
-
-    broadcast('match_finished', {
-      type: 'final',
-      winnerId: winner ? winner.toString() : null,
-      needTiebreak: s4.needTiebreak,
-      p1Total: p1Scores.reduce((a, s) => a + (s ? s.achievement : 0), 0),
-      p2Total: p2Scores.reduce((a, s) => a + (s ? s.achievement : 0), 0)
-    });
-
-    broadcast('stage_advanced', {
-      from: 'stage4',
-      to: 'finished',
-      timestamp: Date.now()
-    });
+    const winner = result === 'p1' ? s4.p1 : s4.p2;
+    await _finalizeFinal(tournament, s4, winner);
 
     return {
       nextStep: 'match_done',
-      winner: winner ? winner.toString() : null,
-      p1Total: p1Scores.reduce((a, s) => a + (s ? s.achievement : 0), 0).toFixed(4),
-      p2Total: p2Scores.reduce((a, s) => a + (s ? s.achievement : 0), 0).toFixed(4)
+      winner: String(winner),
+      p1Total: p1Total.toFixed(4),
+      p2Total: p2Total.toFixed(4)
     };
   }
 
   throw new Error('无法识别的推进状态');
+}
+
+/**
+ * 修复 #4/#8：决赛收尾 —— 设冠军 + 赛事 finished + 回写旧赛事（含三四名）
+ */
+async function _finalizeFinal(tournament, s4, winner) {
+  s4.winner = winner;
+  s4.needTiebreak = false;
+  s4.status = 'done';
+  tournament.status = 'finished';
+  await tournament.save();
+
+  const runnerUp = String(winner) === String(s4.p1) ? s4.p2 : s4.p1;
+
+  // 修复 #8：三四名 = 阶段三未晋级决赛的两位（按跑图排名取前二）
+  let semiFinalists = [];
+  try {
+    if (tournament.stage3 && Array.isArray(tournament.stage3.players) && tournament.stage3.players.length) {
+      const { calculateRaceRankings } = require('./utils');
+      const finalists = new Set([String(s4.p1), String(s4.p2)]);
+      semiFinalists = calculateRaceRankings(tournament.stage3.players)
+        .map(r => String(r.userId))
+        .filter(uid => !finalists.has(uid))
+        .slice(0, 2);
+    }
+  } catch { /* 三四名计算失败不阻塞收尾 */ }
+
+  await syncToOldTournament(tournament, 'stage4_complete', {
+    winner: String(winner),
+    runnerUp: runnerUp ? String(runnerUp) : null,
+    semiFinalists,
+    operatedBy: null
+  });
+
+  broadcast('match_finished', { type: 'final', winnerId: String(winner), needTiebreak: false });
+  broadcast('stage_advanced', { from: 'stage4', to: 'finished', timestamp: Date.now() });
+}
+
+/**
+ * 修复 #4：裁判加赛判定 —— 决赛四曲全平后，线下加赛由裁判录入胜者
+ */
+async function resolveTie(tournament, winnerId) {
+  const s4 = tournament.stage4;
+  if (!s4) throw new Error('决赛未初始化');
+  if (!s4.needTiebreak) throw new Error('决赛当前无需加赛');
+
+  const wid = String(winnerId);
+  if (wid !== String(s4.p1) && wid !== String(s4.p2)) {
+    throw new Error('加赛胜者必须是决赛双方之一');
+  }
+  const winner = wid === String(s4.p1) ? s4.p1 : s4.p2;
+  await _finalizeFinal(tournament, s4, winner);
+  return { winner: String(winner) };
 }
 
 async function _systemRandomPick(tournament, s4) {
@@ -318,5 +369,6 @@ module.exports = {
   initStage4,
   selectSong,
   submitScore,
-  advance
+  advance,
+  resolveTie
 };

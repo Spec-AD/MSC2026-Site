@@ -1,6 +1,19 @@
 // ==========================================
 // 🎮 开字母 2.0 核心引擎
 // ==========================================
+/**
+ * 🔄 Fisher-Yates 洗牌算法 (消除 sort(random) 偏倚)
+ */
+function shuffleArray(arr) {
+  if (!Array.isArray(arr) || arr.length < 2) return arr;
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 const REGEX = {
   eng: /[a-zA-Z0-9]/g,
   kana: /[\u3040-\u309F\u30A0-\u30FF]/g,
@@ -16,11 +29,16 @@ const TRANS_MAP = {
 
 // 🔥 升级版：规范化字符串 (去符号、去空格、去音标注音、小写转写平替)
 function normalizeTitle(str) {
-  if (!str) return '';
+  if (!str || typeof str !== 'string') return '';
   let res = str.toLowerCase();
   
   // 1. 去除字符上的音调注音 (比如: nέο κόsmo -> nεo κoςmo)
-  res = res.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  try {
+    res = res.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  } catch (_) {
+    // normalize 可能因非法字符抛出 RangeError，兜底
+    res = res.replace(/[\u0300-\u036f]/g, '');
+  }
   
   // 2. 映射希腊字母与俄文字母到英文字母
   let mapped = "";
@@ -36,6 +54,7 @@ function normalizeTitle(str) {
  * 🎯 计算多语种文本熵值基础算力 (Base OV)
  */
 function calculateBaseOV(title) {
+  if (!title || typeof title !== 'string') return 5;
   // 统计各类字符出现的集合 (Unique)
   const uniqueEng = new Set(title.match(REGEX.eng)?.map(c => c.toLowerCase()) || []);
   const uniqueKana = new Set(title.match(REGEX.kana) || []);
@@ -68,7 +87,7 @@ function calculateBaseOV(title) {
  * 作用：根据玩家已开出的字符和 Mod，将真实歌名转换为前端可见的掩码
  */
 function generateMaskedTitle(title, openedChars, mods = []) {
-  // 提取 Mod 效果
+  if (!title || typeof title !== 'string') return '';
   const hasPerceiver = mods.includes('Perceiver'); // 空格也变掩码
   const hasPuzzle = mods.includes('Puzzle');       // 变数字 [长度]
   
@@ -129,7 +148,7 @@ function distributeNonLinearOV(starRating, songBaseOvs) {
 }
 
 function getRevealRatio(title, openedChars, mods = []) {
-  const openedSet = new Set(openedChars.map(c => c.toLowerCase()));
+  if (!title || typeof title !== 'string') return 0;
   const hasPerceiver = mods.includes('Perceiver');
   
   let totalValid = 0;
@@ -148,7 +167,7 @@ function getRevealRatio(title, openedChars, mods = []) {
  * ⚖️ 计算单曲最终实际得分 (Actual OV)
  */
 function calculateActualOV(baseOv, title, openedChars, mistakes, mods = []) {
-  // 1. 获取基础乘区信息
+  if (!title || typeof title !== 'string') return 0;
   const openedSet = new Set(openedChars.map(c => c.toLowerCase()));
   
   // 计算 R (盲猜率)：开出的字符 / 总有效字符数
@@ -189,4 +208,4 @@ function calculateActualOV(baseOv, title, openedChars, mistakes, mods = []) {
   return Number(actualOv.toFixed(2));
 }
 
-module.exports = { normalizeTitle, calculateBaseOV, generateMaskedTitle, calculateActualOV, getRevealRatio, calculateSessionStarRating, distributeNonLinearOV };
+module.exports = { normalizeTitle, calculateBaseOV, generateMaskedTitle, calculateActualOV, getRevealRatio, calculateSessionStarRating, distributeNonLinearOV, shuffleArray };

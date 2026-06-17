@@ -33,30 +33,30 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-6">
+      <div className="flex items-end justify-between mb-5 gap-4">
+        <h3 className="text-3xl font-black text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
           {pickLabel}
         </h3>
-        <span className="text-xs text-zinc-500">{availableSongs.length} 首可选</span>
+        <span className="text-4xl font-black text-zinc-300 tabular-nums" style={{ fontFamily: 'Torus, sans-serif' }}>{availableSongs.length}<span className="text-lg text-zinc-500 ml-2">首可选</span></span>
       </div>
 
       {confirmed ? (
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="rounded-xl border border-green-500/20 bg-green-500/5 p-6 text-center"
+          className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-8 text-center"
         >
-          <FaCheck className="text-2xl text-green-400 mx-auto mb-2" />
-          <p className="text-sm text-green-300 font-medium">选曲已确认</p>
+          <FaCheck className="text-4xl text-emerald-300 mx-auto mb-3" />
+          <p className="text-3xl text-emerald-200 font-black">选曲已确认</p>
           {selectedSong && (
-            <p className="text-xs text-zinc-500 mt-1">{selectedSong.title}</p>
+            <p className="text-xl text-zinc-400 mt-2">{selectedSong.title}</p>
           )}
         </motion.div>
       ) : (
         <>
           {/* 曲目列表 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto pr-1 mb-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 max-h-[520px] overflow-y-auto pr-1 mb-5">
             {availableSongs.map((song) => {
               const id = song._id || song.songId;
               const isSelected = id === selectedId;
@@ -66,10 +66,10 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
                   onClick={() => setSelectedId(isSelected ? null : id)}
                   disabled={disabled}
                   className={`
-                    flex items-center gap-3 p-3 rounded-xl text-left transition-all
+                    flex items-center gap-4 p-4 rounded-2xl text-left transition-all border
                     ${isSelected
                       ? 'border-amber-500/40 bg-amber-500/10 ring-1 ring-amber-500/20'
-                      : 'border border-white/5 bg-zinc-800/40 hover:bg-zinc-800/60'
+                      : 'border-white/10 bg-black/15 hover:bg-white/[0.06]'
                     }
                     ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                   `}
@@ -79,31 +79,31 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
                     <img
                       src={song.coverUrl || song.jacketUrl}
                       alt={song.title}
-                      className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                      className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-lg bg-zinc-700 flex items-center justify-center flex-shrink-0">
-                      <FaMusic className="text-zinc-500 text-sm" />
+                    <div className="w-16 h-16 rounded-xl bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                      <FaMusic className="text-zinc-500 text-xl" />
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-white font-medium truncate">{song.title}</p>
-                    <p className="text-xs text-zinc-500 truncate">{song.artist}</p>
+                    <p className="text-xl text-white font-bold truncate">{song.title}</p>
+                    <p className="text-base text-zinc-500 truncate">{song.artist || song.basic_info?.artist}</p>
                     {/* 难度标签 */}
                     {song.level && (
-                      <span className="inline-block text-[10px] px-1.5 py-0.5 mt-0.5 rounded bg-zinc-700/50 text-zinc-400">
+                      <span className="inline-block text-sm px-2 py-0.5 mt-1 rounded bg-white/[0.06] text-zinc-400">
                         {Array.isArray(song.level) ? song.level[song.level.length - 1] : song.level}
                       </span>
                     )}
                   </div>
-                  {isSelected && <FaCheck className="text-amber-400 flex-shrink-0" />}
+                  {isSelected && <FaCheck className="text-amber-300 text-2xl flex-shrink-0" />}
                 </button>
               );
             })}
 
             {availableSongs.length === 0 && (
-              <div className="col-span-full text-center py-8 text-zinc-500 text-sm">
-                <FaLock className="mx-auto mb-2 text-zinc-600" />
+              <div className="col-span-full text-center py-12 text-zinc-500 text-2xl">
+                <FaLock className="mx-auto mb-3 text-zinc-600 text-3xl" />
                 无可选曲目
               </div>
             )}
@@ -114,7 +114,7 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
             onClick={handleConfirm}
             disabled={!selectedId || submitting || disabled}
             className={`
-              w-full py-3 rounded-xl font-medium text-sm transition-all
+              w-full py-4 rounded-xl font-black text-2xl transition-all
               ${selectedId && !submitting && !disabled
                 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 shadow-lg shadow-amber-500/5'
                 : 'bg-zinc-800 text-zinc-600 border border-white/5 cursor-not-allowed'

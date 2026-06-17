@@ -2,7 +2,7 @@
 // ChallengeCard.jsx — 挑战任务卡片（Overlay）
 // ============================================================
 import { motion } from 'framer-motion';
-import { FaShieldAlt, FaCheck, FaTimes, FaMusic, FaQuestion } from 'react-icons/fa';
+import { FaShieldAlt, FaCheck, FaTimes, FaMusic } from 'react-icons/fa';
 import { CHALLENGE_TYPE_LABELS } from '../../constants/gameData';
 
 export default function ChallengeCard({ challenge, pendingJudgement, isJudge = false, onPass, onFail, onDismiss }) {
@@ -10,13 +10,20 @@ export default function ChallengeCard({ challenge, pendingJudgement, isJudge = f
 
   const task = challenge;
   const typeLabel = CHALLENGE_TYPE_LABELS[task.type] || '未知';
+  const conditionText =
+    task.type === 'eval' ? `${task.evalRequirement}` :
+    task.type === 'achievement' ? `${task.threshold}%` :
+    task.type === 'precision' ? `DX ${task.dxRequirement} 星` :
+    task.type === 'tolerance' ? `≤ ${task.toleranceLimit}` :
+    '待确认';
+  const activeEffects = task.activeItemEffects || [];
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-5"
       onClick={onDismiss}
     >
       <motion.div
@@ -25,55 +32,52 @@ export default function ChallengeCard({ challenge, pendingJudgement, isJudge = f
         exit={{ scale: 0.9, y: 20 }}
         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-6 max-w-lg w-full shadow-2xl shadow-amber-500/5"
+        className="bg-[#090d14] border border-amber-400/25 rounded-2xl p-7 md:p-9 max-w-4xl w-full shadow-2xl shadow-amber-500/10"
       >
         {/* 头部 */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-            <FaShieldAlt className="text-amber-400 text-lg" />
+        <div className="flex items-start gap-5 mb-7">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/12 flex items-center justify-center border border-amber-400/20">
+            <FaShieldAlt className="text-amber-300 text-2xl" />
           </div>
-          <div>
-            <span className="text-[10px] text-amber-400/70 uppercase tracking-wider">⚔️ 挑战任务</span>
-            <h3 className="text-lg font-bold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
+          <div className="min-w-0">
+            <span className="text-sm text-amber-300/80 uppercase tracking-[0.18em]">挑战任务 · {task.wallLabel || '墙壁'}</span>
+            <h3 className="text-3xl md:text-5xl font-bold text-white mt-1 leading-tight" style={{ fontFamily: 'Torus, sans-serif' }}>
               {task.taskName}
             </h3>
           </div>
         </div>
 
         {/* 详情 */}
-        <div className="space-y-3 mb-6">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/50 border border-white/5">
-            <FaMusic className="text-zinc-500 text-xs" />
-            <span className="text-sm text-white font-medium">{task.songTitle}</span>
+        <div className="space-y-4 mb-7">
+          <div className="flex items-center gap-4 px-5 py-4 rounded-xl bg-white/[0.045] border border-white/10">
+            <FaMusic className="text-zinc-400 text-xl" />
+            <span className="text-2xl text-white font-bold truncate">{task.songTitle}</span>
             {task.difficulty && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-400">
+              <span className="ml-auto shrink-0 text-base px-3 py-1 rounded-lg bg-white/[0.06] text-zinc-300 border border-white/10">
                 {task.difficulty}
               </span>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <div className="px-3 py-2 rounded-lg bg-zinc-800/30 border border-white/5">
-              <p className="text-[10px] text-zinc-500">类型</p>
-              <p className="text-sm text-white">{typeLabel}</p>
+            <div className="px-5 py-4 rounded-xl bg-white/[0.035] border border-white/10">
+              <p className="text-sm text-zinc-500 uppercase tracking-[0.14em]">类型</p>
+              <p className="text-3xl font-bold text-white mt-1">{typeLabel}</p>
             </div>
-            <div className="px-3 py-2 rounded-lg bg-zinc-800/30 border border-white/5">
-              <p className="text-[10px] text-zinc-500">条件</p>
-              <p className="text-sm text-white font-mono">
-                {task.type === 'eval' && `${task.evalRequirement}`}
-                {task.type === 'achievement' && `${task.threshold}%`}
-                {task.type === 'precision' && `DX ${task.dxRequirement} 星`}
-                {task.type === 'tolerance' && `≤ ${task.toleranceLimit}`}
+            <div className="px-5 py-4 rounded-xl bg-amber-500/[0.07] border border-amber-400/20">
+              <p className="text-sm text-amber-300/70 uppercase tracking-[0.14em]">成功条件</p>
+              <p className="text-4xl md:text-5xl text-amber-200 font-black font-mono mt-1">
+                {conditionText}
               </p>
             </div>
           </div>
 
           {/* 道具修改提示 */}
-          {task.modifiedConditions && Object.keys(task.modifiedConditions).length > 0 && (
-            <div className="px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
-              <p className="text-[10px] text-purple-400/70">道具效果生效中</p>
-              <div className="text-xs text-purple-300 mt-0.5">
-                {task.activeItemEffects?.map((e, i) => (
+          {activeEffects.length > 0 && (
+            <div className="px-5 py-4 rounded-xl bg-sky-500/10 border border-sky-400/20">
+              <p className="text-sm text-sky-300/80 uppercase tracking-[0.14em]">道具效果生效中</p>
+              <div className="text-lg text-sky-100 mt-2 grid gap-1">
+                {activeEffects.map((e, i) => (
                   <span key={i} className="block">{e}</span>
                 ))}
               </div>
@@ -83,26 +87,26 @@ export default function ChallengeCard({ challenge, pendingJudgement, isJudge = f
 
         {/* 操作按钮 */}
         {pendingJudgement && isJudge ? (
-          <div className="flex gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <button
               onClick={onPass}
-              className="flex-1 py-3 rounded-xl bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
+              className="py-5 rounded-xl bg-emerald-500/18 text-emerald-200 border border-emerald-400/35 hover:bg-emerald-500/25 transition-all text-2xl font-black flex items-center justify-center gap-3"
             >
-              <FaCheck className="text-xs" /> 通过
+              <FaCheck /> 通过
             </button>
             <button
               onClick={onFail}
-              className="flex-1 py-3 rounded-xl bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
+              className="py-5 rounded-xl bg-red-500/18 text-red-200 border border-red-400/35 hover:bg-red-500/25 transition-all text-2xl font-black flex items-center justify-center gap-3"
             >
-              <FaTimes className="text-xs" /> 不通过
+              <FaTimes /> 失败
             </button>
           </div>
         ) : pendingJudgement ? (
-          <div className="text-center py-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
-            <p className="text-xs text-amber-400/70">⏳ 等待裁判判定...</p>
+          <div className="text-center py-5 rounded-xl bg-amber-500/10 border border-amber-400/20">
+            <p className="text-2xl font-bold text-amber-200">等待裁判判定</p>
           </div>
         ) : (
-          <p className="text-center text-xs text-zinc-500">挑战已结束</p>
+          <p className="text-center text-lg text-zinc-500">挑战已结束</p>
         )}
       </motion.div>
     </motion.div>

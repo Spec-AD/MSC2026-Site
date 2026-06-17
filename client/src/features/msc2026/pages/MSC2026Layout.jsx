@@ -35,23 +35,24 @@ export default function MSC2026Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
+    <div className="min-h-screen bg-[#06070b] text-white">
+      <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_18%_10%,rgba(245,158,11,0.13),transparent_28%),radial-gradient(circle_at_86%_18%,rgba(56,189,248,0.12),transparent_30%),linear-gradient(180deg,rgba(15,23,42,0.74),rgba(3,7,18,0.98))]" />
       {/* 顶部横幅 */}
-      <div className="border-b border-white/10 bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div className="border-b border-white/10 bg-[#080b12]/88 backdrop-blur-xl sticky top-0 z-40">
+        <div className="max-w-[1800px] mx-auto px-5 md:px-8 py-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold tracking-tight" style={{ fontFamily: 'Torus, sans-serif' }}>
+            <h1 className="text-2xl md:text-4xl font-bold tracking-tight" style={{ fontFamily: 'Torus, sans-serif' }}>
               MSC 2026
             </h1>
             {currentConfig && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <span className="text-sm md:text-lg px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/35">
                 {currentConfig.icon} {currentConfig.label}
               </span>
             )}
           </div>
 
           {/* 阶段导航 */}
-          <div className="flex items-center gap-1">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
             {STAGE_NAV.map((item) => {
               const state = isActive(item.key);
               const config = STAGE_CONFIG[item.key];
@@ -60,12 +61,12 @@ export default function MSC2026Layout() {
                   key={item.key}
                   onClick={() => navigate(`/matches/msc2026/${item.key}`)}
                   className={`
-                    flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200
+                    flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-sm md:text-base font-semibold transition-all duration-200
                     ${state === 'active'
-                      ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                      ? 'bg-amber-500/25 text-amber-200 border border-amber-400/45 shadow-[0_0_24px_rgba(245,158,11,0.16)]'
                       : state === 'done'
-                        ? 'bg-green-500/10 text-green-400/60 border border-green-500/20'
-                        : 'bg-transparent text-zinc-600 border border-transparent'
+                        ? 'bg-emerald-500/10 text-emerald-300/80 border border-emerald-400/20'
+                        : 'bg-white/[0.03] text-zinc-500 border border-white/10'
                     }
                   `}
                   title={config?.label}
@@ -85,7 +86,7 @@ export default function MSC2026Layout() {
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="max-w-7xl mx-auto px-4 py-6"
+        className="relative z-10 max-w-[1800px] mx-auto px-5 md:px-8 py-6 md:py-8"
       >
         <Outlet />
       </motion.div>

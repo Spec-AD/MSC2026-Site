@@ -56,10 +56,14 @@ function undoStage1LastScore(tournament, player = 'both') {
 function revertStage1Group(tournament, groupIdx) {
   const s1 = tournament.stage1;
   if (!s1) throw new Error('阶段一未初始化');
+  groupIdx = Number(groupIdx);
+  if (!Number.isInteger(groupIdx)) throw new Error('无效的组序号');
   if (groupIdx < 0 || groupIdx >= s1.groups.length) throw new Error('无效的组序号');
 
   const targetGroup = s1.groups[groupIdx];
-  targetGroup.status = 'playing';
+  if (!targetGroup.songs || targetGroup.songs.length === 0) targetGroup.status = 'p1_pick';
+  else if (targetGroup.songs.length === 1 && targetGroup.songs[0].p1Score && targetGroup.songs[0].p2Score) targetGroup.status = 'p2_pick';
+  else targetGroup.status = 'playing';
   targetGroup.winner = null;
   targetGroup.forfait = null;
   targetGroup.needTiebreak = false;
@@ -79,6 +83,7 @@ function resetStage1(tournament) {
 
 /** R2.1 撤销最后跑图行动（P0） */
 function undoRaceLastAction(race) {
+  if (!race || !Array.isArray(race.players) || race.players.length === 0) throw new Error('跑图未初始化或选手为空');
   const lastLog = race.actionLog[race.actionLog.length - 1];
   if (!lastLog) throw new Error('无行动可撤销');
 
@@ -131,6 +136,10 @@ function undoRaceLastAction(race) {
     case 'challenge_passed':
     case 'challenge_failed':
       undoRaceLastChallengeResult(race);
+      race.currentPlayerIndex = race.players.findIndex(p => p.userId.toString() === lastLog.playerId.toString());
+      if (race.currentPlayerIndex < 0) race.currentPlayerIndex = 0;
+      race.currentTurn = Math.max(0, race.currentTurn - 1);
+      race.turnStartedAt = null;
       // 上面的函数已经 pop 了 actionLog，这里无需再处理
       return;
 
@@ -153,6 +162,8 @@ function undoRaceLastAction(race) {
 
 /** R2.2 撤销道具使用 */
 function undoRaceItemUse(race, itemRef) {
+  itemRef = Number(itemRef);
+  if (!Number.isInteger(itemRef)) throw new Error('道具编号非法');
   const player = race.players[race.currentPlayerIndex];
   if (!player) throw new Error('无当前选手');
 
@@ -173,6 +184,7 @@ function undoRaceItemUse(race, itemRef) {
 
 /** R2.3 翻转挑战判定（P0） */
 function undoRaceLastChallengeResult(race) {
+  if (!race || !Array.isArray(race.players) || race.players.length === 0) throw new Error('跑图未初始化或选手为空');
   const lastChallenge = [...race.challengeHistory].reverse().find(ch => ch.passed !== null);
   if (!lastChallenge) throw new Error('无已判定的挑战');
 
@@ -190,8 +202,10 @@ function undoRaceLastChallengeResult(race) {
       const def = getItem(ref);
       if (def && def.penalty) {
         const p = def.penalty;
-        if (p.silentTurns) player.silentUntilTurn = Math.max(player.silentUntilTurn || 0, race.currentTurn + p.silentTurns);
-        if (p.disableItemsTurns) player.disableItemsUntilTurn = Math.max(player.disableItemsUntilTurn || 0, race.currentTurn + p.disableItemsTurns);
+        // 与 raceEngine 修复 #5 保持一致：惩罚回合 × playerCount
+        const span = race.players.length;
+        if (p.silentTurns) player.silentUntilTurn = Math.max(player.silentUntilTurn || 0, race.currentTurn + p.silentTurns * span);
+        if (p.disableItemsTurns) player.disableItemsUntilTurn = Math.max(player.disableItemsUntilTurn || 0, race.currentTurn + p.disableItemsTurns * span);
         if (p.backToLayer0) player.currentLayer = 0;
       }
     }
@@ -200,6 +214,13 @@ function undoRaceLastChallengeResult(race) {
     player.silentUntilTurn = null;
     player.disableItemsUntilTurn = null;
     player.currentLayer++;
+    if (player.currentLayer >= race.mapConfig.wallLabels.length) {
+      player.currentLayer = race.mapConfig.layers;
+      const order = race.finishOrder.length + 1;
+      player.finishOrder = order;
+      player.finishTimestamp = Date.now();
+      race.finishOrder.push({ userId: player.userId, finishTimestamp: player.finishTimestamp, order });
+    }
   }
 
   // 从 challengeHistory 移除最后一条 actionLog 记录
@@ -282,6 +303,9 @@ function undoStage4LastScore(tournament, player = 'both') {
   if (player === 'p1' || player === 'both') lastSong.p1Score = null;
   if (player === 'p2' || player === 'both') lastSong.p2Score = null;
   s4.status = 'playing';
+  s4.winner = null;
+  s4.needTiebreak = false;
+  if (tournament.status === 'finished') tournament.status = 'stage4';
 }
 
 /** R4.3 重置决赛 */
