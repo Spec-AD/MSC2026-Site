@@ -600,8 +600,8 @@ router.post('/stage1/init-from-qualifier', authMiddleware, async (req, res) => {
     await initStage1(t, playerIds, normalizedSongPoolIds);
     await startFirstGroup(t);
 
-    // 同步旧赛事状态
-    await syncToOldTournament(t, 'status_sync', { newStatus: 'stage1', operatedBy: req.user.id });
+    // patch-03: 启动 MSC 主赛适配层不再改动权威 tournament.status。
+    // 阶段推进/收尾由组织者在 tournament 端显式控制，预选成绩录入与主赛可并行。
 
     res.json({
       msg: '阶段一已从预选赛初始化',

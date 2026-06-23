@@ -6,12 +6,16 @@
  */
 
 // ── 状态转移矩阵 ────────────────────────────────────
+// patch-03: status 退化为「展示用主阶段标识」，不再是硬门禁。各阶段可并行
+// （预选与主赛并存）或回拨，因此活跃阶段之间允许双向流转。具体操作（预选录入、
+// 对局录入等）由各自独立的能力开关/数据条件控制，而非这里的 status。
+// 约束：ARCHIVED 为终态，且仅能由 FINISHED 进入。
 const TRANSITIONS = {
-  DRAFT:        ['REGISTRATION'],
-  REGISTRATION: ['DRAFT', 'QUALIFYING'],
-  QUALIFYING:   ['ONGOING'],
-  ONGOING:      ['FINISHED'],
-  FINISHED:     ['ONGOING', 'ARCHIVED'],
+  DRAFT:        ['REGISTRATION', 'QUALIFYING'],
+  REGISTRATION: ['DRAFT', 'QUALIFYING', 'ONGOING'],
+  QUALIFYING:   ['DRAFT', 'REGISTRATION', 'ONGOING', 'FINISHED'],
+  ONGOING:      ['REGISTRATION', 'QUALIFYING', 'FINISHED'],
+  FINISHED:     ['QUALIFYING', 'ONGOING', 'ARCHIVED'],
   ARCHIVED:     [],
 };
 

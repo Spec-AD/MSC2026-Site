@@ -525,6 +525,11 @@ router.post('/api/tournaments/detail/:id/qualifier-scores', authMiddleware, asyn
     const targetUser = await User.findOne({ uid: targetUid });
     if (!targetUser) return res.status(404).json({ msg: '选手不存在' });
     const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+    // patch-03: 预选录入独立于 status；仅在显式锁定时拒绝（与批量端点一致）。
+    if (tournament.qualifierLocked) {
+      return res.status(400).json({ msg: '预选成绩已锁定，无法录入（如需修改请先解锁）' });
+    }
     const existingIdx = tournament.qualifierScores.findIndex(
       s => s.userId.toString() === targetUser._id.toString() && s.songName === songName
     );
@@ -884,6 +889,12 @@ router.post('/api/tournaments/:id/qualifier/scores', authMiddleware, async (req,
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
 
+    // patch-03: 预选录入独立于 status；仅在显式锁定时拒绝（不再用阶段硬门禁，
+    // 故主赛进行中仍可正常补录预选成绩）。
+    if (tournament.qualifierLocked) {
+      return res.status(400).json({ msg: '预选成绩已锁定，无法录入（如需修改请先解锁）' });
+    }
+
     // 报名选手 ID 集合（防未报名录入）
     const registeredIds = new Set(tournament.registrations.map(r => r.userId.toString()));
 
@@ -900,12 +911,6 @@ router.post('/api/tournaments/:id/qualifier/scores', authMiddleware, async (req,
       // 防未报名录入
       if (!registeredIds.has(userId.toString())) {
         errors.push({ userId, songName, reason: '选手未报名该赛事' });
-        continue;
-      }
-
-      // 已晋级选手成绩保护（ONGOING+ 状态不可修改预选成绩）
-      if (tournament.status !== 'QUALIFYING') {
-        errors.push({ userId, songName, reason: '赛事已不在预选阶段，无法修改成绩' });
         continue;
       }
 
@@ -944,6 +949,11 @@ router.post('/api/tournaments/:id/qualifier/scores', authMiddleware, async (req,
         });
       }
       updated++;
+    }
+
+    // patch-03: 全部失败时返回 400（不再静默 200），让前端明确报错。
+    if (updated === 0 && errors.length > 0) {
+      return res.status(400).json({ msg: '成绩录入失败', data: { updated, skipped: 0, errors } });
     }
 
     await tournament.save();
@@ -1082,9 +1092,9 @@ router.post('/api/tournaments/:id/qualifier/rollback', authMiddleware, async (re
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
 
-    // 阶段保护：仅 QUALIFYING 阶段可回退预选成绩
-    if (tournament.status !== 'QUALIFYING') {
-      return res.status(400).json({ msg: '赛事已不在预选阶段，无法回退成绩' });
+    // patch-03: 回退预选成绩独立于 status；仅在显式锁定时拒绝。
+    if (tournament.qualifierLocked) {
+      return res.status(400).json({ msg: '预选成绩已锁定，无法回退（如需修改请先解锁）' });
     }
 
     const existingIdx = tournament.qualifierScores.findIndex(
@@ -1125,6 +1135,39 @@ router.post('/api/tournaments/:id/qualifier/rollback', authMiddleware, async (re
   } catch (err) {
     console.error('成绩回退失败:', err);
     res.status(500).json({ msg: '回退失败' });
+  }
+});
+
+// ── 预选成绩锁定开关（独立于 status；锁定后停止录入/回退，用于显式收尾）──
+router.put('/api/tournaments/:id/qualifier/lock', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkTAPermission(req.user.id, req.params.id);
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const blocked = await archivedWriteGuard(req, res, req.params.id);
+    if (blocked) return;
+
+    const locked = !!req.body.locked;
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
+
+    tournament.qualifierLocked = locked;
+    tournament.operationLogs.push({
+      action: locked ? 'qualifier_lock' : 'qualifier_unlock',
+      fromStatus: tournament.status, toStatus: tournament.status,
+      operatedBy: req.user.id,
+      operatedAt: new Date(),
+      note: locked ? '锁定预选成绩录入' : '解锁预选成绩录入',
+    });
+    await tournament.save();
+
+    pushSSE(tournament._id.toString(), 'tournament:qualifierUpdated', {
+      tournamentId: tournament._id.toString(), timestamp: new Date().toISOString(),
+    });
+
+    res.json({ msg: locked ? '预选成绩已锁定' : '预选成绩已解锁', data: { qualifierLocked: locked } });
+  } catch (err) {
+    console.error('预选锁定切换失败:', err);
+    res.status(500).json({ msg: '操作失败' });
   }
 });
 
@@ -1232,8 +1275,10 @@ router.post('/api/tournaments/:id/bracket/reset', authMiddleware, async (req, re
 
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ msg: '赛事不存在' });
-    if (tournament.status !== 'QUALIFYING') {
-      return res.status(400).json({ msg: '仅在 QUALIFYING 状态下可重置对阵表' });
+    // patch-03: 不再用 status 硬门禁（阶段可并行）。仅当已有比赛产生结果时禁止重置，
+    // 以免清空已进行的对局。
+    if ((tournament.matches || []).some(m => m.status === 'FINISHED')) {
+      return res.status(400).json({ msg: '已有比赛产生结果，无法重置对阵表' });
     }
 
     tournament.matches = [];

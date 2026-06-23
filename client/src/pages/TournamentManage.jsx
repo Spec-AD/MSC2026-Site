@@ -16,18 +16,20 @@ import AuditLogView from '../features/tournament/components/detail/AuditLogView'
 import {
   FaArrowLeft, FaSpinner, FaUsers, FaMusic, FaSitemap, FaPlus, FaTimes,
   FaTrophy, FaEdit, FaSave, FaClipboardList, FaCheckCircle, FaCalendarAlt,
-  FaExchangeAlt, FaUndo, FaForward, FaCog, FaLock, FaPlay, FaArchive,
+  FaExchangeAlt, FaUndo, FaForward, FaCog, FaLock, FaLockOpen, FaPlay, FaArchive,
   FaDownload, FaChevronUp, FaChevronDown, FaHistory, FaExclamationTriangle
 } from 'react-icons/fa';
 
 // ---- 状态机映射 ----
 const STATUS_ORDER = ['DRAFT', 'REGISTRATION', 'QUALIFYING', 'ONGOING', 'FINISHED', 'ARCHIVED'];
+// patch-03: 与后端 stateMachine 一致 —— status 为展示用主阶段标识，活跃阶段
+// 之间允许双向流转（含从正赛回退到预选），ARCHIVED 仍为终态。
 const ALLOWED_TRANSITIONS = {
-  DRAFT: ['REGISTRATION'],
-  REGISTRATION: ['DRAFT', 'QUALIFYING'],
-  QUALIFYING: ['ONGOING'],
-  ONGOING: ['FINISHED'],
-  FINISHED: ['ONGOING', 'ARCHIVED'],
+  DRAFT: ['REGISTRATION', 'QUALIFYING'],
+  REGISTRATION: ['DRAFT', 'QUALIFYING', 'ONGOING'],
+  QUALIFYING: ['DRAFT', 'REGISTRATION', 'ONGOING', 'FINISHED'],
+  ONGOING: ['REGISTRATION', 'QUALIFYING', 'FINISHED'],
+  FINISHED: ['QUALIFYING', 'ONGOING', 'ARCHIVED'],
   ARCHIVED: [],
 };
 
@@ -268,6 +270,17 @@ const TournamentManage = () => {
       addToast(res.data.msg, 'success');
       setScoreData({ ...scoreData, songName: '', achievement: '', dxScore: '' });
     } catch (err) { addToast(err.response?.data?.msg || '录入失败', 'error'); }
+  };
+
+  /** 锁定/解锁预选成绩录入（独立于 status；锁定后停止录入/回退） */
+  const handleToggleQualifierLock = async () => {
+    try {
+      const axios = (await import('axios')).default;
+      const next = !tournament?.qualifierLocked;
+      const res = await axios.put(`/api/tournaments/${id}/qualifier/lock`, { locked: next }, { headers });
+      addToast(res.data.msg, 'success');
+      await loadTournament();
+    } catch (err) { addToast(err.response?.data?.msg || '操作失败', 'error'); }
   };
 
   const handleSaveGroups = async () => {
@@ -742,7 +755,23 @@ const TournamentManage = () => {
 
           {/* 成绩矩阵 */}
           <div>
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><FaTrophy className="text-yellow-400" /> 成绩矩阵</h3>
+            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2"><FaTrophy className="text-yellow-400" /> 成绩矩阵</h3>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-bold flex items-center gap-1.5 ${tournament.qualifierLocked ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {tournament.qualifierLocked ? <FaLock /> : <FaLockOpen />}
+                  预选录入{tournament.qualifierLocked ? '已锁定' : '开放中'}
+                </span>
+                {!isArchived && isManager && (
+                  <button
+                    onClick={handleToggleQualifierLock}
+                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"
+                  >
+                    {tournament.qualifierLocked ? <><FaLockOpen /> 解锁录入</> : <><FaLock /> 锁定录入</>}
+                  </button>
+                )}
+              </div>
+            </div>
             <QualifierScoreMatrix
               tournamentId={id}
               songs={localQualSongs}

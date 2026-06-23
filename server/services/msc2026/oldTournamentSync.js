@@ -1,26 +1,22 @@
 /**
- * MSC 2026 — 旧赛事回写服务
- * b1.7.11.patch-02
+ * MSC 2026 — 旧赛事结果投影服务
+ * b1.7.11.patch-03
  *
- * 在各阶段完成时，将 MSC2026Tournament 的结果同步回旧 Tournament 文档。
- * - 全部回写操作静默执行，失败只 log 不抛错（不影响新赛事主流程）
+ * 在各阶段完成时，将 MSC2026Tournament 的「结果/排名」投影回权威 Tournament 文档，
+ * 使得正式赛事记录在 matches 适配层被移除后仍然完整。
+ *
+ * ⚠️ 设计约束（patch-03）：matches/MSC 仅是 tournament 的临时展示适配层，
+ *   绝不能写入 tournament 的权威 status/阶段。本服务只投影 groups/matches/results，
+ *   永不修改 oldT.status —— 阶段推进由组织者在 tournament 端显式控制。
+ * - 全部回写操作静默执行，失败只 log 不抛错（不影响主流程）
  */
 
 const Tournament = require('../../models/Tournament');
 
-/** 新状态 → 旧赛事 status 映射 */
-const STATUS_MAP = {
-  stage1:  'ONGOING',
-  stage2:  'ONGOING',
-  stage3:  'ONGOING',
-  stage4:  'ONGOING',
-  finished:'FINISHED'
-};
-
 /**
- * 回写旧赛事
+ * 结果投影到权威赛事（绝不写 status）
  * @param {object} mscTournament - MSC2026Tournament 文档
- * @param {string} eventType - 'stage1_complete' | 'stage2_complete' | 'stage3_complete' | 'stage4_complete' | 'status_sync'
+ * @param {string} eventType - 'stage1_complete' | 'stage2_complete' | 'stage3_complete' | 'stage4_complete'
  * @param {object} data - 事件数据
  */
 async function syncToOldTournament(mscTournament, eventType, data = {}) {
@@ -112,15 +108,8 @@ async function syncToOldTournament(mscTournament, eventType, data = {}) {
             oldT.results.push({ rank: 3 + i, userId: uid, note: 'MSC 2026 四强' });
           });
         }
-        oldT.status = 'FINISHED';
+        // patch-03: 不再写 oldT.status —— 由组织者在 tournament 端显式收尾。
         note = `决赛完成：冠军 ${data.winner || '?'}`;
-        break;
-      }
-
-      case 'status_sync': {
-        const newStatus = data.newStatus;
-        oldT.status = STATUS_MAP[newStatus] || oldT.status;
-        note = `状态同步 → ${oldT.status}`;
         break;
       }
 

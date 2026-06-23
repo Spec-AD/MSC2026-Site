@@ -41,6 +41,10 @@ export const submitQualifierScores = (id, scores) =>
 export const rollbackQualifierScore = (id, userId, songName) =>
   axios.post(`${BASE}/${id}/qualifier/rollback`, { userId, songName }, { headers: authHeaders() });
 
+/** 锁定/解锁预选成绩录入（TA；独立于 status，用于显式收尾） */
+export const setQualifierLock = (id, locked) =>
+  axios.put(`${BASE}/${id}/qualifier/lock`, { locked }, { headers: authHeaders() });
+
 /** 获取全量成绩矩阵（所有选手 × 所有曲目） */
 export const getQualifierMatrix = (id) =>
   axios.get(`${BASE}/${id}/qualifier/matrix`, { headers: authHeaders() });

@@ -14,6 +14,20 @@ import {
   FaTable, FaCheckCircle, FaCircle, FaEdit, FaUndo
 } from 'react-icons/fa';
 
+// ---- 提交错误归一化：将后端 errors（{songName,reason} 或字符串）去重为可读列表 ----
+function describeSubmitErrors(errors) {
+  if (!Array.isArray(errors)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const e of errors) {
+    const text = typeof e === 'string'
+      ? e
+      : `${e?.songName ? e.songName + ' — ' : ''}${e?.reason || '录入失败'}`;
+    if (!seen.has(text)) { seen.add(text); out.push(text); }
+  }
+  return out;
+}
+
 // ---- CSV 解析（与旧版一致） ----
 function parseCSV(text) {
   const lines = text.trim().split('\n');
@@ -260,13 +274,20 @@ const ScoreEntryModal = ({
         <div className="p-6 pt-4 border-t border-white/[0.05] space-y-3">
           {/* 提交结果 */}
           {submitResult && (
-            <div className={`px-4 py-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+            <div className={`px-4 py-2.5 rounded-xl border text-xs ${
               submitResult.errors?.length
                 ? 'bg-red-500/10 border-red-500/20 text-red-400'
                 : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
             }`}>
-              {submitResult.errors?.length ? <FaExclamationTriangle /> : <FaCheck />}
-              <span>已录入 {submitResult.updated} 条</span>
+              <div className="flex items-center gap-2">
+                {submitResult.errors?.length ? <FaExclamationTriangle /> : <FaCheck />}
+                <span>已录入 {submitResult.updated} 条</span>
+              </div>
+              {submitResult.errors?.length > 0 && (
+                <ul className="mt-1.5 pl-5 space-y-0.5 list-disc text-[11px] text-red-300/90">
+                  {describeSubmitErrors(submitResult.errors).map((t, i) => <li key={i}>{t}</li>)}
+                </ul>
+              )}
             </div>
           )}
           {/* 回退消息独立展示（不污染 submitResult） */}
@@ -428,13 +449,15 @@ const QualifierScoreMatrix = ({
         setSubmitResult(res.data);
       }
     } catch (err) {
-      const errData = { updated: 0, errors: [err.response?.data?.msg || err.msg || '提交失败'] };
-      if (closeModal) {
-        // 弹窗模式：出错留在弹窗显示
-        setSubmitResult(errData);
-      } else {
-        setSubmitResult(errData);
-      }
+      // err 来自 store：失败时可能是 { msg, data: { updated, skipped, errors } }（400 含逐条原因）
+      // 或 { msg }（如预选已锁定）。优先展示后端逐条原因，使失败不再静默。
+      const detail = err?.data || {};
+      const rows = Array.isArray(detail.errors) ? detail.errors : [];
+      setSubmitResult({
+        updated: detail.updated ?? 0,
+        skipped: detail.skipped ?? 0,
+        errors: rows.length ? rows : [err?.msg || err?.response?.data?.msg || '提交失败'],
+      });
     } finally {
       setSubmitting(false);
     }
@@ -584,15 +607,22 @@ const QualifierScoreMatrix = ({
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className={`px-4 py-3 rounded-xl border text-sm flex items-center gap-3 ${
+            className={`px-4 py-3 rounded-xl border text-sm ${
               submitResult.errors?.length
                 ? 'bg-red-500/10 border-red-500/20 text-red-400'
                 : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
             }`}
           >
-            {submitResult.errors?.length ? <FaExclamationTriangle /> : <FaCheck />}
-            <span>已录入 {submitResult.updated} 条{submitResult.skipped > 0 && `，跳过 ${submitResult.skipped} 条`}</span>
-            <button onClick={() => setSubmitResult(null)} className="ml-auto opacity-60 hover:opacity-100"><FaTimes /></button>
+            <div className="flex items-center gap-3">
+              {submitResult.errors?.length ? <FaExclamationTriangle /> : <FaCheck />}
+              <span>已录入 {submitResult.updated} 条{submitResult.skipped > 0 && `，跳过 ${submitResult.skipped} 条`}</span>
+              <button onClick={() => setSubmitResult(null)} className="ml-auto opacity-60 hover:opacity-100"><FaTimes /></button>
+            </div>
+            {submitResult.errors?.length > 0 && (
+              <ul className="mt-2 pl-6 space-y-0.5 list-disc text-xs text-red-300/90">
+                {describeSubmitErrors(submitResult.errors).map((t, i) => <li key={i}>{t}</li>)}
+              </ul>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

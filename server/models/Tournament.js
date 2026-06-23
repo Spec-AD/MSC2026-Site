@@ -127,6 +127,9 @@ const tournamentSchema = new mongoose.Schema({
   // 预选赛
   qualifierSongs: [qualifierSongSchema],
   qualifierScores: [qualifierScoreEntrySchema],
+  // 预选成绩录入开关：独立于 status，使预选与主赛阶段可并行。
+  // 默认开放；组织者显式锁定后方才拒绝录入/回退（阶段不再硬门禁）。
+  qualifierLocked: { type: Boolean, default: false },
 
   // 分组
   groups: [groupSchema],

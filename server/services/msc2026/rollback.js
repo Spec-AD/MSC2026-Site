@@ -8,7 +8,8 @@
 
 const { broadcast } = require('./ssePool');
 const { getItem } = require('./itemDefinitions');
-const { syncToOldTournament } = require('./oldTournamentSync');
+// patch-03: 回退服务不再回写 tournament.status —— matches/MSC 是临时适配层，
+// 权威阶段由组织者在 tournament 端控制，回退只清理本适配层自身的数据。
 
 // ═══════════════════════════════════════════════
 // 阶段一 回退
@@ -352,8 +353,7 @@ async function revertStage(tournament) {
     default:
       throw new Error('当前状态无可回退目标');
   }
-
-  await syncToOldTournament(tournament, 'status_sync', { newStatus: tournament.status });
+  // patch-03: 回退只作用于 MSC 适配层自身，绝不回写 tournament.status。
 }
 
 /** R5.2 完全重置 */
@@ -368,8 +368,7 @@ async function resetAll(tournament) {
   tournament.qualifierRankings = [];
   tournament.status = 'pending';
   // 不重置 oldTournamentId（关联保留）
-
-  await syncToOldTournament(tournament, 'status_sync', { newStatus: 'pending' });
+  // patch-03: 适配层完全重置也不回写 tournament.status。
 }
 
 module.exports = {
