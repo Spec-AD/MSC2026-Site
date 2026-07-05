@@ -610,6 +610,7 @@ router.post('/stage1/init-from-qualifier', authMiddleware, async (req, res) => {
         autoFilledCount: autoFilled.length,
         autoFilledPlayerIds: autoFilled.map(p => p.userId),
         groups: t.stage1.groups.map(g => ({
+          groupId: g.order,
           order: g.order,
           p1: String(g.p1),
           p2: String(g.p2),
@@ -721,6 +722,7 @@ router.get('/stage1/state', async (req, res) => {
 
     // P1-3: 统一序列化 userId 字段，前端用 .userId 而非 ._id
     const serializeGroup = (g) => ({
+      groupId: g.order,
       order: g.order,
       p1: g.p1 ? { userId: String(g.p1._id), username: g.p1.username, avatarUrl: g.p1.avatarUrl } : null,
       p2: g.p2 ? { userId: String(g.p2._id), username: g.p2.username, avatarUrl: g.p2.avatarUrl } : null,
@@ -765,6 +767,7 @@ router.get('/stage1/group/:groupId', async (req, res) => {
 
     // P1-3: 统一序列化 userId
     res.json({ msg: 'ok', data: {
+      groupId: g.order,
       order: g.order,
       p1: g.p1 ? { userId: String(g.p1._id), username: g.p1.username, avatarUrl: g.p1.avatarUrl } : null,
       p2: g.p2 ? { userId: String(g.p2._id), username: g.p2.username, avatarUrl: g.p2.avatarUrl } : null,
@@ -832,7 +835,7 @@ router.post('/stage1/submit-score', authMiddleware, async (req, res) => {
 
     res.json({
       msg: '成绩已录入',
-      data: { nextStep: result.nextStep }
+      data: result
     });
   } catch (err) {
     console.error('提交成绩失败:', err);
@@ -872,11 +875,11 @@ router.post('/stage1/forfait', authMiddleware, async (req, res) => {
     if (!t) return;
 
     const { playerId } = req.body;
-    const group = await forfeitPlayer(t, playerId);
+    const { group, result } = await forfeitPlayer(t, playerId);
 
     res.json({
       msg: `选手弃权，对手晋级`,
-      data: { winner: group.winner.toString(), forfaitBy: playerId }
+      data: { winner: group.winner.toString(), forfaitBy: playerId, nextStep: result.nextStep, groupIndex: result.groupIndex }
     });
   } catch (err) {
     console.error('弃权处理失败:', err);

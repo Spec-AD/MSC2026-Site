@@ -216,6 +216,7 @@ async function submitScore(tournament, userId, body) {
     // 随机曲成绩录入完毕 → 判定胜负 → 组结束
     await _determineGroupWinner(group);
     group.status = 'done';
+    return _advanceCompletedGroup(tournament, stage1);
   }
 
   await tournament.save();
@@ -272,6 +273,100 @@ async function _determineGroupWinner(group) {
 }
 
 /**
+ * 当前组已结束后，自动打开下一组；最后一组结束时完成阶段一。
+ * 这样前端无需额外点击“推进”，避免 currentGroupIndex 停留在已完成组导致后续组灰置。
+ */
+async function _advanceCompletedGroup(tournament, stage1) {
+  const currentIdx = stage1.currentGroupIndex;
+  const group = stage1.groups[currentIdx];
+  if (!group) throw new Error('无进行中的组');
+  if (group.status !== 'done') throw new Error('当前组尚未完成');
+
+  const nextIdx = currentIdx + 1;
+
+  if (nextIdx >= stage1.groups.length) {
+    const unresolved = stage1.groups
+      .map((g, i) => ({ i, ok: !!g.winner }))
+      .filter(x => !x.ok);
+
+    if (unresolved.length > 0) {
+      await tournament.save();
+      broadcast('match_finished', {
+        type: 'group',
+        groupIndex: currentIdx,
+        winnerId: group.winner ? group.winner.toString() : null,
+        needTiebreak: !!group.needTiebreak,
+        unresolvedGroups: unresolved.map(x => x.i)
+      });
+      return {
+        nextStep: 'group_done_need_tiebreak',
+        groupIndex: currentIdx,
+        unresolvedGroups: unresolved.map(x => x.i)
+      };
+    }
+
+    return _completeStage1(tournament, stage1);
+  }
+
+  stage1.currentGroupIndex = nextIdx;
+  const nextGroup = stage1.groups[nextIdx];
+  if (nextGroup.status === 'pending') nextGroup.status = 'p1_pick';
+
+  await tournament.save();
+
+  broadcast('match_finished', {
+    type: 'group',
+    groupIndex: currentIdx,
+    winnerId: group.winner ? group.winner.toString() : null,
+    needTiebreak: !!group.needTiebreak,
+    nextGroupIndex: nextIdx
+  });
+
+  broadcast('turn_change', {
+    stage: 'stage1',
+    groupIndex: nextIdx,
+    phase: nextGroup.status,
+    currentPicker: nextGroup.status === 'p1_pick' ? nextGroup.p1.toString() : null
+  });
+
+  return { nextStep: 'next_group', groupIndex: nextIdx };
+}
+
+async function _completeStage1(tournament, stage1) {
+  // 所有组完成
+  stage1.status = 'done';
+
+  // 收集晋级者
+  const qualifiers = stage1.groups.map(g => g.winner).filter(Boolean);
+
+  tournament.qualifiedStage1 = qualifiers;
+  // P1-8: 阶段一完成后自动推进到 stage2
+  tournament.status = 'stage2';
+
+  await tournament.save();
+
+  // 旧赛事同步：回写 groups + matches
+  await syncToOldTournament(tournament, 'stage1_complete', {
+    groups: stage1.groups.map(g => ({
+      order: g.order,
+      p1: g.p1,
+      p2: g.p2,
+      winner: g.winner
+    })),
+    operatedBy: null
+  });
+
+  broadcast('stage_advanced', {
+    stage: 'stage1',
+    phase: 'completed',
+    qualifiedIds: qualifiers.map(q => q.toString()),
+    nextStage: 'stage2'
+  });
+
+  return { nextStep: 'stage_done', qualifiedIds: qualifiers };
+}
+
+/**
  * 推进：到下一选曲阶段 / 下一组 / 阶段结束
  */
 async function advance(tournament) {
@@ -298,67 +393,7 @@ async function advance(tournament) {
     throw new Error('当前组尚未完成');
   }
 
-  // 当前组完成，推进到下一组
-  const nextIdx = stage1.currentGroupIndex + 1;
-
-  if (nextIdx >= 6) {
-    // 修复 #4：存在未决平局（needTiebreak / winner 为空）时，绝不能带着不足 6 人的名单推进，
-    // 否则阶段二 initRace 会因"需要 6 名选手"而抛错卡死。要求先用 resolveGroupTie 决出胜者。
-    const unresolved = stage1.groups
-      .map((g, i) => ({ i, ok: !!g.winner }))
-      .filter(x => !x.ok);
-    if (unresolved.length > 0) {
-      throw new Error(`存在未决平局，需先加赛决出胜者再推进：组 ${unresolved.map(x => x.i + 1).join('、')}`);
-    }
-
-    // 所有组完成
-    stage1.status = 'done';
-
-    // 收集晋级者
-    const qualifiers = stage1.groups.map(g => g.winner).filter(Boolean);
-
-    tournament.qualifiedStage1 = qualifiers;
-    // P1-8: 阶段一完成后自动推进到 stage2
-    tournament.status = 'stage2';
-
-    await tournament.save();
-
-    // 旧赛事同步：回写 groups + matches
-    await syncToOldTournament(tournament, 'stage1_complete', {
-      groups: stage1.groups.map(g => ({
-        order: g.order,
-        p1: g.p1,
-        p2: g.p2,
-        winner: g.winner
-      })),
-      operatedBy: null
-    });
-
-    broadcast('stage_advanced', {
-      stage: 'stage1',
-      phase: 'completed',
-      qualifiedIds: qualifiers.map(q => q.toString()),
-      nextStage: 'stage2'
-    });
-
-    return { nextStep: 'stage_done', qualifiedIds: qualifiers };
-  }
-
-  // 推进到下一组
-  stage1.currentGroupIndex = nextIdx;
-  const nextGroup = stage1.groups[nextIdx];
-  nextGroup.status = 'p1_pick';
-
-  await tournament.save();
-
-  broadcast('turn_change', {
-    stage: 'stage1',
-    groupIndex: nextIdx,
-    phase: 'p1_pick',
-    currentPicker: nextGroup.p1.toString()
-  });
-
-  return { nextStep: 'next_group', groupIndex: nextIdx };
+  return _advanceCompletedGroup(tournament, stage1);
 }
 
 /**
@@ -377,17 +412,11 @@ async function forfeitPlayer(tournament, playerId) {
   group.forfait = group.p1.toString() === pidStr ? group.p1 : group.p2;
   group.winner = group.p1.toString() === pidStr ? group.p2 : group.p1;
   group.status = 'done';
+  group.needTiebreak = false;
 
-  await tournament.save();
+  const result = await _advanceCompletedGroup(tournament, stage1);
 
-  broadcast('match_finished', {
-    type: 'group',
-    groupIndex: stage1.currentGroupIndex,
-    winnerId: group.winner.toString(),
-    forfaitBy: pidStr
-  });
-
-  return group;
+  return { group, result, forfaitBy: pidStr };
 }
 
 /**
@@ -413,14 +442,24 @@ async function resolveGroupTie(tournament, groupIndex, winnerId) {
   group.needTiebreak = false;
   group.status = 'done';
 
-  await tournament.save();
+  if (groupIndex === stage1.currentGroupIndex) {
+    await _advanceCompletedGroup(tournament, stage1);
+  } else {
+    const allGroupsDone = stage1.groups.every(g => g.status === 'done');
+    const hasUnresolved = stage1.groups.some(g => !g.winner);
 
-  broadcast('match_finished', {
-    type: 'group',
-    groupIndex,
-    winnerId: String(group.winner),
-    resolvedByTiebreak: true
-  });
+    if (allGroupsDone && !hasUnresolved) {
+      await _completeStage1(tournament, stage1);
+    } else {
+      await tournament.save();
+      broadcast('match_finished', {
+        type: 'group',
+        groupIndex,
+        winnerId: String(group.winner),
+        resolvedByTiebreak: true
+      });
+    }
+  }
 
   return group;
 }
