@@ -93,6 +93,7 @@ export const useRaceStore = create((set, get) => ({
         itemsOnMap: data.itemsOnMap,
         wallsBroken: data.wallsBroken || [],
         currentTurn: data.currentTurn,
+        currentPlayerIndex: data.currentPlayerIndex ?? get().currentPlayerIndex,
         currentPlayerId: data.currentPlayerId,
       });
       return data;
@@ -176,6 +177,16 @@ export const useRaceStore = create((set, get) => ({
     }
   },
 
+  /** 获取指定选手持有道具 */
+  fetchPlayerItems: async (playerId) => {
+    try {
+      const res = await api.getRacePlayerItems(playerId);
+      return res.data.data;
+    } catch (err) {
+      throw err.response?.data || { msg: '获取选手道具失败' };
+    }
+  },
+
   /** 终止跑图 */
   terminate: async () => {
     try {
@@ -196,6 +207,31 @@ export const useRaceStore = create((set, get) => ({
 
   /** 关闭道具使用反馈 */
   dismissItemUse: () => set({ activeItemUse: null }),
+
+  /** 本地倒计时流逝 */
+  tickTimers: () => {
+    const {
+      status,
+      timeLimitMs,
+      turnTimeLimitMs,
+      totalTimeStartedAt,
+      turnStartedAt,
+    } = get();
+    if (status !== 'racing') return;
+
+    const now = Date.now();
+    const totalStart = totalTimeStartedAt ? new Date(totalTimeStartedAt).getTime() : null;
+    const turnStart = turnStartedAt ? new Date(turnStartedAt).getTime() : null;
+
+    set({
+      totalRemainingMs: totalStart && timeLimitMs != null
+        ? Math.max(0, timeLimitMs - (now - totalStart))
+        : get().totalRemainingMs,
+      turnRemainingMs: turnStart && turnTimeLimitMs != null
+        ? Math.max(0, turnTimeLimitMs - (now - turnStart))
+        : get().turnRemainingMs,
+    });
+  },
 
   /** SSE 事件：更新回合 */
   sseTurnChange: (data) => {

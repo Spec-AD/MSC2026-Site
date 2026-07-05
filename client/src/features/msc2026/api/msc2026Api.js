@@ -99,6 +99,10 @@ export const skipTurnManual = () =>
 export const getMyRaceItems = () =>
   axios.get(`${BASE}/race/my-items`, { headers: authHeaders() });
 
+/** 查看指定选手持有道具 */
+export const getRacePlayerItems = (playerId) =>
+  axios.get(`${BASE}/race/player/${playerId}/items`);
+
 /** 强制终止跑图 */
 export const terminateRace = () =>
   axios.post(`${BASE}/race/terminate`, {}, { headers: authHeaders() });

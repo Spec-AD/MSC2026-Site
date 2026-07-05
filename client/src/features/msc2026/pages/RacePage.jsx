@@ -3,7 +3,7 @@
 // 布局：顶部「小标签·大数字」数据条 + 中央 3D 地图 + 右侧榜单
 // ============================================================
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useRaceStore } from '../store';
 import { useMSCSSE } from '../hooks/useSSE';
 import { STAGE_CONFIG, getItemDef } from '../constants/gameData';
@@ -11,7 +11,7 @@ import RaceMap3D from '../components/race/RaceMap3D';
 import RaceStatBar from '../components/race/RaceStatBar';
 import ChallengeCard from '../components/race/ChallengeCard';
 import ItemCard from '../components/race/ItemCard';
-import { FaPlay, FaSync } from 'react-icons/fa';
+import { FaForward, FaPlay, FaSync } from 'react-icons/fa';
 import { HiOutlineCube } from 'react-icons/hi';
 
 /** 倒计时格式化 */
@@ -26,13 +26,18 @@ function fmtMs(ms) {
 export default function RacePage({ stage }) {
   const race = useRaceStore();
   const config = STAGE_CONFIG[stage] || {};
-  const [myItems, setMyItems] = useState([]);
-  const [showMyItems, setShowMyItems] = useState(false);
+  const [itemViewer, setItemViewer] = useState(null);
 
   // 初始加载（仅 stage 变化时重载，不依赖整个 store）
   useEffect(() => {
     race.fetchRaceState().catch(() => {});
   }, [stage]);
+
+  // 前端本地倒计时：接口/SSE 负责校准，页面负责每秒流逝。
+  useEffect(() => {
+    const interval = setInterval(() => race.tickTimers(), 1000);
+    return () => clearInterval(interval);
+  }, [race.tickTimers]);
 
   // SSE 实时同步（action 函数引用稳定）
   useMSCSSE({
@@ -59,20 +64,34 @@ export default function RacePage({ stage }) {
     return () => clearInterval(interval);
   }, []);
 
-  const isMyTurn = false; // TODO: 对接当前用户 session
+  const canOperate = race.status === 'racing' && !race.activeChallenge;
 
   /** 处理行动 */
   const handleAdvance = async () => {
+    if (!canOperate) return;
     try {
       await race.performAction({ actionType: 'advance' });
+      race.fetchRaceMap();
     } catch (err) {
       console.error(err);
     }
   };
 
   const handlePickup = async (zoneIndex) => {
+    if (!canOperate) return;
     try {
       await race.performAction({ actionType: 'pickup', zoneIndex });
+      race.fetchRaceMap();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSkipTurn = async () => {
+    if (!canOperate) return;
+    try {
+      await race.skipTurn();
+      race.fetchRaceState();
     } catch (err) {
       console.error(err);
     }
@@ -93,17 +112,32 @@ export default function RacePage({ stage }) {
     try {
       await race.useItem(itemRef);
       race.fetchRaceState();
+      if (itemViewer?.player?.userId) {
+        const data = await race.fetchPlayerItems(itemViewer.player.userId);
+        setItemViewer(data);
+      }
     } catch (err) {
       console.error(err);
     }
   };
 
-  /** 加载我的道具 */
-  const loadMyItems = async () => {
+  /** 加载当前回合选手道具 */
+  const loadCurrentPlayerItems = async () => {
+    if (!race.currentPlayerId) return;
     try {
-      const data = await race.fetchMyItems();
-      setMyItems(data?.items || []);
-      setShowMyItems(true);
+      const data = await race.fetchPlayerItems(race.currentPlayerId);
+      setItemViewer(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadPlayerItems = async (player) => {
+    const playerId = player?._id || player?.userId;
+    if (!playerId) return;
+    try {
+      const data = await race.fetchPlayerItems(playerId);
+      setItemViewer(data);
     } catch (err) {
       console.error(err);
     }
@@ -111,14 +145,23 @@ export default function RacePage({ stage }) {
 
   /** 当前选手的相邻扇区 */
   const adjacentSectors = useMemo(() => {
-    const currentPlayer = race.players?.find((p) => (p._id || p.userId) === race.currentPlayerId);
+    const currentPlayer = race.players?.find((p) => String(p._id || p.userId) === String(race.currentPlayerId));
     if (!currentPlayer) return [];
     const sv = currentPlayer.startVertex;
     const count = config.mapShape === 'hexagon' ? 6 : 4;
     return [sv, (sv + 1) % count];
   }, [race.players, race.currentPlayerId, config.mapShape]);
 
-  const currentPlayer = race.players?.find((p) => (p._id || p.userId) === race.currentPlayerId);
+  const currentPlayer = race.players?.find((p) => String(p._id || p.userId) === String(race.currentPlayerId));
+  const availablePickupSectors = useMemo(() => (
+    (race.itemsOnMap || [])
+      .filter((item) => !item.collected && adjacentSectors.includes(item.zoneIndex))
+      .map((item) => ({
+        zoneIndex: item.zoneIndex,
+        itemRef: item.itemRef,
+        name: item.name || `道具 ${item.itemRef}`,
+      }))
+  ), [race.itemsOnMap, adjacentSectors]);
   const effectiveMapConfig = useMemo(() => ({
     shape: race.mapConfig?.shape || config.mapShape || 'hexagon',
     layers: race.mapConfig?.layers || config.layers || 3,
@@ -128,17 +171,27 @@ export default function RacePage({ stage }) {
   // 派生统计
   const advanceCount = stage === 'stage2' ? 4 : stage === 'stage3' ? 2 : 0;
   const finishedCount = race.players?.filter((p) => p.finishOrder != null).length || 0;
-  // 榜单排序：已完成按名次，未完成按层数
+  // 榜单排序：按回合先手顺序展示，第一个行动的选手排在最上面。
   const ranked = useMemo(() => {
-    const arr = [...(race.players || [])];
-    arr.sort((a, b) => {
-      if (a.finishOrder != null && b.finishOrder != null) return a.finishOrder - b.finishOrder;
-      if (a.finishOrder != null) return -1;
-      if (b.finishOrder != null) return 1;
-      return (b.currentLayer || 0) - (a.currentLayer || 0);
-    });
-    return arr;
-  }, [race.players]);
+    const players = [...(race.players || [])];
+    if (players.length === 0) return players;
+
+    const firstLog = race.actionLog?.find((log) => log.playerId);
+    const firstPlayerId = firstLog ? String(firstLog.playerId?._id || firstLog.playerId) : null;
+    let startIndex = firstPlayerId
+      ? players.findIndex((p) => String(p._id || p.userId) === firstPlayerId)
+      : Number(race.currentPlayerIndex);
+
+    if (!Number.isInteger(startIndex) || startIndex < 0) startIndex = 0;
+
+    return players
+      .map((player, index) => ({
+        player,
+        order: (index - startIndex + players.length) % players.length,
+      }))
+      .sort((a, b) => a.order - b.order)
+      .map(({ player }) => player);
+  }, [race.players, race.currentPlayerIndex, race.actionLog]);
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
@@ -202,30 +255,41 @@ export default function RacePage({ stage }) {
           <div className="rounded-2xl border border-white/10 bg-white/[0.045] backdrop-blur-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl md:text-2xl font-bold text-white">实时榜单</h3>
-              <span className="text-base text-zinc-400">坐标进度</span>
+              <span className="text-base text-zinc-400">回合顺序</span>
             </div>
             <div className="space-y-3">
-              {ranked.map((p) => {
-                const isActive = (p._id || p.userId) === race.currentPlayerId;
+              {ranked.map((p, index) => {
+                const playerId = p._id || p.userId;
+                const isActive = String(playerId) === String(race.currentPlayerId);
                 const finished = p.finishOrder != null;
                 return (
                   <div
-                    key={p._id || p.userId}
+                    key={playerId}
                     className={`flex items-center gap-4 px-4 py-4 rounded-2xl border transition-all
                       ${isActive ? 'bg-amber-500/10 border-amber-500/25'
                         : finished ? 'bg-emerald-500/[0.06] border-emerald-500/20'
                         : 'bg-transparent border-white/[0.06]'}`}
                   >
-                    {/* 名次徽章 */}
-                    <span className={`shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-black tabular-nums
-                      ${finished ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-500'}`}>
-                      {finished ? p.finishOrder : '–'}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => loadPlayerItems(p)}
+                      title="查看道具"
+                      className={`shrink-0 w-12 h-12 rounded-2xl overflow-hidden border transition-all flex items-center justify-center
+                        ${isActive ? 'border-amber-400/45 bg-amber-500/15'
+                          : p.itemCount > 0 ? 'border-sky-400/35 bg-sky-500/10'
+                          : 'border-white/10 bg-zinc-800 hover:bg-zinc-700'}`}
+                    >
+                      {p.avatarUrl ? (
+                        <img src={p.avatarUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-lg font-black text-zinc-400">{index + 1}</span>
+                      )}
+                    </button>
                     {/* 名字 + 状态 */}
                     <div className="flex-1 min-w-0">
                       <p className="text-2xl font-bold text-white truncate leading-tight">{p.username}</p>
                       <p className={`text-base leading-tight mt-1 ${isActive ? 'text-amber-300' : 'text-zinc-500'}`}>
-                        {finished ? '已抵达中心' : isActive ? '行动中…' : '推进中'}
+                        #{index + 1} 出手位 · {finished ? `第 ${p.finishOrder} 名抵达中心` : isActive ? '行动中…' : '等待回合'}
                         {p.itemCount > 0 && <span className="text-sky-400/80 ml-1.5">道具 {p.itemCount}</span>}
                       </p>
                     </div>
@@ -268,20 +332,62 @@ export default function RacePage({ stage }) {
             </div>
           </div>
 
-          {/* 操作按钮区（选手视角） */}
-          {isMyTurn && race.status === 'racing' && (
-            <div className="space-y-2">
+          {/* 操作按钮区 */}
+          {race.status === 'racing' && (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-5 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-lg font-bold text-zinc-100">当前回合操作</h3>
+                <span className="text-sm text-zinc-500 truncate">{currentPlayer?.username || '等待选手'}</span>
+              </div>
               <button
                 onClick={handleAdvance}
-                className="w-full py-3 px-4 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
+                disabled={!canOperate}
+                className={`w-full py-3 px-4 rounded-xl border transition-all text-sm font-medium flex items-center justify-center gap-2
+                  ${canOperate
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/30'
+                    : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
               >
                 <FaPlay className="text-xs" /> 前进 · 挑战墙壁
               </button>
               <button
-                onClick={loadMyItems}
-                className="w-full py-3 px-4 rounded-xl bg-sky-500/20 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
+                onClick={loadCurrentPlayerItems}
+                disabled={!race.currentPlayerId}
+                className="w-full py-3 px-4 rounded-xl bg-sky-500/20 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <HiOutlineCube /> 查看 / 使用道具
+              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {availablePickupSectors.map((item) => (
+                  <button
+                    key={`${item.itemRef}-${item.zoneIndex}`}
+                    onClick={() => handlePickup(item.zoneIndex)}
+                    disabled={!canOperate}
+                    className={`py-3 px-4 rounded-xl border transition-all text-sm font-medium flex items-center justify-center gap-2
+                      ${canOperate
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/25'
+                        : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
+                  >
+                    <HiOutlineCube /> 拾取 {item.name}
+                  </button>
+                ))}
+                {availablePickupSectors.length === 0 && (
+                  <button
+                    disabled
+                    className="py-3 px-4 rounded-xl bg-zinc-800 text-zinc-600 border border-white/5 cursor-not-allowed text-sm font-medium"
+                  >
+                    相邻区域暂无可拾取道具
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={handleSkipTurn}
+                disabled={!canOperate}
+                className={`w-full py-3 px-4 rounded-xl border transition-all text-sm font-medium flex items-center justify-center gap-2
+                  ${canOperate
+                    ? 'bg-zinc-700/50 text-zinc-200 border-white/10 hover:bg-zinc-700'
+                    : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
+              >
+                <FaForward className="text-xs" /> 跳过本回合
               </button>
             </div>
           )}
@@ -323,35 +429,52 @@ export default function RacePage({ stage }) {
 
       {/* 道具背包弹窗 */}
       <AnimatePresence>
-        {showMyItems && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+        {itemViewer && (
+          <div
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowMyItems(false)}
+            onClick={() => setItemViewer(null)}
           >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
+            <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-zinc-900 border border-white/10 rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto"
+              className="bg-zinc-900 border border-white/10 rounded-2xl p-6 max-w-xl w-full max-h-[80vh] overflow-y-auto"
             >
-              <h3 className="text-sm font-semibold text-white mb-4" style={{ fontFamily: 'Torus, sans-serif' }}>
-                道具背包
-              </h3>
-              {myItems.length === 0 ? (
+              <div className="flex items-center gap-3 mb-4">
+                {itemViewer.player?.avatarUrl && (
+                  <img src={itemViewer.player.avatarUrl} alt="" className="w-12 h-12 rounded-xl object-cover" />
+                )}
+                <div className="min-w-0">
+                  <h3 className="text-2xl font-bold text-white truncate" style={{ fontFamily: 'Torus, sans-serif' }}>
+                    {itemViewer.player?.username || '选手'} · 道具
+                  </h3>
+                  <p className="text-sm text-zinc-500">
+                    {itemViewer.disableItemsUntilTurn != null ? `禁用道具至回合 ${itemViewer.disableItemsUntilTurn}` : '可查看当前持有与已激活效果'}
+                  </p>
+                </div>
+              </div>
+              {(itemViewer.items || []).length === 0 ? (
                 <p className="text-xl text-zinc-500">暂无道具</p>
               ) : (
                 <div className="space-y-2">
-                  {myItems.map((item) => {
+                  {itemViewer.items.map((item) => {
                     const def = getItemDef(item.itemRef);
+                    const effect = item.description || def?.effect || '暂无效果说明';
+                    const penalty = item.penalty || def?.penalty;
                     return (
                       <div key={item.itemRef} className="flex items-center justify-between p-3 rounded-xl border border-white/10 bg-zinc-800/50">
-                        <div>
-                          <p className="text-xl text-white font-bold">{def?.name}</p>
-                          <p className="text-base text-zinc-500 mt-1">{def?.effect}</p>
+                        <div className="min-w-0 pr-4">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xl text-white font-bold truncate">{item.name || def?.name}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${item.type === 'double' ? 'bg-pink-500/20 text-pink-300' : 'bg-sky-500/20 text-sky-300'}`}>
+                              {item.type === 'double' ? '双面' : '增益'}
+                            </span>
+                          </div>
+                          <p className="text-base text-zinc-400 mt-1">{effect}</p>
+                          {item.probability != null && (
+                            <p className="text-sm text-zinc-500 mt-1">成功率 {(item.probability * 100).toFixed(0)}%</p>
+                          )}
+                          {penalty && (
+                            <p className="text-sm text-red-300 mt-1">{typeof penalty === 'string' ? penalty : '失败将触发双面惩罚'}</p>
+                          )}
                         </div>
                         {item.status === 'unused' && (
                           <button
@@ -373,13 +496,13 @@ export default function RacePage({ stage }) {
                 </div>
               )}
               <button
-                onClick={() => setShowMyItems(false)}
+                onClick={() => setItemViewer(null)}
                 className="w-full mt-4 py-2 rounded-xl border border-white/10 text-zinc-400 hover:text-white text-sm transition-all"
               >
                 关闭
               </button>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
       </AnimatePresence>
     </div>

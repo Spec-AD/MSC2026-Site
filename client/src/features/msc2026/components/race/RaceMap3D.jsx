@@ -1,6 +1,6 @@
 // ============================================================
 // RaceMap3D.jsx — 精致 3D 跑图地图 (React Three Fiber)
-// 正六边形 / 正方形 · 等距投影 · 可旋转摄像机
+// 正六边形 / 正方形 · 等距投影 · 静态摄像机
 // 视觉：柔光 + 接触阴影 + 辉光宝石 + 浮动选手 + 坐标系
 // ============================================================
 import { useRef, useMemo } from 'react';
@@ -344,7 +344,7 @@ export default function RaceMap3D({
   const outerVertices = useMemo(() => verticesFn(0, 0, maxR), [verticesFn]);
 
   return (
-    <div style={{ width, height }} className="relative rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-b from-[#0b1020] via-[#070b14] to-[#05060a] cursor-grab active:cursor-grabbing shadow-[0_28px_90px_rgba(0,0,0,0.45)]">
+    <div style={{ width, height }} className="relative rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-b from-[#0b1020] via-[#070b14] to-[#05060a] shadow-[0_28px_90px_rgba(0,0,0,0.45)]">
       <Canvas
         camera={{ position: [maxR * 0.84, maxR * 1.12, maxR * 1.18], fov: 42 }}
         gl={{ antialias: true, alpha: true }}
@@ -361,7 +361,7 @@ export default function RaceMap3D({
         <pointLight position={[6, 4, 7]} intensity={0.34} color="#c084fc" distance={18} />
         <pointLight position={[0, 3.8, 0]} intensity={0.22} color="#fbbf24" distance={10} />
 
-        <OrbitControls enableDamping dampingFactor={0.08} autoRotate autoRotateSpeed={0.28} enablePan={false} minDistance={5.8} maxDistance={15.5} maxPolarAngle={Math.PI / 2.12} target={[0, -0.18, 0]} />
+        <OrbitControls enableDamping={false} enableRotate={false} enableZoom={false} enablePan={false} target={[0, -0.18, 0]} />
 
         <SceneFloor maxR={maxR} />
         <ContactShadows position={[0, -0.65, 0]} opacity={0.58} scale={maxR * 3} blur={3.2} far={4.6} resolution={768} color="#000000" />

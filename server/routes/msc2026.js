@@ -1055,6 +1055,8 @@ router.get('/race/map', async (req, res) => {
           avatarUrl: p.userId.avatarUrl,
           startVertex: p.startVertex,
           currentLayer: p.currentLayer,
+          itemCount: p.items.length,
+          itemUsedCount: p.items.filter(i => i.status === 'consumed' || i.status === 'armed').length,
           status: p.finishOrder ? 'finished' : 'racing',
           finishOrder: p.finishOrder
         })),
@@ -1070,6 +1072,7 @@ router.get('/race/map', async (req, res) => {
         }),
         wallsBroken,
         currentTurn: race.currentTurn,
+        currentPlayerIndex: race.currentPlayerIndex,
         currentPlayerId: String(race.players[race.currentPlayerIndex]?.userId?._id || race.players[race.currentPlayerIndex]?.userId)
       }
     });
@@ -1265,6 +1268,51 @@ router.get('/race/my-items', authMiddleware, async (req, res) => {
     });
   } catch (err) {
     console.error('获取道具失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.get('/race/player/:playerId/items', async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne();
+    if (!t) return res.status(404).json({ msg: '赛事不存在' });
+
+    const race = currentRace(t);
+    if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
+
+    const playerId = String(req.params.playerId);
+    const player = race.players.find(p => String(p.userId?._id || p.userId) === playerId);
+    if (!player) return res.status(404).json({ msg: '选手不在比赛中' });
+
+    const user = await User.findById(playerId).select('username avatarUrl').lean();
+    const items = player.items.map(i => {
+      const def = getItem(i.itemRef);
+      return {
+        itemRef: i.itemRef,
+        name: def ? def.name : '???',
+        type: def ? def.type : '???',
+        description: def ? def.description : '',
+        penalty: def && def.penalty ? def.penalty : null,
+        probability: def && def.probability != null ? def.probability : null,
+        status: i.status
+      };
+    });
+
+    res.json({
+      msg: 'ok',
+      data: {
+        player: {
+          userId: playerId,
+          username: user?.username || null,
+          avatarUrl: user?.avatarUrl || null
+        },
+        items,
+        disableItemsUntilTurn: player.disableItemsUntilTurn,
+        silentUntilTurn: player.silentUntilTurn
+      }
+    });
+  } catch (err) {
+    console.error('获取选手道具失败:', err);
     res.status(500).json({ msg: '服务器错误' });
   }
 });
