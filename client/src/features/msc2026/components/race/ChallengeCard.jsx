@@ -3,18 +3,14 @@
 // ============================================================
 import { FaShieldAlt, FaCheck, FaTimes, FaMusic } from 'react-icons/fa';
 import { CHALLENGE_TYPE_LABELS } from '../../constants/gameData';
+import { formatChallengeCondition } from '../../utils/challengeFormat';
 
 export default function ChallengeCard({ challenge, pendingJudgement, isJudge = false, onPass, onFail, onDismiss }) {
   if (!challenge) return null;
 
   const task = challenge;
   const typeLabel = CHALLENGE_TYPE_LABELS[task.type] || '未知';
-  const conditionText =
-    task.type === 'eval' ? `${task.evalRequirement}` :
-    task.type === 'achievement' ? `${task.threshold}%` :
-    task.type === 'precision' ? `DX ${task.dxRequirement} 星` :
-    task.type === 'tolerance' ? `≤ ${task.toleranceLimit}` :
-    '待确认';
+  const conditionText = formatChallengeCondition(task);
   const activeEffects = task.activeItemEffects || [];
 
   return (

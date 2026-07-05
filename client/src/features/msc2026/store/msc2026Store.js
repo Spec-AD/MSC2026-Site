@@ -176,7 +176,7 @@ export const useMSC2026Store = create((set, get) => ({
     try {
       const res = await api.initStage4(data);
       set((s) => ({
-        stage4: { ...s.stage4, ...res.data.data, status: 'playing' },
+        stage4: { ...s.stage4, ...res.data.data, status: res.data.data.status || 'p1_pick' },
       }));
       return res.data;
     } catch (err) {

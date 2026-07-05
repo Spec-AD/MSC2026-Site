@@ -161,15 +161,29 @@ function PickupSlot({ sectorIdx, hasItem, isHighlighted, outerVertices, sectorCo
 
   const color = hasItem ? '#60a5fa' : '#475569';
   const opacity = hasItem ? 0.88 : 0.34;
+  const handlePick = (e) => {
+    e.stopPropagation();
+    if (hasItem && onPick) onPick(sectorIdx);
+  };
 
   return (
     <group position={position}>
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (hasItem && onPick) onPick(sectorIdx);
+        onPointerUp={handlePick}
+        onPointerOver={() => {
+          if (hasItem) document.body.style.cursor = 'pointer';
         }}
+        onPointerOut={() => {
+          document.body.style.cursor = '';
+        }}
+      >
+        <circleGeometry args={[0.64, 48]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.001} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        onPointerUp={handlePick}
       >
         <circleGeometry args={[0.34, 48]} />
         <meshBasicMaterial color={color} transparent opacity={opacity * 0.28} depthWrite={false} side={THREE.DoubleSide} />

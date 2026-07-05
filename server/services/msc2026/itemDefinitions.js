@@ -382,7 +382,15 @@ function applyItemEffects(challenge, itemRefs, ctx) {
   for (const ref of itemRefs) {
     const item = getItem(ref);
     if (item && item.apply) {
+      const beforeCount = (modified._modifiedBy || []).length;
       modified = item.apply(modified, ctx);
+      const afterCount = (modified._modifiedBy || []).length;
+      if (afterCount === beforeCount) {
+        modified = {
+          ...modified,
+          _modifiedBy: [...(modified._modifiedBy || []), `${item.name}(未适用)`]
+        };
+      }
     }
   }
   return modified;

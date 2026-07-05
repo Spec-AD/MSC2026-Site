@@ -1,7 +1,7 @@
 // ============================================================
 // SongPicker.jsx — 选手曲目选择面板
 // ============================================================
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { FaMusic, FaCheck, FaLock } from 'react-icons/fa';
 
@@ -15,9 +15,15 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
     pickType === 'p2_pick' ? 'P2 选择自选曲' :
     '选曲';
 
-  const excludedSet = new Set(excludedSongIds);
-  const availableSongs = pool.filter((s) => !excludedSet.has(s._id || s.songId));
-  const selectedSong = availableSongs.find((s) => (s._id || s.songId) === selectedId);
+  useEffect(() => {
+    setSelectedId(null);
+    setConfirmed(false);
+  }, [pickType]);
+
+  const getSongId = (song) => String(song?._id || song?.songId?._id || song?.songId || '');
+  const excludedSet = new Set(excludedSongIds.map((id) => String(id?._id || id)));
+  const availableSongs = pool.filter((s) => !excludedSet.has(getSongId(s)));
+  const selectedSong = availableSongs.find((s) => getSongId(s) === selectedId);
 
   const handleConfirm = async () => {
     if (!selectedId || submitting || disabled) return;
@@ -58,7 +64,7 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
           {/* 曲目列表 */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 max-h-[520px] overflow-y-auto pr-1 mb-5">
             {availableSongs.map((song) => {
-              const id = song._id || song.songId;
+              const id = getSongId(song);
               const isSelected = id === selectedId;
               return (
                 <button

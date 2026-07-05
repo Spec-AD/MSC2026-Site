@@ -1498,6 +1498,7 @@ router.post('/stage4/init', authMiddleware, async (req, res) => {
         p1: { userId: s4.p1.toString() },
         p2: { userId: s4.p2.toString() },
         designatedSongId: s4.designatedSongId.toString(),
+        status: s4.status,
         totalSongs: 4,
         songs: []
       }
@@ -1525,6 +1526,34 @@ router.get('/stage4/state', async (req, res) => {
     if (s4.status === 'p1_pick') currentTurn = { phase: 'p1_pick', currentPicker: s4.p1?._id?.toString() };
     else if (s4.status === 'p2_pick') currentTurn = { phase: 'p2_pick', currentPicker: s4.p2?._id?.toString() };
 
+    const serializeSongDoc = (song) => {
+      if (!song) return null;
+      const id = song._id || song;
+      const isPopulated = typeof song === 'object' && song.title;
+      return {
+        _id: String(id),
+        title: isPopulated ? song.title : '',
+        artist: isPopulated ? (song.basic_info?.artist || song.artist || '') : '',
+        ds: isPopulated ? song.ds : undefined,
+        level: isPopulated ? song.level : undefined
+      };
+    };
+
+    const serializeFinalSong = (songPlay) => {
+      const songDoc = songPlay.songId && typeof songPlay.songId === 'object' && songPlay.songId.title
+        ? songPlay.songId
+        : null;
+      return {
+        songId: String(songDoc?._id || songPlay.songId),
+        song: songDoc ? serializeSongDoc(songDoc) : null,
+        pickType: songPlay.pickType,
+        pickedBy: songPlay.pickedBy ? String(songPlay.pickedBy._id || songPlay.pickedBy) : null,
+        p1Score: songPlay.p1Score || null,
+        p2Score: songPlay.p2Score || null,
+        order: songPlay.order
+      };
+    };
+
     // P1-3: 统一序列化 userId
     res.json({
       msg: 'ok',
@@ -1532,9 +1561,9 @@ router.get('/stage4/state', async (req, res) => {
         status: s4.status,
         p1: s4.p1 ? { userId: String(s4.p1._id), username: s4.p1.username, avatarUrl: s4.p1.avatarUrl } : null,
         p2: s4.p2 ? { userId: String(s4.p2._id), username: s4.p2.username, avatarUrl: s4.p2.avatarUrl } : null,
-        songPool: s4.songPool,
-        designatedSong: s4.designatedSongId,
-        songs: s4.songs,
+        songPool: (s4.songPool || []).map(serializeSongDoc),
+        designatedSong: serializeSongDoc(s4.designatedSongId),
+        songs: (s4.songs || []).map(serializeFinalSong),
         currentTurn,
         winner: s4.winner ? String(s4.winner._id || s4.winner) : null,
         needTiebreak: s4.needTiebreak

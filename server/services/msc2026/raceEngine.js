@@ -276,6 +276,13 @@ async function useItem(tournament, targetPlayerId, itemRef) {
 
     if (itemRef === 9) { // 红心：100% 成功
       const challenge = await _peekChallenge(race, player);
+      race.actionLog.push({
+        playerId: player.userId,
+        turn: race.currentTurn,
+        actionType: 'use_item',
+        detail: { itemRef, success: true, taskId: challenge?.taskId },
+        timestamp: new Date()
+      });
       await tournament.save();
       broadcast('item_used', { playerId: userId.toString(), itemRef, itemName: itemDef.name });
       return { itemRef, name: itemDef.name, effect: '预览最近墙壁挑战', challenge, success: true };
@@ -283,13 +290,27 @@ async function useItem(tournament, targetPlayerId, itemRef) {
       const success = Math.random() < 0.40;
       if (success) {
         const challenge = await _peekChallenge(race, player);
+        race.actionLog.push({
+          playerId: player.userId,
+          turn: race.currentTurn,
+          actionType: 'use_item',
+          detail: { itemRef, success: true, taskId: challenge?.taskId },
+          timestamp: new Date()
+        });
         await tournament.save();
         broadcast('item_used', { playerId: userId.toString(), itemRef, itemName: itemDef.name });
         return { itemRef, name: itemDef.name, effect: '40%概率预览墙壁挑战', challenge, success: true };
       } else {
+        race.actionLog.push({
+          playerId: player.userId,
+          turn: race.currentTurn,
+          actionType: 'use_item',
+          detail: { itemRef, success: false },
+          timestamp: new Date()
+        });
         await tournament.save();
         broadcast('item_used', { playerId: userId.toString(), itemRef, itemName: itemDef.name, effect: '未生效（60%概率）' });
-        return { itemRef, name: itemDef.name, effect: '未能解析墙壁挑战（40%概率未命中）', success: false };
+        return { itemRef, name: itemDef.name, effect: '40%概率未命中，本次未能预览墙壁挑战', success: false };
       }
     }
   }
@@ -305,6 +326,13 @@ async function useItem(tournament, targetPlayerId, itemRef) {
       startsAtTurn: race.currentTurn,
       endsAtTurn: race.currentTurn + duration
     };
+    race.actionLog.push({
+      playerId: player.userId,
+      turn: race.currentTurn,
+      actionType: 'use_item',
+      detail: { itemRef, globalEffect: true, duration },
+      timestamp: new Date()
+    });
     await tournament.save();
     broadcast('item_used', {
       playerId: userId.toString(),
@@ -317,6 +345,13 @@ async function useItem(tournament, targetPlayerId, itemRef) {
   }
 
   // 普通增益/双面道具：标记 armed，等待挑战时消耗
+  race.actionLog.push({
+    playerId: player.userId,
+    turn: race.currentTurn,
+    actionType: 'use_item',
+    detail: { itemRef, armed: true },
+    timestamp: new Date()
+  });
   await tournament.save();
 
   broadcast('item_armed', {
@@ -908,6 +943,12 @@ async function _peekChallenge(race, player) {
     taskName: rawChallenge.name,
     description: rawChallenge.description,
     type: rawChallenge.type,
+    evalRequirement: rawChallenge.evalRequirement || null,
+    threshold: rawChallenge.threshold || null,
+    dxRequirement: rawChallenge.dxRequirement || null,
+    toleranceType: rawChallenge.toleranceType || null,
+    toleranceLimit: rawChallenge.toleranceLimit || null,
+    greatMax: rawChallenge.greatMax || null,
     difficulty: rawChallenge.difficulty,
     songTitle: rawChallenge.songTitle,
     wallLabel: race.mapConfig.wallLabels[wallIndex]

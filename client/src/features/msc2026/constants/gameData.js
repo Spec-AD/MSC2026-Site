@@ -266,6 +266,8 @@ export const CHALLENGE_TYPE_LABELS = {
   achievement: '完成型',
   precision: '准度型',
   tolerance: '补全型',
+  completion: '补全型',
+  combined: '复合型',
 };
 
 // ============================================================
@@ -330,4 +332,6 @@ export const CHALLENGE_TYPE_LABELS_DETAIL = {
   achievement: '完成型',
   precision: '准度型',
   tolerance: '补全型',
+  completion: '补全型',
+  combined: '复合型',
 };
