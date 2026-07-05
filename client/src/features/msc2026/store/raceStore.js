@@ -112,7 +112,13 @@ export const useRaceStore = create((set, get) => ({
         set({ activeItemPickup: data.item, activeChallenge: null });
       }
       if (data.action === 'advance' && data.challenge) {
-        set({ activeChallenge: { ...data.challenge, pendingJudgement: true }, activeItemPickup: null });
+        set({
+          activeChallenge: { ...data.challenge, pendingJudgement: true },
+          pendingJudgement: true,
+          activeItemPickup: null,
+          turnStartedAt: null,
+          turnRemainingMs: null,
+        });
       }
       if (data.turnEnded && data.nextPlayerId) {
         set({ currentPlayerId: data.nextPlayerId });
@@ -229,7 +235,7 @@ export const useRaceStore = create((set, get) => ({
         : get().totalRemainingMs,
       turnRemainingMs: turnStart && turnTimeLimitMs != null
         ? Math.max(0, turnTimeLimitMs - (now - turnStart))
-        : get().turnRemainingMs,
+        : null,
     });
   },
 

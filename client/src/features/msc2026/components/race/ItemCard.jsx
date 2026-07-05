@@ -1,7 +1,6 @@
 // ============================================================
 // ItemCard.jsx — 道具卡片（拾取/使用确认）
 // ============================================================
-import { motion } from 'framer-motion';
 import { FaGift, FaExclamationTriangle, FaCheck } from 'react-icons/fa';
 
 export default function ItemCard({ item, variant = 'pickup', onUse, onDismiss }) {
@@ -10,18 +9,11 @@ export default function ItemCard({ item, variant = 'pickup', onUse, onDismiss })
   const def = item;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-5"
+    <div
+      className="fixed inset-0 bg-black/75 backdrop-blur-md z-[120] flex items-center justify-center p-5"
       onClick={onDismiss}
     >
-      <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+      <div
         onClick={(e) => e.stopPropagation()}
         className={`
           bg-[#090d14] rounded-2xl p-7 md:p-9 max-w-2xl w-full shadow-2xl
@@ -95,7 +87,7 @@ export default function ItemCard({ item, variant = 'pickup', onUse, onDismiss })
             关闭
           </button>
         )}
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }

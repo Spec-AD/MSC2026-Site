@@ -1,6 +1,6 @@
 // ============================================================
 // RaceMap3D.jsx — 精致 3D 跑图地图 (React Three Fiber)
-// 正六边形 / 正方形 · 等距投影 · 静态摄像机
+// 正六边形 / 正方形 · 等距投影 · 手动摄像机
 // 视觉：柔光 + 接触阴影 + 辉光宝石 + 浮动选手 + 坐标系
 // ============================================================
 import { useRef, useMemo } from 'react';
@@ -131,7 +131,7 @@ function WallRing({ vertices, y, height = 0.72, label = '', breachedCount = 0, t
       <Line points={topLoop} color={baseColor} lineWidth={2.2} transparent opacity={0.95} />
 
       {/* 标签：墙名 · 坐标 · 攻破进度 */}
-      <Html position={labelPosition} center distanceFactor={8}>
+      <Html position={labelPosition} center distanceFactor={8} zIndexRange={[10, 0]}>
         <div className={`flex items-center gap-2 text-xs md:text-sm px-3 py-1.5 rounded-full whitespace-nowrap border backdrop-blur-md pointer-events-none shadow-lg
           ${fully ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30'
             : partial ? 'bg-amber-500/15 text-amber-300 border-amber-400/30'
@@ -150,34 +150,41 @@ function WallRing({ vertices, y, height = 0.72, label = '', breachedCount = 0, t
 
 // ==================== 道具宝石 ====================
 
-function ItemCrystal({ item, outerVertices, sectorCount, maxR }) {
-  const meshRef = useRef();
+function PickupSlot({ sectorIdx, hasItem, isHighlighted, outerVertices, sectorCount, maxR, onPick }) {
   const position = useMemo(() => {
-    const v1 = outerVertices[item.zoneIndex];
-    const v2 = outerVertices[(item.zoneIndex + 1) % sectorCount];
+    const v1 = outerVertices[sectorIdx];
+    const v2 = outerVertices[(sectorIdx + 1) % sectorCount];
     const midAngle = sectorMidAngle(v1, v2);
-    const itemR = maxR * 0.52;
-    return [itemR * Math.cos(midAngle), 0.42, itemR * Math.sin(midAngle)];
-  }, [outerVertices, sectorCount, maxR, item.zoneIndex]);
+    const itemR = maxR * 0.56;
+    return [itemR * Math.cos(midAngle), 0.11, itemR * Math.sin(midAngle)];
+  }, [outerVertices, sectorCount, maxR, sectorIdx]);
 
-  useFrame((_, delta) => {
-    if (meshRef.current) meshRef.current.rotation.y += delta * 1.3;
-  });
-
-  if (item.collected) return null;
-  const color = item.type === 'buff' ? '#60a5fa' : '#f472b6';
+  const color = hasItem ? '#60a5fa' : '#475569';
+  const opacity = hasItem ? 0.88 : 0.34;
 
   return (
-    <Float speed={3} floatIntensity={0.6} rotationIntensity={0}>
-      <group position={position}>
-        <mesh ref={meshRef}>
-          <octahedronGeometry args={[0.22, 0]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.25} metalness={0.72} roughness={0.12} />
+    <group position={position}>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (hasItem && onPick) onPick(sectorIdx);
+        }}
+      >
+        <circleGeometry args={[0.34, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={opacity * 0.28} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.31, 0.39, 56]} />
+        <meshBasicMaterial color={isHighlighted ? '#fbbf24' : color} transparent opacity={isHighlighted ? 0.95 : opacity} side={THREE.DoubleSide} />
+      </mesh>
+      {hasItem && (
+        <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.12, 0.16, 36]} />
+          <meshBasicMaterial color="#dbeafe" transparent opacity={0.78} side={THREE.DoubleSide} />
         </mesh>
-        <Sparkles count={10} scale={0.75} size={2.1} speed={0.4} color={color} />
-        <pointLight color={color} intensity={0.82} distance={1.6} />
-      </group>
-    </Float>
+      )}
+    </group>
   );
 }
 
@@ -241,7 +248,7 @@ function PlayerToken({ player, layers, maxR, verticesFn, sectorCount, activePlay
           <pointLight color={color} intensity={isActive ? 1.0 : 0.35} distance={1.8} />
 
           {/* 名牌 */}
-          <Html position={[0, 0.58, 0]} center distanceFactor={7}>
+          <Html position={[0, 0.58, 0]} center distanceFactor={7} zIndexRange={[10, 0]}>
             <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs md:text-sm whitespace-nowrap border backdrop-blur-md pointer-events-none shadow-lg
               ${isActive ? 'bg-amber-500/25 text-amber-200 border-amber-400/40'
                 : isFinished ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
@@ -286,7 +293,7 @@ function FinishCore({ centerCoord }) {
       </mesh>
       <Sparkles count={34} scale={[1.25, 2, 1.25]} size={2.6} speed={0.3} color="#fde68a" position={[0, 0.7, 0]} />
       <pointLight color="#fbbf24" intensity={1.25} distance={3.2} />
-      <Html position={[0, 1.35, 0]} center distanceFactor={7}>
+      <Html position={[0, 1.35, 0]} center distanceFactor={7} zIndexRange={[10, 0]}>
         <div className="px-3 py-1 rounded-full text-xs md:text-sm font-bold whitespace-nowrap bg-amber-500/25 text-amber-200 border border-amber-400/40 backdrop-blur-md pointer-events-none shadow-lg">
           中心 · 终点{centerCoord != null ? ` · 坐标${centerCoord}` : ''}
         </div>
@@ -299,7 +306,7 @@ function FinishCore({ centerCoord }) {
 
 function StartLabels({ vertices }) {
   return vertices.map((v, i) => (
-    <Html key={i} position={[v[0] * 0.96, 0.08, v[1] * 0.96]} center distanceFactor={8}>
+    <Html key={i} position={[v[0] * 0.96, 0.08, v[1] * 0.96]} center distanceFactor={8} zIndexRange={[10, 0]}>
       <div className="px-2 py-1 rounded-lg text-xs text-zinc-400 bg-black/35 border border-white/10 whitespace-nowrap pointer-events-none backdrop-blur-sm">
         起点 {i} · 坐标0
       </div>
@@ -361,7 +368,7 @@ export default function RaceMap3D({
         <pointLight position={[6, 4, 7]} intensity={0.34} color="#c084fc" distance={18} />
         <pointLight position={[0, 3.8, 0]} intensity={0.22} color="#fbbf24" distance={10} />
 
-        <OrbitControls enableDamping={false} enableRotate={false} enableZoom={false} enablePan={false} target={[0, -0.18, 0]} />
+        <OrbitControls enableDamping dampingFactor={0.08} enableRotate enableZoom enablePan={false} minDistance={5.8} maxDistance={15.5} maxPolarAngle={Math.PI / 2.12} target={[0, -0.18, 0]} />
 
         <SceneFloor maxR={maxR} />
         <ContactShadows position={[0, -0.65, 0]} opacity={0.58} scale={maxR * 3} blur={3.2} far={4.6} resolution={768} color="#000000" />
@@ -403,10 +410,22 @@ export default function RaceMap3D({
         {/* 相邻扇区高亮 */}
         {highlightSectors.map((s) => <SectorHighlight key={s} vertices={outerVertices} sectorIdx={s} />)}
 
-        {/* 道具 */}
-        {itemsOnMap?.map((item) => (
-          <ItemCrystal key={`${item.itemRef}-${item.zoneIndex}`} item={item} outerVertices={outerVertices} sectorCount={sectorCount} maxR={maxR} />
-        ))}
+        {/* 固定拾取点：只显示槽位，不公开道具内容 */}
+        {Array.from({ length: sectorCount }).map((_, sectorIdx) => {
+          const hasItem = itemsOnMap?.some(item => item.zoneIndex === sectorIdx && !item.collected);
+          return (
+            <PickupSlot
+              key={sectorIdx}
+              sectorIdx={sectorIdx}
+              hasItem={hasItem}
+              isHighlighted={highlightSectors.includes(sectorIdx)}
+              outerVertices={outerVertices}
+              sectorCount={sectorCount}
+              maxR={maxR}
+              onPick={onSectorClick}
+            />
+          );
+        })}
 
         {/* 选手 */}
         {players?.map((player) => (
@@ -416,28 +435,6 @@ export default function RaceMap3D({
         <StartLabels vertices={outerVertices} />
         <FinishCore centerCoord={layers} />
       </Canvas>
-
-      {/* 扇区拾取按钮（覆盖层） */}
-      {onSectorClick && (
-        <div className="absolute inset-0 pointer-events-none">
-          {Array.from({ length: sectorCount }).map((_, i) => {
-            const v1 = outerVertices[i];
-            const v1Next = outerVertices[(i + 1) % sectorCount];
-            const midAngle = sectorMidAngle(v1, v1Next);
-            const left = 50 + 0.45 * 40 * Math.cos(midAngle);
-            const top = 52 + 0.45 * 40 * Math.sin(midAngle);
-            return (
-              <button
-                key={i}
-                onClick={() => onSectorClick(i)}
-                className="absolute w-16 h-16 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent hover:bg-amber-400/10 border border-white/10 hover:border-amber-400/40 pointer-events-auto cursor-pointer transition-colors"
-                style={{ left: `${left}%`, top: `${top}%` }}
-                title={`扇区 ${i} · 拾取道具`}
-              />
-            );
-          })}
-        </div>
-      )}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_44%,transparent_42%,rgba(2,6,23,0.48)_100%)]" />
     </div>
   );

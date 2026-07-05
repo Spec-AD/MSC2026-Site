@@ -27,6 +27,7 @@ export default function RacePage({ stage }) {
   const race = useRaceStore();
   const config = STAGE_CONFIG[stage] || {};
   const [itemViewer, setItemViewer] = useState(null);
+  const [pendingAdvance, setPendingAdvance] = useState(false);
 
   // 初始加载（仅 stage 变化时重载，不依赖整个 store）
   useEffect(() => {
@@ -67,9 +68,15 @@ export default function RacePage({ stage }) {
   const canOperate = race.status === 'racing' && !race.activeChallenge;
 
   /** 处理行动 */
-  const handleAdvance = async () => {
+  const handleAdvance = async (force = false) => {
     if (!canOperate) return;
+    if (!force && currentPlayer && (currentPlayer.itemCount || 0) > (currentPlayer.itemUsedCount || 0)) {
+      await loadCurrentPlayerItems(true);
+      return;
+    }
     try {
+      setPendingAdvance(false);
+      setItemViewer(null);
       await race.performAction({ actionType: 'advance' });
       race.fetchRaceMap();
     } catch (err) {
@@ -122,11 +129,12 @@ export default function RacePage({ stage }) {
   };
 
   /** 加载当前回合选手道具 */
-  const loadCurrentPlayerItems = async () => {
+  const loadCurrentPlayerItems = async (forAdvance = false) => {
     if (!race.currentPlayerId) return;
     try {
       const data = await race.fetchPlayerItems(race.currentPlayerId);
       setItemViewer(data);
+      setPendingAdvance(forAdvance);
     } catch (err) {
       console.error(err);
     }
@@ -138,6 +146,7 @@ export default function RacePage({ stage }) {
     try {
       const data = await race.fetchPlayerItems(playerId);
       setItemViewer(data);
+      setPendingAdvance(false);
     } catch (err) {
       console.error(err);
     }
@@ -159,7 +168,6 @@ export default function RacePage({ stage }) {
       .map((item) => ({
         zoneIndex: item.zoneIndex,
         itemRef: item.itemRef,
-        name: item.name || `道具 ${item.itemRef}`,
       }))
   ), [race.itemsOnMap, adjacentSectors]);
   const effectiveMapConfig = useMemo(() => ({
@@ -209,6 +217,62 @@ export default function RacePage({ stage }) {
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_430px] gap-5 md:gap-6">
         {/* 地图区 */}
         <div className="min-w-0 flex flex-col">
+          {race.status === 'racing' && (
+            <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.055] backdrop-blur-xl p-4 shadow-[0_18px_54px_rgba(0,0,0,0.24)]">
+              <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+                <div className="min-w-0 xl:w-56">
+                  <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">当前回合</p>
+                  <p className="text-2xl font-bold text-white truncate" style={{ fontFamily: 'Torus, sans-serif' }}>
+                    {currentPlayer?.username || '等待选手'}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 xl:flex xl:flex-1 gap-2">
+                  <button
+                    onClick={() => handleAdvance(false)}
+                    disabled={!canOperate}
+                    className={`min-h-14 px-5 rounded-xl border transition-all text-base font-bold flex items-center justify-center gap-2
+                      ${canOperate
+                        ? 'bg-amber-500/20 text-amber-200 border-amber-500/35 hover:bg-amber-500/30'
+                        : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
+                  >
+                    <FaPlay className="text-xs" /> 前进
+                  </button>
+                  {availablePickupSectors.length > 0 ? (
+                    availablePickupSectors.map((item, index) => (
+                      <button
+                        key={`${item.itemRef}-${item.zoneIndex}`}
+                        onClick={() => handlePickup(item.zoneIndex)}
+                        disabled={!canOperate}
+                        className={`min-h-14 px-5 rounded-xl border transition-all text-base font-bold flex items-center justify-center gap-2
+                          ${canOperate
+                            ? 'bg-sky-500/18 text-sky-200 border-sky-500/30 hover:bg-sky-500/28'
+                            : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
+                      >
+                        <HiOutlineCube /> 拾取道具{availablePickupSectors.length > 1 ? ` ${index + 1}` : ''}
+                      </button>
+                    ))
+                  ) : (
+                    <button
+                      disabled
+                      className="min-h-14 px-5 rounded-xl bg-zinc-800 text-zinc-600 border border-white/5 cursor-not-allowed text-base font-bold"
+                    >
+                      无可拾取道具
+                    </button>
+                  )}
+                  <button
+                    onClick={handleSkipTurn}
+                    disabled={!canOperate}
+                    className={`min-h-14 px-5 rounded-xl border transition-all text-base font-bold flex items-center justify-center gap-2
+                      ${canOperate
+                        ? 'bg-red-500/14 text-red-200 border-red-500/25 hover:bg-red-500/22'
+                        : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
+                  >
+                    <FaForward className="text-xs" /> 弃权
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="relative h-[min(70vh,900px)] min-h-[620px] 2xl:min-h-[720px]">
             <RaceMap3D
               config={effectiveMapConfig}
@@ -234,15 +298,15 @@ export default function RacePage({ stage }) {
             )}
 
             {/* 回合倒计时（右上，大数字） */}
-            {currentPlayer && race.turnRemainingMs != null && (
+            {currentPlayer && (race.turnRemainingMs != null || race.activeChallenge) && (
               <div className={`absolute top-5 right-5 flex flex-col items-end px-5 py-3 rounded-2xl border backdrop-blur-xl pointer-events-none
-                ${race.turnRemainingMs < 10000
+                ${race.turnRemainingMs != null && race.turnRemainingMs < 10000
                   ? 'bg-red-500/20 border-red-400/40'
                   : 'bg-black/55 border-white/10'}`}>
-                <span className="text-sm uppercase tracking-[0.16em] text-zinc-400">本回合</span>
-                <span className={`text-5xl md:text-6xl font-bold leading-none tabular-nums ${race.turnRemainingMs < 10000 ? 'text-red-300 animate-pulse' : 'text-zinc-100'}`}
+                <span className="text-sm uppercase tracking-[0.16em] text-zinc-400">{race.activeChallenge ? '挑战判定' : '本回合'}</span>
+                <span className={`text-5xl md:text-6xl font-bold leading-none tabular-nums ${race.turnRemainingMs != null && race.turnRemainingMs < 10000 ? 'text-red-300 animate-pulse' : 'text-zinc-100'}`}
                   style={{ fontFamily: 'Torus, sans-serif' }}>
-                  {fmtMs(race.turnRemainingMs)}
+                  {race.activeChallenge ? '暂停' : fmtMs(race.turnRemainingMs)}
                 </span>
               </div>
             )}
@@ -332,66 +396,6 @@ export default function RacePage({ stage }) {
             </div>
           </div>
 
-          {/* 操作按钮区 */}
-          {race.status === 'racing' && (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-5 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-bold text-zinc-100">当前回合操作</h3>
-                <span className="text-sm text-zinc-500 truncate">{currentPlayer?.username || '等待选手'}</span>
-              </div>
-              <button
-                onClick={handleAdvance}
-                disabled={!canOperate}
-                className={`w-full py-3 px-4 rounded-xl border transition-all text-sm font-medium flex items-center justify-center gap-2
-                  ${canOperate
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/30'
-                    : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
-              >
-                <FaPlay className="text-xs" /> 前进 · 挑战墙壁
-              </button>
-              <button
-                onClick={loadCurrentPlayerItems}
-                disabled={!race.currentPlayerId}
-                className="w-full py-3 px-4 rounded-xl bg-sky-500/20 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <HiOutlineCube /> 查看 / 使用道具
-              </button>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {availablePickupSectors.map((item) => (
-                  <button
-                    key={`${item.itemRef}-${item.zoneIndex}`}
-                    onClick={() => handlePickup(item.zoneIndex)}
-                    disabled={!canOperate}
-                    className={`py-3 px-4 rounded-xl border transition-all text-sm font-medium flex items-center justify-center gap-2
-                      ${canOperate
-                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/25'
-                        : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
-                  >
-                    <HiOutlineCube /> 拾取 {item.name}
-                  </button>
-                ))}
-                {availablePickupSectors.length === 0 && (
-                  <button
-                    disabled
-                    className="py-3 px-4 rounded-xl bg-zinc-800 text-zinc-600 border border-white/5 cursor-not-allowed text-sm font-medium"
-                  >
-                    相邻区域暂无可拾取道具
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={handleSkipTurn}
-                disabled={!canOperate}
-                className={`w-full py-3 px-4 rounded-xl border transition-all text-sm font-medium flex items-center justify-center gap-2
-                  ${canOperate
-                    ? 'bg-zinc-700/50 text-zinc-200 border-white/10 hover:bg-zinc-700'
-                    : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
-              >
-                <FaForward className="text-xs" /> 跳过本回合
-              </button>
-            </div>
-          )}
-
           {/* 刷新 */}
           <button
             onClick={() => race.fetchRaceState()}
@@ -431,8 +435,8 @@ export default function RacePage({ stage }) {
       <AnimatePresence>
         {itemViewer && (
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setItemViewer(null)}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md z-[120] flex items-center justify-center p-4"
+            onClick={() => { setItemViewer(null); setPendingAdvance(false); }}
           >
             <div
               onClick={(e) => e.stopPropagation()}
@@ -447,7 +451,9 @@ export default function RacePage({ stage }) {
                     {itemViewer.player?.username || '选手'} · 道具
                   </h3>
                   <p className="text-sm text-zinc-500">
-                    {itemViewer.disableItemsUntilTurn != null ? `禁用道具至回合 ${itemViewer.disableItemsUntilTurn}` : '可查看当前持有与已激活效果'}
+                    {pendingAdvance
+                      ? '可先使用道具，也可以直接进入挑战'
+                      : itemViewer.disableItemsUntilTurn != null ? `禁用道具至回合 ${itemViewer.disableItemsUntilTurn}` : '可查看当前持有与已激活效果'}
                   </p>
                 </div>
               </div>
@@ -495,8 +501,24 @@ export default function RacePage({ stage }) {
                   })}
                 </div>
               )}
+              {pendingAdvance && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                  <button
+                    onClick={() => handleAdvance(true)}
+                    className="py-3 rounded-xl bg-amber-500/20 text-amber-200 border border-amber-400/30 hover:bg-amber-500/30 transition-all text-base font-bold"
+                  >
+                    不使用道具，继续挑战
+                  </button>
+                  <button
+                    onClick={() => { setItemViewer(null); setPendingAdvance(false); }}
+                    className="py-3 rounded-xl border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 transition-all text-base font-bold"
+                  >
+                    返回选择
+                  </button>
+                </div>
+              )}
               <button
-                onClick={() => setItemViewer(null)}
+                onClick={() => { setItemViewer(null); setPendingAdvance(false); }}
                 className="w-full mt-4 py-2 rounded-xl border border-white/10 text-zinc-400 hover:text-white text-sm transition-all"
               >
                 关闭

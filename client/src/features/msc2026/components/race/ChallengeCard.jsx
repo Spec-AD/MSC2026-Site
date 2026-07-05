@@ -1,7 +1,6 @@
 // ============================================================
 // ChallengeCard.jsx — 挑战任务卡片（Overlay）
 // ============================================================
-import { motion } from 'framer-motion';
 import { FaShieldAlt, FaCheck, FaTimes, FaMusic } from 'react-icons/fa';
 import { CHALLENGE_TYPE_LABELS } from '../../constants/gameData';
 
@@ -19,18 +18,13 @@ export default function ChallengeCard({ challenge, pendingJudgement, isJudge = f
   const activeEffects = task.activeItemEffects || [];
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-5"
-      onClick={onDismiss}
+    <div
+      className="fixed inset-0 bg-black/75 backdrop-blur-md z-[120] flex items-center justify-center p-5"
+      onClick={() => {
+        if (!pendingJudgement) onDismiss?.();
+      }}
     >
-      <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+      <div
         onClick={(e) => e.stopPropagation()}
         className="bg-[#090d14] border border-amber-400/25 rounded-2xl p-7 md:p-9 max-w-4xl w-full shadow-2xl shadow-amber-500/10"
       >
@@ -108,7 +102,7 @@ export default function ChallengeCard({ challenge, pendingJudgement, isJudge = f
         ) : (
           <p className="text-center text-lg text-zinc-500">挑战已结束</p>
         )}
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }

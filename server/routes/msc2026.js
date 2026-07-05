@@ -973,6 +973,7 @@ router.get('/race/state', async (req, res) => {
     const now = Date.now();
     const totalElapsed = now - new Date(race.totalTimeStartedAt).getTime();
     const turnElapsed = race.turnStartedAt ? now - new Date(race.turnStartedAt).getTime() : 0;
+    const pendingChallenge = race.challengeHistory?.some(ch => ch.passed === null);
 
     res.json({
       msg: 'ok',
@@ -1003,7 +1004,7 @@ router.get('/race/state', async (req, res) => {
         })),
         finishOrder: race.finishOrder,
         actionLog: race.actionLog.slice(-50),
-        turnRemainingMs: Math.max(0, race.turnTimeLimitMs - turnElapsed),
+        turnRemainingMs: pendingChallenge || !race.turnStartedAt ? null : Math.max(0, race.turnTimeLimitMs - turnElapsed),
         totalRemainingMs: Math.max(0, race.timeLimitMs - totalElapsed),
         terminated: race.terminated,
         terminatedReason: race.terminatedReason
@@ -1061,13 +1062,10 @@ router.get('/race/map', async (req, res) => {
           finishOrder: p.finishOrder
         })),
         itemsOnMap: race.itemsOnMap.map(i => {
-          const def = getItem(i.itemRef);
           return {
             itemRef: i.itemRef,
             zoneIndex: i.zoneIndex,
-            collected: i.collected,
-            name: def ? def.name : '???',
-            type: def ? def.type : '???'
+            collected: i.collected
           };
         }),
         wallsBroken,
