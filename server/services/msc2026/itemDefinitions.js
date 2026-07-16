@@ -12,6 +12,8 @@
  * 双面道具额外提供 penalty 对象描述失败惩罚
  */
 
+const { rollProbability } = require('./probabilityRoll');
+
 const ITEM_MAIN_POOL = {
   // ===== #1-#10：密锁之墙 & 准锁之墙 =====
 
@@ -98,6 +100,7 @@ const ITEM_MAIN_POOL = {
         toleranceType: undefined,
         toleranceLimit: undefined,
         greatMax: undefined,
+        extraRequirement: undefined,
         _convertedBy: '万能钥匙',
         _modifiedBy: [...(challenge._modifiedBy || []), '万能钥匙']
       };
@@ -189,17 +192,23 @@ const ITEM_SIGH_POOL = {
     ref: 11,
     name: '略显老旧的醒时之钥',
     type: 'buff',
+    probability: 0.70,
     description: '评价型挑战 70%概率评价要求降一级',
     apply(challenge, ctx) {
       if (!challenge.evalRequirement) return challenge;
-      if (Math.random() < 0.70) {
-        const rank = ['FC', 'FC+', 'AP', 'AP+'];
-        const idx = rank.indexOf(challenge.evalRequirement);
-        if (idx > 0) {
-          return { ...challenge, evalRequirement: rank[idx - 1], _modifiedBy: [...(challenge._modifiedBy || []), '略显老旧的醒时之钥'] };
-        }
+      const rank = ['FC', 'FC+', 'AP', 'AP+'];
+      const idx = rank.indexOf(challenge.evalRequirement);
+      if (idx <= 0) return challenge;
+      const outcome = (ctx?.rollProbability || rollProbability)(0.70);
+      if (outcome.success) {
+        return {
+          ...challenge,
+          evalRequirement: rank[idx - 1],
+          _itemOutcome: { status: 'applied', ...outcome },
+          _modifiedBy: [...(challenge._modifiedBy || []), '略显老旧的醒时之钥']
+        };
       }
-      return { ...challenge, _itemMissedEffect: true, _modifiedBy: [...(challenge._modifiedBy || []), '略显老旧的醒时之钥(未生效)'] };
+      return { ...challenge, _itemOutcome: { status: 'missed', ...outcome } };
     }
   },
 
@@ -268,6 +277,7 @@ const ITEM_SIGH_POOL = {
         toleranceType: undefined,
         toleranceLimit: undefined,
         greatMax: undefined,
+        extraRequirement: undefined,
         _convertedBy: '不再万能的万能钥匙',
         _modifiedBy: [...(challenge._modifiedBy || []), '不再万能的万能钥匙']
       };
@@ -327,6 +337,7 @@ const ITEM_SIGH_POOL = {
     ref: 19,
     name: '白色的红心',
     type: 'buff',
+    probability: 0.40,
     description: '40%概率知道最近墙壁的挑战（不占行动）',
     isIntel: true,
     apply(challenge, ctx) {
@@ -344,7 +355,7 @@ const ITEM_SIGH_POOL = {
     apply(challenge, ctx) {
       // 仅 MASTER 不受影响，Re:MASTER → MASTER
       if (challenge.difficulty === 'MASTER') {
-        return { ...challenge, _itemNoEffect: true, _modifiedBy: [...(challenge._modifiedBy || []), '深渊黑心(未生效: MASTER不受影响)'] };
+        return challenge;
       }
       if (challenge.difficulty === 'Re:MASTER') {
         return { ...challenge, difficulty: 'MASTER', _modifiedBy: [...(challenge._modifiedBy || []), '深渊黑心(Re:MASTER→MASTER)'] };
@@ -378,22 +389,81 @@ function getItem(ref) {
  * @returns {object} 修改后的 challenge
  */
 function applyItemEffects(challenge, itemRefs, ctx) {
-  let modified = { ...challenge, _achievementBonus: 0, _dxBonus: 0, _greatCancel: 0, _modifiedBy: [] };
+  return applyItemEffectsDetailed(challenge, itemRefs, ctx).challenge;
+}
+
+const EFFECT_FIELDS = [
+  ['type', '挑战类型'],
+  ['difficulty', '谱面难度'],
+  ['evalRequirement', '评价要求'],
+  ['threshold', '完成率要求'],
+  ['dxRequirement', 'DX星级要求'],
+  ['toleranceLimit', '容错上限'],
+  ['greatMax', 'GREAT上限'],
+  ['_achievementBonus', '完成率判定奖励'],
+  ['_dxBonus', 'DX完成率奖励'],
+  ['_greatCancel', 'GREAT抵消']
+];
+
+function normalizeEffectValue(value) {
+  return value == null ? null : value;
+}
+
+function getEffectChanges(before, after) {
+  return EFFECT_FIELDS.flatMap(([field, label]) => {
+    const previous = normalizeEffectValue(before[field]);
+    const next = normalizeEffectValue(after[field]);
+    if (previous === next) return [];
+    return [{ field, label, before: previous, after: next }];
+  });
+}
+
+function summarizeEffect(status, item, changes, outcome) {
+  if (status === 'missed') {
+    return `概率判定未命中：掷值 ${(outcome.roll * 100).toFixed(2)}%，需低于 ${(outcome.probability * 100).toFixed(0)}%`;
+  }
+  if (status === 'not_applicable') return `当前挑战不适用：${item.description}`;
+  if (changes.length === 0) return item.description;
+  return changes.map(change => `${change.label} ${String(change.before ?? '无')} → ${String(change.after ?? '无')}`).join('；');
+}
+
+function applyItemEffectsDetailed(challenge, itemRefs, ctx = {}) {
+  let modified = {
+    ...challenge,
+    _achievementBonus: challenge._achievementBonus || 0,
+    _dxBonus: challenge._dxBonus || 0,
+    _greatCancel: challenge._greatCancel || 0,
+    _modifiedBy: [...(challenge._modifiedBy || [])]
+  };
+  const effects = [];
+
   for (const ref of itemRefs) {
     const item = getItem(ref);
     if (item && item.apply) {
-      const beforeCount = (modified._modifiedBy || []).length;
-      modified = item.apply(modified, ctx);
-      const afterCount = (modified._modifiedBy || []).length;
-      if (afterCount === beforeCount) {
-        modified = {
-          ...modified,
-          _modifiedBy: [...(modified._modifiedBy || []), `${item.name}(未适用)`]
-        };
-      }
+      const input = { ...modified };
+      delete input._itemOutcome;
+      const next = item.apply(input, ctx);
+      const outcome = next._itemOutcome || null;
+      const changes = getEffectChanges(input, next);
+      const status = outcome?.status || (changes.length > 0 ? 'applied' : 'not_applicable');
+      effects.push({
+        itemRef: item.ref,
+        itemName: item.name,
+        source: ctx.source || 'personal',
+        status,
+        description: item.description,
+        probability: outcome?.probability ?? item.probability ?? null,
+        roll: outcome?.roll ?? null,
+        changes,
+        summary: summarizeEffect(status, item, changes, outcome),
+        penalty: item.penalty || null
+      });
+      modified = { ...next };
+      delete modified._itemOutcome;
     }
   }
-  return modified;
+
+  return { challenge: modified, effects };
 }
 
 module.exports = {
@@ -401,5 +471,6 @@ module.exports = {
   ITEM_SIGH_POOL,
   getItemPool,
   getItem,
-  applyItemEffects
+  applyItemEffects,
+  applyItemEffectsDetailed
 };

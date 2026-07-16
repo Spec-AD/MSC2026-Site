@@ -1,11 +1,13 @@
 // ============================================================
 // GroupBracket.jsx — 12进6 分组对阵表
 // ============================================================
-import { motion } from 'framer-motion';
+import { motion as Motion, useReducedMotion } from 'framer-motion';
 import { FaPlay, FaCheck, FaClock, FaCrown } from 'react-icons/fa';
+import { MOTION_TRANSITIONS, STAGGER_CONTAINER, STAGGER_ITEM } from '../../utils/motion';
 
 /** 单组卡片 */
 function GroupCard({ group, isCurrent, isCompleted, onClick }) {
+  const reduceMotion = useReducedMotion();
   const { order, p1, p2, songs, winner } = group;
   const winnerId = winner?.toString?.() || winner;
   const p1Id = (p1?._id || p1?.userId)?.toString?.() || p1?._id || p1?.userId;
@@ -27,10 +29,13 @@ function GroupCard({ group, isCurrent, isCompleted, onClick }) {
       : 'border-white/10 bg-white/[0.035]';
 
   return (
-    <motion.button
+    <Motion.button
       onClick={onClick}
-      whileHover={{ scale: 1.01 }}
-      whileTap={{ scale: 0.99 }}
+      layout
+      variants={reduceMotion ? undefined : STAGGER_ITEM}
+      whileHover={!reduceMotion && (isCompleted || isCurrent) ? { y: -3, scale: 1.008 } : undefined}
+      whileTap={!reduceMotion && (isCompleted || isCurrent) ? { scale: 0.985 } : undefined}
+      transition={MOTION_TRANSITIONS.spring}
       className={`w-full rounded-2xl border ${statusBg} p-5 md:p-6 text-left transition-all
         ${isCompleted ? 'cursor-pointer' : isCurrent ? 'cursor-pointer' : 'cursor-default'}
         ${!isCompleted && !isCurrent ? 'opacity-65' : 'opacity-100'}`}
@@ -76,9 +81,13 @@ function GroupCard({ group, isCurrent, isCompleted, onClick }) {
           const song = songs?.[i];
           const hasScore = song?.p1Score && song?.p2Score;
           return (
-            <div
+            <Motion.div
               key={i}
+              initial={reduceMotion ? false : { scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ ...MOTION_TRANSITIONS.enter, delay: reduceMotion ? 0 : i * 0.07 }}
               className={`h-2.5 flex-1 rounded-full ${hasScore ? 'bg-emerald-400' : song ? 'bg-amber-400/70' : 'bg-white/10'}`}
+              style={{ transformOrigin: 'left center' }}
             />
           );
         })}
@@ -86,12 +95,13 @@ function GroupCard({ group, isCurrent, isCompleted, onClick }) {
           {scoredCount}/3
         </span>
       </div>
-    </motion.button>
+    </Motion.button>
   );
 }
 
 /** 分组对阵表 */
 export default function GroupBracket({ groups, currentGroupIndex, completedGroups, onSelectGroup }) {
+  const reduceMotion = useReducedMotion();
   if (!groups || groups.length === 0) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-16 md:p-24 text-center">
@@ -107,8 +117,13 @@ export default function GroupBracket({ groups, currentGroupIndex, completedGroup
         <span className="text-lg md:text-2xl font-bold text-zinc-100">小组对阵</span>
         <span className="text-lg md:text-2xl text-zinc-300 tabular-nums font-bold">{completedGroups}/{groups.length} 组完成</span>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-        {groups
+      <Motion.div
+        variants={reduceMotion ? undefined : STAGGER_CONTAINER}
+        initial="initial"
+        animate="animate"
+        className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4"
+      >
+        {[...groups]
           .sort((a, b) => a.order - b.order)
           .map((group) => (
             <GroupCard
@@ -119,7 +134,7 @@ export default function GroupBracket({ groups, currentGroupIndex, completedGroup
               onClick={() => onSelectGroup(group.groupId)}
             />
           ))}
-      </div>
+      </Motion.div>
     </div>
   );
 }

@@ -39,6 +39,7 @@ export function useMSCSSE(handlers, { enabled = true, since } = {}) {
       'challenge_revealed', 'challenge_resolved',
       'wall_broken', 'player_bounced', 'match_finished',
       'stage_advanced', 'map_timeout', 'timer_tick',
+      'song_drawn', 'item_armed',
     ];
 
     eventNames.forEach((eventName) => {

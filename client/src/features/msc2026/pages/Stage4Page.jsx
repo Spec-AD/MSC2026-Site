@@ -1,12 +1,17 @@
 // ============================================================
 // Stage4Page.jsx — 决赛 2进1
 // ============================================================
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
+import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { useMSC2026Store } from '../store';
 import SongPicker from '../components/stage1/SongPicker';
 import ScoreEntryForm from '../components/stage1/ScoreEntryForm';
 import { useMSCSSE } from '../hooks/useSSE';
-import { FaTrophy, FaCrown, FaMusic } from 'react-icons/fa';
+import { FaCrown, FaMusic } from 'react-icons/fa';
+import SongReveal from '../components/live/SongReveal';
+import ScoreDuelResult from '../components/live/ScoreDuelResult';
+import WinnerReveal from '../components/live/WinnerReveal';
+import { MOTION_TRANSITIONS, STAGGER_CONTAINER, STAGGER_ITEM } from '../utils/motion';
 
 export default function Stage4Page() {
   const store = useMSC2026Store();
@@ -18,7 +23,13 @@ export default function Stage4Page() {
     selectStage4Song,
     submitStage4Score,
     advanceStage4,
+    resolveStage4Tie,
   } = store;
+  const [tieWinnerId, setTieWinnerId] = useState(null);
+  const [tiePending, setTiePending] = useState(false);
+  const [tieError, setTieError] = useState(null);
+  const [scoreResult, setScoreResult] = useState(null);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     fetchStatus().catch(() => {});
@@ -37,7 +48,6 @@ export default function Stage4Page() {
   const currentSong = stage4.songs?.[currentSongIndex];
   const getSongId = (song) => String(song?.songId?._id || song?.songId || song?._id || '');
   const getSongTitle = (song) => song?.song?.title || song?.songId?.title || song?.title || '—';
-  const getSongArtist = (song) => song?.song?.artist || song?.songId?.basic_info?.artist || song?.songId?.artist || song?.artist || '';
 
   const pickTypes = ['p1_pick', 'p2_pick', 'random', 'designated'];
   const pickLabels = {
@@ -50,6 +60,24 @@ export default function Stage4Page() {
   const winnerId = stage4.winner?.toString?.() || stage4.winner;
   const p1Id = stage4.p1?.userId || stage4.p1?._id;
   const winnerName = winnerId === p1Id ? stage4.p1?.username : stage4.p2?.username;
+  const p2Id = stage4.p2?.userId || stage4.p2?._id;
+  const tieWinnerName = tieWinnerId === p1Id ? stage4.p1?.username : stage4.p2?.username;
+
+  const submitTieWinner = async () => {
+    if (!tieWinnerId) return;
+    setTiePending(true);
+    setTieError(null);
+    try {
+      await resolveStage4Tie(tieWinnerId);
+      await fetchStage4State();
+      await fetchStatus();
+      setTieWinnerId(null);
+    } catch (err) {
+      setTieError(err?.msg || '加赛结果提交失败');
+    } finally {
+      setTiePending(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -102,12 +130,20 @@ export default function Stage4Page() {
         <h3 className="text-2xl font-bold text-white mb-5" style={{ fontFamily: 'Torus, sans-serif' }}>
           曲目进度
         </h3>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Motion.div
+          variants={reduceMotion ? undefined : STAGGER_CONTAINER}
+          initial="initial"
+          animate="animate"
+          className="grid grid-cols-1 xl:grid-cols-2 gap-4"
+        >
           {pickTypes.map((type, idx) => {
             const song = stage4.songs?.[idx];
             return (
-              <div
+              <Motion.div
                 key={type}
+                layout
+                variants={reduceMotion ? undefined : STAGGER_ITEM}
+                transition={MOTION_TRANSITIONS.spring}
                 className={`flex items-center gap-4 px-5 py-4 rounded-2xl border transition-all
                   ${song?.p1Score && song?.p2Score
                     ? 'border-emerald-400/25 bg-emerald-500/10'
@@ -127,15 +163,23 @@ export default function Stage4Page() {
                 {song?.p1Score && song?.p2Score && (
                   <span className="text-2xl text-emerald-300">✓</span>
                 )}
-              </div>
+              </Motion.div>
             );
           })}
-        </div>
+        </Motion.div>
       </div>
 
       {/* 比赛操作区 */}
       {stage4.status !== 'done' && (
-        <div className="space-y-4">
+        <AnimatePresence mode="wait">
+          <Motion.div
+            key={`${stage4.status}-${currentSongIndex}`}
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
+            transition={MOTION_TRANSITIONS.enter}
+            className="space-y-4"
+          >
           {(stage4.status === 'p1_pick' || stage4.status === 'p2_pick') && (
             <SongPicker
               key={`stage4-${stage4.status}-${stage4.songs?.length || 0}`}
@@ -150,27 +194,28 @@ export default function Stage4Page() {
           )}
           {stage4.status === 'playing' && currentSong && (
             <>
-              <div className="rounded-2xl border border-amber-400/25 bg-amber-500/[0.07] p-5">
-                <div className="flex items-center gap-3 text-amber-300/85">
-                  <FaMusic className="text-xl" />
-                  <span className="text-sm uppercase tracking-[0.18em]">当前曲目 · {pickLabels[currentSong.pickType]}</span>
-                </div>
-                <p className="text-3xl md:text-4xl font-black text-white mt-2 truncate">{getSongTitle(currentSong)}</p>
-                {getSongArtist(currentSong) && (
-                  <p className="text-lg text-zinc-400 mt-1 truncate">{getSongArtist(currentSong)}</p>
-                )}
-              </div>
+              <SongReveal play={currentSong} label={`当前曲目 · ${pickLabels[currentSong.pickType]}`} order={currentSongIndex + 1} />
               <ScoreEntryForm
+                key={`stage4-score-${getSongId(currentSong)}`}
+                songId={getSongId(currentSong)}
                 songIndex={currentSongIndex}
                 p1={stage4.p1}
                 p2={stage4.p2}
                 onSubmit={async (data) => {
                   const result = await submitStage4Score({ ...data, songIndex: currentSongIndex });
+                  setScoreResult({
+                    p1: stage4.p1,
+                    p2: stage4.p2,
+                    p1Score: data.p1Score,
+                    p2Score: data.p2Score,
+                    songTitle: getSongTitle(currentSong),
+                  });
                   if (result.data?.nextStep === 'advance') {
                     await advanceStage4();
                   }
                   await fetchStage4State();
                   await fetchStatus();
+                  return result;
                 }}
                 onAdvance={async () => {
                   await advanceStage4();
@@ -180,19 +225,47 @@ export default function Stage4Page() {
               />
             </>
           )}
+          </Motion.div>
+        </AnimatePresence>
+      )}
+
+      {stage4.status === 'done' && stage4.needTiebreak && !stage4.winner && (
+        <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-6">
+          <h3 className="text-2xl font-black text-amber-100">四曲总成绩完全相同</h3>
+          <p className="text-zinc-300 mt-2">完成线下加赛后，选择获胜选手并再次确认。</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+            <button onClick={() => { setTieWinnerId(p1Id); setTieError(null); }} className="py-3 rounded-xl border border-sky-400/30 bg-sky-500/10 text-sky-200 font-bold">
+              {stage4.p1?.username} 加赛获胜
+            </button>
+            <button onClick={() => { setTieWinnerId(p2Id); setTieError(null); }} className="py-3 rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-200 font-bold">
+              {stage4.p2?.username} 加赛获胜
+            </button>
+          </div>
+          {tieWinnerId && (
+            <div className="mt-5 border-t border-amber-400/20 pt-5">
+              <p className="text-lg font-bold text-white">确认 {tieWinnerName} 为 MSC 2026 冠军？</p>
+              {tieError && <p className="text-red-200 mt-2">{tieError}</p>}
+              <div className="flex gap-3 mt-4">
+                <button disabled={tiePending} onClick={submitTieWinner} className="px-5 py-2.5 rounded-xl bg-amber-500/25 border border-amber-400/40 text-amber-100 font-bold disabled:opacity-50">
+                  {tiePending ? '提交中...' : '确认赛果'}
+                </button>
+                <button disabled={tiePending} onClick={() => setTieWinnerId(null)} className="px-5 py-2.5 rounded-xl border border-white/10 text-zinc-300 disabled:opacity-50">
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* 胜者 */}
       {stage4.winner && (
-        <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-10 text-center">
-          <FaTrophy className="text-5xl text-amber-300 mx-auto mb-4" />
-          <p className="text-xl text-amber-300/80 mb-2">MSC 2026 冠军</p>
-          <p className="text-5xl md:text-7xl font-black text-amber-200" style={{ fontFamily: 'Torus, sans-serif' }}>
-            {winnerName}
-          </p>
-        </div>
+        <WinnerReveal name={winnerName} eyebrow="MSC 2026 CHAMPION" detail="决赛结果已确认" champion />
       )}
+
+      <AnimatePresence>
+        {scoreResult && <ScoreDuelResult result={scoreResult} onContinue={() => setScoreResult(null)} />}
+      </AnimatePresence>
     </div>
   );
 }

@@ -2,9 +2,11 @@
 // ScoreEntryForm.jsx — 裁判成绩录入表单
 // ============================================================
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { FaClipboardCheck, FaUser } from 'react-icons/fa';
 import { SCORE_LIMITS } from '../../constants/gameData';
+import MotionButton from '../live/MotionButton';
+import { MOTION_TRANSITIONS } from '../../utils/motion';
 
 /** 单个分数输入 */
 function ScoreField({ label, field, value, onChange, ...limits }) {
@@ -110,7 +112,7 @@ function PlayerScoreCard({ player, prefix, scores, onChange }) {
 
 /** 裁判成绩录入表单 */
 export default function ScoreEntryForm({
-  songIndex, p1, p2,
+  songId, songIndex, p1, p2,
   onSubmit, onAdvance,
   disabled = false, initialScores = null,
 }) {
@@ -129,6 +131,8 @@ export default function ScoreEntryForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState(null);
+  const [advancing, setAdvancing] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const handleScoreChange = (field, value) => {
     setScores((prev) => {
@@ -175,6 +179,7 @@ export default function ScoreEntryForm({
     setError(null);
 
     const payload = {
+      songId,
       songIndex,
       p1Score: {
         achievement: parseFloat(scores.p1Score.achievement),
@@ -200,23 +205,31 @@ export default function ScoreEntryForm({
 
   if (submitted) {
     return (
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
+      <Motion.div
+        initial={reduceMotion ? { opacity: 0 } : { scale: 0.94, opacity: 0, y: 16 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={MOTION_TRANSITIONS.spring}
         className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-8 text-center"
       >
         <FaClipboardCheck className="text-4xl text-emerald-300 mx-auto mb-3" />
         <p className="text-3xl text-emerald-200 font-black">成绩已录入</p>
-        <button
+        <MotionButton
+          loading={advancing}
           onClick={async () => {
-            setSubmitted(false);
-            if (onAdvance) await onAdvance();
+            if (!onAdvance) return;
+            setAdvancing(true);
+            try {
+              await onAdvance();
+              setSubmitted(false);
+            } finally {
+              setAdvancing(false);
+            }
           }}
           className="mt-5 px-8 py-3 rounded-xl bg-amber-500/20 text-amber-200 border border-amber-400/30 text-xl font-bold hover:bg-amber-500/30 transition-all"
         >
-          推进下一轮
-        </button>
-      </motion.div>
+          {advancing ? '推进中...' : '推进下一轮'}
+        </MotionButton>
+      </Motion.div>
     );
   }
 
@@ -229,19 +242,24 @@ export default function ScoreEntryForm({
       <PlayerScoreCard player={p1} prefix="p1" scores={scores.p1Score} onChange={handleScoreChange} />
       <PlayerScoreCard player={p2} prefix="p2" scores={scores.p2Score} onChange={handleScoreChange} />
 
-      {error && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-lg text-red-300 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20"
-        >
-          {error}
-        </motion.p>
-      )}
+      <AnimatePresence>
+        {error && (
+          <Motion.p
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={MOTION_TRANSITIONS.quick}
+            className="text-lg text-red-300 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20"
+          >
+            {error}
+          </Motion.p>
+        )}
+      </AnimatePresence>
 
-      <button
+      <MotionButton
         onClick={handleSubmit}
         disabled={submitting || disabled}
+        loading={submitting}
         className={`
           w-full py-4 rounded-xl font-black text-2xl transition-all
           ${!submitting && !disabled
@@ -251,7 +269,7 @@ export default function ScoreEntryForm({
         `}
       >
         {submitting ? '提交中...' : '确认录入成绩'}
-      </button>
+      </MotionButton>
     </div>
   );
 }

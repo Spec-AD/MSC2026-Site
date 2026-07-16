@@ -11,6 +11,8 @@
 const { shuffle, validateScore, normalizeScoreInput, determineWinner, assertObjectIdList } = require('./utils');
 const { broadcast } = require('./ssePool');
 const { syncToOldTournament } = require('./oldTournamentSync');
+const { assertScoreTarget } = require('./scoreTarget');
+const { drawRandomSong } = require('./randomSongDraw');
 
 /**
  * 初始化12进6分组
@@ -167,6 +169,7 @@ async function submitScore(tournament, userId, body) {
 
   const lastSong = group.songs[group.songs.length - 1];
   if (!lastSong) throw new Error('未找到待录入的曲目');
+  assertScoreTarget(body, lastSong);
 
   // 校验并写入成绩
   if (body.p1Score) {
@@ -204,13 +207,15 @@ async function submitScore(tournament, userId, body) {
 
   // 推进状态
   const songCount = group.songs.length;
+  let drawnSongId = null;
 
   if (songCount === 1) {
     // P1 选曲成绩录入完毕 → P2 选曲
     group.status = 'p2_pick';
   } else if (songCount === 2) {
     // P2 选曲成绩录入完毕 → 系统随机选曲
-    await _systemRandomPick(tournament, group, stage1);
+    const randomSong = await _systemRandomPick(tournament, group, stage1);
+    drawnSongId = randomSong.toString();
     group.status = 'playing'; // 等待记录成绩
   } else if (songCount === 3 && lastSong.pickType === 'random') {
     // 随机曲成绩录入完毕 → 判定胜负 → 组结束
@@ -221,6 +226,15 @@ async function submitScore(tournament, userId, body) {
 
   await tournament.save();
 
+  if (drawnSongId) {
+    broadcast('song_drawn', {
+      stage: 'stage1',
+      groupIndex: stage1.currentGroupIndex,
+      songId: drawnSongId,
+      pickType: 'random'
+    });
+  }
+
   broadcast('score_updated', {
     stage: 'stage1',
     groupIndex: stage1.currentGroupIndex,
@@ -228,7 +242,7 @@ async function submitScore(tournament, userId, body) {
     groupStatus: group.status
   });
 
-  return { group, nextStep: group.status };
+  return { group, nextStep: group.status, drawnSongId };
 }
 
 /**
@@ -236,10 +250,7 @@ async function submitScore(tournament, userId, body) {
  */
 async function _systemRandomPick(tournament, group, stage1) {
   const pickedIds = group.songs.map(s => s.songId.toString());
-  const available = stage1.songPool.filter(s => !pickedIds.includes(s.toString()));
-  if (available.length === 0) throw new Error('图池已无可用曲目');
-
-  const randomSong = available[Math.floor(Math.random() * available.length)];
+  const randomSong = drawRandomSong(stage1.songPool, pickedIds);
 
   group.songs.push({
     songId: randomSong,
@@ -249,6 +260,19 @@ async function _systemRandomPick(tournament, group, stage1) {
     p2Score: null,
     order: group.songs.length
   });
+
+  tournament.operationLogs.push({
+    action: 'random_song_drawn',
+    stage: 'stage1',
+    detail: {
+      groupIndex: stage1.currentGroupIndex,
+      songId: randomSong.toString(),
+      excludedSongIds: pickedIds
+    },
+    operatedAt: new Date()
+  });
+
+  return randomSong;
 }
 
 /**
@@ -386,9 +410,19 @@ async function advance(tournament) {
   }
   // 自动处理推进逻辑
   if (group.status === 'playing' && group.songs.length === 2) {
-    await _systemRandomPick(tournament, group, stage1);
+    const randomSong = await _systemRandomPick(tournament, group, stage1);
     await tournament.save();
-    return { nextStep: 'random_pick', groupIndex: stage1.currentGroupIndex };
+    broadcast('song_drawn', {
+      stage: 'stage1',
+      groupIndex: stage1.currentGroupIndex,
+      songId: randomSong.toString(),
+      pickType: 'random'
+    });
+    return {
+      nextStep: 'random_pick',
+      groupIndex: stage1.currentGroupIndex,
+      songId: randomSong.toString()
+    };
   }
     throw new Error('当前组尚未完成');
   }
@@ -403,6 +437,8 @@ async function forfeitPlayer(tournament, playerId) {
   const stage1 = tournament.stage1;
   const group = stage1.groups[stage1.currentGroupIndex];
   if (!group) throw new Error('无进行中的组');
+  if (group.status === 'done') throw new Error('当前组已结束，不能再标记弃权');
+  if (!playerId) throw new Error('需指定弃权选手');
 
   const pidStr = playerId.toString();
   if (group.p1.toString() !== pidStr && group.p2.toString() !== pidStr) {
@@ -432,6 +468,7 @@ async function resolveGroupTie(tournament, groupIndex, winnerId) {
   const group = stage1.groups[groupIndex];
   if (!group) throw new Error('无效的组索引');
   if (group.winner) throw new Error('该组已决出胜者，无需加赛');
+  if (!group.needTiebreak || group.status !== 'done') throw new Error('该组当前不处于加赛判定状态');
 
   const wid = String(winnerId);
   const p1 = String(group.p1);

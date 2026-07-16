@@ -61,6 +61,10 @@ export const advanceStage1 = () =>
 export const forfaitStage1 = (playerId) =>
   axios.post(`${BASE}/stage1/forfait`, { playerId }, { headers: authHeaders() });
 
+/** 录入阶段一线下加赛胜者 */
+export const resolveStage1Tie = (groupIndex, winnerId) =>
+  axios.post(`${BASE}/stage1/resolve-tie`, { groupIndex, winnerId }, { headers: authHeaders() });
+
 // ==================== 跑图（阶段二 & 三） ====================
 
 /** 初始化跑图 */
@@ -136,6 +140,10 @@ export const submitStage4Score = (data) =>
 /** 推进回合/结束 */
 export const advanceStage4 = () =>
   axios.post(`${BASE}/stage4/advance`, {}, { headers: authHeaders() });
+
+/** 录入决赛线下加赛胜者 */
+export const resolveStage4Tie = (winnerId) =>
+  axios.post(`${BASE}/stage4/resolve-tie`, { winnerId }, { headers: authHeaders() });
 
 // ==================== SSE ====================
 

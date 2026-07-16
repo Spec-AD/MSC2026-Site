@@ -16,10 +16,15 @@ const ADMIN_ROLES = ['ADM', 'TO', 'CHM'];
 
 // ==================== 曲目搜索 ====================
 
-function SongSearch({ onSelect, selectedIds, maxSelect }) {
+function getSongId(song) {
+  return String(song?._id || song?.songId || '');
+}
+
+function SongSearch({ onToggle, selectedSongs = [], maxSelect }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const selectedIds = selectedSongs.map(getSongId);
 
   const handleSearch = useCallback(async (q) => {
     if (!q.trim()) { setResults([]); return; }
@@ -48,11 +53,11 @@ function SongSearch({ onSelect, selectedIds, maxSelect }) {
       {results.length > 0 && (
         <div className="max-h-48 overflow-y-auto border border-white/10 rounded-xl bg-zinc-800/80 divide-y divide-white/5">
           {results.map((song) => {
-            const id = song._id || song.songId;
+            const id = getSongId(song);
             const selected = selectedIds.includes(id);
             const atLimit = maxSelect != null && selectedIds.length >= maxSelect && !selected;
             return (
-              <button key={id} onClick={() => !atLimit && onSelect(id)} disabled={atLimit}
+              <button key={id} onClick={() => !atLimit && onToggle(song)} disabled={atLimit}
                 className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-all
                   ${selected ? 'bg-amber-500/10' : 'hover:bg-zinc-700/50'}
                   ${atLimit ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
@@ -72,11 +77,11 @@ function SongSearch({ onSelect, selectedIds, maxSelect }) {
       {selectedIds.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] text-zinc-500">已选：</span>
-          {selectedIds.map((id, i) => (
-            <span key={id} onClick={() => onSelect(id)}
-              className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 cursor-pointer hover:bg-red-500/20 hover:text-red-400 transition-all">
-              #{i + 1} ✕
-            </span>
+          {selectedSongs.map((song) => (
+            <button key={getSongId(song)} type="button" onClick={() => onToggle(song)}
+              className="text-[10px] px-2 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/25 hover:bg-red-500/15 hover:text-red-300 transition-all">
+              {song.title || getSongId(song)} ×
+            </button>
           ))}
         </div>
       )}
@@ -88,7 +93,6 @@ function SongSearch({ onSelect, selectedIds, maxSelect }) {
 
 function RegistrationCard({ reg, rank, qualifiedUpTo }) {
   const hasQualifier = reg.qualifierProgress?.completed > 0;
-  const formData = reg.formData || {};
   return (
     <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all
       ${rank <= qualifiedUpTo ? 'border-green-500/20 bg-green-500/5' : 'border-white/5 bg-zinc-800/30'}`}>
@@ -129,6 +133,23 @@ function ActionButton({ onClick, loading, disabled, icon, label, variant = 'prim
   );
 }
 
+function QualifiedPlayerList({ players, emptyText }) {
+  if (!players.length) {
+    return <p className="text-xs text-zinc-600 py-2">{emptyText}</p>;
+  }
+  return (
+    <div className="grid grid-cols-2 gap-1.5">
+      {players.map((player, index) => (
+        <div key={player.userId} className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-emerald-500/15 bg-emerald-500/5 text-xs text-emerald-200">
+          <span className="w-5 text-center font-mono text-emerald-500">{index + 1}</span>
+          <span className="truncate">{player.username}</span>
+          <FaCheck className="ml-auto text-emerald-400 text-[10px]" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ==================== 主面板 ====================
 
 export default function AdminPanel() {
@@ -145,20 +166,26 @@ export default function AdminPanel() {
   const [regLoading, setRegLoading] = useState(false);
 
   // 图池
-  const [selectedSongs, setSelectedSongs] = useState([]);
-  const [designatedSongId, setDesignatedSongId] = useState(null);
-  const [advanceCount, setAdvanceCount] = useState(12);
-
-  // 跑图选手选择
-  const [selectedPlayers, setSelectedPlayers] = useState([]);
+  const [stage1Songs, setStage1Songs] = useState([]);
+  const [stage4Songs, setStage4Songs] = useState([]);
+  const [designatedSong, setDesignatedSong] = useState(null);
+  const [savedSongConfig, setSavedSongConfig] = useState({
+    stage1SongPool: [],
+    stage4SongPool: [],
+    designatedSong: null,
+  });
+  const advanceCount = 12;
 
   const isAdmin = user && ADMIN_ROLES.includes(user.role);
-  if (!isAdmin) return null;
-
   const status = store.status;
+  const fetchPlayers = store.fetchPlayers;
+  const stage2Players = store.players.filter(player => player.isQualifiedStage1);
+  const stage3Players = store.players.filter(player => player.isQualifiedStage2);
+  const stage4Players = store.players.filter(player => player.isQualifiedStage3);
 
   // 加载旧赛事数据
   const loadRegistrations = useCallback(async () => {
+    if (!isAdmin) return;
     setRegLoading(true);
     try {
       const [regRes, rankRes] = await Promise.all([
@@ -169,10 +196,34 @@ export default function AdminPanel() {
       setQualifierRankings(rankRes.data.data || null);
     } catch (err) { console.error('加载比赛档案数据失败', err); }
     finally { setRegLoading(false); }
-  }, []);
+  }, [isAdmin]);
+
+  const loadSongConfig = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await api.getConfig();
+      const config = res.data.data || {};
+      const nextConfig = {
+        stage1SongPool: config.stage1SongPool || [],
+        stage4SongPool: config.stage4SongPool || [],
+        designatedSong: config.designatedSong || null,
+      };
+      setSavedSongConfig(nextConfig);
+      setStage1Songs(nextConfig.stage1SongPool);
+      setStage4Songs(nextConfig.stage4SongPool);
+      setDesignatedSong(nextConfig.designatedSong);
+    } catch (err) {
+      console.error('加载比赛图池配置失败', err);
+    }
+  }, [isAdmin]);
 
   useEffect(() => { loadRegistrations(); }, [loadRegistrations]);
-  useEffect(() => { store.fetchPlayers().catch(() => {}); }, []);
+  useEffect(() => { loadSongConfig(); }, [loadSongConfig]);
+  useEffect(() => {
+    if (isAdmin) fetchPlayers().catch(() => {});
+  }, [isAdmin, fetchPlayers]);
+
+  if (!isAdmin) return null;
 
   // 通用操作包装
   const handleAction = async (fn, successMsg) => {
@@ -190,30 +241,59 @@ export default function AdminPanel() {
 
   const quickAction = (fn, label) => () => handleAction(fn, `${label} 完成`);
 
+  const toggleSong = (setter, song) => {
+    const id = getSongId(song);
+    setter((current) => current.some(item => getSongId(item) === id)
+      ? current.filter(item => getSongId(item) !== id)
+      : [...current, song]);
+  };
+
+  const handleSaveStage1Pool = () => handleAction(
+    async () => {
+      await api.updateConfig({
+        poolType: 'stage1',
+        songPoolIds: stage1Songs.map(getSongId),
+      });
+      await loadSongConfig();
+    },
+    '阶段一图池已保存'
+  );
+
+  const handleSaveStage4Pool = () => handleAction(
+    async () => {
+      await api.updateConfig({
+        poolType: 'stage4',
+        songPoolIds: stage4Songs.map(getSongId),
+        designatedSongId: getSongId(designatedSong),
+      });
+      await loadSongConfig();
+    },
+    '决赛图池与课题曲已保存'
+  );
+
   // 初始化动作
   const handleInitFromQualifier = () =>
     handleAction(
-      () => api.initStage1FromQualifier({ songPoolIds: selectedSongs, advanceCount }),
+      () => api.initStage1FromQualifier({ advanceCount }),
       `阶段一已从预选赛初始化，${advanceCount} 人晋级`
     );
 
-  const handleInitRace = (playerCount) => {
-    if (selectedPlayers.length !== playerCount) return;
+  const handleInitRace = () => {
     handleAction(
-      () => api.initRace({ playerIds: selectedPlayers }),
-      `跑图初始化完成！${playerCount} 名选手已就位`
+      () => api.initRace({}),
+      '跑图初始化完成，后端晋级选手已就位'
     );
   };
 
   const handleInitStage4 = () =>
     handleAction(
-      () => api.initStage4({ songPoolIds: selectedSongs, designatedSongId, playerIds: selectedPlayers }),
+      () => api.initStage4({}),
       '决赛初始化完成！'
     );
 
   const handleAdvanceToStage3 = () =>
     handleAction(
-      () => api.advanceToStage3({ qualifiedIds: selectedPlayers }),
+      () => api.advanceToStage3({}),
       '已推进到阶段三'
     );
 
@@ -313,14 +393,33 @@ export default function AdminPanel() {
 
         {/* ========== 图池 Tab ========== */}
         {activeTab === 'songs' && (
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-xs text-zinc-400 uppercase tracking-wider mb-3">阶段一/决赛 比赛图池</h4>
-              <SongSearch onSelect={(id) => setSelectedSongs((prev) => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])} selectedIds={selectedSongs} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-xs text-zinc-400 uppercase tracking-wider">阶段一图池</h4>
+                <span className="text-xs text-zinc-500">{stage1Songs.length} 首</span>
+              </div>
+              <SongSearch onToggle={(song) => toggleSong(setStage1Songs, song)} selectedSongs={stage1Songs} />
+              <ActionButton onClick={handleSaveStage1Pool} loading={loading} disabled={stage1Songs.length < 3}
+                icon={<FaCheck />} label="保存阶段一图池" />
             </div>
-            <div>
-              <h4 className="text-xs text-zinc-400 uppercase tracking-wider mb-3">决赛课题曲（可选 1 首）</h4>
-              <SongSearch onSelect={(id) => setDesignatedSongId(id === designatedSongId ? null : id)} selectedIds={designatedSongId ? [designatedSongId] : []} maxSelect={1} />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-xs text-zinc-400 uppercase tracking-wider">决赛图池</h4>
+                <span className="text-xs text-zinc-500">{stage4Songs.length} 首</span>
+              </div>
+              <SongSearch onToggle={(song) => toggleSong(setStage4Songs, song)} selectedSongs={stage4Songs} />
+              <div className="pt-2 border-t border-white/10">
+                <h4 className="text-xs text-zinc-500 uppercase tracking-wider mb-2">决赛课题曲</h4>
+                <SongSearch
+                  onToggle={(song) => setDesignatedSong(current => getSongId(current) === getSongId(song) ? null : song)}
+                  selectedSongs={designatedSong ? [designatedSong] : []}
+                  maxSelect={1}
+                />
+              </div>
+              <ActionButton onClick={handleSaveStage4Pool} loading={loading}
+                disabled={stage4Songs.length < 3 || !designatedSong || stage4Songs.some(song => getSongId(song) === getSongId(designatedSong))}
+                icon={<FaCheck />} label="保存决赛配置" />
             </div>
           </div>
         )}
@@ -333,15 +432,7 @@ export default function AdminPanel() {
               <div className="rounded-xl border border-white/10 bg-zinc-800/40 p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-xs text-zinc-400 uppercase tracking-wider">预选赛排名（前 {advanceCount} 名晋级）</h4>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-zinc-500">晋级人数:</span>
-                    <select value={advanceCount} onChange={(e) => setAdvanceCount(Number(e.target.value))}
-                      className="bg-zinc-800 border border-white/10 rounded-lg px-2 py-1 text-xs text-white">
-                      <option value={12}>12</option>
-                      <option value={8}>8</option>
-                      <option value={6}>6</option>
-                    </select>
-                  </div>
+                  <span className="text-[10px] text-zinc-500">MSC 2026 固定晋级 12 人</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-[200px] overflow-y-auto">
                   {qualifierRankings.rankings?.slice(0, 12).map((r) => (
@@ -365,8 +456,8 @@ export default function AdminPanel() {
                 </div>
                 <p className="text-xs text-zinc-500">系统将自动从预选赛排名取前 {advanceCount} 名选手，随机分组并决定 P1/P2 及出场顺序。</p>
                 <div>
-                  <span className="text-[10px] text-zinc-500 uppercase block mb-2">比赛图池</span>
-                  <SongSearch onSelect={(id) => setSelectedSongs((prev) => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])} selectedIds={selectedSongs} />
+                  <span className="text-[10px] text-zinc-500 uppercase block mb-2">已保存比赛图池</span>
+                  <p className="text-sm text-zinc-300">{savedSongConfig.stage1SongPool.length} 首曲目</p>
                 </div>
                 {qualifierRankings?.autoFilledCount > 0 && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
@@ -374,8 +465,8 @@ export default function AdminPanel() {
                     有 {qualifierRankings.autoFilledCount} 人无预选赛成绩，将按报名时间自动补位
                   </div>
                 )}
-                <ActionButton onClick={handleInitFromQualifier} loading={loading} disabled={selectedSongs.length === 0}
-                  icon={<FaPlay />} label={selectedSongs.length === 0 ? '请先选择图池' : `从预选赛初始化阶段一（前${advanceCount}人）`} />
+                <ActionButton onClick={handleInitFromQualifier} loading={loading} disabled={savedSongConfig.stage1SongPool.length < 3}
+                  icon={<FaPlay />} label={savedSongConfig.stage1SongPool.length < 3 ? '请先保存阶段一图池' : `从预选赛初始化阶段一（前${advanceCount}人）`} />
               </div>
             )}
 
@@ -402,34 +493,21 @@ export default function AdminPanel() {
                   <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">2</div>
                   <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>阶段二 · 6进4 跑图</h4>
                 </div>
-                <p className="text-xs text-zinc-500">选择阶段一晋级的 6 名选手，初始化正六边形跑图地图。</p>
+                <p className="text-xs text-zinc-500">阶段一结束后，系统固定使用后端确认的 6 名晋级选手。</p>
                 <div>
-                  <span className="text-[10px] text-zinc-500 uppercase block mb-2">晋级选手（6人）— 从下方旧赛事名单中勾选</span>
-                  <div className="grid grid-cols-2 gap-1.5 max-h-[180px] overflow-y-auto">
-                    {registrations.map((reg) => {
-                      const selected = selectedPlayers.includes(reg.userId);
-                      const atLimit = selectedPlayers.length >= 6 && !selected;
-                      return (
-                        <button key={reg.userId} onClick={() => !atLimit && setSelectedPlayers((prev) => prev.includes(reg.userId) ? prev.filter(p => p !== reg.userId) : [...prev, reg.userId])} disabled={atLimit}
-                          className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-xs transition-all
-                            ${selected ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300' : 'bg-zinc-800/50 border border-white/5 text-zinc-400 hover:border-white/10'}
-                            ${atLimit ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
-                          <span className="truncate">{reg.username}</span>
-                          {selected && <FaCheck className="text-amber-400 text-[10px] ml-auto flex-shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <span className="text-[10px] text-zinc-500 uppercase block mb-2">后端晋级名单（{stage2Players.length}/6）</span>
+                  <QualifiedPlayerList players={stage2Players} emptyText="等待阶段一产生晋级名单" />
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <ActionButton onClick={() => handleInitRace(6)} loading={loading} disabled={selectedPlayers.length !== 6}
-                    icon={<FaPlay />} label={selectedPlayers.length !== 6 ? `选手 ${selectedPlayers.length}/6` : '初始化跑图'}
-                    variant={status === 'stage2' ? 'danger' : 'primary'} />
+                  {status === 'stage2' && !store.summary?.stage2 && (
+                    <ActionButton onClick={handleInitRace} loading={loading} disabled={stage2Players.length !== 6}
+                      icon={<FaPlay />} label={stage2Players.length !== 6 ? `等待晋级名单 ${stage2Players.length}/6` : '初始化跑图'} />
+                  )}
                   {status === 'stage2' && (
                     <>
-                      <ActionButton onClick={handleAdvanceToStage3} loading={loading} disabled={selectedPlayers.length !== 4}
-                        icon={<FaPlay />} label={selectedPlayers.length !== 4 ? '选4名晋级者' : '推进到阶段三'} />
-                      <ActionButton onClick={quickAction(api.terminateRace, '终止跑图')} loading={loading} icon={<FaTimes />} label="终止" variant="danger" />
+                      <ActionButton onClick={handleAdvanceToStage3} loading={loading} disabled={!store.summary?.stage2?.terminated || stage3Players.length !== 4}
+                        icon={<FaPlay />} label={store.summary?.stage2?.terminated ? '推进到阶段三' : '跑图结束后可推进'} />
+                      <ActionButton onClick={quickAction(api.terminateRace, '终止跑图')} loading={loading} disabled={!store.summary?.stage2 || store.summary?.stage2?.terminated} icon={<FaTimes />} label="终止" variant="danger" />
                       <ActionButton onClick={quickAction(api.undoRaceLastAction, '撤销行动')} loading={loading} icon={<FaUndo />} label="撤销行动" variant="undo" />
                       <ActionButton onClick={quickAction(api.revertChallengeResult, '翻转判定')} loading={loading} icon={<FaUndo />} label="翻转判定" variant="undo" />
                       <ActionButton onClick={quickAction(api.resetRace, '重置跑图')} loading={loading} icon={<FaTrash />} label="重置" variant="danger" />
@@ -446,29 +524,17 @@ export default function AdminPanel() {
                   <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-xs font-bold">3</div>
                   <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>阶段三 · 4进2 跑图</h4>
                 </div>
-                <p className="text-xs text-zinc-500">选择阶段二晋级的 4 名选手，初始化正四边形跑图地图。</p>
+                <p className="text-xs text-zinc-500">系统固定使用阶段二排名产生的 4 名晋级选手。</p>
                 <div>
-                  <span className="text-[10px] text-zinc-500 uppercase block mb-2">晋级选手（4人）</span>
-                  <div className="grid grid-cols-2 gap-1.5 max-h-[180px] overflow-y-auto">
-                    {registrations.map((reg) => {
-                      const selected = selectedPlayers.includes(reg.userId);
-                      const atLimit = selectedPlayers.length >= 4 && !selected;
-                      return (
-                        <button key={reg.userId} onClick={() => !atLimit && setSelectedPlayers((prev) => prev.includes(reg.userId) ? prev.filter(p => p !== reg.userId) : [...prev, reg.userId])} disabled={atLimit}
-                          className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-xs transition-all
-                            ${selected ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300' : 'bg-zinc-800/50 border border-white/5 text-zinc-400 hover:border-white/10'}
-                            ${atLimit ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
-                          <span className="truncate">{reg.username}</span>
-                          {selected && <FaCheck className="text-amber-400 text-[10px] ml-auto flex-shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <span className="text-[10px] text-zinc-500 uppercase block mb-2">后端晋级名单（{stage3Players.length}/4）</span>
+                  <QualifiedPlayerList players={stage3Players} emptyText="等待阶段二完成排名结算" />
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <ActionButton onClick={() => handleInitRace(4)} loading={loading} disabled={selectedPlayers.length !== 4}
-                    icon={<FaPlay />} label={selectedPlayers.length !== 4 ? `选手 ${selectedPlayers.length}/4` : '初始化跑图'} />
-                  <ActionButton onClick={quickAction(api.terminateRace, '终止跑图')} loading={loading} icon={<FaTimes />} label="终止" variant="danger" />
+                  {!store.summary?.stage3 && (
+                    <ActionButton onClick={handleInitRace} loading={loading} disabled={stage3Players.length !== 4}
+                      icon={<FaPlay />} label={stage3Players.length !== 4 ? `等待晋级名单 ${stage3Players.length}/4` : '初始化跑图'} />
+                  )}
+                  <ActionButton onClick={quickAction(api.terminateRace, '终止跑图')} loading={loading} disabled={!store.summary?.stage3 || store.summary?.stage3?.terminated} icon={<FaTimes />} label="终止" variant="danger" />
                   <ActionButton onClick={quickAction(api.undoRaceLastAction, '撤销行动')} loading={loading} icon={<FaUndo />} label="撤销行动" variant="undo" />
                   <ActionButton onClick={quickAction(api.revertChallengeResult, '翻转判定')} loading={loading} icon={<FaUndo />} label="翻转判定" variant="undo" />
                   <ActionButton onClick={quickAction(api.resetRace, '重置跑图')} loading={loading} icon={<FaTrash />} label="重置" variant="danger" />
@@ -483,38 +549,24 @@ export default function AdminPanel() {
                   <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 text-xs font-bold">4</div>
                   <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>阶段四 · 决赛</h4>
                 </div>
-                <p className="text-xs text-zinc-500">选择 2 名决赛选手、图池及课题曲。</p>
+                <p className="text-xs text-zinc-500">阶段三结束后自动锁定 2 名决赛选手，只需确认图池与课题曲。</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <span className="text-[10px] text-zinc-500 uppercase block mb-2">选手（2人）</span>
-                    <div className="grid grid-cols-1 gap-1.5 max-h-[150px] overflow-y-auto">
-                      {registrations.map((reg) => {
-                        const selected = selectedPlayers.includes(reg.userId);
-                        const atLimit = selectedPlayers.length >= 2 && !selected;
-                        return (
-                          <button key={reg.userId} onClick={() => !atLimit && setSelectedPlayers((prev) => prev.includes(reg.userId) ? prev.filter(p => p !== reg.userId) : [...prev, reg.userId])} disabled={atLimit}
-                            className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-xs transition-all
-                              ${selected ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300' : 'bg-zinc-800/50 border border-white/5 text-zinc-400 hover:border-white/10'}
-                              ${atLimit ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
-                            <span className="truncate">{reg.username}</span>
-                            {selected && <FaCheck className="text-amber-400 text-[10px] ml-auto flex-shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <span className="text-[10px] text-zinc-500 uppercase block mb-2">决赛选手（{stage4Players.length}/2）</span>
+                    <QualifiedPlayerList players={stage4Players} emptyText="等待阶段三完成排名结算" />
                   </div>
                   <div>
-                    <span className="text-[10px] text-zinc-500 uppercase block mb-2">决赛图池 + 课题曲</span>
-                    <SongSearch onSelect={(id) => setSelectedSongs((prev) => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])} selectedIds={selectedSongs} />
-                    <div className="mt-2">
-                      <span className="text-[10px] text-zinc-600">课题曲（可选）</span>
-                      <SongSearch onSelect={(id) => setDesignatedSongId(id === designatedSongId ? null : id)} selectedIds={designatedSongId ? [designatedSongId] : []} maxSelect={1} />
-                    </div>
+                    <span className="text-[10px] text-zinc-500 uppercase block mb-2">已保存决赛配置</span>
+                    <p className="text-sm text-zinc-300">图池 {savedSongConfig.stage4SongPool.length} 首</p>
+                    <p className="text-xs text-zinc-500 mt-1">课题曲：{savedSongConfig.designatedSong?.title || '未设置'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <ActionButton onClick={handleInitStage4} loading={loading} disabled={selectedPlayers.length !== 2 || selectedSongs.length === 0}
-                    icon={<FaPlay />} label={selectedPlayers.length !== 2 ? `选手 ${selectedPlayers.length}/2` : '初始化决赛'} />
+                  {status === 'stage3' && (
+                    <ActionButton onClick={handleInitStage4} loading={loading}
+                      disabled={stage4Players.length !== 2 || !store.summary?.stage3?.terminated || savedSongConfig.stage4SongPool.length < 3 || !savedSongConfig.designatedSong}
+                      icon={<FaPlay />} label={stage4Players.length !== 2 ? `等待决赛名单 ${stage4Players.length}/2` : '初始化决赛'} />
+                  )}
                   {status === 'stage4' && (
                     <>
                       <ActionButton onClick={quickAction(api.undoStage4LastSong, '撤销选曲')} loading={loading} icon={<FaUndo />} label="撤销选曲" variant="undo" />

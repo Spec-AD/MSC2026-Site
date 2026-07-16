@@ -38,6 +38,7 @@ import TournamentHome from './features/msc2026/pages/TournamentHome';
 import Stage1Page from './features/msc2026/pages/Stage1Page';
 import Stage4Page from './features/msc2026/pages/Stage4Page';
 import RacePage from './features/msc2026/pages/RacePage';
+import LiveMatchPage from './features/msc2026/pages/LiveMatchPage';
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -59,6 +60,7 @@ function App() {
       <ToastProvider>
         <ThemeProvider>
           <Routes>
+            <Route path="/matches/msc2026/live" element={<LiveMatchPage />} />
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />
               <Route path="register" element={<Register />} />

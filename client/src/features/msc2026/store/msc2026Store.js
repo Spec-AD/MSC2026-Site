@@ -151,6 +151,15 @@ export const useMSC2026Store = create((set, get) => ({
     }
   },
 
+  resolveStage1Tie: async (groupIndex, winnerId) => {
+    try {
+      const res = await api.resolveStage1Tie(groupIndex, winnerId);
+      return res.data;
+    } catch (err) {
+      throw err.response?.data || { msg: '加赛结果提交失败' };
+    }
+  },
+
   // ==================== 阶段四 Actions ====================
 
   fetchStage4State: async () => {
@@ -208,6 +217,15 @@ export const useMSC2026Store = create((set, get) => ({
       return res.data;
     } catch (err) {
       throw err.response?.data || { msg: '推进失败' };
+    }
+  },
+
+  resolveStage4Tie: async (winnerId) => {
+    try {
+      const res = await api.resolveStage4Tie(winnerId);
+      return res.data;
+    } catch (err) {
+      throw err.response?.data || { msg: '加赛结果提交失败' };
     }
   },
 

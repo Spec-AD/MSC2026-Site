@@ -3,7 +3,7 @@
 // 布局：顶部「小标签·大数字」数据条 + 中央 3D 地图 + 右侧榜单
 // ============================================================
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { useRaceStore } from '../store';
 import { useMSCSSE } from '../hooks/useSSE';
 import { STAGE_CONFIG, getItemDef } from '../constants/gameData';
@@ -14,6 +14,9 @@ import ChallengeCard from '../components/race/ChallengeCard';
 import ItemCard from '../components/race/ItemCard';
 import { FaForward, FaPlay, FaSync } from 'react-icons/fa';
 import { HiOutlineCube } from 'react-icons/hi';
+import MotionButton from '../components/live/MotionButton';
+import MapEventSignal from '../components/race/MapEventSignal';
+import { MOTION_TRANSITIONS } from '../utils/motion';
 
 /** 倒计时格式化 */
 function fmtMs(ms) {
@@ -26,49 +29,89 @@ function fmtMs(ms) {
 
 export default function RacePage({ stage }) {
   const race = useRaceStore();
+  const {
+    fetchRaceState, fetchRaceMap, fetchChallenge, dismissChallenge,
+    tickTimers, sseTurnChange, sseTurnTimeout, ssePlayerMoved, sseTimerTick,
+  } = race;
   const config = STAGE_CONFIG[stage] || {};
   const [itemViewer, setItemViewer] = useState(null);
   const [itemUseResult, setItemUseResult] = useState(null);
   const [pendingAdvance, setPendingAdvance] = useState(false);
   const [actionError, setActionError] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [mapSignal, setMapSignal] = useState(null);
+  const reduceMotion = useReducedMotion();
+
+  const showMapSignal = useCallback((type, data = {}) => {
+    const playerId = String(data.playerId || '');
+    const player = useRaceStore.getState().players.find((entry) => String(entry._id || entry.userId) === playerId);
+    const playerName = player?.username || '选手';
+    let title = `${playerName} 的位置已更新`;
+    let detail = data.wallLabel || '';
+
+    if (type === 'success') title = `${playerName} 突破 ${data.wallLabel || '墙壁'}`;
+    if (type === 'failure') title = `${playerName} 突破失败`;
+    if (type === 'advance') {
+      title = data.reachedEnd ? `${playerName} 抵达中心` : `${playerName} 前进至坐标 ${data.toLayer}`;
+      detail = data.reachedEnd ? `第 ${data.finishOrder} 名完成跑图` : data.wallLabel || '';
+      type = data.reachedEnd ? 'finish' : 'advance';
+    }
+
+    setMapSignal({ id: `${type}-${Date.now()}`, type, title, detail });
+  }, []);
 
   // 初始加载（仅 stage 变化时重载，不依赖整个 store）
   useEffect(() => {
-    race.fetchRaceState().catch(() => {});
-  }, [stage]);
+    fetchRaceState().catch(() => {});
+  }, [stage, fetchRaceState]);
 
   // 前端本地倒计时：接口/SSE 负责校准，页面负责每秒流逝。
   useEffect(() => {
-    const interval = setInterval(() => race.tickTimers(), 1000);
+    const interval = setInterval(() => tickTimers(), 1000);
     return () => clearInterval(interval);
-  }, [race.tickTimers]);
+  }, [tickTimers]);
 
   // SSE 实时同步（action 函数引用稳定）
   useMSCSSE({
-    turn_change: useCallback((data) => race.sseTurnChange(data), [race.sseTurnChange]),
-    turn_timeout: useCallback((data) => race.sseTurnTimeout(data), [race.sseTurnTimeout]),
-    player_moved: useCallback((data) => race.ssePlayerMoved(data), [race.ssePlayerMoved]),
-    timer_tick: useCallback((data) => race.sseTimerTick(data), [race.sseTimerTick]),
-    item_collected: useCallback(() => race.fetchRaceMap(), [race.fetchRaceMap]),
-    item_used: useCallback(() => race.fetchRaceMap(), [race.fetchRaceMap]),
-    challenge_revealed: useCallback(() => race.fetchChallenge(), [race.fetchChallenge]),
+    turn_change: useCallback((data) => sseTurnChange(data), [sseTurnChange]),
+    turn_timeout: useCallback((data) => sseTurnTimeout(data), [sseTurnTimeout]),
+    player_moved: useCallback((data) => {
+      ssePlayerMoved(data);
+      showMapSignal('advance', data);
+    }, [showMapSignal, ssePlayerMoved]),
+    timer_tick: useCallback((data) => sseTimerTick(data), [sseTimerTick]),
+    item_collected: useCallback(() => fetchRaceMap(), [fetchRaceMap]),
+    item_used: useCallback(() => fetchRaceMap(), [fetchRaceMap]),
+    challenge_revealed: useCallback(() => fetchChallenge(), [fetchChallenge]),
     challenge_resolved: useCallback(() => {
-      race.dismissChallenge();
-      race.fetchRaceMap();
-    }, [race.dismissChallenge, race.fetchRaceMap]),
-    wall_broken: useCallback(() => race.fetchRaceMap(), [race.fetchRaceMap]),
-    player_bounced: useCallback(() => race.fetchRaceMap(), [race.fetchRaceMap]),
-    match_finished: useCallback(() => race.fetchRaceState(), [race.fetchRaceState]),
-    map_timeout: useCallback(() => race.fetchRaceState(), [race.fetchRaceState]),
+      dismissChallenge();
+      fetchRaceMap();
+    }, [dismissChallenge, fetchRaceMap]),
+    wall_broken: useCallback((data) => {
+      fetchRaceMap();
+      showMapSignal('success', data);
+    }, [fetchRaceMap, showMapSignal]),
+    player_bounced: useCallback((data) => {
+      fetchRaceMap();
+      showMapSignal('failure', data);
+    }, [fetchRaceMap, showMapSignal]),
+    match_finished: useCallback(() => fetchRaceState(), [fetchRaceState]),
+    map_timeout: useCallback(() => fetchRaceState(), [fetchRaceState]),
   }, { enabled: true });
 
   // 地图数据 15s 轮询作为 SSE 兜底（自执行不依赖外部变量）
   useEffect(() => {
-    const interval = setInterval(() => race.fetchRaceMap().catch(() => {}), 15000);
+    const interval = setInterval(() => fetchRaceMap().catch(() => {}), 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchRaceMap]);
 
-  const canOperate = race.status === 'racing' && !race.activeChallenge;
+  useEffect(() => {
+    if (!mapSignal) return undefined;
+    const timer = setTimeout(() => setMapSignal(null), 2800);
+    return () => clearTimeout(timer);
+  }, [mapSignal]);
+
+  const canOperate = race.status === 'racing' && !race.activeChallenge && !pendingAction;
 
   /** 处理行动 */
   const handleAdvance = async (force = false) => {
@@ -78,6 +121,7 @@ export default function RacePage({ stage }) {
       return;
     }
     try {
+      setPendingAction('advance');
       setActionError(null);
       setPendingAdvance(false);
       setItemViewer(null);
@@ -88,12 +132,15 @@ export default function RacePage({ stage }) {
     } catch (err) {
       console.error(err);
       setActionError(err.msg || '前进失败');
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const handlePickup = async (zoneIndex) => {
     if (!canOperate) return;
     try {
+      setPendingAction('pickup');
       setActionError(null);
       setItemUseResult(null);
       await race.performAction({ actionType: 'pickup', zoneIndex });
@@ -101,12 +148,15 @@ export default function RacePage({ stage }) {
     } catch (err) {
       console.error(err);
       setActionError(err.msg || '拾取失败');
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const handleSkipTurn = async () => {
     if (!canOperate) return;
     try {
+      setPendingAction('skip');
       setActionError(null);
       setItemUseResult(null);
       await race.skipTurn();
@@ -114,22 +164,33 @@ export default function RacePage({ stage }) {
     } catch (err) {
       console.error(err);
       setActionError(err.msg || '跳过失败');
+    } finally {
+      setPendingAction(null);
     }
   };
 
   /** 处理挑战判定 */
   const handleChallengeResult = async (passed) => {
     try {
-      await race.submitChallengeResult(passed);
+      setPendingAction(passed ? 'judge-pass' : 'judge-fail');
+      const result = await race.submitChallengeResult(passed);
+      if (!passed && result.penaltiesApplied?.length) {
+        setActionError(`挑战失败，道具惩罚已执行：${result.penaltiesApplied.map(item => `${item.itemName}（${item.summary}）`).join('；')}`);
+      } else {
+        setActionError(null);
+      }
       race.fetchRaceState();
     } catch (err) {
       console.error(err);
+    } finally {
+      setPendingAction(null);
     }
   };
 
   /** 处理道具使用 */
   const handleUseItem = async (itemRef) => {
     try {
+      setPendingAction(`item:${itemRef}`);
       setActionError(null);
       const response = await race.useItem(itemRef);
       const result = response.data || response;
@@ -142,6 +203,8 @@ export default function RacePage({ stage }) {
     } catch (err) {
       console.error(err);
       setActionError(err.msg || '道具使用失败');
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -248,29 +311,31 @@ export default function RacePage({ stage }) {
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 xl:flex xl:flex-1 gap-2">
-                  <button
+                  <MotionButton
                     onClick={() => handleAdvance(false)}
                     disabled={!canOperate}
+                    loading={pendingAction === 'advance'}
                     className={`min-h-14 px-5 rounded-xl border transition-all text-base font-bold flex items-center justify-center gap-2
                       ${canOperate
                         ? 'bg-amber-500/20 text-amber-200 border-amber-500/35 hover:bg-amber-500/30'
                         : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
                   >
-                    <FaPlay className="text-xs" /> 前进
-                  </button>
+                    <FaPlay className="text-xs" /> {pendingAction === 'advance' ? '前进中' : '前进'}
+                  </MotionButton>
                   {availablePickupSectors.length > 0 ? (
                     availablePickupSectors.map((item, index) => (
-                      <button
+                      <MotionButton
                         key={`${item.itemRef}-${item.zoneIndex}`}
                         onClick={() => handlePickup(item.zoneIndex)}
                         disabled={!canOperate}
+                        loading={pendingAction === 'pickup'}
                         className={`min-h-14 px-5 rounded-xl border transition-all text-base font-bold flex items-center justify-center gap-2
                           ${canOperate
                             ? 'bg-sky-500/18 text-sky-200 border-sky-500/30 hover:bg-sky-500/28'
                             : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
                       >
-                        <HiOutlineCube /> 拾取道具{availablePickupSectors.length > 1 ? ` ${index + 1}` : ''}
-                      </button>
+                        <HiOutlineCube /> {pendingAction === 'pickup' ? '拾取中' : `拾取道具${availablePickupSectors.length > 1 ? ` ${index + 1}` : ''}`}
+                      </MotionButton>
                     ))
                   ) : (
                     <button
@@ -280,16 +345,17 @@ export default function RacePage({ stage }) {
                       无可拾取道具
                     </button>
                   )}
-                  <button
+                  <MotionButton
                     onClick={handleSkipTurn}
                     disabled={!canOperate}
+                    loading={pendingAction === 'skip'}
                     className={`min-h-14 px-5 rounded-xl border transition-all text-base font-bold flex items-center justify-center gap-2
                       ${canOperate
                         ? 'bg-red-500/14 text-red-200 border-red-500/25 hover:bg-red-500/22'
                         : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
                   >
-                    <FaForward className="text-xs" /> 弃权
-                  </button>
+                    <FaForward className="text-xs" /> {pendingAction === 'skip' ? '结束中' : '弃权'}
+                  </MotionButton>
                 </div>
               </div>
               {actionError && (
@@ -299,7 +365,17 @@ export default function RacePage({ stage }) {
               )}
             </div>
           )}
-          <div className="relative h-[min(70vh,900px)] min-h-[620px] 2xl:min-h-[720px]">
+          <Motion.div
+            animate={!reduceMotion && pendingAction === 'advance'
+              ? { scale: [1, 0.994, 1], filter: ['brightness(1)', 'brightness(1.12)', 'brightness(1)'] }
+              : !reduceMotion && mapSignal?.type === 'failure'
+                ? { x: [0, -7, 7, -4, 4, 0], scale: 1, filter: 'brightness(1)' }
+                : !reduceMotion && (mapSignal?.type === 'success' || mapSignal?.type === 'finish')
+                  ? { scale: [1, 1.006, 1], filter: ['brightness(1)', 'brightness(1.15)', 'brightness(1)'] }
+                  : { x: 0, scale: 1, filter: 'brightness(1)' }}
+            transition={{ duration: 0.5, ease: [0.65, 0, 0.35, 1] }}
+            className="relative h-[min(70vh,900px)] min-h-[620px] 2xl:min-h-[720px]"
+          >
             <RaceMap3D
               config={effectiveMapConfig}
               players={race.players}
@@ -311,6 +387,7 @@ export default function RacePage({ stage }) {
               width="100%"
               height="100%"
             />
+            <MapEventSignal signal={mapSignal} />
 
             {/* 当前行动选手标识（左上） */}
             {currentPlayer && (
@@ -336,7 +413,7 @@ export default function RacePage({ stage }) {
                 </span>
               </div>
             )}
-          </div>
+          </Motion.div>
         </div>
 
         {/* 右侧面板 */}
@@ -353,8 +430,12 @@ export default function RacePage({ stage }) {
                 const isActive = String(playerId) === String(race.currentPlayerId);
                 const finished = p.finishOrder != null;
                 return (
-                  <div
+                  <Motion.div
                     key={playerId}
+                    layout
+                    initial={reduceMotion ? false : { opacity: 0, x: 12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={MOTION_TRANSITIONS.spring}
                     className={`flex items-center gap-4 px-4 py-4 rounded-2xl border transition-all
                       ${isActive ? 'bg-amber-500/10 border-amber-500/25'
                         : finished ? 'bg-emerald-500/[0.06] border-emerald-500/20'
@@ -392,7 +473,7 @@ export default function RacePage({ stage }) {
                       </span>
                       <span className="text-sm text-zinc-500 mt-1">{finished ? '完赛' : '坐标'}</span>
                     </div>
-                  </div>
+                  </Motion.div>
                 );
               })}
               {(!ranked || ranked.length === 0) && (
@@ -439,6 +520,7 @@ export default function RacePage({ stage }) {
             challenge={race.activeChallenge}
             pendingJudgement={race.pendingJudgement}
             isJudge
+            resolving={pendingAction === 'judge-pass' ? 'pass' : pendingAction === 'judge-fail' ? 'fail' : null}
             onPass={() => handleChallengeResult(true)}
             onFail={() => handleChallengeResult(false)}
             onDismiss={() => race.dismissChallenge()}
@@ -460,11 +542,19 @@ export default function RacePage({ stage }) {
       {/* 道具背包弹窗 */}
       <AnimatePresence>
         {itemViewer && (
-          <div
+          <Motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={MOTION_TRANSITIONS.quick}
             className="fixed inset-0 bg-black/70 backdrop-blur-md z-[120] flex items-center justify-center p-4"
             onClick={() => { setItemViewer(null); setPendingAdvance(false); setItemUseResult(null); }}
           >
-            <div
+            <Motion.div
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 28, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.985 }}
+              transition={MOTION_TRANSITIONS.spring}
               onClick={(e) => e.stopPropagation()}
               className="bg-zinc-900 border border-white/10 rounded-2xl p-6 max-w-xl w-full max-h-[80vh] overflow-y-auto"
             >
@@ -498,6 +588,9 @@ export default function RacePage({ stage }) {
                     {itemUseResult.globalEffect && <span className="text-sm px-2 py-1 rounded-lg bg-sky-500/20 text-sky-200">全局生效</span>}
                   </div>
                   <p className="text-base text-zinc-300 mt-2">{itemUseResult.effect || '已激活，下一次挑战时生效。'}</p>
+                  {itemUseResult.intendedEffect && (
+                    <p className="text-sm text-zinc-500 mt-1">目标效果：{itemUseResult.intendedEffect}</p>
+                  )}
                   {itemUseResult.challenge && (
                     <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
                       <p className="text-sm uppercase tracking-[0.14em] text-zinc-500">{itemUseResult.challenge.wallLabel || '墙壁'} · 预览挑战</p>
@@ -534,12 +627,14 @@ export default function RacePage({ stage }) {
                           )}
                         </div>
                         {item.status === 'unused' && (
-                          <button
+                          <MotionButton
                             onClick={() => handleUseItem(item.itemRef)}
+                            loading={pendingAction === `item:${item.itemRef}`}
+                            disabled={Boolean(pendingAction)}
                             className="px-4 py-2 rounded-lg bg-amber-500/20 text-amber-200 text-base font-bold border border-amber-500/30 hover:bg-amber-500/30 transition-all"
                           >
-                            使用
-                          </button>
+                            {pendingAction === `item:${item.itemRef}` ? '使用中' : '使用'}
+                          </MotionButton>
                         )}
                         {item.status === 'armed' && (
                           <span className="text-base font-bold text-amber-300">已激活</span>
@@ -554,28 +649,30 @@ export default function RacePage({ stage }) {
               )}
               {pendingAdvance && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                  <button
+                  <MotionButton
                     onClick={() => handleAdvance(true)}
+                    loading={pendingAction === 'advance'}
+                    disabled={Boolean(pendingAction)}
                     className="py-3 rounded-xl bg-amber-500/20 text-amber-200 border border-amber-400/30 hover:bg-amber-500/30 transition-all text-base font-bold"
                   >
-                    {itemUseResult ? '继续挑战' : '不使用道具，继续挑战'}
-                  </button>
-                  <button
+                    {pendingAction === 'advance' ? '进入挑战中' : itemUseResult ? '继续挑战' : '不使用道具，继续挑战'}
+                  </MotionButton>
+                  <MotionButton
                     onClick={() => { setItemViewer(null); setPendingAdvance(false); setItemUseResult(null); }}
                     className="py-3 rounded-xl border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 transition-all text-base font-bold"
                   >
                     返回选择
-                  </button>
+                  </MotionButton>
                 </div>
               )}
-              <button
+              <MotionButton
                 onClick={() => { setItemViewer(null); setPendingAdvance(false); setItemUseResult(null); }}
                 className="w-full mt-4 py-2 rounded-xl border border-white/10 text-zinc-400 hover:text-white text-sm transition-all"
               >
                 关闭
-              </button>
-            </div>
-          </div>
+              </MotionButton>
+            </Motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </div>

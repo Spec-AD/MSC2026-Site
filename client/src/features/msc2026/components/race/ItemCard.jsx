@@ -2,18 +2,30 @@
 // ItemCard.jsx — 道具卡片（拾取/使用确认）
 // ============================================================
 import { FaGift, FaExclamationTriangle, FaCheck } from 'react-icons/fa';
+import { motion as Motion, useReducedMotion } from 'framer-motion';
+import MotionButton from '../live/MotionButton';
+import { MOTION_TRANSITIONS } from '../../utils/motion';
 
 export default function ItemCard({ item, variant = 'pickup', onUse, onDismiss }) {
+  const reduceMotion = useReducedMotion();
   if (!item) return null;
 
   const def = item;
 
   return (
-    <div
+    <Motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={MOTION_TRANSITIONS.quick}
       className="fixed inset-0 bg-black/75 backdrop-blur-md z-[120] flex items-center justify-center p-5"
       onClick={onDismiss}
     >
-      <div
+      <Motion.div
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 32, scale: 0.92 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -18, scale: 0.98 }}
+        transition={MOTION_TRANSITIONS.spring}
         onClick={(e) => e.stopPropagation()}
         className={`
           bg-[#090d14] rounded-2xl p-7 md:p-9 max-w-2xl w-full shadow-2xl
@@ -71,23 +83,23 @@ export default function ItemCard({ item, variant = 'pickup', onUse, onDismiss })
             <span className="text-2xl font-black text-emerald-200">已拾取</span>
           </div>
         ) : variant === 'inventory' && onUse ? (
-          <button
+          <MotionButton
             onClick={onUse}
             className="w-full py-4 rounded-xl bg-amber-500/20 text-amber-200 border border-amber-400/30 hover:bg-amber-500/30 transition-all text-2xl font-black"
           >
             使用道具
-          </button>
+          </MotionButton>
         ) : null}
 
         {onDismiss && (
-          <button
+          <MotionButton
             onClick={onDismiss}
             className="w-full mt-4 py-3 rounded-xl border border-white/10 text-zinc-400 hover:text-white text-lg transition-all"
           >
             关闭
-          </button>
+          </MotionButton>
         )}
-      </div>
-    </div>
+      </Motion.div>
+    </Motion.div>
   );
 }

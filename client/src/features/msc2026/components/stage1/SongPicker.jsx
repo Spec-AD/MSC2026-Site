@@ -2,13 +2,16 @@
 // SongPicker.jsx — 选手曲目选择面板
 // ============================================================
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { FaMusic, FaCheck, FaLock } from 'react-icons/fa';
+import MotionButton from '../live/MotionButton';
+import { MOTION_TRANSITIONS, STAGGER_CONTAINER, STAGGER_ITEM } from '../../utils/motion';
 
 export default function SongPicker({ pool, excludedSongIds = [], pickType, onPick, disabled = false }) {
   const [selectedId, setSelectedId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const pickLabel =
     pickType === 'p1_pick' ? 'P1 选择自选曲' :
@@ -39,7 +42,12 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-6">
+    <Motion.section
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={MOTION_TRANSITIONS.enter}
+      className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-6"
+    >
       <div className="flex items-end justify-between mb-5 gap-4">
         <h3 className="text-3xl font-black text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
           {pickLabel}
@@ -47,32 +55,59 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
         <span className="text-4xl font-black text-zinc-300 tabular-nums" style={{ fontFamily: 'Torus, sans-serif' }}>{availableSongs.length}<span className="text-lg text-zinc-500 ml-2">首可选</span></span>
       </div>
 
-      {confirmed ? (
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-8 text-center"
-        >
-          <FaCheck className="text-4xl text-emerald-300 mx-auto mb-3" />
-          <p className="text-3xl text-emerald-200 font-black">选曲已确认</p>
-          {selectedSong && (
-            <p className="text-xl text-zinc-400 mt-2">{selectedSong.title}</p>
-          )}
-        </motion.div>
-      ) : (
-        <>
+      <AnimatePresence mode="wait">
+        {confirmed ? (
+          <Motion.div
+            key="confirmed"
+            initial={reduceMotion ? { opacity: 0 } : { scale: 0.92, opacity: 0, y: 18 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={MOTION_TRANSITIONS.spring}
+            className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-8 text-center overflow-hidden relative"
+          >
+            <Motion.div
+              initial={reduceMotion ? false : { scale: 0.4, rotate: -24 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={MOTION_TRANSITIONS.spring}
+            >
+              <FaCheck className="text-4xl text-emerald-300 mx-auto mb-3" />
+            </Motion.div>
+            <p className="text-3xl text-emerald-200 font-black">选曲已确认</p>
+            {selectedSong && <p className="text-xl text-zinc-300 mt-2">{selectedSong.title}</p>}
+            {!reduceMotion && (
+              <Motion.span
+                aria-hidden="true"
+                className="absolute bottom-0 left-0 h-1 bg-emerald-300"
+                initial={{ width: '0%' }}
+                animate={{ width: '100%' }}
+                transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+              />
+            )}
+          </Motion.div>
+        ) : (
+          <Motion.div key="picker" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -8 }}>
           {/* 曲目列表 */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 max-h-[520px] overflow-y-auto pr-1 mb-5">
+          <Motion.div
+            variants={reduceMotion ? undefined : STAGGER_CONTAINER}
+            initial="initial"
+            animate="animate"
+            className="grid grid-cols-1 xl:grid-cols-2 gap-3 max-h-[520px] overflow-y-auto pr-1 mb-5"
+          >
             {availableSongs.map((song) => {
               const id = getSongId(song);
               const isSelected = id === selectedId;
               return (
-                <button
+                <Motion.button
                   key={id}
                   onClick={() => setSelectedId(isSelected ? null : id)}
                   disabled={disabled}
+                  layout
+                  variants={reduceMotion ? undefined : STAGGER_ITEM}
+                  whileHover={!disabled && !reduceMotion ? { y: -2 } : undefined}
+                  whileTap={!disabled && !reduceMotion ? { scale: 0.975 } : undefined}
+                  transition={MOTION_TRANSITIONS.quick}
                   className={`
-                    flex items-center gap-4 p-4 rounded-2xl text-left transition-all border
+                    relative overflow-hidden flex items-center gap-4 p-4 rounded-2xl text-left transition-colors border
                     ${isSelected
                       ? 'border-amber-500/40 bg-amber-500/10 ring-1 ring-amber-500/20'
                       : 'border-white/10 bg-black/15 hover:bg-white/[0.06]'
@@ -80,6 +115,13 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
                     ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                   `}
                 >
+                  {isSelected && (
+                    <Motion.span
+                      layoutId="msc-song-selection"
+                      className="absolute inset-0 border-l-4 border-amber-300 bg-amber-400/[0.035] pointer-events-none"
+                      transition={MOTION_TRANSITIONS.spring}
+                    />
+                  )}
                   {/* 封面缩略图 */}
                   {song.coverUrl || song.jacketUrl ? (
                     <img
@@ -103,7 +145,7 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
                     )}
                   </div>
                   {isSelected && <FaCheck className="text-amber-300 text-2xl flex-shrink-0" />}
-                </button>
+                </Motion.button>
               );
             })}
 
@@ -113,12 +155,13 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
                 无可选曲目
               </div>
             )}
-          </div>
+          </Motion.div>
 
           {/* 确认按钮 */}
-          <button
+          <MotionButton
             onClick={handleConfirm}
             disabled={!selectedId || submitting || disabled}
+            loading={submitting}
             className={`
               w-full py-4 rounded-xl font-black text-2xl transition-all
               ${selectedId && !submitting && !disabled
@@ -128,9 +171,10 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
             `}
           >
             {submitting ? '提交中...' : '确认选曲'}
-          </button>
-        </>
-      )}
-    </div>
+          </MotionButton>
+          </Motion.div>
+        )}
+      </AnimatePresence>
+    </Motion.section>
   );
 }

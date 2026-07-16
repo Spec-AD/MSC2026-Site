@@ -2,8 +2,10 @@
 // TournamentHome.jsx — MSC 2026 赛事主页
 // ============================================================
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion as Motion } from 'framer-motion';
+import { Maximize2 } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
 import { useMSC2026Store } from '../store';
 import PlayerList from '../components/PlayerList';
 import AdminPanel from '../components/admin/AdminPanel';
@@ -13,6 +15,8 @@ import { FaArrowRight, FaTrophy } from 'react-icons/fa';
 const STAGE_PHASES = ['stage1', 'stage2', 'stage3', 'stage4'];
 
 export default function TournamentHome() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const { status, summary, players, fetchStatus, fetchPlayers } = useMSC2026Store();
 
   useEffect(() => {
@@ -21,6 +25,18 @@ export default function TournamentHome() {
   }, [fetchStatus, fetchPlayers]);
 
   const currentIdx = STAGE_PHASES.indexOf(status);
+  const canLaunchLive = user && ['ADM', 'TO', 'CHM'].includes(user.role);
+
+  const launchLiveMode = async () => {
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch {
+      // Fullscreen may be unavailable; the standalone match route still works.
+    }
+    navigate('/matches/msc2026/live');
+  };
 
   return (
     <div className="space-y-6">
@@ -54,15 +70,26 @@ export default function TournamentHome() {
           </div>
         </div>
 
-        {status !== 'pending' && status !== 'finished' && (
-          <Link
-            to={`/matches/msc2026/${status}`}
-            className="inline-flex items-center gap-3 mt-7 px-7 py-4 rounded-xl bg-amber-500/20 text-amber-200 border border-amber-400/30 hover:bg-amber-500/30 transition-all text-xl font-black"
-          >
-            进入当前阶段
-            <FaArrowRight />
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-3 mt-7">
+          {canLaunchLive && (
+            <button
+              onClick={launchLiveMode}
+              className="inline-flex items-center gap-3 px-7 py-4 bg-amber-400 text-black border border-amber-200 hover:bg-amber-300 transition-colors text-xl font-black"
+            >
+              <Maximize2 className="h-6 w-6" />
+              启动比赛模式
+            </button>
+          )}
+          {status !== 'pending' && status !== 'finished' && (
+            <Link
+              to={`/matches/msc2026/${status}`}
+              className="inline-flex items-center gap-3 px-7 py-4 rounded-xl bg-white/[0.05] text-zinc-200 border border-white/10 hover:bg-white/10 transition-all text-xl font-black"
+            >
+              普通页面
+              <FaArrowRight />
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* 阶段进度条 */}
@@ -126,7 +153,7 @@ export default function TournamentHome() {
             const config = STAGE_CONFIG[phase];
             if (!info && status !== 'finished') return null;
             return (
-              <motion.div
+              <Motion.div
                 key={phase}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -136,7 +163,7 @@ export default function TournamentHome() {
                 <div className="text-4xl font-black" style={{ fontFamily: 'Torus, sans-serif' }}>
                   {info?.completedGroups != null ? `${info.completedGroups}/${info.totalGroups}` : '-'}
                 </div>
-              </motion.div>
+              </Motion.div>
             );
           })}
         </div>

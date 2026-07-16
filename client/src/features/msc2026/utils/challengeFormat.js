@@ -12,5 +12,15 @@ export function formatChallengeCondition(task = {}) {
     parts.push(`${label} ≤ ${task.toleranceLimit}`);
   }
 
+  if (Number(task.achievementBonus) > 0) {
+    parts.push(`完成率判定 +${Number(task.achievementBonus).toFixed(4)}%`);
+  }
+  if (Number(task.dxBonus) > 0) {
+    parts.push(`DX完成率判定 +${Number(task.dxBonus).toFixed(0)}%`);
+  }
+  if (Number(task.greatCancel) > 0) {
+    parts.push(`GREAT抵消 ${Number(task.greatCancel).toFixed(0)} 个`);
+  }
+
   return parts.length > 0 ? parts.join(' + ') : '待确认';
 }

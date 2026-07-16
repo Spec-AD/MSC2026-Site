@@ -3,7 +3,7 @@
 // ============================================================
 import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 import { useMSC2026Store } from '../store';
 import { STAGE_CONFIG } from '../constants/gameData';
 import { FaTrophy, FaFlag, FaPlay } from 'react-icons/fa';
@@ -81,7 +81,7 @@ export default function MSC2026Layout() {
       </div>
 
       {/* 内容区 */}
-      <motion.div
+      <Motion.div
         key={location.pathname}
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
@@ -89,7 +89,7 @@ export default function MSC2026Layout() {
         className="relative z-10 max-w-[1800px] mx-auto px-5 md:px-8 py-6 md:py-8"
       >
         <Outlet />
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

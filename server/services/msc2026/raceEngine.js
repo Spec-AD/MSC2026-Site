@@ -21,9 +21,13 @@
 
 const { shuffle, calculateRaceRankings, assertObjectIdList } = require('./utils');
 const { CHALLENGE_TASKS } = require('./challengeDefinitions');
-const { getItemPool, getItem, applyItemEffects } = require('./itemDefinitions');
+const { getItemPool, getItem, applyItemEffectsDetailed } = require('./itemDefinitions');
 const { broadcast } = require('./ssePool');
 const { syncToOldTournament } = require('./oldTournamentSync');
+const { getRaceTimerDecision } = require('./raceTimerDecision');
+const { rollProbability } = require('./probabilityRoll');
+const { snapshotChallenge } = require('./challengePresentation');
+const { getGlobalEffectTurnRange } = require('./itemLifecycle');
 
 // ── 阶段配置映射 ──
 const RACE_CONFIGS = {
@@ -285,32 +289,50 @@ async function useItem(tournament, targetPlayerId, itemRef) {
       });
       await tournament.save();
       broadcast('item_used', { playerId: userId.toString(), itemRef, itemName: itemDef.name });
-      return { itemRef, name: itemDef.name, effect: '预览最近墙壁挑战', challenge, success: true };
+      return { itemRef, name: itemDef.name, effect: '已显示最近墙壁的原始挑战', challenge, success: true, status: 'applied' };
     } else if (itemRef === 19) { // 白色红心：40% 成功
-      const success = Math.random() < 0.40;
+      const outcome = rollProbability(0.40);
+      const { success, probability, roll } = outcome;
       if (success) {
         const challenge = await _peekChallenge(race, player);
         race.actionLog.push({
           playerId: player.userId,
           turn: race.currentTurn,
           actionType: 'use_item',
-          detail: { itemRef, success: true, taskId: challenge?.taskId },
+          detail: { itemRef, success: true, probability, roll, taskId: challenge?.taskId },
           timestamp: new Date()
         });
         await tournament.save();
         broadcast('item_used', { playerId: userId.toString(), itemRef, itemName: itemDef.name });
-        return { itemRef, name: itemDef.name, effect: '40%概率预览墙壁挑战', challenge, success: true };
+        return {
+          itemRef,
+          name: itemDef.name,
+          effect: `概率判定命中：掷值 ${(roll * 100).toFixed(2)}%，已显示原始挑战`,
+          challenge,
+          success: true,
+          status: 'applied',
+          probability,
+          roll
+        };
       } else {
         race.actionLog.push({
           playerId: player.userId,
           turn: race.currentTurn,
           actionType: 'use_item',
-          detail: { itemRef, success: false },
+          detail: { itemRef, success: false, probability, roll },
           timestamp: new Date()
         });
         await tournament.save();
         broadcast('item_used', { playerId: userId.toString(), itemRef, itemName: itemDef.name, effect: '未生效（60%概率）' });
-        return { itemRef, name: itemDef.name, effect: '40%概率未命中，本次未能预览墙壁挑战', success: false };
+        return {
+          itemRef,
+          name: itemDef.name,
+          effect: `概率判定未命中：掷值 ${(roll * 100).toFixed(2)}%，需低于 40%`,
+          success: false,
+          status: 'missed',
+          probability,
+          roll
+        };
       }
     }
   }
@@ -320,17 +342,19 @@ async function useItem(tournament, targetPlayerId, itemRef) {
     // 全局效果已使用就立即消耗
     itemEntry.status = 'consumed';
     const duration = itemDef.globalDuration || 1;
+    const effectWindow = getGlobalEffectTurnRange(race.currentTurn, duration, race.players.length);
+    const { durationTurns } = effectWindow;
     // P0-2: 持久化为纯数据（不含 apply 函数）
     race.globalEffect = {
       sourceItemRef: itemRef,
-      startsAtTurn: race.currentTurn,
-      endsAtTurn: race.currentTurn + duration
+      startsAtTurn: effectWindow.startsAtTurn,
+      endsAtTurn: effectWindow.endsAtTurn
     };
     race.actionLog.push({
       playerId: player.userId,
       turn: race.currentTurn,
       actionType: 'use_item',
-      detail: { itemRef, globalEffect: true, duration },
+      detail: { itemRef, globalEffect: true, durationRounds: duration, durationTurns },
       timestamp: new Date()
     });
     await tournament.save();
@@ -338,10 +362,18 @@ async function useItem(tournament, targetPlayerId, itemRef) {
       playerId: userId.toString(),
       itemRef,
       itemName: itemDef.name,
-      effect: `全体玩家效力，持续${duration}回合`,
+      effect: `全体选手各 ${duration} 回合，共覆盖 ${durationTurns} 个行动回合`,
       globalEffect: true
     });
-    return { itemRef, name: itemDef.name, effect: `全体玩家效力，持续${duration}回合`, globalEffect: true };
+    return {
+      itemRef,
+      name: itemDef.name,
+      effect: `全体选手各 ${duration} 回合，共覆盖 ${durationTurns} 个行动回合`,
+      globalEffect: true,
+      status: 'applied',
+      durationRounds: duration,
+      durationTurns
+    };
   }
 
   // 普通增益/双面道具：标记 armed，等待挑战时消耗
@@ -360,7 +392,14 @@ async function useItem(tournament, targetPlayerId, itemRef) {
     itemName: itemDef.name
   });
 
-  return { itemRef, name: itemDef.name, effect: itemDef.description, type: itemDef.type };
+  return {
+    itemRef,
+    name: itemDef.name,
+    effect: '已激活；进入下一次挑战后将明确显示生效结果或不适用原因',
+    intendedEffect: itemDef.description,
+    type: itemDef.type,
+    status: 'armed'
+  };
 }
 
 // ── 内部实现 ──
@@ -404,19 +443,44 @@ async function _handleAdvance(tournament, race, player, userId) {
   // P1-5: 挑出当前回合 armed 的道具（不是所有历史 used 道具）
   const armedItemRefs = player.items.filter(i => i.status === 'armed').map(i => i.itemRef);
 
+  const originalChallenge = snapshotChallenge(rawChallenge, taskId);
+
   // 构建可应用的挑战对象（含道具修改）
   let challenge = { ...rawChallenge, _achievementBonus: 0, _dxBonus: 0, _greatCancel: 0, _modifiedBy: [] };
+  let itemEffectResults = [];
 
   // 应用当前回合 armed 的道具效果
-  challenge = applyItemEffects(challenge, armedItemRefs, { playerId: userId, tournament, stage: race });
+  const personalEffects = applyItemEffectsDetailed(challenge, armedItemRefs, {
+    playerId: userId,
+    tournament,
+    stage: race,
+    source: 'personal'
+  });
+  challenge = personalEffects.challenge;
+  itemEffectResults.push(...personalEffects.effects);
 
   // 检查全局效果（鬼面人心）— P0-2: 从 schema 字段读取，动态调用 getItem().apply
-  if (race.globalEffect && race.globalEffect.sourceItemRef != null && race.currentTurn <= race.globalEffect.endsAtTurn) {
+  if (
+    race.globalEffect &&
+    race.globalEffect.sourceItemRef != null &&
+    race.currentTurn >= race.globalEffect.startsAtTurn &&
+    race.currentTurn <= race.globalEffect.endsAtTurn
+  ) {
     const globalItem = getItem(race.globalEffect.sourceItemRef);
     if (globalItem && globalItem.apply) {
-      challenge = globalItem.apply(challenge, {});
+      const globalEffects = applyItemEffectsDetailed(challenge, [globalItem.ref], {
+        playerId: userId,
+        tournament,
+        stage: race,
+        source: 'global'
+      });
+      challenge = globalEffects.challenge;
+      itemEffectResults.push(...globalEffects.effects);
     }
   }
+
+  const resolvedChallenge = snapshotChallenge(challenge, taskId);
+  const activeItemEffects = itemEffectResults.map(effect => `${effect.itemName}：${effect.summary}`);
 
   // P1-5: 消耗已 armed 的道具（改为 consumed）
   for (const item of player.items) {
@@ -434,24 +498,10 @@ async function _handleAdvance(tournament, race, player, userId) {
     judgedBy: null,
     judgedAt: null,
     usedItemRefs: armedItemRefs,
-    resolvedChallenge: {
-      taskId: challenge.id || taskId,
-      taskName: challenge.name,
-      description: challenge.description,
-      type: challenge.type,
-      evalRequirement: challenge.evalRequirement || null,
-      threshold: challenge.threshold || null,
-      dxRequirement: challenge.dxRequirement || null,
-      toleranceType: challenge.toleranceType || null,
-      toleranceLimit: challenge.toleranceLimit || null,
-      greatMax: challenge.greatMax || null,
-      difficulty: challenge.difficulty,
-      songTitle: challenge.songTitle,
-      achievementBonus: challenge._achievementBonus || 0,
-      dxBonus: challenge._dxBonus || 0,
-      greatCancel: challenge._greatCancel || 0
-    },
-    activeItemEffects: challenge._modifiedBy || []
+    originalChallenge,
+    resolvedChallenge,
+    activeItemEffects,
+    itemEffectResults
   });
 
   // 记录行动日志
@@ -459,7 +509,15 @@ async function _handleAdvance(tournament, race, player, userId) {
     playerId: userId,
     turn: race.currentTurn,
     actionType: 'advance',
-    detail: { taskId, wallIndex },
+    detail: {
+      taskId,
+      wallIndex,
+      itemEffects: itemEffectResults.map(effect => ({
+        itemRef: effect.itemRef,
+        status: effect.status,
+        summary: effect.summary
+      }))
+    },
     timestamp: new Date()
   });
 
@@ -482,24 +540,13 @@ async function _handleAdvance(tournament, race, player, userId) {
   return {
     action: 'advance',
     challenge: {
-      taskId: challenge.id || taskId,
-      taskName: challenge.name,
-      description: challenge.description,
-      type: challenge.type,
-      evalRequirement: challenge.evalRequirement || null,
-      threshold: challenge.threshold || null,
-      dxRequirement: challenge.dxRequirement || null,
-      toleranceType: challenge.toleranceType || null,
-      toleranceLimit: challenge.toleranceLimit || null,
-      greatMax: challenge.greatMax || null,
-      difficulty: challenge.difficulty,
-      songTitle: challenge.songTitle,
+      ...resolvedChallenge,
       wallLabel,
       wallIndex,
-      activeItemEffects: challenge._modifiedBy || [],
-      achievementBonus: challenge._achievementBonus || 0,
-      dxBonus: challenge._dxBonus || 0,
-      greatCancel: challenge._greatCancel || 0
+      originalChallenge,
+      effectiveChallenge: resolvedChallenge,
+      activeItemEffects,
+      itemEffectResults
     },
     turnEnded: false
   };
@@ -596,6 +643,7 @@ async function challengeResult(tournament, judgeId, passed) {
   if (playerIdx < 0) throw new Error('选手不在比赛中');
 
   const player = race.players[playerIdx];
+  const penaltiesApplied = [];
 
   if (passed) {
     // 挑战成功：进入下一层
@@ -702,6 +750,20 @@ async function challengeResult(tournament, judgeId, passed) {
         if (penalty.backToLayer0) {
           player.currentLayer = 0;
         }
+        const parts = [];
+        if (penalty.backToLayer0) parts.push('回到起点');
+        if (penalty.silentTurns) parts.push(`静默 ${penalty.silentTurns} 回合`);
+        if (penalty.disableItemsTurns) parts.push(`禁用道具 ${penalty.disableItemsTurns} 回合`);
+        penaltiesApplied.push({
+          itemRef: itemDef.ref,
+          itemName: itemDef.name,
+          summary: parts.join('、'),
+          backToLayer0: !!penalty.backToLayer0,
+          silentTurns: penalty.silentTurns || 0,
+          disableItemsTurns: penalty.disableItemsTurns || 0,
+          silentUntilTurn: player.silentUntilTurn,
+          disableItemsUntilTurn: player.disableItemsUntilTurn
+        });
       }
     }
 
@@ -709,7 +771,7 @@ async function challengeResult(tournament, judgeId, passed) {
       playerId: lastChallenge.playerId,
       turn: race.currentTurn,
       actionType: 'challenge_failed',
-      detail: { taskId: lastChallenge.taskId },
+      detail: { taskId: lastChallenge.taskId, penaltiesApplied },
       timestamp: new Date()
     });
 
@@ -717,7 +779,8 @@ async function challengeResult(tournament, judgeId, passed) {
       playerId: lastChallenge.playerId.toString(),
       taskId: lastChallenge.taskId,
       passed: false,
-      wallBreached: false
+      wallBreached: false,
+      penaltiesApplied
     });
 
     broadcast('player_bounced', {
@@ -738,6 +801,7 @@ async function challengeResult(tournament, judgeId, passed) {
     wallBreached: passed,
     newLayer: player.currentLayer,
     bounceBack: !passed,
+    penaltiesApplied,
     nextPlayerId: race.players[race.currentPlayerIndex].userId.toString(),
     nextTurn: race.currentTurn
   };
@@ -758,6 +822,7 @@ async function skipTurn(tournament, reason = 'skip_manual') {
 
 async function _skipTurn(tournament, race, reason, userId) {
   const currentPlayer = race.players[race.currentPlayerIndex];
+  const skippedTurn = race.currentTurn;
 
   race.actionLog.push({
     playerId: currentPlayer.userId,
@@ -770,7 +835,13 @@ async function _skipTurn(tournament, race, reason, userId) {
   await _advanceTurn(tournament, race);
   await tournament.save();
 
-  broadcast('turn_timeout', { playerId: userId.toString(), turn: race.currentTurn, reason });
+  broadcast('turn_timeout', {
+    playerId: userId.toString(),
+    turn: skippedTurn,
+    nextTurn: race.currentTurn,
+    nextPlayerId: race.players[race.currentPlayerIndex].userId.toString(),
+    reason
+  });
 
   return { nextPlayerId: race.players[race.currentPlayerIndex].userId.toString(), turn: race.currentTurn };
 }
@@ -844,10 +915,39 @@ async function _checkMapTimeout(tournament, race, stageKey) {
   }
 }
 
+/** Called by the server scheduler while holding the race mutation lock. */
+async function processRaceTimersUnlocked(tournament, now = Date.now()) {
+  const stageKey = tournament.status;
+  const race = tournament[stageKey];
+  if (!race || (stageKey !== 'stage2' && stageKey !== 'stage3')) return { type: 'none' };
+
+  const decision = getRaceTimerDecision(race, now);
+  if (decision.type === 'map_timeout') {
+    const result = await _terminateRace(tournament, race, stageKey, 'timeout');
+    return { type: 'map_timeout', ...result };
+  }
+  if (decision.type === 'turn_timeout') {
+    const timedOutPlayerId = race.players[race.currentPlayerIndex]?.userId;
+    const timedOutTurn = race.currentTurn;
+    const result = await _skipTurn(tournament, race, 'skip_timeout', timedOutPlayerId);
+    return { type: 'turn_timeout', timedOutPlayerId: String(timedOutPlayerId), timedOutTurn, ...result };
+  }
+  return decision;
+}
+
 /**
  * 终止跑图
  */
 async function _terminateRace(tournament, race, stageKey, reason) {
+  if (race.terminated) {
+    return {
+      reason: race.terminatedReason,
+      rankings: calculateRaceRankings(race.players),
+      qualifiedIds: stageKey === 'stage2'
+        ? (tournament.qualifiedStage2 || []).map(String)
+        : (tournament.qualifiedStage3 || []).map(String)
+    };
+  }
   race.terminated = true;
   race.terminatedReason = reason;
 
@@ -876,6 +976,15 @@ async function _terminateRace(tournament, race, stageKey, reason) {
     rankings,
     qualifiedIds
   });
+
+  return { reason, rankings, qualifiedIds };
+}
+
+async function terminateRace(tournament, reason = 'admin') {
+  const stageKey = tournament.status;
+  const race = tournament[stageKey];
+  if (!race || (stageKey !== 'stage2' && stageKey !== 'stage3')) throw new Error('不在跑图阶段');
+  return _terminateRace(tournament, race, stageKey, reason);
 }
 
 /**
@@ -939,18 +1048,7 @@ async function _peekChallenge(race, player) {
   if (!rawChallenge) return null;
 
   return {
-    taskId: rawChallenge.id,
-    taskName: rawChallenge.name,
-    description: rawChallenge.description,
-    type: rawChallenge.type,
-    evalRequirement: rawChallenge.evalRequirement || null,
-    threshold: rawChallenge.threshold || null,
-    dxRequirement: rawChallenge.dxRequirement || null,
-    toleranceType: rawChallenge.toleranceType || null,
-    toleranceLimit: rawChallenge.toleranceLimit || null,
-    greatMax: rawChallenge.greatMax || null,
-    difficulty: rawChallenge.difficulty,
-    songTitle: rawChallenge.songTitle,
+    ...snapshotChallenge(rawChallenge, nextTaskId),
     wallLabel: race.mapConfig.wallLabels[wallIndex]
   };
 }
@@ -969,6 +1067,8 @@ module.exports = {
   useItem,
   challengeResult,
   skipTurn,
+  terminateRace,
+  processRaceTimersUnlocked,
   getRaceConfig,
   RACE_CONFIGS,
   // 内部导出以支持测试

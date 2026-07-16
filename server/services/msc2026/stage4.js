@@ -13,6 +13,8 @@
 const { shuffle, validateScore, normalizeScoreInput, determineWinner, assertObjectIdList } = require('./utils');
 const { broadcast } = require('./ssePool');
 const { syncToOldTournament } = require('./oldTournamentSync');
+const { assertScoreTarget } = require('./scoreTarget');
+const { drawRandomSong } = require('./randomSongDraw');
 
 /**
  * 初始化决赛
@@ -130,6 +132,7 @@ async function submitScore(tournament, userId, body) {
 
   const lastSong = s4.songs[s4.songs.length - 1];
   if (!lastSong) throw new Error('未找到待录入曲目');
+  assertScoreTarget(body, lastSong);
 
   if (body.p1Score) {
     const p1Score = normalizeScoreInput(body.p1Score);
@@ -210,13 +213,19 @@ async function advance(tournament) {
 
   if (songCount === 2 && s4.songs[1].pickType === 'p2_pick') {
     // P2选曲成绩录入完毕 → 系统随机
-    await _systemRandomPick(tournament, s4);
+    const randomSong = await _systemRandomPick(tournament, s4);
     s4.status = 'playing';
     await tournament.save();
 
+    broadcast('song_drawn', {
+      stage: 'stage4',
+      songId: randomSong.toString(),
+      pickType: 'random'
+    });
     broadcast('turn_change', {
       stage: 'stage4',
-      phase: 'random_pick'
+      phase: 'random_pick',
+      songId: randomSong.toString()
     });
 
     return { nextStep: 'random_pick', song: s4.songs[2] };
@@ -344,13 +353,8 @@ async function resolveTie(tournament, winnerId) {
 
 async function _systemRandomPick(tournament, s4) {
   const pickedIds = s4.songs.map(s => s.songId.toString());
-  // 课题曲不在可选范围内
-  const available = s4.songPool.filter(
-    s => !pickedIds.includes(s.toString()) && s.toString() !== s4.designatedSongId.toString()
-  );
-  if (available.length === 0) throw new Error('图池无可用曲目');
-
-  const randomSong = available[Math.floor(Math.random() * available.length)];
+  const excludedSongIds = [...pickedIds, s4.designatedSongId.toString()];
+  const randomSong = drawRandomSong(s4.songPool, excludedSongIds);
 
   s4.songs.push({
     songId: randomSong,
@@ -360,6 +364,18 @@ async function _systemRandomPick(tournament, s4) {
     p2Score: null,
     order: 2
   });
+
+  tournament.operationLogs.push({
+    action: 'random_song_drawn',
+    stage: 'stage4',
+    detail: {
+      songId: randomSong.toString(),
+      excludedSongIds
+    },
+    operatedAt: new Date()
+  });
+
+  return randomSong;
 }
 
 module.exports = {

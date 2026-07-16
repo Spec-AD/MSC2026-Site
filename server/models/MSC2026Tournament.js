@@ -89,9 +89,11 @@ const ChallengeLogSchema = new Schema({
   passed: { type: Boolean },
   judgedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   judgedAt: { type: Date, default: Date.now },
+  originalChallenge: { type: Schema.Types.Mixed, default: null },
   // patch-02: 在 _handleAdvance 时保存道具应用后的 resolvedChallenge 快照
   resolvedChallenge: { type: Schema.Types.Mixed, default: null },
   activeItemEffects: [{ type: String, default: [] }],    // 生效道具名列表
+  itemEffectResults: [{ type: Schema.Types.Mixed }],
   // patch-02 P1-R1: 本次挑战绑定的 armed 道具引用，失败时仅对此列表触发双面惩罚
   usedItemRefs: [{ type: Number, default: [] }]
 });
@@ -182,6 +184,8 @@ const MSC2026TournamentSchema = new Schema({
 
   // 全局配置
   stage1SongPool: [{ type: Schema.Types.ObjectId, ref: 'Song' }],
+  stage4SongPool: [{ type: Schema.Types.ObjectId, ref: 'Song' }],
+  stage4DesignatedSongId: { type: Schema.Types.ObjectId, ref: 'Song', default: null },
   // ⚠️ 已废弃：不再手动录入选手，改为从旧赛事拉取。保留字段仅向下兼容
   registeredPlayers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 

@@ -3,7 +3,7 @@
 // 正六边形 / 正方形 · 等距投影 · 手动摄像机
 // 视觉：柔光 + 接触阴影 + 辉光宝石 + 浮动选手 + 坐标系
 // ============================================================
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import {
   OrbitControls, Line, Html, Float, Sparkles, ContactShadows,
@@ -206,6 +206,7 @@ function PickupSlot({ sectorIdx, hasItem, isHighlighted, outerVertices, sectorCo
 
 function PlayerToken({ player, layers, maxR, verticesFn, sectorCount, activePlayerId }) {
   const glowRef = useRef();
+  const tokenRef = useRef();
   const t = (player.currentLayer || 0) / layers;
   const layerY = -t * 0.68;
 
@@ -218,6 +219,8 @@ function PlayerToken({ player, layers, maxR, verticesFn, sectorCount, activePlay
     const pr = r * 0.86;
     return [pr * Math.cos(midAngle), layerY + 0.36, pr * Math.sin(midAngle)];
   }, [t, maxR, player.startVertex, verticesFn, sectorCount, layerY]);
+  const targetPosition = useMemo(() => new THREE.Vector3(...position), [position]);
+  const [initialPosition] = useState(position);
 
   const playerId = (player._id || player.userId)?.toString?.() || player._id || player.userId;
   const activeId = activePlayerId?.toString?.() || activePlayerId;
@@ -226,7 +229,11 @@ function PlayerToken({ player, layers, maxR, verticesFn, sectorCount, activePlay
   const color = isFinished ? '#34d399' : isActive ? '#fbbf24' : '#94a3b8';
   const emissive = isFinished ? '#059669' : isActive ? '#b45309' : '#334155';
 
-  useFrame(() => {
+  useFrame((_, delta) => {
+    if (tokenRef.current) {
+      const progress = 1 - Math.exp(-7.5 * delta);
+      tokenRef.current.position.lerp(targetPosition, progress);
+    }
     if (glowRef.current && isActive) {
       const pulse = (Math.sin(Date.now() / 380) + 1) / 2;
       glowRef.current.material.opacity = 0.25 + pulse * 0.4;
@@ -234,26 +241,24 @@ function PlayerToken({ player, layers, maxR, verticesFn, sectorCount, activePlay
     }
   });
 
-  const ringPos = [position[0], layerY + 0.01, position[2]];
-
   return (
-    <group>
+    <group ref={tokenRef} position={initialPosition}>
       {/* 地面落点环 */}
-      <mesh position={ringPos} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, -0.35, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.2, 0.27, 48]} />
         <meshBasicMaterial color={color} transparent opacity={0.7} side={THREE.DoubleSide} />
       </mesh>
 
       {/* 活跃脉冲环 */}
       {isActive && (
-        <mesh ref={glowRef} position={ringPos} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh ref={glowRef} position={[0, -0.35, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.3, 0.48, 54]} />
           <meshBasicMaterial color={color} transparent opacity={0.3} side={THREE.DoubleSide} />
         </mesh>
       )}
 
       <Float speed={isFinished ? 0 : 2.4} floatIntensity={isFinished ? 0 : 0.35} rotationIntensity={0}>
-        <group position={position}>
+        <group>
           <mesh>
             <sphereGeometry args={[0.27, 40, 40]} />
             <meshStandardMaterial color={color} emissive={emissive} emissiveIntensity={isActive ? 1.0 : 0.48} metalness={0.62} roughness={0.14} />

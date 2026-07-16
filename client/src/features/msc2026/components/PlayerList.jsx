@@ -4,7 +4,7 @@
 import { FaUser, FaCrown, FaSkull } from 'react-icons/fa';
 
 /** 单个选手条目 */
-function PlayerCard({ player, status, isWinner }) {
+function PlayerCard({ player, isWinner }) {
   const drawToken = player.token || '---';
   const stageLabel = (() => {
     if (player.isQualifiedStage3) return '决赛选手';
@@ -87,7 +87,7 @@ function PlayerCard({ player, status, isWinner }) {
 }
 
 /** 选手名单组件 */
-export default function PlayerList({ players = [], status, winner }) {
+export default function PlayerList({ players = [], winner }) {
   const total = players.length;
   if (total === 0) {
     return (
@@ -122,7 +122,6 @@ export default function PlayerList({ players = [], status, winner }) {
           <PlayerCard
             key={player.userId}
             player={player}
-            status={status}
             isWinner={winner && (player.userId === winner)}
           />
         ))}

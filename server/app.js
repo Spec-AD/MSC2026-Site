@@ -72,6 +72,9 @@ const { checkTimeoutMatches, checkStageAutoAdvance } = require('./tasks/tourname
 setInterval(checkTimeoutMatches, 60_000); // 每 60s 检查一次超时比赛
 setInterval(checkStageAutoAdvance, 60_000); // 每 60s 检查阶段自动推进
 
+const { startRaceTimerScheduler } = require('./services/msc2026/raceTimerScheduler');
+startRaceTimerScheduler();
+
 // ===== 服务器启动 =====
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
