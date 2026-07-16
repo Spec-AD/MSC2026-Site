@@ -34,6 +34,7 @@ function undoStage1LastSong(tournament) {
   // 恢复选曲阶段
   if (lastSong.pickType === 'p1_pick') group.status = 'p1_pick';
   else if (lastSong.pickType === 'p2_pick') group.status = 'p2_pick';
+  else if (lastSong.pickType === 'random') group.status = 'random_pick';
   else group.status = 'playing';
 }
 
@@ -64,7 +65,9 @@ function revertStage1Group(tournament, groupIdx) {
   const targetGroup = s1.groups[groupIdx];
   if (!targetGroup.songs || targetGroup.songs.length === 0) targetGroup.status = 'p1_pick';
   else if (targetGroup.songs.length === 1 && targetGroup.songs[0].p1Score && targetGroup.songs[0].p2Score) targetGroup.status = 'p2_pick';
-  else targetGroup.status = 'playing';
+  else if (targetGroup.songs.length === 2 && targetGroup.songs.every(song => song.p1Score && song.p2Score)) {
+    targetGroup.status = 'random_pick';
+  } else targetGroup.status = 'playing';
   targetGroup.winner = null;
   targetGroup.forfait = null;
   targetGroup.needTiebreak = false;
@@ -291,6 +294,7 @@ function undoStage4LastSong(tournament) {
   s4.songs.pop();
   if (lastSong.pickType === 'p1_pick') s4.status = 'p1_pick';
   else if (lastSong.pickType === 'p2_pick') s4.status = 'p2_pick';
+  else if (lastSong.pickType === 'random') s4.status = 'random_pick';
   else s4.status = 'playing';
 }
 

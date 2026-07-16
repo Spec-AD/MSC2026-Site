@@ -114,7 +114,6 @@ export default function LiveMatchPage() {
   }, [enqueue, refreshStatus, stage1.groups, stage4.p1, stage4.p2]);
 
   const eventHandlers = useMemo(() => ({
-    song_drawn: (data) => handleEvent('song_drawn', data),
     item_collected: (data) => handleEvent('item_collected', data),
     item_used: (data) => handleEvent('item_used', data),
     item_armed: (data) => handleEvent('item_armed', data),

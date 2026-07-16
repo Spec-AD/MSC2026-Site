@@ -751,6 +751,8 @@ router.get('/stage1/state', async (req, res) => {
         currentTurn = { pickPhase: 'p1_pick', currentPicker: currentGroup.p1?._id?.toString() };
       } else if (currentGroup.status === 'p2_pick') {
         currentTurn = { pickPhase: 'p2_pick', currentPicker: currentGroup.p2?._id?.toString() };
+      } else if (currentGroup.status === 'random_pick') {
+        currentTurn = { pickPhase: 'random_pick', currentPicker: null };
       } else if (currentGroup.status === 'playing') {
         currentTurn = { pickPhase: 'playing', currentPicker: null };
       }
@@ -884,15 +886,22 @@ router.post('/stage1/advance', authMiddleware, async (req, res) => {
     const perm = await checkPermission(req.user, null, 'referee');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
 
-    const t = await requireTournament(res);
-    if (!t) return;
-
-    const result = await advanceStage1(t);
+    const result = await withLockedTournament(res, (t) => advanceStage1(t));
+    if (!result) return;
 
     if (result.nextStep === 'stage_done') {
       res.json({ msg: '阶段一完成，6 人晋级', data: { qualifiedIds: result.qualifiedIds.map(String) } });
-    } else if (result.song) {
-      res.json({ msg: '系统已抽取随机曲目', data: result });
+    } else if (result.nextStep === 'random_pick') {
+      const song = await Song.findById(result.songId).select(SONG_DISPLAY_FIELDS).lean();
+      res.json({
+        msg: '系统已抽取随机曲目',
+        data: {
+          ...result,
+          song: serializeSongDoc(song),
+          pickType: 'random',
+          nextStep: 'waiting_play_result'
+        }
+      });
     } else {
       res.json({ msg: '推进成功', data: result });
     }
@@ -1539,6 +1548,7 @@ router.get('/stage4/state', async (req, res) => {
     let currentTurn = null;
     if (s4.status === 'p1_pick') currentTurn = { phase: 'p1_pick', currentPicker: s4.p1?._id?.toString() };
     else if (s4.status === 'p2_pick') currentTurn = { phase: 'p2_pick', currentPicker: s4.p2?._id?.toString() };
+    else if (s4.status === 'random_pick') currentTurn = { phase: 'random_pick', currentPicker: null };
 
     // P1-3: 统一序列化 userId
     res.json({
@@ -1618,10 +1628,8 @@ router.post('/stage4/advance', authMiddleware, async (req, res) => {
     const perm = await checkPermission(req.user, null, 'referee');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
 
-    const t = await requireTournament(res);
-    if (!t) return;
-
-    const result = await advanceStage4(t);
+    const result = await withLockedTournament(res, (t) => advanceStage4(t));
+    if (!result) return;
 
     if (result.nextStep === 'match_done') {
       res.json({ msg: '决赛结束', data: result });
@@ -1630,7 +1638,7 @@ router.post('/stage4/advance', authMiddleware, async (req, res) => {
       const song = await Song.findById(result.song?.songId).select(SONG_DISPLAY_FIELDS).lean();
       res.json({
         msg: '系统已抽取随机曲目',
-        data: { song, pickType: 'random', nextStep: 'waiting_play_result' }
+        data: { song: serializeSongDoc(song), pickType: 'random', nextStep: 'waiting_play_result' }
       });
     } else if (result.nextStep === 'designated_pick') {
       // P2-3

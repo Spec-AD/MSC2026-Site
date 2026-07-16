@@ -11,6 +11,8 @@ import { FaCrown, FaMusic } from 'react-icons/fa';
 import SongReveal from '../components/live/SongReveal';
 import ScoreDuelResult from '../components/live/ScoreDuelResult';
 import WinnerReveal from '../components/live/WinnerReveal';
+import RandomDrawPrompt from '../components/live/RandomDrawPrompt';
+import SongSelectionSpotlight from '../components/live/SongSelectionSpotlight';
 import { MOTION_TRANSITIONS, STAGGER_CONTAINER, STAGGER_ITEM } from '../utils/motion';
 
 export default function Stage4Page() {
@@ -29,6 +31,7 @@ export default function Stage4Page() {
   const [tiePending, setTiePending] = useState(false);
   const [tieError, setTieError] = useState(null);
   const [scoreResult, setScoreResult] = useState(null);
+  const [randomReveal, setRandomReveal] = useState(null);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
@@ -38,6 +41,11 @@ export default function Stage4Page() {
 
   useMSCSSE({
     score_updated: useCallback(() => fetchStage4State(), [fetchStage4State]),
+    song_drawn: useCallback(async () => {
+      const nextState = await fetchStage4State();
+      const randomPlay = [...(nextState.songs || [])].reverse().find((play) => play.pickType === 'random');
+      if (randomPlay?.song) setRandomReveal(randomPlay.song);
+    }, [fetchStage4State]),
     match_finished: useCallback(() => {
       fetchStage4State();
       fetchStatus();
@@ -192,6 +200,15 @@ export default function Stage4Page() {
               }}
             />
           )}
+          {stage4.status === 'random_pick' && (
+            <RandomDrawPrompt
+              onDraw={async () => {
+                const result = await advanceStage4();
+                if (result.data?.song) setRandomReveal(result.data.song);
+                await fetchStage4State().catch(() => {});
+              }}
+            />
+          )}
           {stage4.status === 'playing' && currentSong && (
             <>
               <SongReveal play={currentSong} label={`当前曲目 · ${pickLabels[currentSong.pickType]}`} order={currentSongIndex + 1} />
@@ -266,6 +283,11 @@ export default function Stage4Page() {
       <AnimatePresence>
         {scoreResult && <ScoreDuelResult result={scoreResult} onContinue={() => setScoreResult(null)} />}
       </AnimatePresence>
+      <SongSelectionSpotlight
+        song={randomReveal}
+        pickLabel="RANDOM TRACK · 系统随机曲目"
+        onClose={() => setRandomReveal(null)}
+      />
     </div>
   );
 }

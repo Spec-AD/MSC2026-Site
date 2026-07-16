@@ -14,6 +14,8 @@ import SongReveal from '../components/live/SongReveal';
 import MotionButton from '../components/live/MotionButton';
 import ScoreDuelResult from '../components/live/ScoreDuelResult';
 import WinnerReveal from '../components/live/WinnerReveal';
+import RandomDrawPrompt from '../components/live/RandomDrawPrompt';
+import SongSelectionSpotlight from '../components/live/SongSelectionSpotlight';
 import { FADE_SLIDE, MOTION_TRANSITIONS } from '../utils/motion';
 
 export default function Stage1Page() {
@@ -34,6 +36,7 @@ export default function Stage1Page() {
   const [decisionPending, setDecisionPending] = useState(false);
   const [decisionError, setDecisionError] = useState(null);
   const [scoreResult, setScoreResult] = useState(null);
+  const [randomReveal, setRandomReveal] = useState(null);
   const reduceMotion = useReducedMotion();
 
   // 初始加载（仅挂载时执行一次）
@@ -47,8 +50,11 @@ export default function Stage1Page() {
     score_updated: useCallback(() => {
       fetchStage1State();
     }, [fetchStage1State]),
-    song_drawn: useCallback(() => {
-      fetchStage1State();
+    song_drawn: useCallback(async (data) => {
+      const nextState = await fetchStage1State();
+      const group = nextState.groups?.find((entry) => entry.order === data.groupIndex);
+      const randomPlay = [...(group?.songs || [])].reverse().find((play) => play.pickType === 'random');
+      if (randomPlay?.song) setRandomReveal(randomPlay.song);
     }, [fetchStage1State]),
     match_finished: useCallback(() => {
       fetchStage1State();
@@ -243,7 +249,7 @@ export default function Stage1Page() {
                   transition={MOTION_TRANSITIONS.enter}
                   className="space-y-4"
                 >
-                {selectedGroup.status === 'p1_pick' || selectedGroup.status === 'p2_pick' || selectedGroup.status === 'random_pick' ? (
+                {selectedGroup.status === 'p1_pick' || selectedGroup.status === 'p2_pick' ? (
                   <SongPicker
                     pool={stage1.songPool || []}
                     excludedSongIds={selectedGroup.songs?.filter(s => s.songId).map(s => s.songId) || []}
@@ -254,6 +260,14 @@ export default function Stage1Page() {
                     onPick={async (songId) => {
                       await selectStage1Song(songId);
                       await fetchStage1State();
+                    }}
+                  />
+                ) : selectedGroup.status === 'random_pick' ? (
+                  <RandomDrawPrompt
+                    onDraw={async () => {
+                      const result = await advanceStage1();
+                      if (result.data?.song) setRandomReveal(result.data.song);
+                      await fetchStage1State().catch(() => {});
                     }}
                   />
                 ) : selectedGroup.status === 'playing' ? (
@@ -333,6 +347,11 @@ export default function Stage1Page() {
       <AnimatePresence>
         {scoreResult && <ScoreDuelResult result={scoreResult} onContinue={() => setScoreResult(null)} />}
       </AnimatePresence>
+      <SongSelectionSpotlight
+        song={randomReveal}
+        pickLabel="RANDOM TRACK · 系统随机曲目"
+        onClose={() => setRandomReveal(null)}
+      />
     </div>
   );
 }

@@ -207,16 +207,12 @@ async function submitScore(tournament, userId, body) {
 
   // 推进状态
   const songCount = group.songs.length;
-  let drawnSongId = null;
-
   if (songCount === 1) {
     // P1 选曲成绩录入完毕 → P2 选曲
     group.status = 'p2_pick';
   } else if (songCount === 2) {
-    // P2 选曲成绩录入完毕 → 系统随机选曲
-    const randomSong = await _systemRandomPick(tournament, group, stage1);
-    drawnSongId = randomSong.toString();
-    group.status = 'playing'; // 等待记录成绩
+    // P2 选曲成绩录入完毕 → 等待裁判手动触发随机选曲
+    group.status = 'random_pick';
   } else if (songCount === 3 && lastSong.pickType === 'random') {
     // 随机曲成绩录入完毕 → 判定胜负 → 组结束
     await _determineGroupWinner(group);
@@ -226,15 +222,6 @@ async function submitScore(tournament, userId, body) {
 
   await tournament.save();
 
-  if (drawnSongId) {
-    broadcast('song_drawn', {
-      stage: 'stage1',
-      groupIndex: stage1.currentGroupIndex,
-      songId: drawnSongId,
-      pickType: 'random'
-    });
-  }
-
   broadcast('score_updated', {
     stage: 'stage1',
     groupIndex: stage1.currentGroupIndex,
@@ -242,7 +229,10 @@ async function submitScore(tournament, userId, body) {
     groupStatus: group.status
   });
 
-  return { group, nextStep: group.status, drawnSongId };
+  return {
+    group,
+    nextStep: group.status === 'random_pick' ? 'manual_random_pick' : group.status
+  };
 }
 
 /**
@@ -402,28 +392,30 @@ async function advance(tournament) {
   // 如果当前组未结束但需要推进（裁判手动推进随机选曲等）
   if (group.status !== 'done') {
     // P0-3: advance 也必须校验上一曲成绩完整
-  if (group.status === 'playing' && group.songs.length > 0) {
-    const lastSong = group.songs[group.songs.length - 1];
-    if (!lastSong.p1Score || !lastSong.p2Score) {
-      throw new Error('当前歌曲成绩未完整录入（需P1+P2均存在）');
+    if (group.songs.length > 0) {
+      const lastSong = group.songs[group.songs.length - 1];
+      if (!lastSong.p1Score || !lastSong.p2Score) {
+        throw new Error('当前歌曲成绩未完整录入（需P1+P2均存在）');
+      }
     }
-  }
-  // 自动处理推进逻辑
-  if (group.status === 'playing' && group.songs.length === 2) {
-    const randomSong = await _systemRandomPick(tournament, group, stage1);
-    await tournament.save();
-    broadcast('song_drawn', {
-      stage: 'stage1',
-      groupIndex: stage1.currentGroupIndex,
-      songId: randomSong.toString(),
-      pickType: 'random'
-    });
-    return {
-      nextStep: 'random_pick',
-      groupIndex: stage1.currentGroupIndex,
-      songId: randomSong.toString()
-    };
-  }
+
+    if (group.status === 'random_pick' && group.songs.length === 2) {
+      const randomSong = await _systemRandomPick(tournament, group, stage1);
+      group.status = 'playing';
+      await tournament.save();
+      broadcast('song_drawn', {
+        stage: 'stage1',
+        groupIndex: stage1.currentGroupIndex,
+        songId: randomSong.toString(),
+        pickType: 'random'
+      });
+      return {
+        nextStep: 'random_pick',
+        groupIndex: stage1.currentGroupIndex,
+        songId: randomSong.toString()
+      };
+    }
+
     throw new Error('当前组尚未完成');
   }
 

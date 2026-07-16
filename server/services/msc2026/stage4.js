@@ -167,16 +167,23 @@ async function submitScore(tournament, userId, body) {
     return { stage4: s4, nextStep: 'waiting_more_scores' };
   }
 
+  const waitingForManualRandom = s4.songs.length === 2 && lastSong.pickType === 'p2_pick';
+  if (waitingForManualRandom) s4.status = 'random_pick';
+
   broadcast('score_updated', {
     stage: 'stage4',
     songIndex: lastSong.order,
     p1Score: lastSong.p1Score,
-    p2Score: lastSong.p2Score
+    p2Score: lastSong.p2Score,
+    phase: waitingForManualRandom ? 'random_pick' : s4.status
   });
 
   await tournament.save();
 
-  return { stage4: s4, nextStep: 'advance' };
+  return {
+    stage4: s4,
+    nextStep: waitingForManualRandom ? 'manual_random_pick' : 'advance'
+  };
 }
 
 /**
@@ -211,8 +218,8 @@ async function advance(tournament) {
     return { nextStep: 'p2_pick', currentPicker: s4.p2.toString() };
   }
 
-  if (songCount === 2 && s4.songs[1].pickType === 'p2_pick') {
-    // P2选曲成绩录入完毕 → 系统随机
+  if (songCount === 2 && s4.songs[1].pickType === 'p2_pick' && s4.status === 'random_pick') {
+    // P2选曲成绩录入完毕 → 裁判手动触发系统随机
     const randomSong = await _systemRandomPick(tournament, s4);
     s4.status = 'playing';
     await tournament.save();
