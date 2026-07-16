@@ -47,6 +47,8 @@ const {
 } = require('../services/msc2026/songPoolConfig');
 const { snapshotChallenge } = require('../services/msc2026/challengePresentation');
 
+const SONG_DISPLAY_FIELDS = 'id title basic_info.artist basic_info.bpm ds level';
+
 // ── 辅助 ──
 async function requireTournament(res) {
   const t = await loadTournament(res);
@@ -176,11 +178,11 @@ router.get('/config', authMiddleware, async (req, res) => {
 
     const t = await MSC2026Tournament.findOne()
       // P2-3: artist 在 basic_info.artist 嵌套字段
-      .populate('stage1SongPool', 'title basic_info.artist ds level')
-      .populate('stage4SongPool', 'title basic_info.artist ds level')
-      .populate('stage4DesignatedSongId', 'title basic_info.artist ds level')
-      .populate('stage4.songPool', 'title basic_info.artist ds level')
-      .populate('stage4.designatedSongId', 'title basic_info.artist ds level');
+      .populate('stage1SongPool', SONG_DISPLAY_FIELDS)
+      .populate('stage4SongPool', SONG_DISPLAY_FIELDS)
+      .populate('stage4DesignatedSongId', SONG_DISPLAY_FIELDS)
+      .populate('stage4.songPool', SONG_DISPLAY_FIELDS)
+      .populate('stage4.designatedSongId', SONG_DISPLAY_FIELDS);
 
     if (!t) return res.status(404).json({ msg: '赛事不存在' });
 
@@ -684,6 +686,7 @@ router.get('/songs/search', authMiddleware, async (req, res) => {
       level: s.level || [],
       artist: s.basic_info?.artist || '',
       genre: s.basic_info?.genre || '',
+      bpm: s.basic_info?.bpm || null,
       coverUrl: s.id ? `https://www.diving-fish.com/covers/${String(s.id).padStart(5, '0')}.png` : ''
     }));
 
@@ -731,11 +734,11 @@ router.get('/stage1/state', async (req, res) => {
   try {
     const t = await MSC2026Tournament.findOne()
       // P2-3: artist 在 basic_info.artist 嵌套字段
-      .populate('stage1.songPool', 'title basic_info.artist ds level')
+      .populate('stage1.songPool', SONG_DISPLAY_FIELDS)
       .populate('stage1.groups.p1', 'username avatarUrl')
       .populate('stage1.groups.p2', 'username avatarUrl')
       .populate('stage1.groups.winner', 'username avatarUrl')
-      .populate('stage1.groups.songs.songId', 'title basic_info.artist ds level');
+      .populate('stage1.groups.songs.songId', SONG_DISPLAY_FIELDS);
 
     if (!t || !t.stage1) return res.status(404).json({ msg: '阶段一未初始化' });
 
@@ -790,7 +793,7 @@ router.get('/stage1/group/:groupId', async (req, res) => {
       .populate('stage1.groups.p1', 'username avatarUrl')
       .populate('stage1.groups.p2', 'username avatarUrl')
       // P2-3
-      .populate('stage1.groups.songs.songId', 'title basic_info.artist ds level');
+      .populate('stage1.groups.songs.songId', SONG_DISPLAY_FIELDS);
 
     if (!t || !t.stage1) return res.status(404).json({ msg: '阶段一未初始化' });
 
@@ -836,7 +839,7 @@ router.post('/stage1/select-song', authMiddleware, async (req, res) => {
     // populate song info
     // P2-3
     const populated = await MSC2026Tournament.findById(t._id)
-      .populate('stage1.songPool', 'title basic_info.artist ds level');
+      .populate('stage1.songPool', SONG_DISPLAY_FIELDS);
 
     const songs = populated.stage1.groups[populated.stage1.currentGroupIndex].songs;
     const lastSong = songs[songs.length - 1];
@@ -1526,9 +1529,9 @@ router.get('/stage4/state', async (req, res) => {
       .populate('stage4.p1', 'username avatarUrl')
       .populate('stage4.p2', 'username avatarUrl')
       // P2-3
-      .populate('stage4.songPool', 'title basic_info.artist ds level')
-      .populate('stage4.designatedSongId', 'title basic_info.artist ds level')
-      .populate('stage4.songs.songId', 'title basic_info.artist');
+      .populate('stage4.songPool', SONG_DISPLAY_FIELDS)
+      .populate('stage4.designatedSongId', SONG_DISPLAY_FIELDS)
+      .populate('stage4.songs.songId', SONG_DISPLAY_FIELDS);
 
     if (!t || !t.stage4) return res.status(404).json({ msg: '决赛未初始化' });
 
@@ -1577,7 +1580,7 @@ router.post('/stage4/select-song', authMiddleware, async (req, res) => {
 
     const lastSong = result.stage4.songs[result.stage4.songs.length - 1];
     // P2-3
-    const songRef = await Song.findById(lastSong.songId).select('title basic_info.artist').lean();
+    const songRef = await Song.findById(lastSong.songId).select(SONG_DISPLAY_FIELDS).lean();
 
     res.json({
       msg: '选曲完成',
@@ -1624,14 +1627,14 @@ router.post('/stage4/advance', authMiddleware, async (req, res) => {
       res.json({ msg: '决赛结束', data: result });
     } else if (result.nextStep === 'random_pick') {
       // P2-3
-      const song = await Song.findById(result.song?.songId).select('title basic_info.artist').lean();
+      const song = await Song.findById(result.song?.songId).select(SONG_DISPLAY_FIELDS).lean();
       res.json({
         msg: '系统已抽取随机曲目',
         data: { song, pickType: 'random', nextStep: 'waiting_play_result' }
       });
     } else if (result.nextStep === 'designated_pick') {
       // P2-3
-      const song = await Song.findById(result.designatedSongId).select('title basic_info.artist').lean();
+      const song = await Song.findById(result.designatedSongId).select(SONG_DISPLAY_FIELDS).lean();
       res.json({
         msg: '课题曲阶段',
         data: { song, pickType: 'designated', nextStep: 'waiting_play_result' }

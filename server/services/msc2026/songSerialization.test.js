@@ -8,8 +8,9 @@ test('serializes a populated song play with a stable frontend shape', () => {
   const result = serializeSongPlay({
     songId: {
       _id: '507f1f77bcf86cd799439011',
+      id: '123',
       title: 'Random Song',
-      basic_info: { artist: 'Artist' },
+      basic_info: { artist: 'Artist', bpm: 180 },
       ds: [12.7],
       level: ['12+']
     },
@@ -23,6 +24,8 @@ test('serializes a populated song play with a stable frontend shape', () => {
   assert.equal(result.songId, '507f1f77bcf86cd799439011');
   assert.equal(result.song.title, 'Random Song');
   assert.equal(result.song.artist, 'Artist');
+  assert.equal(result.song.bpm, 180);
+  assert.equal(result.song.coverUrl, 'https://www.diving-fish.com/covers/00123.png');
   assert.equal(result.pickType, 'random');
   assert.equal(result.order, 2);
 });

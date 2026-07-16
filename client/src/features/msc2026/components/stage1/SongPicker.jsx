@@ -5,12 +5,15 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { FaMusic, FaCheck, FaLock } from 'react-icons/fa';
 import MotionButton from '../live/MotionButton';
+import SongSelectionSpotlight from '../live/SongSelectionSpotlight';
 import { MOTION_TRANSITIONS, STAGGER_CONTAINER, STAGGER_ITEM } from '../../utils/motion';
+import { getSongCover } from '../../utils/songPresentation';
 
 export default function SongPicker({ pool, excludedSongIds = [], pickType, onPick, disabled = false }) {
   const [selectedId, setSelectedId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [spotlightSong, setSpotlightSong] = useState(null);
   const reduceMotion = useReducedMotion();
 
   const pickLabel =
@@ -21,12 +24,19 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
   useEffect(() => {
     setSelectedId(null);
     setConfirmed(false);
+    setSpotlightSong(null);
   }, [pickType]);
 
   const getSongId = (song) => String(song?._id || song?.songId?._id || song?.songId || '');
   const excludedSet = new Set(excludedSongIds.map((id) => String(id?._id || id)));
   const availableSongs = pool.filter((s) => !excludedSet.has(getSongId(s)));
   const selectedSong = availableSongs.find((s) => getSongId(s) === selectedId);
+
+  const handleSelect = (song) => {
+    if (disabled) return;
+    setSelectedId(getSongId(song));
+    setSpotlightSong(song);
+  };
 
   const handleConfirm = async () => {
     if (!selectedId || submitting || disabled) return;
@@ -99,7 +109,7 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
               return (
                 <Motion.button
                   key={id}
-                  onClick={() => setSelectedId(isSelected ? null : id)}
+                  onClick={() => handleSelect(song)}
                   disabled={disabled}
                   layout
                   variants={reduceMotion ? undefined : STAGGER_ITEM}
@@ -107,7 +117,7 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
                   whileTap={!disabled && !reduceMotion ? { scale: 0.975 } : undefined}
                   transition={MOTION_TRANSITIONS.quick}
                   className={`
-                    relative overflow-hidden flex items-center gap-4 p-4 rounded-2xl text-left transition-colors border
+                    relative overflow-hidden flex min-h-[92px] items-center gap-4 p-4 rounded-lg text-left transition-colors border
                     ${isSelected
                       ? 'border-amber-500/40 bg-amber-500/10 ring-1 ring-amber-500/20'
                       : 'border-white/10 bg-black/15 hover:bg-white/[0.06]'
@@ -115,6 +125,15 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
                     ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                   `}
                 >
+                  {getSongCover(song) && (
+                    <img
+                      src={getSongCover(song)}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-[-12%] h-[124%] w-[124%] object-cover opacity-[0.18] blur-md saturate-75"
+                    />
+                  )}
+                  <span aria-hidden="true" className="absolute inset-0 bg-black/60" />
                   {isSelected && (
                     <Motion.span
                       layoutId="msc-song-selection"
@@ -123,18 +142,18 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
                     />
                   )}
                   {/* 封面缩略图 */}
-                  {song.coverUrl || song.jacketUrl ? (
+                  {getSongCover(song) ? (
                     <img
-                      src={song.coverUrl || song.jacketUrl}
+                      src={getSongCover(song)}
                       alt={song.title}
-                      className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+                      className="relative z-10 h-16 w-16 flex-shrink-0 rounded object-cover border border-white/20 shadow-lg"
                     />
                   ) : (
-                    <div className="w-16 h-16 rounded-xl bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                    <div className="relative z-10 w-16 h-16 rounded bg-zinc-800 flex items-center justify-center flex-shrink-0">
                       <FaMusic className="text-zinc-500 text-xl" />
                     </div>
                   )}
-                  <div className="min-w-0 flex-1">
+                  <div className="relative z-10 min-w-0 flex-1">
                     <p className="text-xl text-white font-bold truncate">{song.title}</p>
                     <p className="text-base text-zinc-500 truncate">{song.artist || song.basic_info?.artist}</p>
                     {/* 难度标签 */}
@@ -143,8 +162,13 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
                         {Array.isArray(song.level) ? song.level[song.level.length - 1] : song.level}
                       </span>
                     )}
+                    {(song.bpm || song.basic_info?.bpm) && (
+                      <span className="ml-2 inline-block text-sm font-mono text-amber-200/70">
+                        BPM {song.bpm || song.basic_info?.bpm}
+                      </span>
+                    )}
                   </div>
-                  {isSelected && <FaCheck className="text-amber-300 text-2xl flex-shrink-0" />}
+                  {isSelected && <FaCheck className="relative z-10 text-amber-300 text-2xl flex-shrink-0" />}
                 </Motion.button>
               );
             })}
@@ -175,6 +199,11 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
           </Motion.div>
         )}
       </AnimatePresence>
+      <SongSelectionSpotlight
+        song={spotlightSong}
+        pickLabel={pickLabel}
+        onClose={() => setSpotlightSong(null)}
+      />
     </Motion.section>
   );
 }
