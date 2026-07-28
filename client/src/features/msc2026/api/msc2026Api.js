@@ -57,6 +57,10 @@ export const submitStage1Score = (data) =>
 export const advanceStage1 = () =>
   axios.post(`${BASE}/stage1/advance`, {}, { headers: authHeaders() });
 
+/** 完成当前组约 7 秒的抽签揭晓演出 */
+export const completeStage1Reveal = () =>
+  axios.post(`${BASE}/stage1/complete-reveal`, {}, { headers: authHeaders() });
+
 /** 标记弃权 */
 export const forfaitStage1 = (playerId) =>
   axios.post(`${BASE}/stage1/forfait`, { playerId }, { headers: authHeaders() });
@@ -92,8 +96,8 @@ export const getRaceChallenge = () =>
   axios.get(`${BASE}/race/challenge`, { headers: authHeaders() });
 
 /** 裁判判定挑战结果 */
-export const submitChallengeResult = (passed) =>
-  axios.post(`${BASE}/race/challenge-result`, { passed }, { headers: authHeaders() });
+export const submitChallengeResult = (passed, resultSnapshot) =>
+  axios.post(`${BASE}/race/challenge-result`, { passed, resultSnapshot }, { headers: authHeaders() });
 
 /** 裁判手动跳过回合 */
 export const skipTurnManual = () =>
@@ -200,7 +204,7 @@ export const undoRaceLastAction = () =>
 export const undoRaceItemUse = (itemRef) =>
   axios.post(`${BASE}/race/undo-item-use`, { itemRef }, { headers: authHeaders() });
 
-/** 翻转挑战判定 */
+/** 撤回最近一次挑战判定 */
 export const revertChallengeResult = () =>
   axios.post(`${BASE}/race/revert-challenge`, {}, { headers: authHeaders() });
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Clock3, LogOut, Maximize2, Minimize2, Radio, Trophy } from 'lucide-react';
+import { AlertTriangle, Clock3, Loader2, LogOut, Maximize2, Minimize2, Play, Radio, Trophy } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useMSC2026Store } from '../store';
 import { STAGE_CONFIG } from '../constants/gameData';
@@ -12,6 +12,7 @@ import Stage1Page from './Stage1Page';
 import RacePage from './RacePage';
 import Stage4Page from './Stage4Page';
 import { EASE_ACCEL, MOTION_TRANSITIONS } from '../utils/motion';
+import * as api from '../api/msc2026Api';
 
 const ADMIN_ROLES = ['ADM', 'TO', 'CHM'];
 
@@ -24,7 +25,25 @@ function formatClock(date) {
   }).format(date);
 }
 
-function StandbyScreen({ finished }) {
+function StandbyScreen({ finished, onInitialized }) {
+  const [readiness, setReadiness] = useState(null);
+  const [initializing, setInitializing] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (finished) return;
+    Promise.all([api.getConfig(), api.getQualifierRankings()])
+      .then(([configResponse, rankResponse]) => {
+        setReadiness({
+          songCount: configResponse.data.data?.stage1SongPool?.length || 0,
+          playerCount: rankResponse.data.data?.rankings?.slice(0, 12)?.length || 0,
+        });
+      })
+      .catch(err => setError(err.response?.data?.msg || '初始化条件检查失败'));
+  }, [finished]);
+
+  const ready = readiness?.songCount >= 3 && readiness?.playerCount === 12;
+
   return (
     <div className="min-h-[calc(100dvh-76px)] flex items-center justify-center px-6 text-center">
       <div>
@@ -38,16 +57,49 @@ function StandbyScreen({ finished }) {
         <p className="mt-4 text-lg md:text-2xl text-zinc-400">
           {finished ? '最终比赛结果已经确认' : '完成阶段一配置后，运行画面会自动进入比赛流程'}
         </p>
+        {!finished && (
+          <div className="mx-auto mt-8 max-w-2xl border-t border-white/10 pt-7">
+            {readiness && (
+              <p className="mb-4 text-base font-bold text-zinc-400">
+                参赛选手 <span className="text-white">{readiness.playerCount}/12</span>
+                <span className="mx-3 text-zinc-700">|</span>
+                阶段一图池 <span className="text-white">{readiness.songCount} 首</span>
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={!ready || initializing}
+              onClick={async () => {
+                setInitializing(true);
+                setError('');
+                try {
+                  await api.initStage1FromQualifier({ advanceCount: 12 });
+                  await onInitialized?.();
+                } catch (err) {
+                  setError(err.response?.data?.msg || '阶段一初始化失败');
+                } finally {
+                  setInitializing(false);
+                }
+              }}
+              className="mx-auto flex min-h-16 min-w-[280px] items-center justify-center gap-3 border border-amber-300/40 bg-amber-400/15 px-8 text-2xl font-black text-amber-100 transition-colors hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-zinc-600"
+            >
+              {initializing ? <Loader2 className="h-6 w-6 animate-spin" /> : <Play className="h-6 w-6 fill-current" />}
+              {initializing ? '正在生成抽签' : '初始化阶段一'}
+            </button>
+            {error && <p className="mt-4 flex items-center justify-center gap-2 text-base text-red-300"><AlertTriangle className="h-5 w-5" />{error}</p>}
+            {readiness && !ready && !error && <p className="mt-4 text-base text-amber-200/75">请先在管理页补齐 12 人排名与阶段一图池配置</p>}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function StageSurface({ status }) {
+function StageSurface({ status, onInitialized }) {
   if (status === 'stage1') return <Stage1Page />;
   if (status === 'stage2' || status === 'stage3') return <RacePage stage={status} />;
   if (status === 'stage4') return <Stage4Page />;
-  return <StandbyScreen finished={status === 'finished'} />;
+  return <StandbyScreen finished={status === 'finished'} onInitialized={onInitialized} />;
 }
 
 export default function LiveMatchPage() {
@@ -185,7 +237,7 @@ export default function LiveMatchPage() {
             transition={MOTION_TRANSITIONS.flow}
             className="mx-auto w-full max-w-[1920px] px-4 md:px-7 py-5 md:py-7"
           >
-            <StageSurface status={status} />
+            <StageSurface status={status} onInitialized={refreshStatus} />
           </Motion.div>
         </AnimatePresence>
       </main>

@@ -19,7 +19,7 @@ const { drawRandomSong } = require('./randomSongDraw');
 /**
  * 初始化决赛
  */
-async function initStage4(tournament, playerIds, songPoolIds, designatedSongId) {
+async function initStage4(tournament, playerIds, songPoolIds, designatedSongId, difficultyIndexes = {}, designatedDifficultyIndex = 3) {
   playerIds = assertObjectIdList(playerIds, 2, '决赛选手');
   songPoolIds = assertObjectIdList(songPoolIds || [], null, '决赛图池');
   if (songPoolIds.length < 3) {
@@ -40,7 +40,9 @@ async function initStage4(tournament, playerIds, songPoolIds, designatedSongId) 
     p1: shuffled[0],
     p2: shuffled[1],
     songPool: songPoolIds,
+    difficultyIndexes: { ...difficultyIndexes },
     designatedSongId: normalizedDesignatedSongId,
+    designatedDifficultyIndex,
     songs: [],
     status: 'p1_pick',
     winner: null,
@@ -64,6 +66,11 @@ async function initStage4(tournament, playerIds, songPoolIds, designatedSongId) 
   return tournament.stage4;
 }
 
+function getConfiguredDifficulty(stage, songId) {
+  const value = Number(stage?.difficultyIndexes?.[String(songId)] ?? 3);
+  return Number.isInteger(value) && value >= 0 && value <= 4 ? value : 3;
+}
+
 /**
  * 选手选曲
  */
@@ -82,6 +89,7 @@ async function selectSong(tournament, targetPlayerId, songId) {
 
     s4.songs.push({
       songId,
+      difficultyIndex: getConfiguredDifficulty(s4, songId),
       pickType: 'p1_pick',
       pickedBy: s4.p1,
       p1Score: null,
@@ -99,6 +107,7 @@ async function selectSong(tournament, targetPlayerId, songId) {
 
     s4.songs.push({
       songId,
+      difficultyIndex: getConfiguredDifficulty(s4, songId),
       pickType: 'p2_pick',
       pickedBy: s4.p2,
       p1Score: null,
@@ -141,7 +150,7 @@ async function submitScore(tournament, userId, body) {
     lastSong.p1Score = {
       achievement: p1Score.achievement,
       dxScore: p1Score.dxScore,
-      perfectRate: p1Score.perfectRate,
+      perfectBreak: p1Score.perfectBreak,
       recordedBy: userId,
       recordedAt: new Date(),
       locked: true
@@ -154,7 +163,7 @@ async function submitScore(tournament, userId, body) {
     lastSong.p2Score = {
       achievement: p2Score.achievement,
       dxScore: p2Score.dxScore,
-      perfectRate: p2Score.perfectRate,
+      perfectBreak: p2Score.perfectBreak,
       recordedBy: userId,
       recordedAt: new Date(),
       locked: true
@@ -242,6 +251,7 @@ async function advance(tournament) {
     // 三首完成 → 课题曲
     s4.songs.push({
       songId: s4.designatedSongId,
+      difficultyIndex: s4.designatedDifficultyIndex ?? 3,
       pickType: 'designated',
       pickedBy: null,
       p1Score: null,
@@ -256,7 +266,11 @@ async function advance(tournament) {
       phase: 'designated_pick'
     });
 
-    return { nextStep: 'designated_pick', designatedSongId: s4.designatedSongId.toString() };
+    return {
+      nextStep: 'designated_pick',
+      designatedSongId: s4.designatedSongId.toString(),
+      difficultyIndex: s4.designatedDifficultyIndex ?? 3
+    };
   }
 
   if (songCount === 4 && s4.songs[3].pickType === 'designated') {
@@ -365,6 +379,7 @@ async function _systemRandomPick(tournament, s4) {
 
   s4.songs.push({
     songId: randomSong,
+    difficultyIndex: getConfiguredDifficulty(s4, randomSong),
     pickType: 'random',
     pickedBy: null,
     p1Score: null,

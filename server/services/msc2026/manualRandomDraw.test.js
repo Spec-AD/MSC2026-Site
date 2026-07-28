@@ -6,7 +6,7 @@ const stage1Service = require('./stage1');
 const stage4Service = require('./stage4');
 const { undoStage1LastSong, undoStage4LastSong } = require('./rollback');
 
-const SCORE = { achievement: 100, dxScore: 1000, perfectRate: 99.5 };
+const SCORE = { achievement: 100, dxScore: 1000, perfectBreak: 8 };
 
 function song(songId, order, pickType, scored = true) {
   return {

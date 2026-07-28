@@ -21,7 +21,7 @@ const Song = require('../models/Song');
 const User = require('../models/User');
 
 const { loadTournament, checkPermission, calculateRaceRankings, shuffle, assertObjectIdList } = require('../services/msc2026/utils');
-const { initStage1, startFirstGroup, selectSong, submitScore, advance: advanceStage1, forfeitPlayer, resolveGroupTie } = require('../services/msc2026/stage1');
+const { initStage1, startFirstGroup, completeGroupReveal, selectSong, submitScore, advance: advanceStage1, forfeitPlayer, resolveGroupTie } = require('../services/msc2026/stage1');
 const { initRace, currentRace, playerAction, useItem, challengeResult, skipTurn, terminateRace } = require('../services/msc2026/raceEngine');
 const { initStage4, selectSong: selectSong4, submitScore: submitScore4, advance: advanceStage4, resolveTie: resolveTie4 } = require('../services/msc2026/stage4');
 const { addClient, broadcast } = require('../services/msc2026/ssePool');
@@ -47,7 +47,7 @@ const {
 } = require('../services/msc2026/songPoolConfig');
 const { snapshotChallenge } = require('../services/msc2026/challengePresentation');
 
-const SONG_DISPLAY_FIELDS = 'id title basic_info.artist basic_info.bpm ds level';
+const SONG_DISPLAY_FIELDS = 'id title type basic_info.artist basic_info.bpm ds level aliases charts';
 
 // ── 辅助 ──
 async function requireTournament(res) {
@@ -70,9 +70,49 @@ function parseBoolean(value, label = '布尔值') {
   throw new Error(`${label}必须为 true 或 false`);
 }
 
+function normalizeRaceResultSnapshot(raw) {
+  if (raw == null) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw new Error('挑战原始成绩格式非法');
+  const result = {};
+  if (raw.achievement !== undefined && raw.achievement !== '') {
+    const value = Number(raw.achievement);
+    if (!Number.isFinite(value) || value < 0 || value > 101 || !/^\d{1,3}(\.\d{1,4})?$/.test(String(raw.achievement))) {
+      throw new Error('挑战原始完成率须为 0-101，最多四位小数');
+    }
+    result.achievement = value;
+  }
+  if (raw.dxScore !== undefined && raw.dxScore !== '') {
+    const value = Number(raw.dxScore);
+    if (!Number.isInteger(value) || value < 0 || value > 2147483647) throw new Error('挑战原始 DX 分须为非负整数');
+    result.dxScore = value;
+  }
+  return Object.keys(result).length ? result : null;
+}
+
 async function assertSongsExist(songIds, label) {
   const count = await Song.countDocuments({ _id: { $in: songIds } });
   if (count !== songIds.length) throw new Error(`${label}包含曲库中不存在的曲目`);
+}
+
+function normalizeDifficultyIndexes(songIds, raw = {}, label = '图池') {
+  const normalized = {};
+  for (const songId of songIds) {
+    const value = Number(raw?.[String(songId)] ?? 3);
+    if (!Number.isInteger(value) || value < 0 || value > 4) {
+      throw new Error(`${label}包含非法难度索引`);
+    }
+    normalized[String(songId)] = value;
+  }
+  return normalized;
+}
+
+async function assertSongDifficulties(songIds, difficultyIndexes, label) {
+  const songs = await Song.find({ _id: { $in: songIds } }).select('_id ds').lean();
+  if (songs.length !== songIds.length) throw new Error(`${label}包含曲库中不存在的曲目`);
+  for (const song of songs) {
+    const index = difficultyIndexes[String(song._id)];
+    if (song.ds?.[index] == null) throw new Error(`${label}中的曲目缺少所选难度谱面`);
+  }
 }
 
 function normalizeDrawToken(token) {
@@ -190,9 +230,9 @@ router.get('/config', authMiddleware, async (req, res) => {
     res.json({
       msg: 'ok',
       data: {
-        stage1SongPool: (t.stage1SongPool || []).map(serializeSongDoc),
-        stage4SongPool: (stage4Config.songPoolIds || []).map(serializeSongDoc),
-        designatedSong: serializeSongDoc(stage4Config.designatedSongId)
+        stage1SongPool: (t.stage1SongPool || []).map(song => serializeSongDoc(song, t.stage1DifficultyIndexes?.[String(song._id)])),
+        stage4SongPool: (stage4Config.songPoolIds || []).map(song => serializeSongDoc(song, stage4Config.difficultyIndexes?.[String(song._id)])),
+        designatedSong: serializeSongDoc(stage4Config.designatedSongId, stage4Config.designatedDifficultyIndex)
       }
     });
   } catch (err) {
@@ -209,19 +249,26 @@ router.put('/config', authMiddleware, async (req, res) => {
     const t = await requireTournament(res);
     if (!t) return;
 
-    const { poolType, songPoolIds, designatedSongId } = req.body;
+    const { poolType, songPoolIds, designatedSongId, songDifficultyIndexes, designatedDifficultyIndex } = req.body;
 
     if (poolType === 'stage1') {
       const normalizedPool = normalizeSongPool(songPoolIds, '阶段一图池');
-      await assertSongsExist(normalizedPool, '阶段一图池');
+      const difficulties = normalizeDifficultyIndexes(normalizedPool, songDifficultyIndexes, '阶段一图池');
+      await assertSongDifficulties(normalizedPool, difficulties, '阶段一图池');
       t.stage1SongPool = normalizedPool;
+      t.stage1DifficultyIndexes = difficulties;
     } else if (poolType === 'stage4') {
       const normalizedPool = normalizeSongPool(songPoolIds, '决赛图池');
       const normalizedDesignated = normalizeDesignatedSong(designatedSongId);
+      const difficulties = normalizeDifficultyIndexes(normalizedPool, songDifficultyIndexes, '决赛图池');
+      const designatedIndex = Number(designatedDifficultyIndex ?? 3);
+      if (!Number.isInteger(designatedIndex) || designatedIndex < 0 || designatedIndex > 4) throw new Error('课题曲难度非法');
       assertFinalSongConfig(normalizedPool, normalizedDesignated);
-      await assertSongsExist([...normalizedPool, normalizedDesignated], '决赛图池');
+      await assertSongDifficulties([...normalizedPool, normalizedDesignated], { ...difficulties, [normalizedDesignated]: designatedIndex }, '决赛图池');
       t.stage4SongPool = normalizedPool;
+      t.stage4DifficultyIndexes = difficulties;
       t.stage4DesignatedSongId = normalizedDesignated;
+      t.stage4DesignatedDifficultyIndex = designatedIndex;
     } else {
       return res.status(400).json({ msg: '未知配置类型' });
     }
@@ -631,7 +678,7 @@ router.post('/stage1/init-from-qualifier', authMiddleware, async (req, res) => {
     // 初始化阶段一（修复 #2：与 /stage1/init 一致——必须设状态 + 开第一组，
     // 否则状态停留在 pending、currentGroupIndex=-1，首次 select-song 即抛"当前不在比赛阶段"）
     t.status = 'stage1';
-    await initStage1(t, playerIds, normalizedSongPoolIds);
+    await initStage1(t, playerIds, normalizedSongPoolIds, t.stage1DifficultyIndexes || {});
     await startFirstGroup(t);
 
     // patch-03: 启动 MSC 主赛适配层不再改动权威 tournament.status。
@@ -643,13 +690,15 @@ router.post('/stage1/init-from-qualifier', authMiddleware, async (req, res) => {
         qualifiedFromQualifier: advanceCount,
         autoFilledCount: autoFilled.length,
         autoFilledPlayerIds: autoFilled.map(p => p.userId),
-        groups: t.stage1.groups.map(g => ({
-          groupId: g.order,
-          order: g.order,
-          p1: String(g.p1),
-          p2: String(g.p2),
-          status: g.status
-        })),
+        currentGroup: {
+          groupId: t.stage1.groups[0].order,
+          order: t.stage1.groups[0].order,
+          p1: String(t.stage1.groups[0].p1),
+          p2: String(t.stage1.groups[0].p2),
+          status: t.stage1.groups[0].status,
+          revealEndsAt: t.stage1.groups[0].revealEndsAt
+        },
+        totalGroups: t.stage1.groups.length,
         currentGroupIndex: t.stage1.currentGroupIndex
       }
     });
@@ -673,21 +722,18 @@ router.get('/songs/search', authMiddleware, async (req, res) => {
         { aliases: regex }
       ]
     })
-      .select('id title type ds level basic_info')
+      .select('id title type ds level aliases basic_info charts')
       .limit(Math.min(Number(limit), 50))
       .lean();
 
     const data = songs.map(s => ({
-      _id: s._id,
-      id: s.id,
-      title: s.title,
-      type: s.type,
-      ds: s.ds || [],
-      level: s.level || [],
-      artist: s.basic_info?.artist || '',
-      genre: s.basic_info?.genre || '',
-      bpm: s.basic_info?.bpm || null,
-      coverUrl: s.id ? `https://www.diving-fish.com/covers/${String(s.id).padStart(5, '0')}.png` : ''
+      ...serializeSongDoc(s, 3),
+      availableDifficulties: (s.ds || []).map((constant, difficultyIndex) => ({
+        difficultyIndex,
+        difficultyName: ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'Re:MASTER'][difficultyIndex],
+        chartConstant: constant,
+        levelValue: s.level?.[difficultyIndex]
+      })).filter(entry => entry.chartConstant != null)
     }));
 
     res.json({ msg: 'ok', data });
@@ -715,7 +761,7 @@ router.post('/stage1/init', authMiddleware, async (req, res) => {
     const configuredSongPool = resolveConfiguredSongPool(t.stage1SongPool, songPoolIds, '阶段一图池');
     await assertSongsExist(configuredSongPool, '阶段一图池');
 
-    const stage1 = await initStage1(t, playerIds, configuredSongPool);
+    const stage1 = await initStage1(t, playerIds, configuredSongPool, t.stage1DifficultyIndexes || {});
     await startFirstGroup(t);
 
     // populate
@@ -723,7 +769,8 @@ router.post('/stage1/init', authMiddleware, async (req, res) => {
       .populate('stage1.groups.p1', 'username avatarUrl')
       .populate('stage1.groups.p2', 'username avatarUrl');
 
-    res.json({ msg: '分组初始化完成', data: { groups: populated.stage1.groups } });
+    const first = populated.stage1.groups[0];
+    res.json({ msg: '分组初始化完成', data: { totalGroups: populated.stage1.groups.length, currentGroup: first } });
   } catch (err) {
     console.error('阶段一初始化失败:', err);
     res.status(400).json({ msg: err.message });
@@ -755,17 +802,22 @@ router.get('/stage1/state', async (req, res) => {
         currentTurn = { pickPhase: 'random_pick', currentPicker: null };
       } else if (currentGroup.status === 'playing') {
         currentTurn = { pickPhase: 'playing', currentPicker: null };
+      } else if (currentGroup.status === 'revealing') {
+        currentTurn = { pickPhase: 'revealing', currentPicker: null };
       }
     }
 
     // P1-3: 统一序列化 userId 字段，前端用 .userId 而非 ._id
-    const serializeGroup = (g) => ({
+    const serializeGroup = (g, index) => ({
       groupId: g.order,
       order: g.order,
-      p1: g.p1 ? { userId: String(g.p1._id), username: g.p1.username, avatarUrl: g.p1.avatarUrl } : null,
-      p2: g.p2 ? { userId: String(g.p2._id), username: g.p2.username, avatarUrl: g.p2.avatarUrl } : null,
-      songs: (g.songs || []).map(serializeSongPlay),
+      p1: index <= s1.currentGroupIndex && g.p1 ? { userId: String(g.p1._id), username: g.p1.username, avatarUrl: g.p1.avatarUrl } : null,
+      p2: index <= s1.currentGroupIndex && g.p2 ? { userId: String(g.p2._id), username: g.p2.username, avatarUrl: g.p2.avatarUrl } : null,
+      songs: index <= s1.currentGroupIndex ? (g.songs || []).map(serializeSongPlay) : [],
       status: g.status,
+      concealed: index > s1.currentGroupIndex,
+      revealStartedAt: index === s1.currentGroupIndex ? g.revealStartedAt : null,
+      revealEndsAt: index === s1.currentGroupIndex ? g.revealEndsAt : null,
       winner: g.winner ? String(g.winner._id || g.winner) : null,
       forfait: g.forfait ? String(g.forfait._id || g.forfait) : null,
       needTiebreak: g.needTiebreak
@@ -776,7 +828,7 @@ router.get('/stage1/state', async (req, res) => {
       data: {
         status: s1.status,
         currentGroupIndex: s1.currentGroupIndex,
-        songPool: s1.songPool,
+        songPool: (s1.songPool || []).map(song => serializeSongDoc(song, s1.difficultyIndexes?.[String(song._id)])),
         totalGroups: s1.groups.length,
         completedGroups: s1.groups.filter(g => g.status === 'done').length,
         groups: s1.groups.map(serializeGroup),
@@ -802,6 +854,7 @@ router.get('/stage1/group/:groupId', async (req, res) => {
     const idx = Number(req.params.groupId);
     const g = t.stage1.groups[idx];
     if (!g) return res.status(404).json({ msg: '组不存在' });
+    if (idx > t.stage1.currentGroupIndex) return res.status(403).json({ msg: '该组尚未揭晓' });
 
     // P1-3: 统一序列化 userId
     res.json({ msg: 'ok', data: {
@@ -818,6 +871,19 @@ router.get('/stage1/group/:groupId', async (req, res) => {
   } catch (err) {
     console.error('获取组详情失败:', err);
     res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.post('/stage1/complete-reveal', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    const t = await requireTournament(res);
+    if (!t) return;
+    const group = await completeGroupReveal(t);
+    res.json({ msg: '本组抽签揭晓完成', data: { groupIndex: t.stage1.currentGroupIndex, status: group.status } });
+  } catch (err) {
+    res.status(400).json({ msg: err.message });
   }
 });
 
@@ -850,7 +916,7 @@ router.post('/stage1/select-song', authMiddleware, async (req, res) => {
     res.json({
       msg: '选曲完成',
       data: {
-        song: songRef || { _id: lastSong.songId, title: '???' },
+        song: songRef ? serializeSongDoc(songRef, lastSong.difficultyIndex) : { _id: lastSong.songId, title: '???' },
         pickType: lastSong.pickType,
         nextStep: result.nextStep
       }
@@ -897,7 +963,7 @@ router.post('/stage1/advance', authMiddleware, async (req, res) => {
         msg: '系统已抽取随机曲目',
         data: {
           ...result,
-          song: serializeSongDoc(song),
+          song: serializeSongDoc(song, result.difficultyIndex),
           pickType: 'random',
           nextStep: 'waiting_play_result'
         }
@@ -992,7 +1058,7 @@ router.post('/race/init', authMiddleware, async (req, res) => {
         currentPlayerIndex: race.currentPlayerIndex,
         currentPlayerId: String(race.players[race.currentPlayerIndex].userId._id || race.players[race.currentPlayerIndex].userId),
         totalItemsOnMap: race.itemsOnMap.length,
-        totalTasks: 25
+        totalTasks: CHALLENGE_TASKS.length
       }
       });
     });
@@ -1045,10 +1111,19 @@ router.get('/race/state', async (req, res) => {
           disableItemsUntilTurn: p.disableItemsUntilTurn,
           status: p.finishOrder ? 'finished' : 'racing',
           finishOrder: p.finishOrder,
-          finishTimestamp: p.finishTimestamp
+          finishTimestamp: p.finishTimestamp,
+          challengeFailureCount: p.challengeFailureCount || 0,
+          successfulChallengeAverage: p.successfulChallengeCount
+            ? (p.successfulChallengeAchievementTotal || 0) / p.successfulChallengeCount
+            : 0,
+          cumulativeDxScore: p.cumulativeDxScore || 0
         })),
         finishOrder: race.finishOrder,
-        actionLog: race.actionLog.slice(-50),
+        actionLog: race.actionLog.slice(-50).map(log => {
+          const value = log.toObject ? log.toObject() : { ...log };
+          if (value.actionType === 'pickup') value.detail = { zoneIndex: value.detail?.zoneIndex };
+          return value;
+        }),
         turnRemainingMs: pendingChallenge || !race.turnStartedAt ? null : Math.max(0, race.turnTimeLimitMs - turnElapsed),
         totalRemainingMs: Math.max(0, race.timeLimitMs - totalElapsed),
         terminated: race.terminated,
@@ -1104,11 +1179,15 @@ router.get('/race/map', async (req, res) => {
           itemCount: p.items.length,
           itemUsedCount: p.items.filter(i => i.status === 'consumed' || i.status === 'armed').length,
           status: p.finishOrder ? 'finished' : 'racing',
-          finishOrder: p.finishOrder
+          finishOrder: p.finishOrder,
+          challengeFailureCount: p.challengeFailureCount || 0,
+          successfulChallengeAverage: p.successfulChallengeCount
+            ? (p.successfulChallengeAchievementTotal || 0) / p.successfulChallengeCount
+            : 0,
+          cumulativeDxScore: p.cumulativeDxScore || 0
         })),
         itemsOnMap: race.itemsOnMap.map(i => {
           return {
-            itemRef: i.itemRef,
             zoneIndex: i.zoneIndex,
             collected: i.collected
           };
@@ -1236,7 +1315,8 @@ router.post('/race/challenge-result', authMiddleware, async (req, res) => {
 
     await withLockedTournament(res, async (t) => {
       const passed = parseBoolean(req.body.passed, '挑战判定 passed');
-      const result = await challengeResult(t, req.user.id, passed);
+      const resultSnapshot = normalizeRaceResultSnapshot(req.body.resultSnapshot);
+      const result = await challengeResult(t, req.user.id, passed, resultSnapshot);
       if (passed) {
         if (result.raceTerminated) {
           res.json({ msg: '挑战成功，跑图结束', data: result });
@@ -1305,7 +1385,7 @@ router.get('/race/my-items', authMiddleware, async (req, res) => {
   }
 });
 
-router.get('/race/player/:playerId/items', async (req, res) => {
+router.get('/race/player/:playerId/items', authMiddleware, async (req, res) => {
   try {
     const t = await MSC2026Tournament.findOne();
     if (!t) return res.status(404).json({ msg: '赛事不存在' });
@@ -1314,6 +1394,10 @@ router.get('/race/player/:playerId/items', async (req, res) => {
     if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
 
     const playerId = String(req.params.playerId);
+    if (String(req.user.id) !== playerId) {
+      const perm = await checkPermission(req.user, t, 'referee');
+      if (!perm.allowed) return res.status(403).json({ msg: '只能查看自己的隐藏道具' });
+    }
     const player = race.players.find(p => String(p.userId?._id || p.userId) === playerId);
     if (!player) return res.status(404).json({ msg: '选手不在比赛中' });
 
@@ -1509,11 +1593,20 @@ router.post('/stage4/init', authMiddleware, async (req, res) => {
     assertRequestedIdsMatch(req.body.playerIds, playerIds, '决赛选手名单');
 
     t.stage4SongPool = configuredSongPool;
+    t.stage4DifficultyIndexes = storedConfig.difficultyIndexes || {};
     t.stage4DesignatedSongId = configuredDesignatedSong;
+    t.stage4DesignatedDifficultyIndex = storedConfig.designatedDifficultyIndex ?? 3;
     t.stage4 = null;
     t.status = 'stage4';
 
-    const s4 = await initStage4(t, playerIds, configuredSongPool, configuredDesignatedSong);
+    const s4 = await initStage4(
+      t,
+      playerIds,
+      configuredSongPool,
+      configuredDesignatedSong,
+      storedConfig.difficultyIndexes || {},
+      storedConfig.designatedDifficultyIndex ?? 3
+    );
 
     res.json({
       msg: '决赛已初始化',
@@ -1557,8 +1650,8 @@ router.get('/stage4/state', async (req, res) => {
         status: s4.status,
         p1: s4.p1 ? { userId: String(s4.p1._id), username: s4.p1.username, avatarUrl: s4.p1.avatarUrl } : null,
         p2: s4.p2 ? { userId: String(s4.p2._id), username: s4.p2.username, avatarUrl: s4.p2.avatarUrl } : null,
-        songPool: (s4.songPool || []).map(serializeSongDoc),
-        designatedSong: serializeSongDoc(s4.designatedSongId),
+        songPool: (s4.songPool || []).map(song => serializeSongDoc(song, s4.difficultyIndexes?.[String(song._id)])),
+        designatedSong: serializeSongDoc(s4.designatedSongId, s4.designatedDifficultyIndex),
         songs: (s4.songs || []).map(serializeSongPlay),
         currentTurn,
         winner: s4.winner ? String(s4.winner._id || s4.winner) : null,
@@ -1595,7 +1688,7 @@ router.post('/stage4/select-song', authMiddleware, async (req, res) => {
     res.json({
       msg: '选曲完成',
       data: {
-        song: songRef || { title: '???' },
+        song: songRef ? serializeSongDoc(songRef, lastSong.difficultyIndex) : { title: '???' },
         pickType: lastSong.pickType,
         nextStep: result.nextStep
       }
@@ -1638,14 +1731,14 @@ router.post('/stage4/advance', authMiddleware, async (req, res) => {
       const song = await Song.findById(result.song?.songId).select(SONG_DISPLAY_FIELDS).lean();
       res.json({
         msg: '系统已抽取随机曲目',
-        data: { song: serializeSongDoc(song), pickType: 'random', nextStep: 'waiting_play_result' }
+        data: { song: serializeSongDoc(song, result.song?.difficultyIndex), pickType: 'random', nextStep: 'waiting_play_result' }
       });
     } else if (result.nextStep === 'designated_pick') {
       // P2-3
       const song = await Song.findById(result.designatedSongId).select(SONG_DISPLAY_FIELDS).lean();
       res.json({
         msg: '课题曲阶段',
-        data: { song, pickType: 'designated', nextStep: 'waiting_play_result' }
+        data: { song: serializeSongDoc(song, result.difficultyIndex), pickType: 'designated', nextStep: 'waiting_play_result' }
       });
     } else {
       res.json({ msg: '推进成功', data: result });
@@ -1746,7 +1839,7 @@ router.post('/race/undo-last-action', authMiddleware, async (req, res) => {
       const t = await loadAndCheck(req, res); if (!t) return;
       const race = currentRace(t);
       if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
-      undoRaceLastAction(race);
+      undoRaceLastAction(race, t, t.status);
       await t.save();
       broadcast('turn_change', { event: 'undo-last-action', turn: race.currentTurn });
       res.json({ msg: '已撤销最后行动', data: { currentTurn: race.currentTurn } });
@@ -1775,10 +1868,10 @@ router.post('/race/revert-challenge', authMiddleware, async (req, res) => {
       const t = await loadAndCheck(req, res); if (!t) return;
       const race = currentRace(t);
       if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
-      undoRaceLastChallengeResult(race);
+      undoRaceLastChallengeResult(race, t, t.status);
       await t.save();
       broadcast('challenge_resolved', { event: 'revert-challenge' });
-      res.json({ msg: '已翻转最后挑战判定' });
+      res.json({ msg: '已撤回最后挑战判定，等待重新确认' });
     });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });

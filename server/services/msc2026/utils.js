@@ -40,7 +40,7 @@ function assertObjectIdList(ids, expectedCount, label = 'ID列表') {
 function normalizeScoreInput(score) {
   if (!score || typeof score !== 'object') return score;
   const normalized = { ...score };
-  ['achievement', 'perfectRate'].forEach((key) => {
+  ['achievement', 'perfectRate', 'perfectBreak'].forEach((key) => {
     if (typeof normalized[key] === 'string' && normalized[key].trim() !== '') {
       normalized[key] = Number(normalized[key]);
     }
@@ -92,7 +92,7 @@ async function checkPermission(user, tournament, required) {
 }
 
 // ── 数据校验 ──
-// patch-02: 修复 P2-1 perfectRate 小数位校验、P2-2 0值跳过校验
+// 成绩字段采用显式数值校验，0 也是有效成绩。
 function validateScore(score) {
   score = normalizeScoreInput(score);
   const errors = [];
@@ -106,11 +106,8 @@ function validateScore(score) {
   if (!Number.isFinite(score?.dxScore) || score.dxScore < 0 || !Number.isInteger(score.dxScore)) {
     errors.push('DX分数须为非负整数');
   }
-  // patch-02: perfectRate 校验最多2位小数
-  if (!Number.isFinite(score?.perfectRate) || score.perfectRate < 0 || score.perfectRate > 100) {
-    errors.push('大P率须为 0-100 的数字');
-  } else if (score.perfectRate != null && !/^\d{1,3}(\.\d{1,2})?$/.test(String(score.perfectRate))) {
-    errors.push('大P率最多2位小数');
+  if (!Number.isInteger(score?.perfectBreak) || score.perfectBreak < 0 || score.perfectBreak > 100000) {
+    errors.push('完美 BREAK 数量须为 0-100000 的整数');
   }
   return errors;
 }
@@ -126,9 +123,9 @@ function determineWinner(scores1, scores2) {
   const dx2 = scores2.reduce((s, sc) => s + (sc ? sc.dxScore : 0), 0);
   if (dx1 !== dx2) return dx1 > dx2 ? 'p1' : 'p2';
 
-  const pr1 = scores1.reduce((s, sc) => s + (sc ? sc.perfectRate : 0), 0);
-  const pr2 = scores2.reduce((s, sc) => s + (sc ? sc.perfectRate : 0), 0);
-  if (pr1 !== pr2) return pr1 > pr2 ? 'p1' : 'p2';
+  const break1 = scores1.reduce((s, sc) => s + (sc ? (sc.perfectBreak || 0) : 0), 0);
+  const break2 = scores2.reduce((s, sc) => s + (sc ? (sc.perfectBreak || 0) : 0), 0);
+  if (break1 !== break2) return break1 > break2 ? 'p1' : 'p2';
 
   return 'tie';
 }
@@ -140,6 +137,11 @@ function calculateRaceRankings(players) {
     finishOrder: p.finishOrder,
     finishTimestamp: p.finishTimestamp,
     currentLayer: p.currentLayer || 0,
+    challengeFailureCount: p.challengeFailureCount || 0,
+    successfulChallengeAverage: p.successfulChallengeCount
+      ? (p.successfulChallengeAchievementTotal || 0) / p.successfulChallengeCount
+      : 0,
+    cumulativeDxScore: p.cumulativeDxScore || 0,
     startVertex: p.startVertex ?? 999
   }));
 
@@ -150,6 +152,9 @@ function calculateRaceRankings(players) {
     if (a.finishOrder != null) return -1;
     if (b.finishOrder != null) return 1;
     if (b.currentLayer !== a.currentLayer) return b.currentLayer - a.currentLayer;
+    if (a.challengeFailureCount !== b.challengeFailureCount) return a.challengeFailureCount - b.challengeFailureCount;
+    if (b.successfulChallengeAverage !== a.successfulChallengeAverage) return b.successfulChallengeAverage - a.successfulChallengeAverage;
+    if (b.cumulativeDxScore !== a.cumulativeDxScore) return b.cumulativeDxScore - a.cumulativeDxScore;
     return a.startVertex - b.startVertex;
   });
 

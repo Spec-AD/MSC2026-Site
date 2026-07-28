@@ -7,9 +7,12 @@ import { CHALLENGE_TYPE_LABELS } from '../../constants/gameData';
 import { formatChallengeCondition } from '../../utils/challengeFormat';
 import MotionButton from '../live/MotionButton';
 import { MOTION_TRANSITIONS } from '../../utils/motion';
+import { useState } from 'react';
 
 export default function ChallengeCard({ challenge, pendingJudgement, isJudge = false, resolving, onPass, onFail, onDismiss }) {
   const reduceMotion = useReducedMotion();
+  const [rawAchievement, setRawAchievement] = useState('');
+  const [rawDxScore, setRawDxScore] = useState('');
   if (!challenge) return null;
 
   const task = challenge.effectiveChallenge || challenge;
@@ -20,6 +23,10 @@ export default function ChallengeCard({ challenge, pendingJudgement, isJudge = f
   const effectResults = challenge.itemEffectResults || [];
   const legacyEffects = challenge.activeItemEffects || [];
   const hasEffects = effectResults.length > 0 || legacyEffects.length > 0;
+  const resultSnapshot = {
+    ...(rawAchievement !== '' ? { achievement: Number(rawAchievement) } : {}),
+    ...(rawDxScore !== '' ? { dxScore: Number(rawDxScore) } : {}),
+  };
 
   const statusConfig = {
     applied: { label: '生效', className: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/25' },
@@ -137,11 +144,25 @@ export default function ChallengeCard({ challenge, pendingJudgement, isJudge = f
           )}
         </div>
 
+        {pendingJudgement && isJudge && (
+          <div className="mb-7 grid grid-cols-1 gap-3 border-t border-white/10 pt-5 md:grid-cols-2">
+            <label className="block">
+              <span className="text-sm font-bold text-zinc-400">原始完成率（超时排名记录）</span>
+              <input type="number" min="0" max="101" step="0.0001" value={rawAchievement} onChange={(event) => setRawAchievement(event.target.value)} placeholder="可选" className="mt-2 w-full border border-white/15 bg-black/35 px-4 py-3 font-mono text-2xl text-white outline-none focus:border-amber-300/50" />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-zinc-400">原始 DX 分（超时排名记录）</span>
+              <input type="number" min="0" step="1" value={rawDxScore} onChange={(event) => setRawDxScore(event.target.value)} placeholder="可选" className="mt-2 w-full border border-white/15 bg-black/35 px-4 py-3 font-mono text-2xl text-white outline-none focus:border-amber-300/50" />
+            </label>
+            <p className="md:col-span-2 text-sm text-zinc-500">成功或失败仍由裁判人工确认；这些原始数据只用于超时排名和审计。</p>
+          </div>
+        )}
+
         {/* 操作按钮 */}
         {pendingJudgement && isJudge ? (
           <div className="grid grid-cols-2 gap-4">
             <MotionButton
-              onClick={onPass}
+              onClick={() => onPass?.(resultSnapshot)}
               loading={resolving === 'pass'}
               disabled={Boolean(resolving)}
               className="py-5 rounded-xl bg-emerald-500/18 text-emerald-200 border border-emerald-400/35 hover:bg-emerald-500/25 transition-all text-2xl font-black flex items-center justify-center gap-3"
@@ -149,7 +170,7 @@ export default function ChallengeCard({ challenge, pendingJudgement, isJudge = f
               <FaCheck /> {resolving === 'pass' ? '判定中' : '通过'}
             </MotionButton>
             <MotionButton
-              onClick={onFail}
+              onClick={() => onFail?.(resultSnapshot)}
               loading={resolving === 'fail'}
               disabled={Boolean(resolving)}
               className="py-5 rounded-xl bg-red-500/18 text-red-200 border border-red-400/35 hover:bg-red-500/25 transition-all text-2xl font-black flex items-center justify-center gap-3"

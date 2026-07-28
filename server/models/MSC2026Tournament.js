@@ -18,7 +18,8 @@ const Schema = mongoose.Schema;
 const ScoreEntrySchema = new Schema({
   achievement: { type: Number, required: true },      // 完成率 0-101.0000%，4位小数
   dxScore: { type: Number, required: true },           // DX 分数 int32
-  perfectRate: { type: Number, default: 0 },           // 绝赞大P率 0-100.00%，2位小数
+  perfectBreak: { type: Number, min: 0, default: 0 },  // 完美 BREAK 音符数量，越多越优
+  perfectRate: { type: Number, default: 0 },           // 旧记录兼容，不再参与 MSC 胜负判定
   recordedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   recordedAt: { type: Date, default: Date.now },
   locked: { type: Boolean, default: true }             // 录入后锁定，仅ADM可解锁
@@ -27,6 +28,7 @@ const ScoreEntrySchema = new Schema({
 // ── 曲目录入记录 ──
 const SongPlaySchema = new Schema({
   songId: { type: Schema.Types.ObjectId, ref: 'Song', required: true },
+  difficultyIndex: { type: Number, min: 0, max: 4, default: 3 },
   pickType: {
     type: String,
     enum: ['p1_pick', 'p2_pick', 'random', 'designated'],
@@ -46,9 +48,11 @@ const Stage1GroupSchema = new Schema({
   songs: [SongPlaySchema],
   status: {
     type: String,
-    enum: ['pending', 'p1_pick', 'p2_pick', 'random_pick', 'playing', 'done'],
+    enum: ['pending', 'revealing', 'p1_pick', 'p2_pick', 'random_pick', 'playing', 'done'],
     default: 'pending'
   },
+  revealStartedAt: { type: Date, default: null },
+  revealEndsAt: { type: Date, default: null },
   winner: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   forfait: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   needTiebreak: { type: Boolean, default: false }       // 三项全平需加赛
@@ -66,7 +70,11 @@ const RacePlayerSchema = new Schema({
   silentUntilTurn: { type: Number, default: null },      // 静默到第几回合（含）
   disableItemsUntilTurn: { type: Number, default: null },// 禁用道具到第几回合（含）
   finishOrder: { type: Number, default: null },
-  finishTimestamp: { type: Number, default: null }        // ms 时间戳
+  finishTimestamp: { type: Number, default: null },       // ms 时间戳
+  challengeFailureCount: { type: Number, min: 0, default: 0 },
+  successfulChallengeAchievementTotal: { type: Number, min: 0, default: 0 },
+  successfulChallengeCount: { type: Number, min: 0, default: 0 },
+  cumulativeDxScore: { type: Number, min: 0, default: 0 }
 });
 
 // ── 跑图回合日志 ──
@@ -94,6 +102,8 @@ const ChallengeLogSchema = new Schema({
   resolvedChallenge: { type: Schema.Types.Mixed, default: null },
   activeItemEffects: [{ type: String, default: [] }],    // 生效道具名列表
   itemEffectResults: [{ type: Schema.Types.Mixed }],
+  resultSnapshot: { type: Schema.Types.Mixed, default: null },
+  rollbackSnapshot: { type: Schema.Types.Mixed, default: null },
   // patch-02 P1-R1: 本次挑战绑定的 armed 道具引用，失败时仅对此列表触发双面惩罚
   usedItemRefs: [{ type: Number, default: [] }]
 });
@@ -146,7 +156,9 @@ const Stage4Schema = new Schema({
   p1: { type: Schema.Types.ObjectId, ref: 'User' },
   p2: { type: Schema.Types.ObjectId, ref: 'User' },
   songPool: [{ type: Schema.Types.ObjectId, ref: 'Song' }],
+  difficultyIndexes: { type: Schema.Types.Mixed, default: {} },
   designatedSongId: { type: Schema.Types.ObjectId, ref: 'Song' },
+  designatedDifficultyIndex: { type: Number, min: 0, max: 4, default: 3 },
   songs: [SongPlaySchema],
   status: {
     type: String,
@@ -184,8 +196,11 @@ const MSC2026TournamentSchema = new Schema({
 
   // 全局配置
   stage1SongPool: [{ type: Schema.Types.ObjectId, ref: 'Song' }],
+  stage1DifficultyIndexes: { type: Schema.Types.Mixed, default: {} },
   stage4SongPool: [{ type: Schema.Types.ObjectId, ref: 'Song' }],
+  stage4DifficultyIndexes: { type: Schema.Types.Mixed, default: {} },
   stage4DesignatedSongId: { type: Schema.Types.ObjectId, ref: 'Song', default: null },
+  stage4DesignatedDifficultyIndex: { type: Number, min: 0, max: 4, default: 3 },
   // ⚠️ 已废弃：不再手动录入选手，改为从旧赛事拉取。保留字段仅向下兼容
   registeredPlayers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 
@@ -201,6 +216,7 @@ const MSC2026TournamentSchema = new Schema({
   // 阶段一
   stage1: {
     songPool: [{ type: Schema.Types.ObjectId, ref: 'Song' }],
+    difficultyIndexes: { type: Schema.Types.Mixed, default: {} },
     groups: [Stage1GroupSchema],
     status: { type: String, enum: ['pending', 'playing', 'done'], default: 'pending' },
     currentGroupIndex: { type: Number, default: -1 }

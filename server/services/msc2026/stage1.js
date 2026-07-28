@@ -17,20 +17,21 @@ const { drawRandomSong } = require('./randomSongDraw');
 /**
  * 初始化12进6分组
  */
-async function initStage1(tournament, playerIds, songPoolIds) {
+async function initStage1(tournament, playerIds, songPoolIds, difficultyIndexes = {}) {
   playerIds = assertObjectIdList(playerIds, 12, '阶段一选手');
   songPoolIds = assertObjectIdList(songPoolIds || [], null, '阶段一图池');
   if (songPoolIds.length < 3) {
     throw new Error('图池至少需要3首歌');
   }
 
-  const shuffled = shuffle(playerIds);
+  const firstSeedPot = shuffle(playerIds.slice(0, 6));
+  const secondSeedPot = shuffle(playerIds.slice(6, 12));
   const groups = [];
 
-  // 两两配对
+  // 预选赛 1-6 名与 7-12 名分档，每组各抽一人。
   for (let i = 0; i < 6; i++) {
-    const p1 = shuffled[i * 2];
-    const p2 = shuffled[i * 2 + 1];
+    const p1 = firstSeedPot[i];
+    const p2 = secondSeedPot[i];
     // 随机分配 P1/P2
     const swap = Math.random() < 0.5;
     groups.push({
@@ -39,6 +40,8 @@ async function initStage1(tournament, playerIds, songPoolIds) {
       p2: swap ? p1 : p2,
       songs: [],
       status: 'pending',
+      revealStartedAt: null,
+      revealEndsAt: null,
       winner: null,
       forfait: null,
       needTiebreak: false
@@ -51,6 +54,7 @@ async function initStage1(tournament, playerIds, songPoolIds) {
 
   tournament.stage1 = {
     songPool: songPoolIds,
+    difficultyIndexes: { ...difficultyIndexes },
     groups: shuffledGroups,
     status: 'pending',
     currentGroupIndex: -1
@@ -77,16 +81,50 @@ async function startFirstGroup(tournament) {
   tournament.stage1.status = 'playing';
 
   const group = tournament.stage1.groups[0];
-  group.status = 'p1_pick';
+  _startGroupReveal(group);
 
   await tournament.save();
 
-  broadcast('turn_change', {
+  broadcast('group_reveal_started', {
     stage: 'stage1',
     groupIndex: 0,
+    revealEndsAt: group.revealEndsAt,
+    p1: group.p1.toString(),
+    p2: group.p2.toString()
+  });
+}
+
+const GROUP_REVEAL_MS = 7000;
+
+function _startGroupReveal(group, now = Date.now()) {
+  group.status = 'revealing';
+  group.revealStartedAt = new Date(now);
+  group.revealEndsAt = new Date(now + GROUP_REVEAL_MS);
+}
+
+async function completeGroupReveal(tournament, now = Date.now()) {
+  const stage1 = tournament.stage1;
+  const group = stage1?.groups?.[stage1.currentGroupIndex];
+  if (!group) throw new Error('无进行中的组');
+  if (group.status === 'p1_pick') return group;
+  if (group.status !== 'revealing') throw new Error('当前组不在抽签揭晓阶段');
+  if (group.revealEndsAt && now < new Date(group.revealEndsAt).getTime()) {
+    throw new Error('抽签动画尚未结束');
+  }
+  group.status = 'p1_pick';
+  await tournament.save();
+  broadcast('turn_change', {
+    stage: 'stage1',
+    groupIndex: stage1.currentGroupIndex,
     phase: 'p1_pick',
     currentPicker: group.p1.toString()
   });
+  return group;
+}
+
+function getConfiguredDifficulty(stage, songId) {
+  const value = Number(stage?.difficultyIndexes?.[String(songId)] ?? 3);
+  return Number.isInteger(value) && value >= 0 && value <= 4 ? value : 3;
 }
 
 /**
@@ -117,6 +155,7 @@ async function selectSong(tournament, targetPlayerId, songId) {
 
     group.songs.push({
       songId,
+      difficultyIndex: getConfiguredDifficulty(stage1, songId),
       pickType: 'p1_pick',
       pickedBy: group.p1,
       p1Score: null,
@@ -134,6 +173,7 @@ async function selectSong(tournament, targetPlayerId, songId) {
 
     group.songs.push({
       songId,
+      difficultyIndex: getConfiguredDifficulty(stage1, songId),
       pickType: 'p2_pick',
       pickedBy: group.p2,
       p1Score: null,
@@ -179,7 +219,7 @@ async function submitScore(tournament, userId, body) {
     lastSong.p1Score = {
       achievement: p1Score.achievement,
       dxScore: p1Score.dxScore,
-      perfectRate: p1Score.perfectRate,
+      perfectBreak: p1Score.perfectBreak,
       recordedBy: userId,
       recordedAt: new Date(),
       locked: true
@@ -192,7 +232,7 @@ async function submitScore(tournament, userId, body) {
     lastSong.p2Score = {
       achievement: p2Score.achievement,
       dxScore: p2Score.dxScore,
-      perfectRate: p2Score.perfectRate,
+      perfectBreak: p2Score.perfectBreak,
       recordedBy: userId,
       recordedAt: new Date(),
       locked: true
@@ -244,6 +284,7 @@ async function _systemRandomPick(tournament, group, stage1) {
 
   group.songs.push({
     songId: randomSong,
+    difficultyIndex: getConfiguredDifficulty(stage1, randomSong),
     pickType: 'random',
     pickedBy: null,
     p1Score: null,
@@ -324,7 +365,7 @@ async function _advanceCompletedGroup(tournament, stage1) {
 
   stage1.currentGroupIndex = nextIdx;
   const nextGroup = stage1.groups[nextIdx];
-  if (nextGroup.status === 'pending') nextGroup.status = 'p1_pick';
+  if (nextGroup.status === 'pending') _startGroupReveal(nextGroup);
 
   await tournament.save();
 
@@ -336,11 +377,12 @@ async function _advanceCompletedGroup(tournament, stage1) {
     nextGroupIndex: nextIdx
   });
 
-  broadcast('turn_change', {
+  broadcast('group_reveal_started', {
     stage: 'stage1',
     groupIndex: nextIdx,
-    phase: nextGroup.status,
-    currentPicker: nextGroup.status === 'p1_pick' ? nextGroup.p1.toString() : null
+    revealEndsAt: nextGroup.revealEndsAt,
+    p1: nextGroup.p1.toString(),
+    p2: nextGroup.p2.toString()
   });
 
   return { nextStep: 'next_group', groupIndex: nextIdx };
@@ -412,7 +454,8 @@ async function advance(tournament) {
       return {
         nextStep: 'random_pick',
         groupIndex: stage1.currentGroupIndex,
-        songId: randomSong.toString()
+        songId: randomSong.toString(),
+        difficultyIndex: getConfiguredDifficulty(stage1, randomSong)
       };
     }
 
@@ -500,5 +543,6 @@ module.exports = {
   submitScore,
   advance,
   forfeitPlayer,
-  resolveGroupTie
+  resolveGroupTie,
+  completeGroupReveal
 };

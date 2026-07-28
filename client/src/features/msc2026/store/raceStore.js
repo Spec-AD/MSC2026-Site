@@ -152,9 +152,9 @@ export const useRaceStore = create((set, get) => ({
   },
 
   /** 裁判判定挑战结果 */
-  submitChallengeResult: async (passed) => {
+  submitChallengeResult: async (passed, resultSnapshot) => {
     try {
-      const res = await api.submitChallengeResult(passed);
+      const res = await api.submitChallengeResult(passed, resultSnapshot);
       const data = res.data.data;
       set({ activeChallenge: null, pendingJudgement: false });
       return data;

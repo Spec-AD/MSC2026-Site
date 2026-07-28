@@ -5,7 +5,7 @@ import MotionButton from './MotionButton';
 import { MOTION_TRANSITIONS } from '../../utils/motion';
 
 function compareScores(a, b) {
-  const fields = ['achievement', 'dxScore', 'perfectRate'];
+  const fields = ['achievement', 'dxScore', 'perfectBreak'];
   for (const field of fields) {
     const delta = Number(a?.[field] || 0) - Number(b?.[field] || 0);
     if (delta !== 0) return delta > 0 ? 1 : -1;
@@ -49,8 +49,8 @@ function ScoreSide({ player, score, side, leading, reduceMotion }) {
           <p className="mt-1 text-xl md:text-2xl font-bold tabular-nums text-zinc-200">{Number(score?.dxScore || 0).toLocaleString()}</p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">大P率</p>
-          <p className="mt-1 text-xl md:text-2xl font-bold tabular-nums text-zinc-200">{Number(score?.perfectRate || 0).toFixed(4)}%</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">完美 BREAK</p>
+          <p className="mt-1 text-xl md:text-2xl font-bold tabular-nums text-zinc-200">{Number(score?.perfectBreak || 0).toLocaleString()}</p>
         </div>
       </div>
     </Motion.div>

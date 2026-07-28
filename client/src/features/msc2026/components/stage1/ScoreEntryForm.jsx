@@ -15,7 +15,8 @@ function ScoreField({ label, field, value, onChange, ...limits }) {
   const handleChange = (e) => {
     const raw = e.target.value;
     // 只允许数字和小数点
-    if (raw !== '' && !/^[\d.]+$/.test(raw)) return;
+    const pattern = decimals === 0 ? /^\d+$/ : /^[\d.]+$/;
+    if (raw !== '' && !pattern.test(raw)) return;
     onChange(field, raw);
   };
 
@@ -46,7 +47,7 @@ function ScoreField({ label, field, value, onChange, ...limits }) {
       </label>
       <input
         type="text"
-        inputMode="decimal"
+        inputMode={decimals === 0 ? 'numeric' : 'decimal'}
         value={value}
         onChange={handleChange}
         onBlur={handleBlur}
@@ -97,13 +98,12 @@ function PlayerScoreCard({ player, prefix, scores, onChange }) {
           decimals={0}
         />
         <ScoreField
-          label="大P率"
-          field={`${prefix}Score.perfectRate`}
-          value={scores.perfectRate}
+          label="完美 BREAK"
+          field={`${prefix}Score.perfectBreak`}
+          value={scores.perfectBreak}
           onChange={onChange}
-          max={SCORE_LIMITS.perfectRate.max}
-          decimals={SCORE_LIMITS.perfectRate.decimals}
-          suffix="%"
+          max={SCORE_LIMITS.perfectBreak.max}
+          decimals={0}
         />
       </div>
     </div>
@@ -120,12 +120,12 @@ export default function ScoreEntryForm({
     p1Score: {
       achievement: initialScores?.p1Score?.achievement?.toString() || '',
       dxScore: initialScores?.p1Score?.dxScore?.toString() || '',
-      perfectRate: initialScores?.p1Score?.perfectRate?.toString() || '',
+      perfectBreak: initialScores?.p1Score?.perfectBreak?.toString() || '',
     },
     p2Score: {
       achievement: initialScores?.p2Score?.achievement?.toString() || '',
       dxScore: initialScores?.p2Score?.dxScore?.toString() || '',
-      perfectRate: initialScores?.p2Score?.perfectRate?.toString() || '',
+      perfectBreak: initialScores?.p2Score?.perfectBreak?.toString() || '',
     },
   });
   const [submitting, setSubmitting] = useState(false);
@@ -152,7 +152,7 @@ export default function ScoreEntryForm({
   const validateScore = (score, label) => {
     const a = parseFloat(score.achievement);
     const d = parseInt(score.dxScore, 10);
-    const p = parseFloat(score.perfectRate);
+    const p = parseInt(score.perfectBreak, 10);
 
     if (isNaN(a) || a < 0 || a > SCORE_LIMITS.achievement.max) {
       return `${label}: 完成率需在 0-${SCORE_LIMITS.achievement.max} 之间`;
@@ -160,8 +160,8 @@ export default function ScoreEntryForm({
     if (isNaN(d) || d < 0 || d > SCORE_LIMITS.dxScore.max) {
       return `${label}: DX 分数需为有效整数`;
     }
-    if (isNaN(p) || p < 0 || p > SCORE_LIMITS.perfectRate.max) {
-      return `${label}: 大P率需在 0-${SCORE_LIMITS.perfectRate.max} 之间`;
+    if (!Number.isInteger(p) || p < 0 || p > SCORE_LIMITS.perfectBreak.max) {
+      return `${label}: 完美 BREAK 数量需为 0-${SCORE_LIMITS.perfectBreak.max} 的整数`;
     }
     return null;
   };
@@ -184,12 +184,12 @@ export default function ScoreEntryForm({
       p1Score: {
         achievement: parseFloat(scores.p1Score.achievement),
         dxScore: parseInt(scores.p1Score.dxScore, 10),
-        perfectRate: parseFloat(scores.p1Score.perfectRate),
+        perfectBreak: parseInt(scores.p1Score.perfectBreak, 10),
       },
       p2Score: {
         achievement: parseFloat(scores.p2Score.achievement),
         dxScore: parseInt(scores.p2Score.dxScore, 10),
-        perfectRate: parseFloat(scores.p2Score.perfectRate),
+        perfectBreak: parseInt(scores.p2Score.perfectBreak, 10),
       },
     };
 

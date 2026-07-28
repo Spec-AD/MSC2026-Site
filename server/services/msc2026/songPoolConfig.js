@@ -49,7 +49,11 @@ function getStoredStage4Config(tournament) {
       ? tournament.stage4SongPool
       : (tournament.stage4?.songPool || []),
     designatedSongId: tournament.stage4DesignatedSongId ||
-      tournament.stage4?.designatedSongId || null
+      tournament.stage4?.designatedSongId || null,
+    difficultyIndexes: tournament.stage4DifficultyIndexes ||
+      tournament.stage4?.difficultyIndexes || {},
+    designatedDifficultyIndex: tournament.stage4DesignatedDifficultyIndex ??
+      tournament.stage4?.designatedDifficultyIndex ?? 3
   };
 }
 

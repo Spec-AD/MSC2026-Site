@@ -157,9 +157,9 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
                     <p className="text-xl text-white font-bold truncate">{song.title}</p>
                     <p className="text-base text-zinc-500 truncate">{song.artist || song.basic_info?.artist}</p>
                     {/* 难度标签 */}
-                    {song.level && (
-                      <span className="inline-block text-sm px-2 py-0.5 mt-1 rounded bg-white/[0.06] text-zinc-400">
-                        {Array.isArray(song.level) ? song.level[song.level.length - 1] : song.level}
+                    {(song.difficultyName || song.level) && (
+                      <span className="inline-block text-sm px-2 py-0.5 mt-1 rounded bg-white/[0.06] text-zinc-300">
+                        {song.difficultyName || 'MASTER'} · {song.chartConstant ?? song.levelValue ?? (Array.isArray(song.level) ? song.level[song.difficultyIndex ?? 3] : song.level)}
                       </span>
                     )}
                     {(song.bpm || song.basic_info?.bpm) && (

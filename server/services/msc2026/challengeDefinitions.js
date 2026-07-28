@@ -1,6 +1,5 @@
 /**
- * MSC 2026 挑战任务库（25条常量定义）
- * 三堵墙（密锁、准锁、叹息）共用此库
+ * MSC 2026 第一道墙随机挑战池（33 条）与第二道墙固定挑战
  * stage2 与 stage3 各自独立实例化，互不干扰
  *
  * 任务类型：
@@ -245,8 +244,77 @@ const CHALLENGE_TASKS = [
     difficulty: 'MASTER',
     toleranceType: 'nonPerfect',
     toleranceLimit: 2
+  },
+  {
+    id: 26,
+    name: '兄弟提一把',
+    description: '在 TiamaT:F minor[MASTER] 谱面中 GREAT及以下 ≤ 6',
+    type: 'completion', songTitle: 'TiamaT:F minor', difficulty: 'MASTER',
+    toleranceType: 'greatOrBelow', toleranceLimit: 6
+  },
+  {
+    id: 27,
+    name: 'YOSHIKI附体',
+    description: '在 Our Wrenally[MASTER] 谱面中取得 AP+',
+    type: 'eval', songTitle: 'Our Wrenally', difficulty: 'MASTER', evalRequirement: 'AP+'
+  },
+  {
+    id: 28,
+    name: '艺术就是爆炸！',
+    description: '在 脳天直撃[MASTER] 谱面中取得 100.9000% 及以上',
+    type: 'achievement', songTitle: '脳天直撃', difficulty: 'MASTER', threshold: 100.9000
+  },
+  {
+    id: 29,
+    name: '我上早八',
+    description: '在 QuiQ[MASTER] 谱面中非完美 BREAK 数 ≤ 8',
+    type: 'completion', songTitle: 'QuiQ', difficulty: 'MASTER',
+    toleranceType: 'nonPerfectBreak', toleranceLimit: 8
+  },
+  {
+    id: 30,
+    name: '舞萌科目二',
+    description: '在 ウミユリ海底譚[MASTER] 谱面中取得 AP+ 且 DX 5星',
+    type: 'combined', songTitle: 'ウミユリ海底譚', difficulty: 'MASTER',
+    evalRequirement: 'AP+', dxRequirement: 5
+  },
+  {
+    id: 31,
+    name: '404 Mother-No-Found',
+    description: '在 Good bye, Merry-Go-Round.[MASTER] 谱面中取得 AP',
+    type: 'eval', songTitle: 'Good bye, Merry-Go-Round.', difficulty: 'MASTER', evalRequirement: 'AP'
+  },
+  {
+    id: 32,
+    name: '崩坏：星穹铁道',
+    description: '在 CO5M1C R4ILR0AD[MASTER] 谱面中取得 AP',
+    type: 'eval', songTitle: 'CO5M1C R4ILR0AD', difficulty: 'MASTER', evalRequirement: 'AP'
+  },
+  {
+    id: 33,
+    name: '你爹来咯',
+    description: '在 ≠彡"/了→[MASTER] 谱面中非完美 BREAK 数 ≤ 15',
+    type: 'completion', songTitle: '≠彡"/了→', difficulty: 'MASTER',
+    toleranceType: 'nonPerfectBreak', toleranceLimit: 15
   }
 ];
+
+const FIXED_WALL_CHALLENGES = {
+  stage2: {
+    id: 201,
+    name: '6进4 最终墙',
+    description: '在 最強 STRONGER[MASTER] 谱面中取得 DX 4星及以上',
+    type: 'precision', songTitle: '最強 STRONGER', difficulty: 'MASTER', dxRequirement: 4,
+    fixed: true
+  },
+  stage3: {
+    id: 301,
+    name: '4进2 最终墙',
+    description: '在 氷滅の135小節[MASTER] 谱面中取得 AP',
+    type: 'eval', songTitle: '氷滅の135小節', difficulty: 'MASTER', evalRequirement: 'AP',
+    fixed: true
+  }
+};
 
 /**
  * 根据 songTitle 查找 Song._id（管理员配置阶段调用）
@@ -280,4 +348,4 @@ function createTaskPool(songMap) {
   };
 }
 
-module.exports = { CHALLENGE_TASKS, resolveSongIds, createTaskPool };
+module.exports = { CHALLENGE_TASKS, FIXED_WALL_CHALLENGES, resolveSongIds, createTaskPool };

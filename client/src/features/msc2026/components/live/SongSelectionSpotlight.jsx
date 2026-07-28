@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion as Motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { Music2, X } from 'lucide-react';
 import { EASE_ACCEL } from '../../utils/motion';
 import { getSongCover } from '../../utils/songPresentation';
@@ -23,14 +23,33 @@ function normalizeBpm(song) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+const DIFFICULTY_STYLES = {
+  BASIC: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200',
+  ADVANCED: 'border-amber-400/40 bg-amber-500/15 text-amber-200',
+  EXPERT: 'border-red-400/40 bg-red-500/15 text-red-200',
+  MASTER: 'border-violet-400/40 bg-violet-500/15 text-violet-200',
+  'Re:MASTER': 'border-fuchsia-300/50 bg-fuchsia-400/15 text-fuchsia-100',
+};
+
+const NOTE_LABELS = [
+  ['tap', 'TAP', 'bg-sky-400'],
+  ['hold', 'HOLD', 'bg-amber-300'],
+  ['slide', 'SLIDE', 'bg-rose-400'],
+  ['touch', 'TOUCH', 'bg-emerald-400'],
+  ['break', 'BREAK', 'bg-orange-300'],
+];
+
 export default function SongSelectionSpotlight({ song, onClose, pickLabel }) {
   const reduceMotion = useReducedMotion();
   const [closing, setClosing] = useState(false);
+  const [detailsForSong, setDetailsForSong] = useState(null);
   const closeTimerRef = useRef(null);
   const bpm = normalizeBpm(song);
   const beatDuration = bpm ? Math.max(0.18, Math.min(1.2, 60 / bpm)) : 0.5;
   const cover = getSongCover(song);
   const artist = song?.artist || song?.basic_info?.artist || '曲师未标注';
+  const songKey = String(song?._id || song?.songId || song?.id || song?.title || '');
+  const detailsVisible = detailsForSong === songKey;
 
   useEffect(() => {
     if (!song) return undefined;
@@ -48,6 +67,12 @@ export default function SongSelectionSpotlight({ song, onClose, pickLabel }) {
 
   useEffect(() => () => clearTimeout(closeTimerRef.current), []);
 
+  useEffect(() => {
+    if (!song) return undefined;
+    const timer = window.setTimeout(() => setDetailsForSong(songKey), reduceMotion ? 300 : 3000);
+    return () => window.clearTimeout(timer);
+  }, [reduceMotion, song, songKey]);
+
   const dismiss = () => {
     if (closing) return;
     setClosing(true);
@@ -58,6 +83,10 @@ export default function SongSelectionSpotlight({ song, onClose, pickLabel }) {
   };
 
   if (!song) return null;
+
+  const difficultyName = song.difficultyName || 'MASTER';
+  const noteCounts = song.noteCounts || {};
+  const maxNoteCount = Math.max(1, ...NOTE_LABELS.map(([key]) => Number(noteCounts[key]) || 0));
 
   return createPortal(
     <Motion.div
@@ -133,79 +162,84 @@ export default function SongSelectionSpotlight({ song, onClose, pickLabel }) {
           {pickLabel || 'TRACK SELECT'}
         </Motion.p>
 
-        <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
-          {!reduceMotion && [0, 1].map((ring) => (
+        <div className="relative flex min-h-0 w-full flex-1 items-center justify-center overflow-y-auto">
+          <Motion.div layout className="flex w-full max-w-[1500px] flex-col items-center justify-center gap-6 lg:flex-row lg:gap-10">
             <Motion.div
-              key={ring}
-              aria-hidden="true"
-              className="absolute aspect-square h-[min(72vw,58vh)] max-h-[560px] max-w-[560px] border border-amber-200/45 shadow-[0_0_34px_rgba(251,191,36,0.12)]"
-              animate={{ scale: [1, 1.025 + ring * 0.018, 1.025 + ring * 0.018], opacity: [0.58, 0, 0] }}
-              transition={{
-                duration: beatDuration,
-                delay: ring * beatDuration * 0.5,
-                repeat: Infinity,
-                ease: 'easeOut',
-              }}
-            />
-          ))}
-
-          <Motion.div
-            data-testid="song-spotlight-cover"
-            data-beat-duration={beatDuration}
-            className="relative aspect-square h-[min(72vw,58vh)] max-h-[560px] max-w-[560px] overflow-hidden border border-white/30 bg-zinc-950 shadow-[0_0_65px_rgba(251,191,36,0.18)]"
-            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.78, rotate: -1.5 }}
-            animate={reduceMotion
-              ? { opacity: 1 }
-              : { opacity: 1, scale: [1, 1.012, 1], rotate: 0 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, rotate: 1 }}
-            transition={reduceMotion
-              ? { duration: 0.18 }
-              : {
+              layout
+              animate={{ rotate: detailsVisible && !reduceMotion ? -2.2 : 0 }}
+              transition={{ duration: 0.18, ease: EASE_ACCEL }}
+              className="relative shrink-0"
+            >
+              {!reduceMotion && [0, 1].map((ring) => (
+                <Motion.div
+                  key={ring}
+                  aria-hidden="true"
+                  className="absolute inset-0 border border-amber-200/45 shadow-[0_0_34px_rgba(251,191,36,0.12)]"
+                  animate={{ scale: [1, 1.025 + ring * 0.018, 1.025 + ring * 0.018], opacity: [0.58, 0, 0] }}
+                  transition={{ duration: beatDuration, delay: ring * beatDuration * 0.5, repeat: Infinity, ease: 'easeOut' }}
+                />
+              ))}
+              <Motion.div
+                data-testid="song-spotlight-cover"
+                data-beat-duration={beatDuration}
+                className="relative aspect-square h-[min(68vw,55vh)] max-h-[560px] max-w-[560px] overflow-hidden border border-white/30 bg-zinc-950 shadow-[0_0_65px_rgba(251,191,36,0.18)] lg:h-[min(42vw,55vh)]"
+                initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.78, rotate: -1.5 }}
+                animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: [1, 1.012, 1] }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, rotate: 1 }}
+                transition={reduceMotion ? { duration: 0.18 } : {
                   opacity: { duration: 0.42, ease: EASE_ACCEL },
-                  rotate: { duration: 0.52, ease: EASE_ACCEL },
                   scale: { duration: beatDuration, repeat: Infinity, ease: 'easeOut' },
                 }}
-          >
-            {cover ? (
-              <img src={cover} alt={song.title} className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-zinc-900 text-zinc-600">
-                <Music2 className="h-16 w-16 md:h-24 md:w-24" />
-              </div>
-            )}
-            {!reduceMotion && (
-              <Motion.span
-                aria-hidden="true"
-                className="absolute inset-x-0 top-0 h-1 bg-amber-100 shadow-[0_0_18px_rgba(253,230,138,0.9)]"
-                animate={{ opacity: [0.95, 0.18, 0.18] }}
-                transition={{ duration: beatDuration, repeat: Infinity, ease: 'easeOut' }}
-              />
-            )}
+              >
+                {cover ? <img src={cover} alt={song.title} className="h-full w-full object-cover" /> : (
+                  <div className="flex h-full w-full items-center justify-center bg-zinc-900 text-zinc-600"><Music2 className="h-16 w-16 md:h-24 md:w-24" /></div>
+                )}
+                {!reduceMotion && <Motion.span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-amber-100 shadow-[0_0_18px_rgba(253,230,138,0.9)]" animate={{ opacity: [0.95, 0.18, 0.18] }} transition={{ duration: beatDuration, repeat: Infinity, ease: 'easeOut' }} />}
+              </Motion.div>
+              <AnimatePresence>
+                {!detailsVisible && (
+                  <Motion.div exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15, ease: EASE_ACCEL }} className="absolute inset-x-[-12vw] top-full mt-4 text-center">
+                    <h2 id="msc-song-spotlight-title" className="truncate text-3xl font-black text-white md:text-5xl" style={{ fontFamily: 'Torus, sans-serif', letterSpacing: 0 }}>{song.title || '未命名曲目'}</h2>
+                    {bpm && <p className="mt-2 font-mono text-sm font-bold text-amber-200/75">BPM {bpm}</p>}
+                  </Motion.div>
+                )}
+              </AnimatePresence>
+            </Motion.div>
+
+            <AnimatePresence>
+              {detailsVisible && (
+                <Motion.section
+                  initial={{ opacity: 0, x: 34 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.18, ease: EASE_ACCEL }}
+                  className="w-full max-w-2xl border-l-4 border-amber-300 bg-black/45 p-5 text-left md:p-7"
+                >
+                  <div className="flex items-start justify-between gap-5">
+                    <div className="min-w-0">
+                      <h2 id="msc-song-spotlight-title" className="text-3xl font-black text-white md:text-5xl" style={{ fontFamily: 'Torus, sans-serif', letterSpacing: 0 }}>{song.title || '未命名曲目'}</h2>
+                      <p className="mt-2 text-lg font-bold text-zinc-300 md:text-2xl">{artist}</p>
+                    </div>
+                    <div className={`shrink-0 border px-4 py-3 text-center ${DIFFICULTY_STYLES[difficultyName] || DIFFICULTY_STYLES.MASTER}`}>
+                      <p className="text-sm font-black">{difficultyName}</p>
+                      <p className="mt-1 font-mono text-3xl font-black">{song.chartConstant ?? song.levelValue ?? '--'}</p>
+                    </div>
+                  </div>
+                  <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-4 border-y border-white/10 py-5 text-base md:text-xl">
+                    <div><p className="text-sm text-zinc-500">谱师</p><p className="mt-1 font-bold text-white">{song.charter || '未收录'}</p></div>
+                    <div><p className="text-sm text-zinc-500">总物量</p><p className="mt-1 font-mono text-3xl font-black text-white">{Number(song.totalNotes || 0).toLocaleString()}</p></div>
+                    <div><p className="text-sm text-zinc-500">BPM</p><p className="mt-1 font-mono text-2xl font-black text-amber-200">{bpm || '--'}</p></div>
+                    <div><p className="text-sm text-zinc-500">别名</p><p className="mt-1 line-clamp-2 font-bold text-zinc-200">{song.aliases?.length ? song.aliases.join(' / ') : '未收录'}</p></div>
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    {NOTE_LABELS.map(([key, label, color]) => {
+                      const count = Number(noteCounts[key]) || 0;
+                      return <div key={key} className="grid grid-cols-[64px_1fr_60px] items-center gap-3"><span className="text-sm font-black text-zinc-400">{label}</span><div className="h-3 bg-white/10"><Motion.div initial={{ scaleX: 0 }} animate={{ scaleX: count / maxNoteCount }} transition={{ duration: 0.18, delay: 0.05, ease: EASE_ACCEL }} className={`h-full origin-left ${color}`} /></div><span className="text-right font-mono text-lg font-black text-white">{count}</span></div>;
+                    })}
+                  </div>
+                </Motion.section>
+              )}
+            </AnimatePresence>
           </Motion.div>
         </div>
-
-        <Motion.div
-          className="mt-3 w-full max-w-5xl shrink-0 text-center md:mt-5"
-          initial={reduceMotion ? false : { opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.48, delay: 0.18, ease: EASE_ACCEL }}
-        >
-          <h2
-            id="msc-song-spotlight-title"
-            className="overflow-hidden text-ellipsis whitespace-nowrap text-2xl font-black text-white sm:text-4xl md:text-5xl"
-            style={{ fontFamily: 'Torus, sans-serif', letterSpacing: 0 }}
-          >
-            {song.title || '未命名曲目'}
-          </h2>
-          <p className="mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold text-zinc-300 sm:text-lg md:text-xl">
-            {artist}
-          </p>
-          {bpm && (
-            <p className="mt-2 font-mono text-xs font-bold text-amber-200/75 md:text-sm">
-              BPM {bpm}
-            </p>
-          )}
-        </Motion.div>
       </div>
     </Motion.div>,
     document.body,

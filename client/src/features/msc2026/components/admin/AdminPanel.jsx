@@ -20,7 +20,7 @@ function getSongId(song) {
   return String(song?._id || song?.songId || '');
 }
 
-function SongSearch({ onToggle, selectedSongs = [], maxSelect }) {
+function SongSearch({ onToggle, onDifficultyChange, selectedSongs = [], maxSelect }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -78,10 +78,24 @@ function SongSearch({ onToggle, selectedSongs = [], maxSelect }) {
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] text-zinc-500">已选：</span>
           {selectedSongs.map((song) => (
-            <button key={getSongId(song)} type="button" onClick={() => onToggle(song)}
-              className="text-[10px] px-2 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/25 hover:bg-red-500/15 hover:text-red-300 transition-all">
-              {song.title || getSongId(song)} ×
-            </button>
+            <div key={getSongId(song)} className="flex items-center gap-2 border border-amber-500/25 bg-amber-500/10 px-2 py-1.5">
+              <span className="max-w-[160px] truncate text-xs text-amber-100">{song.title || getSongId(song)}</span>
+              <select
+                value={song.difficultyIndex ?? 3}
+                onChange={(event) => onDifficultyChange?.(getSongId(song), Number(event.target.value))}
+                className="bg-zinc-900 border border-white/10 px-2 py-1 text-xs text-white"
+                aria-label={`${song.title} 难度`}
+              >
+                {(song.availableDifficulties || (song.ds || []).map((constant, difficultyIndex) => ({ difficultyIndex, chartConstant: constant })))
+                  .filter(entry => entry.chartConstant != null)
+                  .map(entry => (
+                    <option key={entry.difficultyIndex} value={entry.difficultyIndex}>
+                      {entry.difficultyName || ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'Re:MASTER'][entry.difficultyIndex]} {entry.chartConstant}
+                    </option>
+                  ))}
+              </select>
+              <button type="button" onClick={() => onToggle(song)} className="px-1 text-zinc-400 hover:text-red-300" aria-label={`移除 ${song.title}`}>×</button>
+            </div>
           ))}
         </div>
       )}
@@ -245,14 +259,21 @@ export default function AdminPanel() {
     const id = getSongId(song);
     setter((current) => current.some(item => getSongId(item) === id)
       ? current.filter(item => getSongId(item) !== id)
-      : [...current, song]);
+      : [...current, { ...song, difficultyIndex: song.difficultyIndex ?? 3 }]);
   };
+
+  const setSongDifficulty = (setter, songId, difficultyIndex) => {
+    setter(current => current.map(song => getSongId(song) === songId ? { ...song, difficultyIndex } : song));
+  };
+
+  const difficultyMap = (songs) => Object.fromEntries(songs.map(song => [getSongId(song), song.difficultyIndex ?? 3]));
 
   const handleSaveStage1Pool = () => handleAction(
     async () => {
       await api.updateConfig({
         poolType: 'stage1',
         songPoolIds: stage1Songs.map(getSongId),
+        songDifficultyIndexes: difficultyMap(stage1Songs),
       });
       await loadSongConfig();
     },
@@ -264,7 +285,9 @@ export default function AdminPanel() {
       await api.updateConfig({
         poolType: 'stage4',
         songPoolIds: stage4Songs.map(getSongId),
+        songDifficultyIndexes: difficultyMap(stage4Songs),
         designatedSongId: getSongId(designatedSong),
+        designatedDifficultyIndex: designatedSong?.difficultyIndex ?? 3,
       });
       await loadSongConfig();
     },
@@ -399,7 +422,7 @@ export default function AdminPanel() {
                 <h4 className="text-xs text-zinc-400 uppercase tracking-wider">阶段一图池</h4>
                 <span className="text-xs text-zinc-500">{stage1Songs.length} 首</span>
               </div>
-              <SongSearch onToggle={(song) => toggleSong(setStage1Songs, song)} selectedSongs={stage1Songs} />
+              <SongSearch onToggle={(song) => toggleSong(setStage1Songs, song)} onDifficultyChange={(id, index) => setSongDifficulty(setStage1Songs, id, index)} selectedSongs={stage1Songs} />
               <ActionButton onClick={handleSaveStage1Pool} loading={loading} disabled={stage1Songs.length < 3}
                 icon={<FaCheck />} label="保存阶段一图池" />
             </div>
@@ -408,11 +431,12 @@ export default function AdminPanel() {
                 <h4 className="text-xs text-zinc-400 uppercase tracking-wider">决赛图池</h4>
                 <span className="text-xs text-zinc-500">{stage4Songs.length} 首</span>
               </div>
-              <SongSearch onToggle={(song) => toggleSong(setStage4Songs, song)} selectedSongs={stage4Songs} />
+              <SongSearch onToggle={(song) => toggleSong(setStage4Songs, song)} onDifficultyChange={(id, index) => setSongDifficulty(setStage4Songs, id, index)} selectedSongs={stage4Songs} />
               <div className="pt-2 border-t border-white/10">
                 <h4 className="text-xs text-zinc-500 uppercase tracking-wider mb-2">决赛课题曲</h4>
                 <SongSearch
                   onToggle={(song) => setDesignatedSong(current => getSongId(current) === getSongId(song) ? null : song)}
+                  onDifficultyChange={(_id, index) => setDesignatedSong(current => current ? { ...current, difficultyIndex: index } : current)}
                   selectedSongs={designatedSong ? [designatedSong] : []}
                   maxSelect={1}
                 />
@@ -509,7 +533,7 @@ export default function AdminPanel() {
                         icon={<FaPlay />} label={store.summary?.stage2?.terminated ? '推进到阶段三' : '跑图结束后可推进'} />
                       <ActionButton onClick={quickAction(api.terminateRace, '终止跑图')} loading={loading} disabled={!store.summary?.stage2 || store.summary?.stage2?.terminated} icon={<FaTimes />} label="终止" variant="danger" />
                       <ActionButton onClick={quickAction(api.undoRaceLastAction, '撤销行动')} loading={loading} icon={<FaUndo />} label="撤销行动" variant="undo" />
-                      <ActionButton onClick={quickAction(api.revertChallengeResult, '翻转判定')} loading={loading} icon={<FaUndo />} label="翻转判定" variant="undo" />
+                      <ActionButton onClick={quickAction(api.revertChallengeResult, '撤回判定')} loading={loading} icon={<FaUndo />} label="撤回判定" variant="undo" />
                       <ActionButton onClick={quickAction(api.resetRace, '重置跑图')} loading={loading} icon={<FaTrash />} label="重置" variant="danger" />
                     </>
                   )}
@@ -536,7 +560,7 @@ export default function AdminPanel() {
                   )}
                   <ActionButton onClick={quickAction(api.terminateRace, '终止跑图')} loading={loading} disabled={!store.summary?.stage3 || store.summary?.stage3?.terminated} icon={<FaTimes />} label="终止" variant="danger" />
                   <ActionButton onClick={quickAction(api.undoRaceLastAction, '撤销行动')} loading={loading} icon={<FaUndo />} label="撤销行动" variant="undo" />
-                  <ActionButton onClick={quickAction(api.revertChallengeResult, '翻转判定')} loading={loading} icon={<FaUndo />} label="翻转判定" variant="undo" />
+                  <ActionButton onClick={quickAction(api.revertChallengeResult, '撤回判定')} loading={loading} icon={<FaUndo />} label="撤回判定" variant="undo" />
                   <ActionButton onClick={quickAction(api.resetRace, '重置跑图')} loading={loading} icon={<FaTrash />} label="重置" variant="danger" />
                 </div>
               </div>
@@ -621,7 +645,7 @@ export default function AdminPanel() {
                 <h4 className="text-xs text-purple-400 uppercase tracking-wider">跑图 回退操作</h4>
                 <div className="flex items-center gap-2 flex-wrap">
                   <ActionButton onClick={quickAction(api.undoRaceLastAction, '撤销行动')} loading={loading} icon={<FaUndo />} label="撤销最后行动" variant="undo" />
-                  <ActionButton onClick={quickAction(api.revertChallengeResult, '翻转判定')} loading={loading} icon={<FaUndo />} label="翻转挑战判定" variant="undo" />
+                  <ActionButton onClick={quickAction(api.revertChallengeResult, '撤回判定')} loading={loading} icon={<FaUndo />} label="撤回挑战判定" variant="undo" />
                   <ActionButton onClick={quickAction(api.resetRace, '重置')} loading={loading} icon={<FaTrash />} label="重置跑图" variant="danger" />
                 </div>
               </div>

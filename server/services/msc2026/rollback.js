@@ -8,6 +8,7 @@
 
 const { broadcast } = require('./ssePool');
 const { getItem } = require('./itemDefinitions');
+const { FIXED_WALL_CHALLENGES } = require('./challengeDefinitions');
 // patch-03: 回退服务不再回写 tournament.status —— matches/MSC 是临时适配层，
 // 权威阶段由组织者在 tournament 端控制，回退只清理本适配层自身的数据。
 
@@ -71,14 +72,40 @@ function revertStage1Group(tournament, groupIdx) {
   targetGroup.winner = null;
   targetGroup.forfait = null;
   targetGroup.needTiebreak = false;
+  targetGroup.revealStartedAt = null;
+  targetGroup.revealEndsAt = null;
+  for (let index = groupIdx + 1; index < s1.groups.length; index++) {
+    const group = s1.groups[index];
+    group.songs = [];
+    group.status = 'pending';
+    group.winner = null;
+    group.forfait = null;
+    group.needTiebreak = false;
+    group.revealStartedAt = null;
+    group.revealEndsAt = null;
+  }
   s1.currentGroupIndex = groupIdx;
   s1.status = 'playing';
+  tournament.status = 'stage1';
+  tournament.qualifiedStage1 = [];
+  tournament.qualifiedStage2 = [];
+  tournament.qualifiedStage3 = [];
+  tournament.stage2 = null;
+  tournament.stage3 = null;
+  tournament.stage4 = null;
 }
 
 /** R1.4 重置阶段一 */
 function resetStage1(tournament) {
   tournament.stage1 = null;
-  // qualifiedStage1 保留（从预选赛来的晋级选手不变）
+  tournament.stage2 = null;
+  tournament.stage3 = null;
+  tournament.stage4 = null;
+  tournament.qualifiedStage1 = [];
+  tournament.qualifiedStage2 = [];
+  tournament.qualifiedStage3 = [];
+  tournament.qualifierRankings = [];
+  tournament.status = 'pending';
 }
 
 // ═══════════════════════════════════════════════
@@ -86,7 +113,7 @@ function resetStage1(tournament) {
 // ═══════════════════════════════════════════════
 
 /** R2.1 撤销最后跑图行动（P0） */
-function undoRaceLastAction(race) {
+function undoRaceLastAction(race, tournament = null, stageKey = null) {
   if (!race || !Array.isArray(race.players) || race.players.length === 0) throw new Error('跑图未初始化或选手为空');
   const lastLog = race.actionLog[race.actionLog.length - 1];
   if (!lastLog) throw new Error('无行动可撤销');
@@ -102,9 +129,12 @@ function undoRaceLastAction(race) {
       if (!lastChallenge) throw new Error('无挑战记录可撤销');
 
       // 恢复任务到池中
-      race.taskPool.remaining.push(lastChallenge.taskId);
-      const usedIdx = race.taskPool.used.indexOf(lastChallenge.taskId);
-      if (usedIdx >= 0) race.taskPool.used.splice(usedIdx, 1);
+      const fixedIds = new Set(Object.values(FIXED_WALL_CHALLENGES).map(task => task.id));
+      if (!fixedIds.has(lastChallenge.taskId)) {
+        race.taskPool.remaining.push(lastChallenge.taskId);
+        const usedIdx = race.taskPool.used.indexOf(lastChallenge.taskId);
+        if (usedIdx >= 0) race.taskPool.used.splice(usedIdx, 1);
+      }
 
       // 如果已判定为通过，回退层数
       if (lastChallenge.passed === true) {
@@ -139,11 +169,7 @@ function undoRaceLastAction(race) {
 
     case 'challenge_passed':
     case 'challenge_failed':
-      undoRaceLastChallengeResult(race);
-      race.currentPlayerIndex = race.players.findIndex(p => p.userId.toString() === lastLog.playerId.toString());
-      if (race.currentPlayerIndex < 0) race.currentPlayerIndex = 0;
-      race.currentTurn = Math.max(0, race.currentTurn - 1);
-      race.turnStartedAt = null;
+      undoRaceLastChallengeResult(race, tournament, stageKey);
       // 上面的函数已经 pop 了 actionLog，这里无需再处理
       return;
 
@@ -186,73 +212,71 @@ function undoRaceItemUse(race, itemRef) {
   }
 }
 
-/** R2.3 翻转挑战判定（P0） */
-function undoRaceLastChallengeResult(race) {
+/** R2.3 撤回最近一次挑战判定，恢复为待裁判确认 */
+function undoRaceLastChallengeResult(race, tournament = null, stageKey = null) {
   if (!race || !Array.isArray(race.players) || race.players.length === 0) throw new Error('跑图未初始化或选手为空');
+  const resultLogIndex = race.actionLog.findLastIndex(
+    log => ['challenge_passed', 'challenge_failed'].includes(log.actionType)
+  );
+  const trailingActions = resultLogIndex >= 0 ? race.actionLog.slice(resultLogIndex + 1) : [];
+  const onlyAutomaticSilentSkips = trailingActions.every(
+    log => log.actionType === 'skip_timeout' && log.detail?.reason === 'silent'
+  );
+  if (resultLogIndex < 0 || !onlyAutomaticSilentSkips) {
+    throw new Error('只能撤回最近一次操作；挑战判定后已有其他行动');
+  }
   const lastChallenge = [...race.challengeHistory].reverse().find(ch => ch.passed !== null);
   if (!lastChallenge) throw new Error('无已判定的挑战');
 
   const player = race.players.find(p => p.userId.toString() === lastChallenge.playerId.toString());
   if (!player) throw new Error('选手数据异常');
 
-  // 翻转判定
   const wasPassed = lastChallenge.passed;
-
-  if (wasPassed) {
-    // true→false: 选手弹回
-    player.currentLayer = Math.max(0, player.currentLayer - 1);
-    // 应用双面道具惩罚
-    for (const ref of (lastChallenge.usedItemRefs || [])) {
-      const def = getItem(ref);
-      if (def && def.penalty) {
-        const p = def.penalty;
-        // 与 raceEngine 修复 #5 保持一致：惩罚回合 × playerCount
-        const span = race.players.length;
-        if (p.silentTurns) player.silentUntilTurn = Math.max(player.silentUntilTurn || 0, race.currentTurn + p.silentTurns * span);
-        if (p.disableItemsTurns) player.disableItemsUntilTurn = Math.max(player.disableItemsUntilTurn || 0, race.currentTurn + p.disableItemsTurns * span);
-        if (p.backToLayer0) player.currentLayer = 0;
-      }
-    }
+  const snapshot = lastChallenge.rollbackSnapshot;
+  if (snapshot?.player && snapshot?.race) {
+    Object.assign(player, snapshot.player);
+    race.currentPlayerIndex = snapshot.race.currentPlayerIndex;
+    race.currentTurn = snapshot.race.currentTurn;
+    race.turnStartedAt = snapshot.race.turnStartedAt;
+    race.terminated = snapshot.race.terminated;
+    race.terminatedReason = snapshot.race.terminatedReason;
+    race.finishOrder = snapshot.race.finishOrder || [];
+    race.globalEffect = snapshot.race.globalEffect || { sourceItemRef: null, startsAtTurn: null, endsAtTurn: null };
+    if (tournament && stageKey === 'stage2') tournament.qualifiedStage2 = snapshot.qualifiedIds || [];
+    if (tournament && stageKey === 'stage3') tournament.qualifiedStage3 = snapshot.qualifiedIds || [];
   } else {
-    // false→true: 移除惩罚（恢复 silent/disable 到原来状态），前进一层
-    player.silentUntilTurn = null;
-    player.disableItemsUntilTurn = null;
-    player.currentLayer++;
-    if (player.currentLayer >= race.mapConfig.wallLabels.length) {
-      player.currentLayer = race.mapConfig.layers;
-      const order = race.finishOrder.length + 1;
-      player.finishOrder = order;
-      player.finishTimestamp = Date.now();
-      race.finishOrder.push({ userId: player.userId, finishTimestamp: player.finishTimestamp, order });
+    const dxScore = Number(lastChallenge.resultSnapshot?.dxScore);
+    if (Number.isFinite(dxScore)) player.cumulativeDxScore = Math.max(0, (player.cumulativeDxScore || 0) - dxScore);
+    player.currentLayer = Math.max(0, lastChallenge.wallIndex || 0);
+    if (wasPassed) {
+      const achievement = Number(lastChallenge.resultSnapshot?.achievement);
+      if (Number.isFinite(achievement)) {
+        player.successfulChallengeAchievementTotal = Math.max(0, (player.successfulChallengeAchievementTotal || 0) - achievement);
+        player.successfulChallengeCount = Math.max(0, (player.successfulChallengeCount || 0) - 1);
+      }
+    } else {
+      player.silentUntilTurn = null;
+      player.disableItemsUntilTurn = null;
+      player.challengeFailureCount = Math.max(0, (player.challengeFailureCount || 0) - 1);
     }
+    race.currentPlayerIndex = race.players.findIndex(p => p.userId.toString() === lastChallenge.playerId.toString());
+    if (race.currentPlayerIndex < 0) race.currentPlayerIndex = 0;
+    race.currentTurn = Math.max(0, race.currentTurn - 1);
+    race.turnStartedAt = null;
   }
 
-  // 从 challengeHistory 移除最后一条 actionLog 记录
-  const relatedLogIdx = race.actionLog.findLastIndex(
-    log => log.playerId.toString() === lastChallenge.playerId.toString() &&
-           (log.actionType === 'challenge_passed' || log.actionType === 'challenge_failed')
-  );
-  if (relatedLogIdx >= 0) race.actionLog.splice(relatedLogIdx, 1);
+  race.actionLog.splice(resultLogIndex);
 
   // 重置挑战状态为待判定
   lastChallenge.passed = null;
   lastChallenge.judgedBy = null;
   lastChallenge.judgedAt = null;
 
-  // 清除 finishOrder（如果到达终点被撤回）
-  const finishIdx = race.finishOrder.findIndex(
-    f => f.userId.toString() === player.userId.toString()
-  );
-  if (finishIdx >= 0 && wasPassed) {
-    race.finishOrder.splice(finishIdx, 1);
-    player.finishOrder = null;
-    player.finishTimestamp = null;
-  }
-
-  // 终止标记清除
-  if (race.terminated && race.terminatedReason === 'all_qualified') {
+  if (!snapshot && race.terminated && race.terminatedReason === 'all_qualified') {
     race.terminated = false;
     race.terminatedReason = null;
+    if (tournament && stageKey === 'stage2') tournament.qualifiedStage2 = [];
+    if (tournament && stageKey === 'stage3') tournament.qualifiedStage3 = [];
   }
 }
 
@@ -316,7 +340,7 @@ function undoStage4LastScore(tournament, player = 'both') {
 /** R4.3 重置决赛 */
 function resetStage4(tournament) {
   tournament.stage4 = null;
-  // 保留 songPool/designatedSongId 在图池配置中
+  tournament.status = 'stage3';
 }
 
 // ═══════════════════════════════════════════════

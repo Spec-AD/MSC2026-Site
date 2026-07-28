@@ -142,6 +142,15 @@ export const useMSC2026Store = create((set, get) => ({
     }
   },
 
+  completeStage1Reveal: async () => {
+    try {
+      const res = await api.completeStage1Reveal();
+      return res.data;
+    } catch (err) {
+      throw err.response?.data || { msg: '抽签揭晓确认失败' };
+    }
+  },
+
   forfaitStage1: async (playerId) => {
     try {
       const res = await api.forfaitStage1(playerId);

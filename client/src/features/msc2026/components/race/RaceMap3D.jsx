@@ -3,8 +3,8 @@
 // 正六边形 / 正方形 · 等距投影 · 手动摄像机
 // 视觉：柔光 + 接触阴影 + 辉光宝石 + 浮动选手 + 坐标系
 // ============================================================
-import { useRef, useMemo, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { useLayoutEffect, useRef, useMemo, useState } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import {
   OrbitControls, Line, Html, Float, Sparkles, ContactShadows,
 } from '@react-three/drei';
@@ -30,6 +30,27 @@ function squareVertices2D(cx, cy, r) {
 
 const toXYZ = (v, y = 0) => [v[0], y, v[1]];
 const sectorMidAngle = (v1, v2) => Math.atan2(v1[1] + v2[1], v1[0] + v2[0]);
+
+function CameraSetup({ maxR }) {
+  const camera = useThree(state => state.camera);
+  const controls = useThree(state => state.controls);
+  const size = useThree(state => state.size);
+
+  useLayoutEffect(() => {
+    const target = new THREE.Vector3(0, -0.18, 0);
+    const aspect = size.width / Math.max(1, size.height);
+    const narrowScreenScale = Math.max(1, 0.98 / aspect);
+    camera.position.set(0, maxR * 1.8 * narrowScreenScale, maxR * 2.1 * narrowScreenScale);
+    camera.lookAt(target);
+    camera.updateProjectionMatrix();
+    if (controls) {
+      controls.target.copy(target);
+      controls.update();
+    }
+  }, [camera, controls, maxR, size.height, size.width]);
+
+  return null;
+}
 
 // ==================== 地面 ====================
 
@@ -132,7 +153,7 @@ function WallRing({ vertices, y, height = 0.72, label = '', breachedCount = 0, t
 
       {/* 标签：墙名 · 坐标 · 攻破进度 */}
       <Html position={labelPosition} center distanceFactor={8} zIndexRange={[10, 0]}>
-        <div className={`flex items-center gap-2 text-xs md:text-sm px-3 py-1.5 rounded-full whitespace-nowrap border backdrop-blur-md pointer-events-none shadow-lg
+        <div className={`flex items-center gap-2 whitespace-nowrap border border-l-4 px-4 py-2 text-sm font-bold backdrop-blur-md pointer-events-none shadow-lg md:text-base
           ${fully ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30'
             : partial ? 'bg-amber-500/15 text-amber-300 border-amber-400/30'
             : 'bg-red-500/15 text-red-300 border-red-400/30'}`}>
@@ -370,15 +391,19 @@ export default function RaceMap3D({
   const outerVertices = useMemo(() => verticesFn(0, 0, maxR), [verticesFn]);
 
   return (
-    <div style={{ width, height }} className="relative rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-b from-[#0b1020] via-[#070b14] to-[#05060a] shadow-[0_28px_90px_rgba(0,0,0,0.45)]">
+    <div style={{ width, height }} className="relative overflow-hidden border-y border-white/10 bg-[#070b12] shadow-[0_28px_90px_rgba(0,0,0,0.45)]">
       <Canvas
-        camera={{ position: [maxR * 0.84, maxR * 1.12, maxR * 1.18], fov: 42 }}
+        camera={{
+          position: [0, maxR * 2, maxR * 2.3],
+          rotation: [-Math.atan2(maxR * 2 + 0.18, maxR * 2.3), 0, 0],
+          fov: 42,
+        }}
         gl={{ antialias: true, alpha: true }}
-        dpr={[1, 2]}
+        dpr={1}
         style={{ width: '100%', height: '100%' }}
       >
         <color attach="background" args={['#08080f']} />
-        <fog attach="fog" args={['#08080f', 11, 26]} />
+        <fog attach="fog" args={['#08080f', 11, 42]} />
 
         {/* 灯光：冷调主光，暖色仅集中于中心，避免整图偏橙 */}
         <ambientLight intensity={0.58} color="#d6ddff" />
@@ -387,7 +412,8 @@ export default function RaceMap3D({
         <pointLight position={[6, 4, 7]} intensity={0.34} color="#c084fc" distance={18} />
         <pointLight position={[0, 3.8, 0]} intensity={0.22} color="#fbbf24" distance={10} />
 
-        <OrbitControls enableDamping dampingFactor={0.08} enableRotate enableZoom enablePan={false} minDistance={5.8} maxDistance={15.5} maxPolarAngle={Math.PI / 2.12} target={[0, -0.18, 0]} />
+        <OrbitControls makeDefault enableDamping dampingFactor={0.08} enableRotate enableZoom enablePan={false} minDistance={8} maxDistance={36} maxPolarAngle={Math.PI / 2.12} target={[0, -0.18, 0]} />
+        <CameraSetup maxR={maxR} />
 
         <SceneFloor maxR={maxR} />
         <ContactShadows position={[0, -0.65, 0]} opacity={0.58} scale={maxR * 3} blur={3.2} far={4.6} resolution={768} color="#000000" />

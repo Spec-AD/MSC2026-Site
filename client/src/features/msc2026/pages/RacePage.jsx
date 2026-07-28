@@ -170,10 +170,10 @@ export default function RacePage({ stage }) {
   };
 
   /** 处理挑战判定 */
-  const handleChallengeResult = async (passed) => {
+  const handleChallengeResult = async (passed, resultSnapshot) => {
     try {
       setPendingAction(passed ? 'judge-pass' : 'judge-fail');
-      const result = await race.submitChallengeResult(passed);
+      const result = await race.submitChallengeResult(passed, resultSnapshot);
       if (!passed && result.penaltiesApplied?.length) {
         setActionError(`挑战失败，道具惩罚已执行：${result.penaltiesApplied.map(item => `${item.itemName}（${item.summary}）`).join('；')}`);
       } else {
@@ -242,7 +242,7 @@ export default function RacePage({ stage }) {
     if (!currentPlayer) return [];
     const sv = currentPlayer.startVertex;
     const count = config.mapShape === 'hexagon' ? 6 : 4;
-    return [sv, (sv + 1) % count];
+    return [sv, (sv + count - 1) % count];
   }, [race.players, race.currentPlayerId, config.mapShape]);
 
   const currentPlayer = race.players?.find((p) => String(p._id || p.userId) === String(race.currentPlayerId));
@@ -251,7 +251,6 @@ export default function RacePage({ stage }) {
       .filter((item) => !item.collected && adjacentSectors.includes(item.zoneIndex))
       .map((item) => ({
         zoneIndex: item.zoneIndex,
-        itemRef: item.itemRef,
       }))
   ), [race.itemsOnMap, adjacentSectors]);
   const effectiveMapConfig = useMemo(() => ({
@@ -298,7 +297,7 @@ export default function RacePage({ stage }) {
         stageLabel={config.label || ''}
       />
 
-      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_430px] gap-5 md:gap-6">
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_380px] gap-5 md:gap-6">
         {/* 地图区 */}
         <div className="min-w-0 flex flex-col">
           {race.status === 'racing' && (
@@ -325,7 +324,7 @@ export default function RacePage({ stage }) {
                   {availablePickupSectors.length > 0 ? (
                     availablePickupSectors.map((item, index) => (
                       <MotionButton
-                        key={`${item.itemRef}-${item.zoneIndex}`}
+                        key={item.zoneIndex}
                         onClick={() => handlePickup(item.zoneIndex)}
                         disabled={!canOperate}
                         loading={pendingAction === 'pickup'}
@@ -374,7 +373,7 @@ export default function RacePage({ stage }) {
                   ? { scale: [1, 1.006, 1], filter: ['brightness(1)', 'brightness(1.15)', 'brightness(1)'] }
                   : { x: 0, scale: 1, filter: 'brightness(1)' }}
             transition={{ duration: 0.5, ease: [0.65, 0, 0.35, 1] }}
-            className="relative h-[min(70vh,900px)] min-h-[620px] 2xl:min-h-[720px]"
+            className="relative h-[min(76vh,980px)] min-h-[700px] 2xl:min-h-[800px]"
           >
             <RaceMap3D
               config={effectiveMapConfig}
@@ -462,6 +461,7 @@ export default function RacePage({ stage }) {
                       <p className={`text-base leading-tight mt-1 ${isActive ? 'text-amber-300' : 'text-zinc-500'}`}>
                         #{index + 1} 出手位 · {finished ? `第 ${p.finishOrder} 名抵达中心` : isActive ? '行动中…' : '等待回合'}
                         {p.itemCount > 0 && <span className="text-sky-400/80 ml-1.5">道具 {p.itemCount}</span>}
+                        <span className="ml-1.5 text-red-300/75">失败 {p.challengeFailureCount || 0}</span>
                       </p>
                     </div>
                     {/* 大数字：坐标 / ★ */}
@@ -517,12 +517,13 @@ export default function RacePage({ stage }) {
       <AnimatePresence>
         {race.activeChallenge && (
           <ChallengeCard
+            key={`${race.activeChallenge.playerId}-${race.activeChallenge.taskId}-${race.currentTurn}`}
             challenge={race.activeChallenge}
             pendingJudgement={race.pendingJudgement}
             isJudge
             resolving={pendingAction === 'judge-pass' ? 'pass' : pendingAction === 'judge-fail' ? 'fail' : null}
-            onPass={() => handleChallengeResult(true)}
-            onFail={() => handleChallengeResult(false)}
+            onPass={(snapshot) => handleChallengeResult(true, snapshot)}
+            onFail={(snapshot) => handleChallengeResult(false, snapshot)}
             onDismiss={() => race.dismissChallenge()}
           />
         )}

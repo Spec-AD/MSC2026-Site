@@ -5,7 +5,7 @@
  *
  * 核心机制：
  * - 回合制行动（advance / pickup）
- * - 墙壁挑战（25任务库 + 纯函数读取 CHALLENGE_TASKS）
+ * - 墙壁挑战（33 任务随机池 + 各阶段固定第二墙）
  * - 道具系统（unused → armed → consumed 生命周期）
  * - 超时机制（回合45s / 地图总限时）
  * - 鬼面人心全局效果（持久化为纯数据）
@@ -20,7 +20,7 @@
  */
 
 const { shuffle, calculateRaceRankings, assertObjectIdList } = require('./utils');
-const { CHALLENGE_TASKS } = require('./challengeDefinitions');
+const { CHALLENGE_TASKS, FIXED_WALL_CHALLENGES } = require('./challengeDefinitions');
 const { getItemPool, getItem, applyItemEffectsDetailed } = require('./itemDefinitions');
 const { broadcast } = require('./ssePool');
 const { syncToOldTournament } = require('./oldTournamentSync');
@@ -37,17 +37,17 @@ const RACE_CONFIGS = {
     wallLabels: ['密锁之墙', '准锁之墙'],
     itemPoolRefs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     zoneCount: 6,
-    timeLimitMs: 45 * 60 * 1000,      // 45min（赛制规定）
+    timeLimitMs: 60 * 60 * 1000,
     turnTimeLimitMs: 45 * 1000,         // 45s
     advanceCount: 4
   },
   stage3: {
     shape: 'square',
-    layers: 2,
-    wallLabels: ['叹息之墙'],
+    layers: 3,
+    wallLabels: ['叹息之墙', '终局之墙'],
     itemPoolRefs: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     zoneCount: 4,
-    timeLimitMs: 25 * 60 * 1000,       // 25min（赛制规定）
+    timeLimitMs: 45 * 60 * 1000,
     turnTimeLimitMs: 45 * 1000,          // 45s
     advanceCount: 2
   }
@@ -55,7 +55,8 @@ const RACE_CONFIGS = {
 
 // ── 辅助：从 CHALLENGE_TASKS 读取原始任务 ──
 function getTaskById(taskId) {
-  // 先查 1-25 的常量任务
+  const fixedTask = Object.values(FIXED_WALL_CHALLENGES).find(task => task.id === taskId);
+  if (fixedTask) return { ...fixedTask };
   const staticTask = CHALLENGE_TASKS.find(t => t.id === taskId);
   if (staticTask) return { ...staticTask };
   return null; // fallback 任务不从这查
@@ -91,7 +92,11 @@ async function initRace(tournament, playerIds) {
     silentUntilTurn: null,
     disableItemsUntilTurn: null,
     finishOrder: null,
-    finishTimestamp: null
+    finishTimestamp: null,
+    challengeFailureCount: 0,
+    successfulChallengeAchievementTotal: 0,
+    successfulChallengeCount: 0,
+    cumulativeDxScore: 0
   }));
 
   // 道具生成：均匀分布到每个三角区域
@@ -407,9 +412,14 @@ async function useItem(tournament, targetPlayerId, itemRef) {
 /**
  * 从任务池中取一个任务（纯函数方式：CHALLENGE_TASKS + fallbackTasks）
  */
-function _drawTask(race) {
+function _drawTask(race, stageKey, wallIndex) {
+  if (wallIndex === 1) {
+    const task = FIXED_WALL_CHALLENGES[stageKey];
+    if (!task) throw new Error('固定墙壁挑战未配置');
+    return { taskId: task.id, task: { ...task } };
+  }
   if (race.taskPool.remaining.length === 0) {
-    _refillTaskPool(race);
+    throw new Error('第一墙任务池已耗尽；同场任务禁止重复，请由裁判终止并按规则处理');
   }
 
   const taskId = race.taskPool.remaining.pop();
@@ -436,7 +446,7 @@ async function _handleAdvance(tournament, race, player, userId) {
   if (!wallLabel) throw new Error('该坐标没有可挑战墙壁');
 
   // 从任务池中取一个任务（P0-1: 纯函数读取）
-  const { taskId, task: rawChallenge } = _drawTask(race);
+  const { taskId, task: rawChallenge } = _drawTask(race, tournament.status, wallIndex);
 
   if (!rawChallenge) throw new Error('任务数据丢失');
 
@@ -575,8 +585,6 @@ async function _handlePickup(tournament, race, player, zoneIndex) {
 
   availableItem.collected = true;
 
-  const itemDef = getItem(availableItem.itemRef);
-
   // P1-5: 拾取时 status 统一为 'unused'
   player.items.push({ itemRef: availableItem.itemRef, status: 'unused' });
 
@@ -596,18 +604,16 @@ async function _handlePickup(tournament, race, player, zoneIndex) {
 
   broadcast('item_collected', {
     playerId: player.userId.toString(),
-    itemRef: availableItem.itemRef,
-    itemName: itemDef ? itemDef.name : '???',
     zoneIndex
   });
 
   return {
     action: 'pickup',
     item: {
-      itemRef: availableItem.itemRef,
-      name: itemDef ? itemDef.name : '???',
-      type: itemDef ? itemDef.type : '???',
-      description: itemDef ? itemDef.description : ''
+      hidden: true,
+      name: '隐藏道具',
+      type: 'hidden',
+      description: '道具内容仅对持有选手可见'
     },
     zoneIndex,
     turnEnded: true,
@@ -618,7 +624,7 @@ async function _handlePickup(tournament, race, player, zoneIndex) {
 /**
  * 裁判判定挑战结果
  */
-async function challengeResult(tournament, judgeId, passed) {
+async function challengeResult(tournament, judgeId, passed, resultSnapshot = null) {
   const stageKey = tournament.status;
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
@@ -636,6 +642,7 @@ async function challengeResult(tournament, judgeId, passed) {
   lastChallenge.passed = passed;
   lastChallenge.judgedBy = judgeId;
   lastChallenge.judgedAt = new Date();
+  lastChallenge.resultSnapshot = resultSnapshot && typeof resultSnapshot === 'object' ? resultSnapshot : null;
 
   const playerIdx = race.players.findIndex(
     p => p.userId.toString() === lastChallenge.playerId.toString()
@@ -643,9 +650,42 @@ async function challengeResult(tournament, judgeId, passed) {
   if (playerIdx < 0) throw new Error('选手不在比赛中');
 
   const player = race.players[playerIdx];
+  lastChallenge.rollbackSnapshot = {
+    player: {
+      currentLayer: player.currentLayer,
+      silentUntilTurn: player.silentUntilTurn,
+      disableItemsUntilTurn: player.disableItemsUntilTurn,
+      finishOrder: player.finishOrder,
+      finishTimestamp: player.finishTimestamp,
+      challengeFailureCount: player.challengeFailureCount,
+      successfulChallengeAchievementTotal: player.successfulChallengeAchievementTotal,
+      successfulChallengeCount: player.successfulChallengeCount,
+      cumulativeDxScore: player.cumulativeDxScore
+    },
+    race: {
+      currentPlayerIndex: race.currentPlayerIndex,
+      currentTurn: race.currentTurn,
+      turnStartedAt: race.turnStartedAt,
+      terminated: race.terminated,
+      terminatedReason: race.terminatedReason,
+      finishOrder: race.finishOrder.map(entry => entry.toObject ? entry.toObject() : { ...entry }),
+      globalEffect: race.globalEffect?.toObject ? race.globalEffect.toObject() : { ...race.globalEffect },
+      actionLogLength: race.actionLog.length
+    },
+    qualifiedIds: stageKey === 'stage2'
+      ? (tournament.qualifiedStage2 || []).map(String)
+      : (tournament.qualifiedStage3 || []).map(String)
+  };
   const penaltiesApplied = [];
+  const resultDxScore = Number(resultSnapshot?.dxScore);
+  if (Number.isInteger(resultDxScore) && resultDxScore >= 0) player.cumulativeDxScore += resultDxScore;
 
   if (passed) {
+    const achievement = Number(resultSnapshot?.achievement);
+    if (Number.isFinite(achievement) && achievement >= 0 && achievement <= 101) {
+      player.successfulChallengeAchievementTotal += achievement;
+      player.successfulChallengeCount += 1;
+    }
     // 挑战成功：进入下一层
     player.currentLayer++;
     const wallLabel = race.mapConfig.wallLabels[player.currentLayer - 1];
@@ -723,6 +763,7 @@ async function challengeResult(tournament, judgeId, passed) {
       });
     }
   } else {
+    player.challengeFailureCount += 1;
     // 挑战失败：弹回该层起点（currentLayer 不变）
 
     // P1-R1: 精准惩罚——仅对本次挑战绑定的道具（lastChallenge.usedItemRefs）触发双面惩罚
@@ -988,29 +1029,6 @@ async function terminateRace(tournament, reason = 'admin') {
 }
 
 /**
- * 任务库补充机制（P0-1: 持久化到 fallbackTasks）
- */
-function _refillTaskPool(race) {
-  if (!race.taskPool.used.length) return;
-  race.taskPool.fallbackCount++;
-  // 从已使用的任务中随机挑选一条
-  const srcId = race.taskPool.used[Math.floor(Math.random() * race.taskPool.used.length)];
-  const originalTask = getTaskById(srcId);
-  if (!originalTask) return;
-
-  // 复制任务结构，保留条件不变（P0-1: 存入 fallbackTasks 以持久化）
-  const newId = 1000 + race.taskPool.fallbackCount; // 虚拟ID
-  const fallbackTask = {
-    ...originalTask,
-    id: newId,
-    name: `${originalTask.name}（补充）`
-  };
-
-  race.taskPool.fallbackTasks.push(fallbackTask);
-  race.taskPool.remaining.push(newId);
-}
-
-/**
  * 区域相邻检查
  */
 function _isAdjacentZone(player, zoneIndex, zoneCount) {
@@ -1034,8 +1052,13 @@ function _isAdjacentZone(player, zoneIndex, zoneCount) {
  */
 async function _peekChallenge(race, player) {
   const wallIndex = player.currentLayer;
+  if (wallIndex === 1) {
+    const stageKey = race.mapConfig?.shape === 'hexagon' ? 'stage2' : 'stage3';
+    const fixed = FIXED_WALL_CHALLENGES[stageKey];
+    return fixed ? { ...snapshotChallenge(fixed, fixed.id), wallLabel: race.mapConfig.wallLabels[wallIndex] } : null;
+  }
   if (race.taskPool.remaining.length === 0) {
-    _refillTaskPool(race);
+    return null;
   }
   const nextTaskId = race.taskPool.remaining[race.taskPool.remaining.length - 1];
 

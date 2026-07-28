@@ -16,6 +16,7 @@ import ScoreDuelResult from '../components/live/ScoreDuelResult';
 import WinnerReveal from '../components/live/WinnerReveal';
 import RandomDrawPrompt from '../components/live/RandomDrawPrompt';
 import SongSelectionSpotlight from '../components/live/SongSelectionSpotlight';
+import GroupDrawReveal from '../components/live/GroupDrawReveal';
 import { FADE_SLIDE, MOTION_TRANSITIONS } from '../utils/motion';
 
 export default function Stage1Page() {
@@ -27,6 +28,7 @@ export default function Stage1Page() {
     selectStage1Song,
     submitStage1Score,
     advanceStage1,
+    completeStage1Reveal,
     forfaitStage1,
     resolveStage1Tie,
   } = useMSC2026Store();
@@ -68,6 +70,7 @@ export default function Stage1Page() {
   const selectedGroup = selectedGroupId !== null
     ? stage1.groups?.find((g) => g.groupId === selectedGroupId)
     : null;
+  const currentGroup = stage1.groups?.find(group => group.order === stage1.currentGroupIndex) || null;
   const selectedWinnerId = selectedGroup?.winner?.toString?.() || selectedGroup?.winner;
   const selectedP1Id = (selectedGroup?.p1?._id || selectedGroup?.p1?.userId)?.toString?.() || selectedGroup?.p1?._id || selectedGroup?.p1?.userId;
   const selectedWinnerName = selectedWinnerId === selectedP1Id
@@ -352,6 +355,20 @@ export default function Stage1Page() {
         pickLabel="RANDOM TRACK · 系统随机曲目"
         onClose={() => setRandomReveal(null)}
       />
+      {currentGroup?.status === 'revealing' && (
+        <GroupDrawReveal
+          group={currentGroup}
+          onComplete={async () => {
+            try {
+              await completeStage1Reveal();
+            } finally {
+              await fetchStage1State().catch(() => {});
+              setSelectedGroupId(currentGroup.order);
+              setView('match');
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

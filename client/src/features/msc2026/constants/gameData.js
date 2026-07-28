@@ -17,7 +17,7 @@ export const EVAL_ORDER = { FC: 0, 'FC+': 1, AP: 2, 'AP+': 3 };
 export const DIFFICULTY_ORDER = { EXPERT: 0, MASTER: 1, 'Re:MASTER': 2 };
 
 // ============================================================
-// 挑战任务库（25 条）
+// 第一道墙随机挑战池（33 条）及第二道墙固定挑战
 // ============================================================
 export const CHALLENGE_TASKS = {
   1: {
@@ -251,6 +251,16 @@ export const CHALLENGE_TASKS = {
     difficulty: 'MASTER',
     songTitle: '星詠みとデスペラード',
   },
+  26: { id: 26, name: '兄弟提一把', description: 'TiamaT:F minor [MASTER] GREAT及以下 ≤ 6', type: 'completion', difficulty: 'MASTER', songTitle: 'TiamaT:F minor' },
+  27: { id: 27, name: 'YOSHIKI附体', description: 'Our Wrenally [MASTER] 取得 AP+', type: 'eval', difficulty: 'MASTER', songTitle: 'Our Wrenally' },
+  28: { id: 28, name: '艺术就是爆炸！', description: '脳天直撃 [MASTER] 取得 100.9000%+', type: 'achievement', difficulty: 'MASTER', songTitle: '脳天直撃' },
+  29: { id: 29, name: '我上早八', description: 'QuiQ [MASTER] 非完美 BREAK ≤ 8', type: 'completion', difficulty: 'MASTER', songTitle: 'QuiQ' },
+  30: { id: 30, name: '舞萌科目二', description: 'ウミユリ海底譚 [MASTER] AP+ 且 DX 5星', type: 'combined', difficulty: 'MASTER', songTitle: 'ウミユリ海底譚' },
+  31: { id: 31, name: '404 Mother-No-Found', description: 'Good bye, Merry-Go-Round. [MASTER] 取得 AP', type: 'eval', difficulty: 'MASTER', songTitle: 'Good bye, Merry-Go-Round.' },
+  32: { id: 32, name: '崩坏：星穹铁道', description: 'CO5M1C R4ILR0AD [MASTER] 取得 AP', type: 'eval', difficulty: 'MASTER', songTitle: 'CO5M1C R4ILR0AD' },
+  33: { id: 33, name: '你爹来咯', description: '≠彡"/了→ [MASTER] 非完美 BREAK ≤ 15', type: 'completion', difficulty: 'MASTER', songTitle: '≠彡"/了→' },
+  201: { id: 201, name: '6进4 最终墙', description: '最強 STRONGER [MASTER] DX 4星及以上', type: 'precision', difficulty: 'MASTER', songTitle: '最強 STRONGER' },
+  301: { id: 301, name: '4进2 最终墙', description: '氷滅の135小節 [MASTER] 取得 AP', type: 'eval', difficulty: 'MASTER', songTitle: '氷滅の135小節' },
 };
 
 /**
@@ -316,15 +326,15 @@ export const getItemDef = (itemRef) => ALL_ITEMS[itemRef] || null;
 
 export const STAGE_CONFIG = {
   stage1: { label: '12进6', desc: '淘汰赛', icon: '⚔️' },
-  stage2: { label: '6进4', desc: '跑图 · 六边形', icon: '⬡', mapShape: 'hexagon', layers: 3, wallLabels: ['密锁之墙', '准锁之墙'], totalTimeMs: 45 * 60 * 1000, turnTimeMs: 45 * 1000, playerCount: 6 },
-  stage3: { label: '4进2', desc: '跑图 · 正方形', icon: '⬜', mapShape: 'square', layers: 2, wallLabels: ['叹息之墙'], totalTimeMs: 25 * 60 * 1000, turnTimeMs: 45 * 1000, playerCount: 4 },
+  stage2: { label: '6进4', desc: '跑图 · 六边形', icon: '⬡', mapShape: 'hexagon', layers: 3, wallLabels: ['密锁之墙', '准锁之墙'], totalTimeMs: 60 * 60 * 1000, turnTimeMs: 45 * 1000, playerCount: 6 },
+  stage3: { label: '4进2', desc: '跑图 · 正方形', icon: '⬜', mapShape: 'square', layers: 3, wallLabels: ['叹息之墙', '终局之墙'], totalTimeMs: 45 * 60 * 1000, turnTimeMs: 45 * 1000, playerCount: 4 },
   stage4: { label: '决赛', desc: '2进1', icon: '👑' },
 };
 
 export const SCORE_LIMITS = {
   achievement: { min: 0, max: 101, decimals: 4 },
   dxScore: { min: 0, max: 2147483647, decimals: 0 },
-  perfectRate: { min: 0, max: 100, decimals: 2 },
+  perfectBreak: { min: 0, max: 100000, decimals: 0 },
 };
 
 export const CHALLENGE_TYPE_LABELS_DETAIL = {
