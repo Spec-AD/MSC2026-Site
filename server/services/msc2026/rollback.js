@@ -319,7 +319,10 @@ function undoStage4LastSong(tournament) {
   if (lastSong.pickType === 'p1_pick') s4.status = 'p1_pick';
   else if (lastSong.pickType === 'p2_pick') s4.status = 'p2_pick';
   else if (lastSong.pickType === 'random') s4.status = 'random_pick';
-  else s4.status = 'playing';
+  else {
+    if (lastSong.pickType === 'secret_designated') s4.secretRevealedAt = null;
+    s4.status = 'playing';
+  }
 }
 
 /** R4.2 撤销决赛成绩 */

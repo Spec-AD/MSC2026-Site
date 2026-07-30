@@ -4,6 +4,7 @@
 import { create } from 'zustand';
 import * as api from '../api/msc2026Api';
 import { STAGE_CONFIG } from '../constants/gameData';
+import { collectSongs, warmSongCache } from '../utils/songCache';
 
 export const useMSC2026Store = create((set, get) => ({
   // ---- 全局状态 ----
@@ -31,6 +32,7 @@ export const useMSC2026Store = create((set, get) => ({
     p2: null,
     songPool: [],
     designatedSong: null,
+    secretRevealed: false,
     songs: [],
     currentTurn: null,
     winner: null,
@@ -95,6 +97,7 @@ export const useMSC2026Store = create((set, get) => ({
           loading: false,
         },
       }));
+      warmSongCache(collectSongs(data.songPool, data.groups?.flatMap(group => group.songs || []))).catch(() => {});
       return data;
     } catch (err) {
       console.error('[MSC2026] fetchStage1State failed', err);
@@ -183,6 +186,7 @@ export const useMSC2026Store = create((set, get) => ({
           loading: false,
         },
       }));
+      warmSongCache(collectSongs(data.songPool, data.designatedSong, data.songs)).catch(() => {});
       return data;
     } catch (err) {
       set((s) => ({ stage4: { ...s.stage4, loading: false } }));
@@ -265,6 +269,6 @@ export const useMSC2026Store = create((set, get) => ({
       error: null,
       players: [],
       stage1: { status: 'pending', totalGroups: 6, completedGroups: 0, currentGroupIndex: -1, songPool: [], groups: [], currentTurn: null, loading: false },
-      stage4: { status: 'pending', p1: null, p2: null, songPool: [], designatedSong: null, songs: [], currentTurn: null, winner: null, loading: false },
+      stage4: { status: 'pending', p1: null, p2: null, songPool: [], designatedSong: null, secretRevealed: false, songs: [], currentTurn: null, winner: null, loading: false },
     }),
 }));

@@ -221,8 +221,10 @@ router.get('/config', authMiddleware, async (req, res) => {
       .populate('stage1SongPool', SONG_DISPLAY_FIELDS)
       .populate('stage4SongPool', SONG_DISPLAY_FIELDS)
       .populate('stage4DesignatedSongId', SONG_DISPLAY_FIELDS)
+      .populate('stage4SecretDesignatedSongId', SONG_DISPLAY_FIELDS)
       .populate('stage4.songPool', SONG_DISPLAY_FIELDS)
-      .populate('stage4.designatedSongId', SONG_DISPLAY_FIELDS);
+      .populate('stage4.designatedSongId', SONG_DISPLAY_FIELDS)
+      .populate('stage4.secretDesignatedSongId', SONG_DISPLAY_FIELDS);
 
     if (!t) return res.status(404).json({ msg: '赛事不存在' });
 
@@ -232,7 +234,8 @@ router.get('/config', authMiddleware, async (req, res) => {
       data: {
         stage1SongPool: (t.stage1SongPool || []).map(song => serializeSongDoc(song, t.stage1DifficultyIndexes?.[String(song._id)])),
         stage4SongPool: (stage4Config.songPoolIds || []).map(song => serializeSongDoc(song, stage4Config.difficultyIndexes?.[String(song._id)])),
-        designatedSong: serializeSongDoc(stage4Config.designatedSongId, stage4Config.designatedDifficultyIndex)
+        designatedSong: serializeSongDoc(stage4Config.designatedSongId, stage4Config.designatedDifficultyIndex),
+        secretDesignatedSong: serializeSongDoc(stage4Config.secretDesignatedSongId, stage4Config.secretDesignatedDifficultyIndex)
       }
     });
   } catch (err) {
@@ -245,11 +248,14 @@ router.put('/config', authMiddleware, async (req, res) => {
   try {
     const perm = await checkPermission(req.user, null, 'admin');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
 
-    const t = await requireTournament(res);
-    if (!t) return;
-
-    const { poolType, songPoolIds, designatedSongId, songDifficultyIndexes, designatedDifficultyIndex } = req.body;
+    const {
+      poolType, songPoolIds, designatedSongId, secretDesignatedSongId,
+      songDifficultyIndexes, designatedDifficultyIndex, secretDesignatedDifficultyIndex
+    } = req.body;
 
     if (poolType === 'stage1') {
       const normalizedPool = normalizeSongPool(songPoolIds, '阶段一图池');
@@ -259,16 +265,25 @@ router.put('/config', authMiddleware, async (req, res) => {
       t.stage1DifficultyIndexes = difficulties;
     } else if (poolType === 'stage4') {
       const normalizedPool = normalizeSongPool(songPoolIds, '决赛图池');
-      const normalizedDesignated = normalizeDesignatedSong(designatedSongId);
+      const normalizedDesignated = normalizeDesignatedSong(designatedSongId, '决赛表课题曲');
+      const normalizedSecretDesignated = normalizeDesignatedSong(secretDesignatedSongId, '决赛里课题曲');
       const difficulties = normalizeDifficultyIndexes(normalizedPool, songDifficultyIndexes, '决赛图池');
       const designatedIndex = Number(designatedDifficultyIndex ?? 3);
-      if (!Number.isInteger(designatedIndex) || designatedIndex < 0 || designatedIndex > 4) throw new Error('课题曲难度非法');
-      assertFinalSongConfig(normalizedPool, normalizedDesignated);
-      await assertSongDifficulties([...normalizedPool, normalizedDesignated], { ...difficulties, [normalizedDesignated]: designatedIndex }, '决赛图池');
+      const secretDesignatedIndex = Number(secretDesignatedDifficultyIndex ?? 3);
+      if (!Number.isInteger(designatedIndex) || designatedIndex < 0 || designatedIndex > 4) throw new Error('表课题曲难度非法');
+      if (!Number.isInteger(secretDesignatedIndex) || secretDesignatedIndex < 0 || secretDesignatedIndex > 4) throw new Error('里课题曲难度非法');
+      assertFinalSongConfig(normalizedPool, normalizedDesignated, normalizedSecretDesignated);
+      await assertSongDifficulties(
+        [...normalizedPool, normalizedDesignated, normalizedSecretDesignated],
+        { ...difficulties, [normalizedDesignated]: designatedIndex, [normalizedSecretDesignated]: secretDesignatedIndex },
+        '决赛图池'
+      );
       t.stage4SongPool = normalizedPool;
       t.stage4DifficultyIndexes = difficulties;
       t.stage4DesignatedSongId = normalizedDesignated;
       t.stage4DesignatedDifficultyIndex = designatedIndex;
+      t.stage4SecretDesignatedSongId = normalizedSecretDesignated;
+      t.stage4SecretDesignatedDifficultyIndex = secretDesignatedIndex;
     } else {
       return res.status(400).json({ msg: '未知配置类型' });
     }
@@ -276,12 +291,13 @@ router.put('/config', authMiddleware, async (req, res) => {
     t.operationLogs.push({
       action: 'song_pool_configured',
       stage: poolType,
-      detail: { songPoolIds, designatedSongId: designatedSongId || null },
+      detail: { songPoolIds, designatedSongId: designatedSongId || null, secretDesignatedSongId: secretDesignatedSongId || null },
       operatedBy: req.user.id,
       operatedAt: new Date()
     });
-    await t.save();
-    res.json({ msg: '配置已更新', data: { count: songPoolIds?.length || 0 } });
+      await t.save();
+      res.json({ msg: '配置已更新', data: { count: songPoolIds?.length || 0 } });
+    });
   } catch (err) {
     console.error('更新配置失败:', err);
     res.status(400).json({ msg: err.message });
@@ -606,9 +622,9 @@ router.post('/stage1/init-from-qualifier', authMiddleware, async (req, res) => {
   try {
     const perm = await checkPermission(req.user, null, 'admin');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
-
-    const t = await requireTournament(res);
-    if (!t) return;
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
     if (!t.oldTournamentId) return res.status(404).json({ msg: '未关联旧赛事' });
     if (t.stage1?.status === 'done' || (t.stage1?.groups?.length || 0) > 0) {
       return res.status(400).json({ msg: '阶段一已初始化，如需重置请先手动清理' });
@@ -684,23 +700,24 @@ router.post('/stage1/init-from-qualifier', authMiddleware, async (req, res) => {
     // patch-03: 启动 MSC 主赛适配层不再改动权威 tournament.status。
     // 阶段推进/收尾由组织者在 tournament 端显式控制，预选成绩录入与主赛可并行。
 
-    res.json({
-      msg: '阶段一已从预选赛初始化',
-      data: {
-        qualifiedFromQualifier: advanceCount,
-        autoFilledCount: autoFilled.length,
-        autoFilledPlayerIds: autoFilled.map(p => p.userId),
-        currentGroup: {
-          groupId: t.stage1.groups[0].order,
-          order: t.stage1.groups[0].order,
-          p1: String(t.stage1.groups[0].p1),
-          p2: String(t.stage1.groups[0].p2),
-          status: t.stage1.groups[0].status,
-          revealEndsAt: t.stage1.groups[0].revealEndsAt
-        },
-        totalGroups: t.stage1.groups.length,
-        currentGroupIndex: t.stage1.currentGroupIndex
-      }
+      res.json({
+        msg: '阶段一已从预选赛初始化',
+        data: {
+          qualifiedFromQualifier: advanceCount,
+          autoFilledCount: autoFilled.length,
+          autoFilledPlayerIds: autoFilled.map(p => p.userId),
+          currentGroup: {
+            groupId: t.stage1.groups[0].order,
+            order: t.stage1.groups[0].order,
+            p1: String(t.stage1.groups[0].p1),
+            p2: String(t.stage1.groups[0].p2),
+            status: t.stage1.groups[0].status,
+            revealEndsAt: t.stage1.groups[0].revealEndsAt
+          },
+          totalGroups: t.stage1.groups.length,
+          currentGroupIndex: t.stage1.currentGroupIndex
+        }
+      });
     });
   } catch (err) {
     console.error('init-from-qualifier 失败:', err);
@@ -751,9 +768,9 @@ router.post('/stage1/init', authMiddleware, async (req, res) => {
   try {
     const perm = await checkPermission(req.user, null, 'admin');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
-
-    const t = await requireTournament(res);
-    if (!t) return;
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
 
     const { songPoolIds, playerIds } = req.body;
 
@@ -769,8 +786,9 @@ router.post('/stage1/init', authMiddleware, async (req, res) => {
       .populate('stage1.groups.p1', 'username avatarUrl')
       .populate('stage1.groups.p2', 'username avatarUrl');
 
-    const first = populated.stage1.groups[0];
-    res.json({ msg: '分组初始化完成', data: { totalGroups: populated.stage1.groups.length, currentGroup: first } });
+      const first = populated.stage1.groups[0];
+      res.json({ msg: '分组初始化完成', data: { totalGroups: populated.stage1.groups.length, currentGroup: first } });
+    });
   } catch (err) {
     console.error('阶段一初始化失败:', err);
     res.status(400).json({ msg: err.message });
@@ -878,10 +896,12 @@ router.post('/stage1/complete-reveal', authMiddleware, async (req, res) => {
   try {
     const perm = await checkPermission(req.user, null, 'referee');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
-    const t = await requireTournament(res);
-    if (!t) return;
-    const group = await completeGroupReveal(t);
-    res.json({ msg: '本组抽签揭晓完成', data: { groupIndex: t.stage1.currentGroupIndex, status: group.status } });
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
+      const group = await completeGroupReveal(t);
+      res.json({ msg: '本组抽签揭晓完成', data: { groupIndex: t.stage1.currentGroupIndex, status: group.status } });
+    });
   } catch (err) {
     res.status(400).json({ msg: err.message });
   }
@@ -892,8 +912,9 @@ router.post('/stage1/select-song', authMiddleware, async (req, res) => {
     const perm = await checkPermission(req.user, null, 'referee');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
 
-    const t = await requireTournament(res);
-    if (!t) return;
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
 
     const { songId } = req.body;
     const group = t.stage1?.groups?.[t.stage1.currentGroupIndex];
@@ -913,13 +934,14 @@ router.post('/stage1/select-song', authMiddleware, async (req, res) => {
     const lastSong = songs[songs.length - 1];
     const songRef = populated.stage1.songPool.find(s => s._id.toString() === lastSong.songId.toString());
 
-    res.json({
-      msg: '选曲完成',
-      data: {
-        song: songRef ? serializeSongDoc(songRef, lastSong.difficultyIndex) : { _id: lastSong.songId, title: '???' },
-        pickType: lastSong.pickType,
-        nextStep: result.nextStep
-      }
+      res.json({
+        msg: '选曲完成',
+        data: {
+          song: songRef ? serializeSongDoc(songRef, lastSong.difficultyIndex) : { _id: lastSong.songId, title: '???' },
+          pickType: lastSong.pickType,
+          nextStep: result.nextStep
+        }
+      });
     });
   } catch (err) {
     console.error('选曲失败:', err);
@@ -932,14 +954,14 @@ router.post('/stage1/submit-score', authMiddleware, async (req, res) => {
     const perm = await checkPermission(req.user, null, 'referee');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
 
-    const t = await requireTournament(res);
-    if (!t) return;
-
-    const result = await submitScore(t, req.user.id, req.body);
-
-    res.json({
-      msg: '成绩已录入',
-      data: result
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
+      const result = await submitScore(t, req.user.id, req.body);
+      res.json({
+        msg: '成绩已录入',
+        data: result
+      });
     });
   } catch (err) {
     console.error('提交成绩失败:', err);
@@ -982,15 +1004,15 @@ router.post('/stage1/forfait', authMiddleware, async (req, res) => {
     const perm = await checkPermission(req.user, null, 'referee');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
 
-    const t = await requireTournament(res);
-    if (!t) return;
-
-    const { playerId } = req.body;
-    const { group, result } = await forfeitPlayer(t, playerId);
-
-    res.json({
-      msg: `选手弃权，对手晋级`,
-      data: { winner: group.winner.toString(), forfaitBy: playerId, nextStep: result.nextStep, groupIndex: result.groupIndex }
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
+      const { playerId } = req.body;
+      const { group, result } = await forfeitPlayer(t, playerId);
+      res.json({
+        msg: `选手弃权，对手晋级`,
+        data: { winner: group.winner.toString(), forfaitBy: playerId, nextStep: result.nextStep, groupIndex: result.groupIndex }
+      });
     });
   } catch (err) {
     console.error('弃权处理失败:', err);
@@ -1004,16 +1026,16 @@ router.post('/stage1/resolve-tie', authMiddleware, async (req, res) => {
     const perm = await checkPermission(req.user, null, 'referee');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
 
-    const t = await requireTournament(res);
-    if (!t) return;
-
     const { groupIndex, winnerId } = req.body;
     if (groupIndex == null || !winnerId) {
       return res.status(400).json({ msg: '需提供 groupIndex 与 winnerId' });
     }
-
-    const group = await resolveGroupTie(t, Number(groupIndex), winnerId);
-    res.json({ msg: '加赛结果已录入', data: { groupIndex: Number(groupIndex), winner: String(group.winner) } });
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
+      const group = await resolveGroupTie(t, Number(groupIndex), winnerId);
+      res.json({ msg: '加赛结果已录入', data: { groupIndex: Number(groupIndex), winner: String(group.winner) } });
+    });
   } catch (err) {
     console.error('阶段一加赛判定失败:', err);
     res.status(400).json({ msg: err.message });
@@ -1518,9 +1540,9 @@ router.post('/stage2/advance-to-stage3', authMiddleware, async (req, res) => {
   try {
     const perm = await checkPermission(req.user, null, 'admin');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
-
-    const t = await requireTournament(res);
-    if (!t) return;
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
 
     if (t.status !== 'stage2') return res.status(400).json({ msg: '当前不在阶段二' });
     if (!t.stage2) return res.status(400).json({ msg: '阶段二未初始化' });
@@ -1547,7 +1569,8 @@ router.post('/stage2/advance-to-stage3', authMiddleware, async (req, res) => {
 
     broadcast('stage_advanced', { from: 'stage2', to: 'stage3', timestamp: Date.now() });
 
-    res.json({ msg: '已推进到阶段三', data: { status: 'stage3', qualifiedIds } });
+      res.json({ msg: '已推进到阶段三', data: { status: 'stage3', qualifiedIds } });
+    });
   } catch (err) {
     console.error('推进阶段三失败:', err);
     res.status(400).json({ msg: err.message });
@@ -1562,30 +1585,37 @@ router.post('/stage4/init', authMiddleware, async (req, res) => {
   try {
     const perm = await checkPermission(req.user, null, 'admin');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
-
-    const t = await requireTournament(res);
-    if (!t) return;
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
 
     if (t.status !== 'stage3') return res.status(400).json({ msg: '当前不在决赛初始化阶段' });
     if (!t.stage3?.terminated) return res.status(400).json({ msg: '阶段三尚未完成' });
     if (isStage4Initialized(t.stage4)) return res.status(400).json({ msg: '决赛已经初始化，如需重开请先重置' });
 
-    const { songPoolIds, designatedSongId } = req.body;
+    const { songPoolIds, designatedSongId, secretDesignatedSongId } = req.body;
     const storedConfig = getStoredStage4Config(t);
     const configuredSongPool = resolveConfiguredSongPool(
       storedConfig.songPoolIds,
       songPoolIds,
       '决赛图池'
     );
-    const configuredDesignatedSong = normalizeDesignatedSong(storedConfig.designatedSongId);
+    const configuredDesignatedSong = normalizeDesignatedSong(storedConfig.designatedSongId, '决赛表课题曲');
+    const configuredSecretDesignatedSong = normalizeDesignatedSong(storedConfig.secretDesignatedSongId, '决赛里课题曲');
     if (designatedSongId) {
       const requestedDesignatedSong = normalizeDesignatedSong(designatedSongId);
       if (requestedDesignatedSong !== configuredDesignatedSong) {
         throw new Error('决赛课题曲与已保存的比赛配置不一致，请刷新后重试');
       }
     }
-    assertFinalSongConfig(configuredSongPool, configuredDesignatedSong);
-    await assertSongsExist([...configuredSongPool, configuredDesignatedSong], '决赛图池');
+    if (secretDesignatedSongId) {
+      const requestedSecretSong = normalizeDesignatedSong(secretDesignatedSongId, '决赛里课题曲');
+      if (requestedSecretSong !== configuredSecretDesignatedSong) {
+        throw new Error('决赛里课题曲与已保存的比赛配置不一致，请刷新后重试');
+      }
+    }
+    assertFinalSongConfig(configuredSongPool, configuredDesignatedSong, configuredSecretDesignatedSong);
+    await assertSongsExist([...configuredSongPool, configuredDesignatedSong, configuredSecretDesignatedSong], '决赛图池');
 
     const playerIds = getQualifiedIdsForStage(t, 'stage4');
     const rankingIds = calculateRaceRankings(t.stage3.players).slice(0, 2).map(r => String(r.userId));
@@ -1596,6 +1626,8 @@ router.post('/stage4/init', authMiddleware, async (req, res) => {
     t.stage4DifficultyIndexes = storedConfig.difficultyIndexes || {};
     t.stage4DesignatedSongId = configuredDesignatedSong;
     t.stage4DesignatedDifficultyIndex = storedConfig.designatedDifficultyIndex ?? 3;
+    t.stage4SecretDesignatedSongId = configuredSecretDesignatedSong;
+    t.stage4SecretDesignatedDifficultyIndex = storedConfig.secretDesignatedDifficultyIndex ?? 3;
     t.stage4 = null;
     t.status = 'stage4';
 
@@ -1604,20 +1636,23 @@ router.post('/stage4/init', authMiddleware, async (req, res) => {
       playerIds,
       configuredSongPool,
       configuredDesignatedSong,
+      configuredSecretDesignatedSong,
       storedConfig.difficultyIndexes || {},
-      storedConfig.designatedDifficultyIndex ?? 3
+      storedConfig.designatedDifficultyIndex ?? 3,
+      storedConfig.secretDesignatedDifficultyIndex ?? 3
     );
 
-    res.json({
-      msg: '决赛已初始化',
-      data: {
-        p1: { userId: s4.p1.toString() },
-        p2: { userId: s4.p2.toString() },
-        designatedSongId: s4.designatedSongId.toString(),
-        status: s4.status,
-        totalSongs: 4,
-        songs: []
-      }
+      res.json({
+        msg: '决赛已初始化',
+        data: {
+          p1: { userId: s4.p1.toString() },
+          p2: { userId: s4.p2.toString() },
+          designatedSongId: s4.designatedSongId.toString(),
+          status: s4.status,
+          totalSongs: 5,
+          songs: []
+        }
+      });
     });
   } catch (err) {
     console.error('决赛初始化失败:', err);
@@ -1653,6 +1688,7 @@ router.get('/stage4/state', async (req, res) => {
         songPool: (s4.songPool || []).map(song => serializeSongDoc(song, s4.difficultyIndexes?.[String(song._id)])),
         designatedSong: serializeSongDoc(s4.designatedSongId, s4.designatedDifficultyIndex),
         songs: (s4.songs || []).map(serializeSongPlay),
+        secretRevealed: Boolean(s4.secretRevealedAt),
         currentTurn,
         winner: s4.winner ? String(s4.winner._id || s4.winner) : null,
         needTiebreak: s4.needTiebreak
@@ -1668,9 +1704,9 @@ router.post('/stage4/select-song', authMiddleware, async (req, res) => {
   try {
     const perm = await checkPermission(req.user, null, 'referee');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
-
-    const t = await requireTournament(res);
-    if (!t) return;
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
 
     const { songId } = req.body;
     const s4 = t.stage4;
@@ -1685,13 +1721,14 @@ router.post('/stage4/select-song', authMiddleware, async (req, res) => {
     // P2-3
     const songRef = await Song.findById(lastSong.songId).select(SONG_DISPLAY_FIELDS).lean();
 
-    res.json({
-      msg: '选曲完成',
-      data: {
-        song: songRef ? serializeSongDoc(songRef, lastSong.difficultyIndex) : { title: '???' },
-        pickType: lastSong.pickType,
-        nextStep: result.nextStep
-      }
+      res.json({
+        msg: '选曲完成',
+        data: {
+          song: songRef ? serializeSongDoc(songRef, lastSong.difficultyIndex) : { title: '???' },
+          pickType: lastSong.pickType,
+          nextStep: result.nextStep
+        }
+      });
     });
   } catch (err) {
     console.error('决赛选曲失败:', err);
@@ -1704,12 +1741,12 @@ router.post('/stage4/submit-score', authMiddleware, async (req, res) => {
     const perm = await checkPermission(req.user, null, 'referee');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
 
-    const t = await requireTournament(res);
-    if (!t) return;
-
-    const result = await submitScore4(t, req.user.id, req.body);
-
-    res.json({ msg: '成绩已录入', data: { nextStep: result.nextStep } });
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
+      const result = await submitScore4(t, req.user.id, req.body);
+      res.json({ msg: '成绩已录入', data: { nextStep: result.nextStep } });
+    });
   } catch (err) {
     console.error('决赛成绩提交失败:', err);
     res.status(400).json({ msg: err.message });
@@ -1740,6 +1777,12 @@ router.post('/stage4/advance', authMiddleware, async (req, res) => {
         msg: '课题曲阶段',
         data: { song: serializeSongDoc(song, result.difficultyIndex), pickType: 'designated', nextStep: 'waiting_play_result' }
       });
+    } else if (result.nextStep === 'final_challenge') {
+      const song = await Song.findById(result.secretDesignatedSongId).select(SONG_DISPLAY_FIELDS).lean();
+      res.json({
+        msg: '最终挑战已揭晓',
+        data: { song: serializeSongDoc(song, result.difficultyIndex), pickType: 'secret_designated', nextStep: 'final_challenge' }
+      });
     } else {
       res.json({ msg: '推进成功', data: result });
     }
@@ -1749,20 +1792,20 @@ router.post('/stage4/advance', authMiddleware, async (req, res) => {
   }
 });
 
-// 修复 #4：决赛加赛判定（四曲全平后，线下加赛录入胜者并收尾赛事）
+// 修复 #4：决赛加赛判定（五曲全平后，线下加赛录入胜者并收尾赛事）
 router.post('/stage4/resolve-tie', authMiddleware, async (req, res) => {
   try {
     const perm = await checkPermission(req.user, null, 'referee');
     if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
 
-    const t = await requireTournament(res);
-    if (!t) return;
-
     const { winnerId } = req.body;
     if (!winnerId) return res.status(400).json({ msg: '需提供 winnerId' });
-
-    const result = await resolveTie4(t, winnerId);
-    res.json({ msg: '决赛加赛结果已录入，赛事结束', data: result });
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
+      const result = await resolveTie4(t, winnerId);
+      res.json({ msg: '决赛加赛结果已录入，赛事结束', data: result });
+    });
   } catch (err) {
     console.error('决赛加赛判定失败:', err);
     res.status(400).json({ msg: err.message });
@@ -1785,49 +1828,58 @@ const loadAndCheck = async (req, res) => {
   return await requireTournament(res);
 };
 
+const withAdminLockedTournament = (req, res, operation) => withRaceMutationLock(async () => {
+  const t = await loadAndCheck(req, res);
+  if (!t) return null;
+  return operation(t);
+});
+
 // ── 阶段一回退 ──
 
 router.post('/stage1/undo-last-song', authMiddleware, async (req, res) => {
   try {
-    const t = await loadAndCheck(req, res); if (!t) return;
-    undoStage1LastSong(t);
-    await t.save();
-    broadcast('score_updated', { stage: 'stage1', event: 'undo-last-song' });
-    res.json({ msg: '已撤销最后选曲' });
+    await withAdminLockedTournament(req, res, async (t) => {
+      undoStage1LastSong(t);
+      await t.save();
+      broadcast('score_updated', { stage: 'stage1', event: 'undo-last-song' });
+      res.json({ msg: '已撤销最后选曲' });
+    });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });
 
 router.post('/stage1/undo-last-score', authMiddleware, async (req, res) => {
   try {
-    const t = await loadAndCheck(req, res); if (!t) return;
-    const { player = 'both' } = req.body;
-    undoStage1LastScore(t, player);
-    await t.save();
-    broadcast('score_updated', { stage: 'stage1', event: 'undo-last-score', player });
-    res.json({ msg: '已撤销最后成绩' });
+    await withAdminLockedTournament(req, res, async (t) => {
+      const { player = 'both' } = req.body;
+      undoStage1LastScore(t, player);
+      await t.save();
+      broadcast('score_updated', { stage: 'stage1', event: 'undo-last-score', player });
+      res.json({ msg: '已撤销最后成绩' });
+    });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });
 
 router.post('/stage1/revert-group', authMiddleware, async (req, res) => {
   try {
-    const t = await loadAndCheck(req, res); if (!t) return;
-    const { groupId } = req.body;
-    revertStage1Group(t, Number(groupId));
-    await t.save();
-    broadcast('stage_advanced', { stage: 'stage1', event: 'revert-group', groupId });
-    res.json({ msg: `已回退到组 ${groupId}` });
+    await withAdminLockedTournament(req, res, async (t) => {
+      const { groupId } = req.body;
+      revertStage1Group(t, Number(groupId));
+      await t.save();
+      broadcast('stage_advanced', { stage: 'stage1', event: 'revert-group', groupId });
+      res.json({ msg: `已回退到组 ${groupId}` });
+    });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });
 
 router.post('/stage1/reset', authMiddleware, async (req, res) => {
   try {
-    const t = await loadAndCheck(req, res); if (!t) return;
-    resetStage1(t);
-    await t.save();
-    t.operationLogs.push({ action: 'stage1_reset', stage: 'stage1', operatedBy: req.user.id, operatedAt: new Date() });
-    await t.save();
-    broadcast('stage_advanced', { stage: 'stage1', event: 'reset' });
-    res.json({ msg: '阶段一已重置' });
+    await withAdminLockedTournament(req, res, async (t) => {
+      resetStage1(t);
+      t.operationLogs.push({ action: 'stage1_reset', stage: 'stage1', operatedBy: req.user.id, operatedAt: new Date() });
+      await t.save();
+      broadcast('stage_advanced', { stage: 'stage1', event: 'reset' });
+      res.json({ msg: '阶段一已重置' });
+    });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });
 
@@ -1895,33 +1947,36 @@ router.post('/race/reset', authMiddleware, async (req, res) => {
 
 router.post('/stage4/undo-last-song', authMiddleware, async (req, res) => {
   try {
-    const t = await loadAndCheck(req, res); if (!t) return;
-    undoStage4LastSong(t);
-    await t.save();
-    broadcast('score_updated', { stage: 'stage4', event: 'undo-last-song' });
-    res.json({ msg: '已撤销决赛最后选曲' });
+    await withAdminLockedTournament(req, res, async (t) => {
+      undoStage4LastSong(t);
+      await t.save();
+      broadcast('score_updated', { stage: 'stage4', event: 'undo-last-song' });
+      res.json({ msg: '已撤销决赛最后选曲' });
+    });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });
 
 router.post('/stage4/undo-last-score', authMiddleware, async (req, res) => {
   try {
-    const t = await loadAndCheck(req, res); if (!t) return;
-    const { player = 'both' } = req.body;
-    undoStage4LastScore(t, player);
-    await t.save();
-    broadcast('score_updated', { stage: 'stage4', event: 'undo-last-score', player });
-    res.json({ msg: '已撤销决赛最后成绩' });
+    await withAdminLockedTournament(req, res, async (t) => {
+      const { player = 'both' } = req.body;
+      undoStage4LastScore(t, player);
+      await t.save();
+      broadcast('score_updated', { stage: 'stage4', event: 'undo-last-score', player });
+      res.json({ msg: '已撤销决赛最后成绩' });
+    });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });
 
 router.post('/stage4/reset', authMiddleware, async (req, res) => {
   try {
-    const t = await loadAndCheck(req, res); if (!t) return;
-    resetStage4(t);
-    t.operationLogs.push({ action: 'stage4_reset', stage: 'stage4', operatedBy: req.user.id, operatedAt: new Date() });
-    await t.save();
-    broadcast('stage_advanced', { stage: 'stage4', event: 'reset' });
-    res.json({ msg: '决赛已重置' });
+    await withAdminLockedTournament(req, res, async (t) => {
+      resetStage4(t);
+      t.operationLogs.push({ action: 'stage4_reset', stage: 'stage4', operatedBy: req.user.id, operatedAt: new Date() });
+      await t.save();
+      broadcast('stage_advanced', { stage: 'stage4', event: 'reset' });
+      res.json({ msg: '决赛已重置' });
+    });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });
 
@@ -1929,23 +1984,25 @@ router.post('/stage4/reset', authMiddleware, async (req, res) => {
 
 router.post('/revert-stage', authMiddleware, async (req, res) => {
   try {
-    const t = await loadAndCheck(req, res); if (!t) return;
-    await revertStage(t);
-    t.operationLogs.push({ action: 'revert_stage', stage: t.status, operatedBy: req.user.id, operatedAt: new Date() });
-    await t.save();
-    broadcast('stage_advanced', { from: 'rolled_back', to: t.status });
-    res.json({ msg: `已回退到 ${t.status}` });
+    await withAdminLockedTournament(req, res, async (t) => {
+      await revertStage(t);
+      t.operationLogs.push({ action: 'revert_stage', stage: t.status, operatedBy: req.user.id, operatedAt: new Date() });
+      await t.save();
+      broadcast('stage_advanced', { from: 'rolled_back', to: t.status });
+      res.json({ msg: `已回退到 ${t.status}` });
+    });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });
 
 router.post('/reset', authMiddleware, async (req, res) => {
   try {
-    const t = await loadAndCheck(req, res); if (!t) return;
-    await resetAll(t);
-    t.operationLogs.push({ action: 'full_reset', operatedBy: req.user.id, operatedAt: new Date() });
-    await t.save();
-    broadcast('stage_advanced', { from: 'reset', to: 'pending' });
-    res.json({ msg: '赛事已完全重置' });
+    await withAdminLockedTournament(req, res, async (t) => {
+      await resetAll(t);
+      t.operationLogs.push({ action: 'full_reset', operatedBy: req.user.id, operatedAt: new Date() });
+      await t.save();
+      broadcast('stage_advanced', { from: 'reset', to: 'pending' });
+      res.json({ msg: '赛事已完全重置' });
+    });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });
 

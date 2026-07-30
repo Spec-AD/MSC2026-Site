@@ -281,12 +281,13 @@ export default function Stage1Page() {
                       order={(currentSong?.order ?? 0) + 1}
                     />
                     <ScoreEntryForm
-                      key={`${selectedGroup.groupId}-${currentSong?.songId || 'none'}`}
+                      key={`${selectedGroup.groupId}-${currentSong?.songId || 'none'}-${Boolean(currentSong?.p1Score && currentSong?.p2Score)}`}
                       groupId={selectedGroup.groupId}
                       songId={currentSong?.songId}
                       songIndex={currentSong?.order ?? 0}
                       p1={selectedGroup.p1}
                       p2={selectedGroup.p2}
+                      initialScores={currentSong}
                       onSubmit={async (data) => {
                         const result = await submitStage1Score(data);
                         setScoreResult({

@@ -32,6 +32,7 @@ export default function Stage4Page() {
   const [tieError, setTieError] = useState(null);
   const [scoreResult, setScoreResult] = useState(null);
   const [randomReveal, setRandomReveal] = useState(null);
+  const [finalChallengeReveal, setFinalChallengeReveal] = useState(null);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
@@ -43,8 +44,12 @@ export default function Stage4Page() {
     score_updated: useCallback(() => fetchStage4State(), [fetchStage4State]),
     song_drawn: useCallback(async () => {
       const nextState = await fetchStage4State();
-      const randomPlay = [...(nextState.songs || [])].reverse().find((play) => play.pickType === 'random');
-      if (randomPlay?.song) setRandomReveal(randomPlay.song);
+      const latestPlay = nextState.songs?.[nextState.songs.length - 1];
+      if (latestPlay?.pickType === 'secret_designated' && latestPlay.song) {
+        setFinalChallengeReveal(latestPlay.song);
+      } else if (latestPlay?.pickType === 'random' && latestPlay.song) {
+        setRandomReveal(latestPlay.song);
+      }
     }, [fetchStage4State]),
     match_finished: useCallback(() => {
       fetchStage4State();
@@ -52,17 +57,23 @@ export default function Stage4Page() {
     }, [fetchStage4State, fetchStatus]),
   }, { enabled: status === 'stage4' });
 
-  const currentSongIndex = stage4.songs?.filter(s => s.p1Score && s.p2Score).length || 0;
+  const completedSongCount = stage4.songs?.filter(s => s.p1Score && s.p2Score).length || 0;
+  const currentSongIndex = stage4.status === 'playing' && stage4.songs?.length
+    ? stage4.songs.length - 1
+    : completedSongCount;
   const currentSong = stage4.songs?.[currentSongIndex];
   const getSongId = (song) => String(song?.songId?._id || song?.songId || song?._id || '');
   const getSongTitle = (song) => song?.song?.title || song?.songId?.title || song?.title || '—';
 
-  const pickTypes = ['p1_pick', 'p2_pick', 'random', 'designated'];
+  const pickTypes = stage4.secretRevealed
+    ? ['p1_pick', 'p2_pick', 'random', 'designated', 'secret_designated']
+    : ['p1_pick', 'p2_pick', 'random', 'designated'];
   const pickLabels = {
     p1_pick: 'P1 自选',
     p2_pick: 'P2 自选',
     random: '系统随机',
-    designated: '课题曲',
+    designated: '表课题曲',
+    secret_designated: 'FINAL CHALLENGE',
   };
 
   const winnerId = stage4.winner?.toString?.() || stage4.winner;
@@ -102,7 +113,7 @@ export default function Stage4Page() {
         </div>
         <div className="text-right">
           <p className="text-6xl md:text-8xl font-black text-white leading-none tabular-nums" style={{ fontFamily: 'Torus, sans-serif' }}>2</p>
-          <p className="text-lg md:text-2xl text-zinc-400">进 1 · 4 首曲目</p>
+          <p className="text-lg md:text-2xl text-zinc-400">进 1 · {stage4.secretRevealed ? '最终挑战' : '4 首公开曲目'}</p>
         </div>
       </div>
 
@@ -119,12 +130,12 @@ export default function Stage4Page() {
         </div>
       </div>
 
-      {/* 课题曲 */}
+      {/* 公开的表课题曲；里课题曲只能由 songs[4] 在揭晓后进入前端状态。 */}
       {stage4.designatedSong && (
         <div className="rounded-2xl border border-amber-400/20 bg-amber-500/[0.06] p-5">
           <div className="flex items-center gap-3">
             <FaMusic className="text-amber-300 text-xl" />
-            <span className="text-sm uppercase tracking-[0.18em] text-amber-300/80">课题曲</span>
+            <span className="text-sm uppercase tracking-[0.18em] text-amber-300/80">表课题曲</span>
           </div>
           <p className="text-3xl font-black text-white mt-2 truncate">{stage4.designatedSong.title}</p>
           {stage4.designatedSong.artist && (
@@ -152,13 +163,14 @@ export default function Stage4Page() {
                 layout
                 variants={reduceMotion ? undefined : STAGGER_ITEM}
                 transition={MOTION_TRANSITIONS.spring}
+                onClick={() => type === 'secret_designated' && song?.song && setFinalChallengeReveal(song.song)}
                 className={`flex items-center gap-4 px-5 py-4 rounded-2xl border transition-all
                   ${song?.p1Score && song?.p2Score
                     ? 'border-emerald-400/25 bg-emerald-500/10'
                     : idx === currentSongIndex
                       ? 'border-amber-400/35 bg-amber-500/10'
                       : 'border-white/10 bg-black/15'
-                  }`}
+                  } ${type === 'secret_designated' && song?.song ? 'cursor-pointer hover:border-red-300/45' : ''}`}
               >
                 <span className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl font-black tabular-nums
                   ${idx === currentSongIndex ? 'bg-amber-500/20 text-amber-200' : 'bg-white/[0.06] text-zinc-400'}`}>
@@ -213,11 +225,18 @@ export default function Stage4Page() {
             <>
               <SongReveal play={currentSong} label={`当前曲目 · ${pickLabels[currentSong.pickType]}`} order={currentSongIndex + 1} />
               <ScoreEntryForm
-                key={`stage4-score-${getSongId(currentSong)}`}
+                key={`stage4-score-${getSongId(currentSong)}-${Boolean(currentSong.p1Score && currentSong.p2Score)}`}
                 songId={getSongId(currentSong)}
                 songIndex={currentSongIndex}
                 p1={stage4.p1}
                 p2={stage4.p2}
+                initialScores={currentSong}
+                advanceLabel={{
+                  p1_pick: '进入 P2 选曲',
+                  random: '进入表课题曲',
+                  designated: '揭晓最终挑战',
+                  secret_designated: '确认决赛结果',
+                }[currentSong.pickType] || '推进下一轮'}
                 onSubmit={async (data) => {
                   const result = await submitStage4Score({ ...data, songIndex: currentSongIndex });
                   setScoreResult({
@@ -227,15 +246,15 @@ export default function Stage4Page() {
                     p2Score: data.p2Score,
                     songTitle: getSongTitle(currentSong),
                   });
-                  if (result.data?.nextStep === 'advance') {
-                    await advanceStage4();
-                  }
                   await fetchStage4State();
                   await fetchStatus();
                   return result;
                 }}
                 onAdvance={async () => {
-                  await advanceStage4();
+                  const advanceResult = await advanceStage4();
+                  if (advanceResult.data?.nextStep === 'final_challenge' && advanceResult.data.song) {
+                    setFinalChallengeReveal(advanceResult.data.song);
+                  }
                   await fetchStage4State();
                   await fetchStatus();
                 }}
@@ -248,7 +267,7 @@ export default function Stage4Page() {
 
       {stage4.status === 'done' && stage4.needTiebreak && !stage4.winner && (
         <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-6">
-          <h3 className="text-2xl font-black text-amber-100">四曲总成绩完全相同</h3>
+          <h3 className="text-2xl font-black text-amber-100">五曲总成绩完全相同</h3>
           <p className="text-zinc-300 mt-2">完成线下加赛后，选择获胜选手并再次确认。</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
             <button onClick={() => { setTieWinnerId(p1Id); setTieError(null); }} className="py-3 rounded-xl border border-sky-400/30 bg-sky-500/10 text-sky-200 font-bold">
@@ -287,6 +306,11 @@ export default function Stage4Page() {
         song={randomReveal}
         pickLabel="RANDOM TRACK · 系统随机曲目"
         onClose={() => setRandomReveal(null)}
+      />
+      <SongSelectionSpotlight
+        song={finalChallengeReveal}
+        pickLabel="FINAL CHALLENGE · 里课题曲"
+        onClose={() => setFinalChallengeReveal(null)}
       />
     </div>
   );

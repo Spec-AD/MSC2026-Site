@@ -14,7 +14,8 @@ const IDS = [
   '507f1f77bcf86cd799439011',
   '507f1f77bcf86cd799439012',
   '507f1f77bcf86cd799439013',
-  '507f1f77bcf86cd799439014'
+  '507f1f77bcf86cd799439014',
+  '507f1f77bcf86cd799439015'
 ];
 
 test('normalizes a usable song pool and rejects duplicates', () => {
@@ -34,8 +35,9 @@ test('requires initialization requests to match the stored pool', () => {
 });
 
 test('keeps the designated song outside the selectable final pool', () => {
-  assert.doesNotThrow(() => assertFinalSongConfig(IDS.slice(0, 3), IDS[3]));
+  assert.doesNotThrow(() => assertFinalSongConfig(IDS.slice(0, 3), IDS[3], IDS[4]));
   assert.throws(() => assertFinalSongConfig(IDS.slice(0, 3), IDS[2]), /不能同时出现在/);
+  assert.throws(() => assertFinalSongConfig(IDS.slice(0, 3), IDS[3], IDS[3]), /不能是同一首/);
 });
 
 test('reads legacy final configuration and detects initialized finals separately', () => {

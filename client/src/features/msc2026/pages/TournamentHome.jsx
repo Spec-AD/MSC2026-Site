@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion as Motion } from 'framer-motion';
-import { Maximize2 } from 'lucide-react';
+import { BookOpen, Maximize2 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useMSC2026Store } from '../store';
 import PlayerList from '../components/PlayerList';
@@ -51,7 +51,7 @@ export default function TournamentHome() {
               MSC 2026
             </h1>
             <p className="text-zinc-300 text-xl max-w-3xl leading-relaxed">
-              资格赛、12进6 小组赛、六边形与正方形跑图、最终四曲决赛。
+              资格赛、12进6 小组赛、六边形与正方形跑图、最终决赛。
             </p>
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -80,6 +80,13 @@ export default function TournamentHome() {
               启动比赛模式
             </button>
           )}
+          <Link
+            to="/matches/msc2026/tutorial"
+            className="inline-flex items-center gap-3 border border-cyan-300/35 bg-cyan-400/10 px-7 py-4 text-xl font-black text-cyan-100 transition-colors hover:bg-cyan-400/18"
+          >
+            <BookOpen className="h-6 w-6" />
+            了解跑图
+          </Link>
           {status !== 'pending' && status !== 'finished' && (
             <Link
               to={`/matches/msc2026/${status}`}

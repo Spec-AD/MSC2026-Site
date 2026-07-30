@@ -1,0 +1,7 @@
+
+> msc-2026-server@b0.0.1 start
+> node app.js
+
+✅ Server running on port 5000
+🔄 [v1.5.3] 开始自动同步曲目别名库...
+⏳ 等待 5 秒后进行第 2 次重试...

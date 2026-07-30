@@ -31,7 +31,7 @@ const SongPlaySchema = new Schema({
   difficultyIndex: { type: Number, min: 0, max: 4, default: 3 },
   pickType: {
     type: String,
-    enum: ['p1_pick', 'p2_pick', 'random', 'designated'],
+    enum: ['p1_pick', 'p2_pick', 'random', 'designated', 'secret_designated'],
     required: true
   },
   pickedBy: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -159,6 +159,9 @@ const Stage4Schema = new Schema({
   difficultyIndexes: { type: Schema.Types.Mixed, default: {} },
   designatedSongId: { type: Schema.Types.ObjectId, ref: 'Song' },
   designatedDifficultyIndex: { type: Number, min: 0, max: 4, default: 3 },
+  secretDesignatedSongId: { type: Schema.Types.ObjectId, ref: 'Song' },
+  secretDesignatedDifficultyIndex: { type: Number, min: 0, max: 4, default: 3 },
+  secretRevealedAt: { type: Date, default: null },
   songs: [SongPlaySchema],
   status: {
     type: String,
@@ -201,6 +204,8 @@ const MSC2026TournamentSchema = new Schema({
   stage4DifficultyIndexes: { type: Schema.Types.Mixed, default: {} },
   stage4DesignatedSongId: { type: Schema.Types.ObjectId, ref: 'Song', default: null },
   stage4DesignatedDifficultyIndex: { type: Number, min: 0, max: 4, default: 3 },
+  stage4SecretDesignatedSongId: { type: Schema.Types.ObjectId, ref: 'Song', default: null },
+  stage4SecretDesignatedDifficultyIndex: { type: Number, min: 0, max: 4, default: 3 },
   // ⚠️ 已废弃：不再手动录入选手，改为从旧赛事拉取。保留字段仅向下兼容
   registeredPlayers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 

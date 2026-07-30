@@ -10,14 +10,17 @@ function normalizeSongPool(ids, label, minimum = 3) {
   return normalized;
 }
 
-function normalizeDesignatedSong(songId) {
-  if (!songId) throw new Error('需要指定决赛课题曲');
-  return assertObjectIdList([songId], 1, '决赛课题曲')[0];
+function normalizeDesignatedSong(songId, label = '决赛课题曲') {
+  if (!songId) throw new Error(`需要指定${label}`);
+  return assertObjectIdList([songId], 1, label)[0];
 }
 
-function assertFinalSongConfig(songPoolIds, designatedSongId) {
-  if (songPoolIds.includes(designatedSongId)) {
-    throw new Error('决赛课题曲不能同时出现在决赛可选图池中');
+function assertFinalSongConfig(songPoolIds, designatedSongId, secretDesignatedSongId = null) {
+  if (songPoolIds.includes(designatedSongId) || (secretDesignatedSongId && songPoolIds.includes(secretDesignatedSongId))) {
+    throw new Error('表/里课题曲不能同时出现在决赛可选图池中');
+  }
+  if (secretDesignatedSongId && designatedSongId === secretDesignatedSongId) {
+    throw new Error('表课题曲与里课题曲不能是同一首歌');
   }
 }
 
@@ -50,10 +53,14 @@ function getStoredStage4Config(tournament) {
       : (tournament.stage4?.songPool || []),
     designatedSongId: tournament.stage4DesignatedSongId ||
       tournament.stage4?.designatedSongId || null,
+    secretDesignatedSongId: tournament.stage4SecretDesignatedSongId ||
+      tournament.stage4?.secretDesignatedSongId || null,
     difficultyIndexes: tournament.stage4DifficultyIndexes ||
       tournament.stage4?.difficultyIndexes || {},
     designatedDifficultyIndex: tournament.stage4DesignatedDifficultyIndex ??
-      tournament.stage4?.designatedDifficultyIndex ?? 3
+      tournament.stage4?.designatedDifficultyIndex ?? 3,
+    secretDesignatedDifficultyIndex: tournament.stage4SecretDesignatedDifficultyIndex ??
+      tournament.stage4?.secretDesignatedDifficultyIndex ?? 3
   };
 }
 

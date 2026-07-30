@@ -1,0 +1,23 @@
+(node:9160) [MONGOOSE] Warning: `isNew` is a reserved schema pathname and may break some functionality. You are allowed to use it, but use at your own risk. To disable this warning pass `suppressReservedKeysWarning` as a schema option.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[MSC2026] 跑图计时调度失败: MongooseError: Operation `msc2026tournaments.findOne()` buffering timed out after 10000ms
+    at Timeout.<anonymous> (D:\MSC2026\Sign_up\server\node_modules\mongoose\lib\drivers\node-mongodb-native\collection.js:187:23)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[MSC2026] 跑图计时调度失败: MongooseError: Operation `msc2026tournaments.findOne()` buffering timed out after 10000ms
+    at Timeout.<anonymous> (D:\MSC2026\Sign_up\server\node_modules\mongoose\lib\drivers\node-mongodb-native\collection.js:187:23)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+⚠️ 第 1 次尝试拉取别名失败: connect ETIMEDOUT 114.66.10.76:5000
+[MSC2026] 跑图计时调度失败: MongooseError: Operation `msc2026tournaments.findOne()` buffering timed out after 10000ms
+    at Timeout.<anonymous> (D:\MSC2026\Sign_up\server\node_modules\mongoose\lib\drivers\node-mongodb-native\collection.js:187:23)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+MSC 状态查询失败: MongooseError: Operation `msc2026tournaments.findOne()` buffering timed out after 10000ms
+    at Timeout.<anonymous> (D:\MSC2026\Sign_up\server\node_modules\mongoose\lib\drivers\node-mongodb-native\collection.js:187:23)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[MSC2026] 跑图计时调度失败: MongooseError: Operation `msc2026tournaments.findOne()` buffering timed out after 10000ms
+    at Timeout.<anonymous> (D:\MSC2026\Sign_up\server\node_modules\mongoose\lib\drivers\node-mongodb-native\collection.js:187:23)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)

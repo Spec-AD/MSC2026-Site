@@ -9,8 +9,9 @@ import { useMSC2026Store } from '../../store';
 import * as api from '../../api/msc2026Api';
 import {
   FaCog, FaPlay, FaUsers, FaMusic, FaCheck, FaSpinner, FaTimes,
-  FaUndo, FaTrash, FaTrophy, FaMedal, FaExclamationTriangle
+  FaUndo, FaTrash, FaTrophy, FaMedal, FaExclamationTriangle, FaDownload
 } from 'react-icons/fa';
+import { collectSongs, readCachedSongConfig, readSongCacheStatus, warmSongCache, writeCachedSongConfig } from '../../utils/songCache';
 
 const ADMIN_ROLES = ['ADM', 'TO', 'CHM'];
 
@@ -183,10 +184,13 @@ export default function AdminPanel() {
   const [stage1Songs, setStage1Songs] = useState([]);
   const [stage4Songs, setStage4Songs] = useState([]);
   const [designatedSong, setDesignatedSong] = useState(null);
+  const [secretDesignatedSong, setSecretDesignatedSong] = useState(null);
+  const [cacheStatus, setCacheStatus] = useState(() => readSongCacheStatus());
   const [savedSongConfig, setSavedSongConfig] = useState({
     stage1SongPool: [],
     stage4SongPool: [],
     designatedSong: null,
+    secretDesignatedSong: null,
   });
   const advanceCount = 12;
 
@@ -214,18 +218,30 @@ export default function AdminPanel() {
 
   const loadSongConfig = useCallback(async () => {
     if (!isAdmin) return;
-    try {
-      const res = await api.getConfig();
-      const config = res.data.data || {};
+    const applyConfig = (config) => {
       const nextConfig = {
         stage1SongPool: config.stage1SongPool || [],
         stage4SongPool: config.stage4SongPool || [],
         designatedSong: config.designatedSong || null,
+        secretDesignatedSong: config.secretDesignatedSong || null,
       };
       setSavedSongConfig(nextConfig);
       setStage1Songs(nextConfig.stage1SongPool);
       setStage4Songs(nextConfig.stage4SongPool);
       setDesignatedSong(nextConfig.designatedSong);
+      setSecretDesignatedSong(nextConfig.secretDesignatedSong);
+      return nextConfig;
+    };
+    const cached = readCachedSongConfig();
+    if (cached?.data) applyConfig(cached.data);
+    try {
+      const res = await api.getConfig();
+      const config = res.data.data || {};
+      const nextConfig = applyConfig(config);
+      writeCachedSongConfig(nextConfig);
+      warmSongCache(collectSongs(nextConfig.stage1SongPool, nextConfig.stage4SongPool, nextConfig.designatedSong, nextConfig.secretDesignatedSong))
+        .then(setCacheStatus)
+        .catch(() => {});
     } catch (err) {
       console.error('加载比赛图池配置失败', err);
     }
@@ -288,10 +304,20 @@ export default function AdminPanel() {
         songDifficultyIndexes: difficultyMap(stage4Songs),
         designatedSongId: getSongId(designatedSong),
         designatedDifficultyIndex: designatedSong?.difficultyIndex ?? 3,
+        secretDesignatedSongId: getSongId(secretDesignatedSong),
+        secretDesignatedDifficultyIndex: secretDesignatedSong?.difficultyIndex ?? 3,
       });
       await loadSongConfig();
     },
-    '决赛图池与课题曲已保存'
+    '决赛图池与表/里课题曲已保存'
+  );
+
+  const handleWarmSongCache = () => handleAction(
+    async () => {
+      const result = await warmSongCache(collectSongs(stage1Songs, stage4Songs, designatedSong, secretDesignatedSong));
+      setCacheStatus(result);
+    },
+    '比赛曲目与曲绘缓存已预热'
   );
 
   // 初始化动作
@@ -416,7 +442,17 @@ export default function AdminPanel() {
 
         {/* ========== 图池 Tab ========== */}
         {activeTab === 'songs' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+              <div>
+                <p className="text-sm font-bold text-white">现场素材缓存</p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {cacheStatus ? `已缓存 ${cacheStatus.songCount || 0} 首曲目 / ${cacheStatus.coverCount || 0} 张曲绘` : '尚未预热本机素材'}
+                </p>
+              </div>
+              <ActionButton onClick={handleWarmSongCache} loading={loading} icon={<FaDownload />} label="预热比赛素材" variant="undo" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <h4 className="text-xs text-zinc-400 uppercase tracking-wider">阶段一图池</h4>
@@ -433,7 +469,7 @@ export default function AdminPanel() {
               </div>
               <SongSearch onToggle={(song) => toggleSong(setStage4Songs, song)} onDifficultyChange={(id, index) => setSongDifficulty(setStage4Songs, id, index)} selectedSongs={stage4Songs} />
               <div className="pt-2 border-t border-white/10">
-                <h4 className="text-xs text-zinc-500 uppercase tracking-wider mb-2">决赛课题曲</h4>
+                <h4 className="text-xs text-zinc-500 uppercase tracking-wider mb-2">表课题曲（第四首，公开）</h4>
                 <SongSearch
                   onToggle={(song) => setDesignatedSong(current => getSongId(current) === getSongId(song) ? null : song)}
                   onDifficultyChange={(_id, index) => setDesignatedSong(current => current ? { ...current, difficultyIndex: index } : current)}
@@ -441,9 +477,20 @@ export default function AdminPanel() {
                   maxSelect={1}
                 />
               </div>
+              <div className="pt-2 border-t border-white/10">
+                <h4 className="text-xs text-red-300/80 uppercase tracking-wider mb-2">里课题曲（第五首，最终挑战）</h4>
+                <SongSearch
+                  onToggle={(song) => setSecretDesignatedSong(current => getSongId(current) === getSongId(song) ? null : song)}
+                  onDifficultyChange={(_id, index) => setSecretDesignatedSong(current => current ? { ...current, difficultyIndex: index } : current)}
+                  selectedSongs={secretDesignatedSong ? [secretDesignatedSong] : []}
+                  maxSelect={1}
+                />
+                <p className="mt-2 text-xs leading-relaxed text-zinc-500">里课题曲仅在第四首成绩完成后公开，请勿在公共屏幕打开管理员图池页。</p>
+              </div>
               <ActionButton onClick={handleSaveStage4Pool} loading={loading}
-                disabled={stage4Songs.length < 3 || !designatedSong || stage4Songs.some(song => getSongId(song) === getSongId(designatedSong))}
+                disabled={stage4Songs.length < 3 || !designatedSong || !secretDesignatedSong || getSongId(designatedSong) === getSongId(secretDesignatedSong) || stage4Songs.some(song => [getSongId(designatedSong), getSongId(secretDesignatedSong)].includes(getSongId(song)))}
                 icon={<FaCheck />} label="保存决赛配置" />
+            </div>
             </div>
           </div>
         )}
@@ -582,13 +629,14 @@ export default function AdminPanel() {
                   <div>
                     <span className="text-[10px] text-zinc-500 uppercase block mb-2">已保存决赛配置</span>
                     <p className="text-sm text-zinc-300">图池 {savedSongConfig.stage4SongPool.length} 首</p>
-                    <p className="text-xs text-zinc-500 mt-1">课题曲：{savedSongConfig.designatedSong?.title || '未设置'}</p>
+                    <p className="text-xs text-zinc-500 mt-1">表课题曲：{savedSongConfig.designatedSong?.title || '未设置'}</p>
+                    <p className="text-xs text-zinc-500 mt-1">里课题曲：{savedSongConfig.secretDesignatedSong?.title || '未设置'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   {status === 'stage3' && (
                     <ActionButton onClick={handleInitStage4} loading={loading}
-                      disabled={stage4Players.length !== 2 || !store.summary?.stage3?.terminated || savedSongConfig.stage4SongPool.length < 3 || !savedSongConfig.designatedSong}
+                      disabled={stage4Players.length !== 2 || !store.summary?.stage3?.terminated || savedSongConfig.stage4SongPool.length < 3 || !savedSongConfig.designatedSong || !savedSongConfig.secretDesignatedSong}
                       icon={<FaPlay />} label={stage4Players.length !== 2 ? `等待决赛名单 ${stage4Players.length}/2` : '初始化决赛'} />
                   )}
                   {status === 'stage4' && (

@@ -105,7 +105,7 @@ function LayerRing({ vertices, y, fill, line, opacity = 0.06, lineOpacity = 0.5,
 
 // ==================== 墙壁 ====================
 
-function WallRing({ vertices, y, height = 0.72, label = '', breachedCount = 0, totalPlayers = 0, coord = 0 }) {
+function WallRing({ vertices, y, height = 0.72, label = '', breachedCount = 0, totalPlayers = 0, coord = 0, labelAnchorIndex = 0 }) {
   const fully = totalPlayers > 0 && breachedCount >= totalPlayers;
   const partial = breachedCount > 0 && !fully;
   const baseColor = fully ? '#34d399' : partial ? '#f59e0b' : '#ef4444';
@@ -116,9 +116,9 @@ function WallRing({ vertices, y, height = 0.72, label = '', breachedCount = 0, t
     [vertices, y, height],
   );
   const labelPosition = useMemo(() => {
-    const topVertex = vertices.reduce((best, v) => (v[1] < best[1] ? v : best), vertices[0]);
-    return [topVertex[0] * 0.82, y + height + 0.5, topVertex[1] * 0.82];
-  }, [vertices, y, height]);
+    const anchor = vertices[labelAnchorIndex] || vertices[0];
+    return [anchor[0] * 0.88, y + height + 0.52, anchor[1] * 0.88];
+  }, [vertices, y, height, labelAnchorIndex]);
 
   return (
     <group>
@@ -153,13 +153,13 @@ function WallRing({ vertices, y, height = 0.72, label = '', breachedCount = 0, t
 
       {/* 标签：墙名 · 坐标 · 攻破进度 */}
       <Html position={labelPosition} center distanceFactor={8} zIndexRange={[10, 0]}>
-        <div className={`flex items-center gap-2 whitespace-nowrap border border-l-4 px-4 py-2 text-sm font-bold backdrop-blur-md pointer-events-none shadow-lg md:text-base
+        <div className={`flex items-center gap-1 whitespace-nowrap border border-l-4 px-2 py-1 text-[11px] font-bold backdrop-blur-md pointer-events-none shadow-lg sm:gap-2 sm:px-4 sm:py-2 sm:text-sm md:text-base
           ${fully ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30'
             : partial ? 'bg-amber-500/15 text-amber-300 border-amber-400/30'
             : 'bg-red-500/15 text-red-300 border-red-400/30'}`}>
           <span className="font-bold">{label}</span>
           <span className="opacity-50">·</span>
-          <span className="opacity-60">坐标{coord}</span>
+          <span className="opacity-60"><span className="hidden sm:inline">坐标</span>{coord}</span>
           {totalPlayers > 0 && (
             <span className="font-mono tabular-nums opacity-80">{breachedCount}/{totalPlayers}{fully ? ' ✓' : ''}</span>
           )}
@@ -334,8 +334,8 @@ function FinishCore({ centerCoord }) {
       <Sparkles count={34} scale={[1.25, 2, 1.25]} size={2.6} speed={0.3} color="#fde68a" position={[0, 0.7, 0]} />
       <pointLight color="#fbbf24" intensity={1.25} distance={3.2} />
       <Html position={[0, 1.35, 0]} center distanceFactor={7} zIndexRange={[10, 0]}>
-        <div className="px-3 py-1 rounded-full text-xs md:text-sm font-bold whitespace-nowrap bg-amber-500/25 text-amber-200 border border-amber-400/40 backdrop-blur-md pointer-events-none shadow-lg">
-          中心 · 终点{centerCoord != null ? ` · 坐标${centerCoord}` : ''}
+        <div className="px-2 py-1 rounded-full text-[11px] sm:px-3 sm:text-xs md:text-sm font-bold whitespace-nowrap bg-amber-500/25 text-amber-200 border border-amber-400/40 backdrop-blur-md pointer-events-none shadow-lg">
+          中心<span className="hidden sm:inline"> · 终点</span>{centerCoord != null ? <><span> · </span><span className="hidden sm:inline">坐标</span>{centerCoord}</> : ''}
         </div>
       </Html>
     </group>
@@ -347,8 +347,8 @@ function FinishCore({ centerCoord }) {
 function StartLabels({ vertices }) {
   return vertices.map((v, i) => (
     <Html key={i} position={[v[0] * 0.96, 0.08, v[1] * 0.96]} center distanceFactor={8} zIndexRange={[10, 0]}>
-      <div className="px-2 py-1 rounded-lg text-xs text-zinc-400 bg-black/35 border border-white/10 whitespace-nowrap pointer-events-none backdrop-blur-sm">
-        起点 {i} · 坐标0
+      <div className="px-1.5 py-1 rounded-lg text-[11px] text-zinc-400 bg-black/35 border border-white/10 whitespace-nowrap pointer-events-none backdrop-blur-sm sm:px-2 sm:text-xs">
+        <span className="sm:hidden">S{i} · 0</span><span className="hidden sm:inline">起点 {i} · 坐标0</span>
       </div>
     </Html>
   ));
@@ -444,6 +444,7 @@ export default function RaceMap3D({
                 coord={l}
                 breachedCount={breachedCount}
                 totalPlayers={players.length}
+                labelAnchorIndex={l === 1 ? verts.length - 1 : 2}
               />
             </group>
           );

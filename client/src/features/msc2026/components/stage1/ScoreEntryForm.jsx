@@ -114,7 +114,7 @@ function PlayerScoreCard({ player, prefix, scores, onChange }) {
 export default function ScoreEntryForm({
   songId, songIndex, p1, p2,
   onSubmit, onAdvance,
-  disabled = false, initialScores = null,
+  disabled = false, initialScores = null, advanceLabel = '推进下一轮',
 }) {
   const [scores, setScores] = useState({
     p1Score: {
@@ -129,7 +129,7 @@ export default function ScoreEntryForm({
     },
   });
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(Boolean(initialScores?.p1Score && initialScores?.p2Score));
   const [error, setError] = useState(null);
   const [advancing, setAdvancing] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -213,21 +213,29 @@ export default function ScoreEntryForm({
       >
         <FaClipboardCheck className="text-4xl text-emerald-300 mx-auto mb-3" />
         <p className="text-3xl text-emerald-200 font-black">成绩已录入</p>
+        {error && (
+          <p className="mx-auto mt-4 max-w-2xl rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-lg text-red-200">
+            {error}
+          </p>
+        )}
         <MotionButton
           loading={advancing}
           onClick={async () => {
             if (!onAdvance) return;
             setAdvancing(true);
+            setError(null);
             try {
               await onAdvance();
               setSubmitted(false);
+            } catch (err) {
+              setError(err?.msg || '推进失败，请检查当前比赛状态后重试');
             } finally {
               setAdvancing(false);
             }
           }}
           className="mt-5 px-8 py-3 rounded-xl bg-amber-500/20 text-amber-200 border border-amber-400/30 text-xl font-bold hover:bg-amber-500/30 transition-all"
         >
-          {advancing ? '推进中...' : '推进下一轮'}
+          {advancing ? '推进中...' : advanceLabel}
         </MotionButton>
       </Motion.div>
     );

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -31,14 +32,16 @@ import Rules from './pages/Rules';
 import TournamentManage from './pages/TournamentManage';
 import TournamentDetail from './pages/TournamentDetail';
 import ComplaintForm from './pages/ComplaintForm';
+import MSCErrorBoundary from './features/msc2026/components/MSCErrorBoundary';
 
-// MSC 2026
-import MSC2026Layout from './features/msc2026/pages/MSC2026Layout';
-import TournamentHome from './features/msc2026/pages/TournamentHome';
-import Stage1Page from './features/msc2026/pages/Stage1Page';
-import Stage4Page from './features/msc2026/pages/Stage4Page';
-import RacePage from './features/msc2026/pages/RacePage';
-import LiveMatchPage from './features/msc2026/pages/LiveMatchPage';
+// MSC 2026 的 3D 与现场模块按路由加载，避免拖慢站点首屏。
+const MSC2026Layout = lazy(() => import('./features/msc2026/pages/MSC2026Layout'));
+const TournamentHome = lazy(() => import('./features/msc2026/pages/TournamentHome'));
+const RaceTutorialPage = lazy(() => import('./features/msc2026/pages/RaceTutorialPage'));
+const Stage1Page = lazy(() => import('./features/msc2026/pages/Stage1Page'));
+const Stage4Page = lazy(() => import('./features/msc2026/pages/Stage4Page'));
+const RacePage = lazy(() => import('./features/msc2026/pages/RacePage'));
+const LiveMatchPage = lazy(() => import('./features/msc2026/pages/LiveMatchPage'));
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -59,8 +62,9 @@ function App() {
     <BrowserRouter>
       <ToastProvider>
         <ThemeProvider>
+          <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#06070b] text-xl font-bold text-zinc-300">正在载入比赛界面...</div>}>
           <Routes>
-            <Route path="/matches/msc2026/live" element={<LiveMatchPage />} />
+            <Route path="/matches/msc2026/live" element={<MSCErrorBoundary><LiveMatchPage /></MSCErrorBoundary>} />
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />
               <Route path="register" element={<Register />} />
@@ -104,8 +108,9 @@ function App() {
                 <Route path="leaderboard/:bid" element={<OsuLeaderboard />} />
               </Route>
               {/* MSC 2026 独立路由 */}
-              <Route path="/matches/msc2026" element={<MSC2026Layout />}>
+              <Route path="/matches/msc2026" element={<MSCErrorBoundary><MSC2026Layout /></MSCErrorBoundary>}>
                 <Route index element={<TournamentHome />} />
+                <Route path="tutorial" element={<RaceTutorialPage />} />
                 <Route path="stage1" element={<Stage1Page />} />
                 <Route path="stage2" element={<RacePage stage="stage2" />} />
                 <Route path="stage3" element={<RacePage stage="stage3" />} />
@@ -119,6 +124,7 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
+          </Suspense>
         </ThemeProvider>
       </ToastProvider>
     </BrowserRouter>

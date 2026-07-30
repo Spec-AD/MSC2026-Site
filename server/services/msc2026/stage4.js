@@ -19,19 +19,29 @@ const { drawRandomSong } = require('./randomSongDraw');
 /**
  * 初始化决赛
  */
-async function initStage4(tournament, playerIds, songPoolIds, designatedSongId, difficultyIndexes = {}, designatedDifficultyIndex = 3) {
+async function initStage4(
+  tournament,
+  playerIds,
+  songPoolIds,
+  designatedSongId,
+  secretDesignatedSongId,
+  difficultyIndexes = {},
+  designatedDifficultyIndex = 3,
+  secretDesignatedDifficultyIndex = 3
+) {
   playerIds = assertObjectIdList(playerIds, 2, '决赛选手');
   songPoolIds = assertObjectIdList(songPoolIds || [], null, '决赛图池');
   if (songPoolIds.length < 3) {
     throw new Error('决赛图池至少需要 3 首歌');
   }
-  if (!designatedSongId) {
-    throw new Error('需要指定课题曲');
-  }
+  if (!designatedSongId) throw new Error('需要指定表课题曲');
+  if (!secretDesignatedSongId) throw new Error('需要指定里课题曲');
   const [normalizedDesignatedSongId] = assertObjectIdList([designatedSongId], 1, '课题曲');
-  if (songPoolIds.includes(normalizedDesignatedSongId)) {
-    throw new Error('课题曲不能同时出现在决赛可选图池中');
+  const [normalizedSecretDesignatedSongId] = assertObjectIdList([secretDesignatedSongId], 1, '里课题曲');
+  if (songPoolIds.includes(normalizedDesignatedSongId) || songPoolIds.includes(normalizedSecretDesignatedSongId)) {
+    throw new Error('表/里课题曲不能同时出现在决赛可选图池中');
   }
+  if (normalizedDesignatedSongId === normalizedSecretDesignatedSongId) throw new Error('表课题曲与里课题曲不能相同');
 
   // 随机抽签 P1/P2
   const shuffled = shuffle(playerIds);
@@ -43,6 +53,9 @@ async function initStage4(tournament, playerIds, songPoolIds, designatedSongId, 
     difficultyIndexes: { ...difficultyIndexes },
     designatedSongId: normalizedDesignatedSongId,
     designatedDifficultyIndex,
+    secretDesignatedSongId: normalizedSecretDesignatedSongId,
+    secretDesignatedDifficultyIndex,
+    secretRevealedAt: null,
     songs: [],
     status: 'p1_pick',
     winner: null,
@@ -274,7 +287,36 @@ async function advance(tournament) {
   }
 
   if (songCount === 4 && s4.songs[3].pickType === 'designated') {
-    // 四首全部完成 → 判定胜负
+    // 表课题曲完成后才揭晓里课题曲，避免公共状态提前泄题。
+    s4.songs.push({
+      songId: s4.secretDesignatedSongId,
+      difficultyIndex: s4.secretDesignatedDifficultyIndex ?? 3,
+      pickType: 'secret_designated',
+      pickedBy: null,
+      p1Score: null,
+      p2Score: null,
+      order: 4
+    });
+    s4.secretRevealedAt = new Date();
+    s4.status = 'playing';
+    await tournament.save();
+
+    broadcast('song_drawn', {
+      stage: 'stage4',
+      songId: s4.secretDesignatedSongId.toString(),
+      pickType: 'secret_designated'
+    });
+    broadcast('turn_change', { stage: 'stage4', phase: 'final_challenge' });
+
+    return {
+      nextStep: 'final_challenge',
+      secretDesignatedSongId: s4.secretDesignatedSongId.toString(),
+      difficultyIndex: s4.secretDesignatedDifficultyIndex ?? 3
+    };
+  }
+
+  if (songCount === 5 && s4.songs[4].pickType === 'secret_designated') {
+    // 五首全部完成 → 判定胜负
     const p1Scores = s4.songs.map(s => s.p1Score);
     const p2Scores = s4.songs.map(s => s.p2Score);
     const p1Total = p1Scores.reduce((a, s) => a + (s ? s.achievement : 0), 0);
@@ -356,7 +398,7 @@ async function _finalizeFinal(tournament, s4, winner) {
 }
 
 /**
- * 修复 #4：裁判加赛判定 —— 决赛四曲全平后，线下加赛由裁判录入胜者
+ * 修复 #4：裁判加赛判定 —— 决赛五曲全平后，线下加赛由裁判录入胜者
  */
 async function resolveTie(tournament, winnerId) {
   const s4 = tournament.stage4;
@@ -374,7 +416,11 @@ async function resolveTie(tournament, winnerId) {
 
 async function _systemRandomPick(tournament, s4) {
   const pickedIds = s4.songs.map(s => s.songId.toString());
-  const excludedSongIds = [...pickedIds, s4.designatedSongId.toString()];
+  const excludedSongIds = [
+    ...pickedIds,
+    s4.designatedSongId.toString(),
+    s4.secretDesignatedSongId.toString()
+  ];
   const randomSong = drawRandomSong(s4.songPool, excludedSongIds);
 
   s4.songs.push({
