@@ -56,6 +56,34 @@ const MOCK_PLAYERS = Array.from({ length: 6 }, (_, index) => ({
   itemCount: index === 0 ? 1 : 0,
 }));
 
+const CHALLENGE_CATALOG = [
+  {
+    code: 'EVAL', name: '评价型', basis: '以 FC、FC+、AP、AP+ 等评价结果判定。',
+    example: '例：在指定谱面取得 FC+ 或更高评价。',
+    color: 'border-cyan-300 bg-cyan-500/[0.06] text-cyan-200',
+  },
+  {
+    code: 'RATE', name: '完成型', basis: '以最终完成率是否达到目标线判定。',
+    example: '例：在指定谱面达到现场公布的目标完成率。',
+    color: 'border-emerald-300 bg-emerald-500/[0.06] text-emerald-200',
+  },
+  {
+    code: 'DX', name: '准度型', basis: '以 DX 星级等准度结果判定。',
+    example: '例：在指定谱面达到裁判要求的 DX 星级。',
+    color: 'border-amber-300 bg-amber-500/[0.06] text-amber-200',
+  },
+  {
+    code: 'LIMIT', name: '补全型', basis: '限制特定失误音符或非完美音符的数量。',
+    example: '例：GREAT 及以下音符不超过裁判给出的数量。',
+    color: 'border-fuchsia-300 bg-fuchsia-500/[0.06] text-fuchsia-200',
+  },
+  {
+    code: 'COMBO', name: '复合型', basis: '要求同时满足两种或更多判定条件。',
+    example: '例：取得指定评价，同时达到要求的 DX 星级。',
+    color: 'border-red-300 bg-red-500/[0.06] text-red-200',
+  },
+];
+
 function MapDemo({ square = false }) {
   const count = square ? 4 : 6;
   return (
@@ -117,6 +145,37 @@ function ItemCatalog({ pool, setPool }) {
   return <div><div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-black text-cyan-300">ITEM DATABASE</p><h2 className="mt-2 text-4xl font-black md:text-6xl">道具图鉴</h2></div><div className="flex border border-white/10 bg-black/25 p-1"><button onClick={() => setPool('stage2')} className={`px-5 py-3 text-base font-black ${pool === 'stage2' ? 'bg-cyan-300 text-black' : 'text-zinc-400'}`}>6 进 4</button><button onClick={() => setPool('stage3')} className={`px-5 py-3 text-base font-black ${pool === 'stage3' ? 'bg-amber-300 text-black' : 'text-zinc-400'}`}>4 进 2</button></div></div><div className="grid gap-3 lg:grid-cols-2">{items.map(item => <div key={item.ref} className={`border-l-4 bg-white/[0.035] p-5 ${item.type === 'double' ? 'border-red-300' : 'border-cyan-300'}`}><div className="flex items-start justify-between gap-4"><div><p className="font-mono text-sm font-black text-zinc-500">ITEM {String(item.ref).padStart(2, '0')}</p><h3 className="mt-1 text-2xl font-black text-white">{item.name}</h3></div><span className={`shrink-0 border px-3 py-1 text-sm font-black ${item.type === 'double' ? 'border-red-300/35 text-red-200' : 'border-cyan-300/35 text-cyan-200'}`}>{item.type === 'double' ? '双面' : '增益'}</span></div><p className="mt-4 text-lg leading-relaxed text-zinc-300">{item.effect}</p>{item.penalty && <p className="mt-3 border-t border-red-300/15 pt-3 text-base font-bold text-red-200">风险：{item.penalty}</p>}{item.probability && <p className="mt-2 text-sm text-amber-200">触发概率 {Math.round(item.probability * 100)}%</p>}</div>)}</div></div>;
 }
 
+function ChallengeCatalog() {
+  return (
+    <div>
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-5 border-b border-white/10 pb-7">
+        <div>
+          <p className="text-sm font-black text-cyan-300">CHALLENGE TYPES</p>
+          <h2 className="mt-2 text-4xl font-black md:text-6xl">挑战图鉴</h2>
+        </div>
+        <p className="max-w-2xl border-l-4 border-amber-300 bg-amber-500/[0.06] px-5 py-4 text-base font-bold leading-relaxed text-amber-100 md:text-lg">
+          以下示例仅用于解释判定方式，不代表本场挑战池，也不包含实际曲目、难度或目标数值。
+        </p>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {CHALLENGE_CATALOG.map((challenge, index) => (
+          <article key={challenge.code} className={`border-l-4 p-6 md:p-7 ${challenge.color}`}>
+            <div className="flex items-start justify-between gap-5">
+              <div>
+                <p className="font-mono text-sm font-black opacity-65">TYPE {String(index + 1).padStart(2, '0')} / {challenge.code}</p>
+                <h3 className="mt-2 text-3xl font-black text-white md:text-4xl">{challenge.name}</h3>
+              </div>
+              <span className="font-mono text-5xl font-black opacity-25 md:text-6xl">{String(index + 1).padStart(2, '0')}</span>
+            </div>
+            <p className="mt-6 text-xl font-bold leading-relaxed text-zinc-100">{challenge.basis}</p>
+            <p className="mt-5 border-t border-white/10 pt-5 text-lg leading-relaxed text-zinc-300">{challenge.example}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function RaceTutorialPage() {
   const [mode, setMode] = useState('guide');
   const [stepIndex, setStepIndex] = useState(0);
@@ -128,10 +187,10 @@ export default function RaceTutorialPage() {
     <div className="mx-auto max-w-[1700px] pb-10">
       <header className="mb-7 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4"><span className="flex h-12 w-12 shrink-0 items-center justify-center bg-cyan-300 text-black sm:h-14 sm:w-14"><BookOpen className="h-6 w-6 sm:h-7 sm:w-7"/></span><div className="min-w-0"><p className="text-xs font-black text-cyan-300 sm:text-sm">MSC 2026 / RACE PRIMER</p><h1 className="text-3xl font-black md:text-5xl">了解跑图</h1></div></div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center"><button onClick={() => setMode('guide')} className={`flex items-center justify-center gap-2 px-3 py-3 font-black sm:px-4 ${mode === 'guide' ? 'bg-white text-black' : 'border border-white/15 text-zinc-300'}`}><CircleDot className="h-5 w-5"/>分步教程</button><button onClick={() => setMode('items')} className={`flex items-center justify-center gap-2 px-3 py-3 font-black sm:px-4 ${mode === 'items' ? 'bg-white text-black' : 'border border-white/15 text-zinc-300'}`}><List className="h-5 w-5"/>道具列表</button><Link to="/matches/msc2026" className="col-span-2 flex items-center justify-center gap-2 px-4 py-3 text-zinc-400 hover:text-white sm:col-span-1"><X className="h-5 w-5"/>跳过</Link></div>
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center"><button onClick={() => setMode('guide')} className={`flex items-center justify-center gap-2 px-3 py-3 font-black sm:px-4 ${mode === 'guide' ? 'bg-white text-black' : 'border border-white/15 text-zinc-300'}`}><CircleDot className="h-5 w-5"/>分步教程</button><button onClick={() => setMode('challenges')} className={`flex items-center justify-center gap-2 px-3 py-3 font-black sm:px-4 ${mode === 'challenges' ? 'bg-white text-black' : 'border border-white/15 text-zinc-300'}`}><ShieldAlert className="h-5 w-5"/>挑战图鉴</button><button onClick={() => setMode('items')} className={`flex items-center justify-center gap-2 px-3 py-3 font-black sm:px-4 ${mode === 'items' ? 'bg-white text-black' : 'border border-white/15 text-zinc-300'}`}><List className="h-5 w-5"/>道具列表</button><Link to="/matches/msc2026" className="flex items-center justify-center gap-2 px-4 py-3 text-zinc-400 hover:text-white"><X className="h-5 w-5"/>跳过</Link></div>
       </header>
 
-      {mode === 'items' ? <ItemCatalog pool={itemPool} setPool={setItemPool} /> : <>
+      {mode === 'items' ? <ItemCatalog pool={itemPool} setPool={setItemPool} /> : mode === 'challenges' ? <ChallengeCatalog /> : <>
         <nav className="mb-6 grid grid-cols-7 gap-1" aria-label="教程步骤">{STEPS.map((item, index) => <button key={item.key} onClick={() => setStepIndex(index)} aria-label={`第 ${index + 1} 步：${item.title}`} className={`h-2 transition-colors ${index === stepIndex ? 'bg-cyan-300' : index < stepIndex ? 'bg-emerald-400/65' : 'bg-white/10'}`}/>)}</nav>
         <div className="grid gap-7 xl:grid-cols-[420px_minmax(0,1fr)]">
           <section className="flex flex-col border-t-4 border-cyan-300 bg-white/[0.035] p-7 md:p-9">
