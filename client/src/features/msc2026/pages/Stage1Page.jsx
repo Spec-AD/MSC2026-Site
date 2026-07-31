@@ -18,6 +18,7 @@ import RandomDrawPrompt from '../components/live/RandomDrawPrompt';
 import SongSelectionSpotlight from '../components/live/SongSelectionSpotlight';
 import GroupDrawReveal from '../components/live/GroupDrawReveal';
 import { FADE_SLIDE, MOTION_TRANSITIONS } from '../utils/motion';
+import BettingPanel from '../components/betting/BettingPanel';
 
 export default function Stage1Page() {
   const {
@@ -134,6 +135,8 @@ export default function Stage1Page() {
           </button>
         </div>
       </div>
+
+      <BettingPanel stage="stage1" groupIndex={stage1.currentGroupIndex} />
 
       {/* 内容区 */}
       <AnimatePresence mode="wait">

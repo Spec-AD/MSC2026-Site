@@ -47,6 +47,7 @@ const {
 } = require('../services/msc2026/songPoolConfig');
 const { snapshotChallenge } = require('../services/msc2026/challengePresentation');
 const { buildQualifierRankings } = require('../services/msc2026/qualifierRanking');
+const { createMarket, settleMarket, prepareMarketsForRollback, FINAL_REVEAL_MS } = require('../services/msc2026/betting');
 
 const SONG_DISPLAY_FIELDS = 'id title type basic_info.artist basic_info.bpm ds level aliases charts';
 
@@ -911,7 +912,17 @@ router.post('/stage1/complete-reveal', authMiddleware, async (req, res) => {
       const t = await requireTournament(res);
       if (!t) return;
       const group = await completeGroupReveal(t);
-      res.json({ msg: '本组抽签揭晓完成', data: { groupIndex: t.stage1.currentGroupIndex, status: group.status } });
+      const market = await createMarket({
+        tournamentId: t._id,
+        stage: 'stage1',
+        groupIndex: t.stage1.currentGroupIndex,
+        playerIds: [group.p1, group.p2],
+        opensAt: new Date()
+      });
+      res.json({
+        msg: '本组抽签揭晓完成，竞猜已开放 2 分钟',
+        data: { groupIndex: t.stage1.currentGroupIndex, status: group.status, bettingClosesAt: market.closesAt }
+      });
     });
   } catch (err) {
     res.status(400).json({ msg: err.message });
@@ -968,7 +979,12 @@ router.post('/stage1/submit-score', authMiddleware, async (req, res) => {
     await withRaceMutationLock(async () => {
       const t = await requireTournament(res);
       if (!t) return;
+      const groupIndex = t.stage1.currentGroupIndex;
+      const group = t.stage1.groups[groupIndex];
       const result = await submitScore(t, req.user.id, req.body);
+      if (group.status === 'done' && group.winner) {
+        await settleMarket({ tournamentId: t._id, stage: 'stage1', groupIndex, winnerId: group.winner });
+      }
       res.json({
         msg: '成绩已录入',
         data: result
@@ -1019,7 +1035,9 @@ router.post('/stage1/forfait', authMiddleware, async (req, res) => {
       const t = await requireTournament(res);
       if (!t) return;
       const { playerId } = req.body;
+      const groupIndex = t.stage1.currentGroupIndex;
       const { group, result } = await forfeitPlayer(t, playerId);
+      await settleMarket({ tournamentId: t._id, stage: 'stage1', groupIndex, winnerId: group.winner });
       res.json({
         msg: `选手弃权，对手晋级`,
         data: { winner: group.winner.toString(), forfaitBy: playerId, nextStep: result.nextStep, groupIndex: result.groupIndex }
@@ -1045,6 +1063,7 @@ router.post('/stage1/resolve-tie', authMiddleware, async (req, res) => {
       const t = await requireTournament(res);
       if (!t) return;
       const group = await resolveGroupTie(t, Number(groupIndex), winnerId);
+      await settleMarket({ tournamentId: t._id, stage: 'stage1', groupIndex: Number(groupIndex), winnerId: group.winner });
       res.json({ msg: '加赛结果已录入', data: { groupIndex: Number(groupIndex), winner: String(group.winner) } });
     });
   } catch (err) {
@@ -1682,15 +1701,24 @@ router.post('/stage4/init', authMiddleware, async (req, res) => {
       storedConfig.secretDesignatedDifficultyIndex ?? 3
     );
 
+      const market = await createMarket({
+        tournamentId: t._id,
+        stage: 'stage4',
+        playerIds: [s4.p1, s4.p2],
+        opensAt: new Date(Date.now() + FINAL_REVEAL_MS)
+      });
+
       res.json({
-        msg: '决赛已初始化',
+        msg: '决赛已初始化，选手揭晓后将开放 2 分钟竞猜',
         data: {
           p1: { userId: s4.p1.toString() },
           p2: { userId: s4.p2.toString() },
           designatedSongId: s4.designatedSongId.toString(),
           status: s4.status,
           totalSongs: 5,
-          songs: []
+          songs: [],
+          bettingOpensAt: market.opensAt,
+          bettingClosesAt: market.closesAt
         }
       });
     });
@@ -1802,6 +1830,8 @@ router.post('/stage4/advance', authMiddleware, async (req, res) => {
     if (!result) return;
 
     if (result.nextStep === 'match_done') {
+      const t = await MSC2026Tournament.findOne().select('_id').lean();
+      if (t) await settleMarket({ tournamentId: t._id, stage: 'stage4', winnerId: result.winner });
       res.json({ msg: '决赛结束', data: result });
     } else if (result.nextStep === 'random_pick') {
       // P2-3
@@ -1844,6 +1874,7 @@ router.post('/stage4/resolve-tie', authMiddleware, async (req, res) => {
       const t = await requireTournament(res);
       if (!t) return;
       const result = await resolveTie4(t, winnerId);
+      await settleMarket({ tournamentId: t._id, stage: 'stage4', winnerId: result.winner });
       res.json({ msg: '决赛加赛结果已录入，赛事结束', data: result });
     });
   } catch (err) {
@@ -1903,6 +1934,7 @@ router.post('/stage1/revert-group', authMiddleware, async (req, res) => {
   try {
     await withAdminLockedTournament(req, res, async (t) => {
       const { groupId } = req.body;
+      await prepareMarketsForRollback({ tournamentId: t._id, stage: 'stage1', fromGroupIndex: Number(groupId) });
       revertStage1Group(t, Number(groupId));
       await t.save();
       broadcast('stage_advanced', { stage: 'stage1', event: 'revert-group', groupId });
@@ -1914,6 +1946,7 @@ router.post('/stage1/revert-group', authMiddleware, async (req, res) => {
 router.post('/stage1/reset', authMiddleware, async (req, res) => {
   try {
     await withAdminLockedTournament(req, res, async (t) => {
+      await prepareMarketsForRollback({ tournamentId: t._id, stage: 'stage1' });
       resetStage1(t);
       t.operationLogs.push({ action: 'stage1_reset', stage: 'stage1', operatedBy: req.user.id, operatedAt: new Date() });
       await t.save();
@@ -1988,6 +2021,7 @@ router.post('/race/reset', authMiddleware, async (req, res) => {
 router.post('/stage4/undo-last-song', authMiddleware, async (req, res) => {
   try {
     await withAdminLockedTournament(req, res, async (t) => {
+      if (t.status === 'finished') await prepareMarketsForRollback({ tournamentId: t._id, stage: 'stage4' });
       undoStage4LastSong(t);
       await t.save();
       broadcast('score_updated', { stage: 'stage4', event: 'undo-last-song' });
@@ -2000,6 +2034,7 @@ router.post('/stage4/undo-last-score', authMiddleware, async (req, res) => {
   try {
     await withAdminLockedTournament(req, res, async (t) => {
       const { player = 'both' } = req.body;
+      if (t.status === 'finished') await prepareMarketsForRollback({ tournamentId: t._id, stage: 'stage4' });
       undoStage4LastScore(t, player);
       await t.save();
       broadcast('score_updated', { stage: 'stage4', event: 'undo-last-score', player });
@@ -2011,6 +2046,7 @@ router.post('/stage4/undo-last-score', authMiddleware, async (req, res) => {
 router.post('/stage4/reset', authMiddleware, async (req, res) => {
   try {
     await withAdminLockedTournament(req, res, async (t) => {
+      await prepareMarketsForRollback({ tournamentId: t._id, stage: 'stage4' });
       resetStage4(t);
       t.operationLogs.push({ action: 'stage4_reset', stage: 'stage4', operatedBy: req.user.id, operatedAt: new Date() });
       await t.save();
@@ -2025,6 +2061,8 @@ router.post('/stage4/reset', authMiddleware, async (req, res) => {
 router.post('/revert-stage', authMiddleware, async (req, res) => {
   try {
     await withAdminLockedTournament(req, res, async (t) => {
+      if (t.status === 'stage1') await prepareMarketsForRollback({ tournamentId: t._id, stage: 'stage1' });
+      if (t.status === 'stage4' || t.status === 'finished') await prepareMarketsForRollback({ tournamentId: t._id, stage: 'stage4' });
       await revertStage(t);
       t.operationLogs.push({ action: 'revert_stage', stage: t.status, operatedBy: req.user.id, operatedAt: new Date() });
       await t.save();
@@ -2037,6 +2075,7 @@ router.post('/revert-stage', authMiddleware, async (req, res) => {
 router.post('/reset', authMiddleware, async (req, res) => {
   try {
     await withAdminLockedTournament(req, res, async (t) => {
+      await prepareMarketsForRollback({ tournamentId: t._id });
       await resetAll(t);
       t.operationLogs.push({ action: 'full_reset', operatedBy: req.user.id, operatedAt: new Date() });
       await t.save();

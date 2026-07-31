@@ -14,6 +14,7 @@ import WinnerReveal from '../components/live/WinnerReveal';
 import RandomDrawPrompt from '../components/live/RandomDrawPrompt';
 import SongSelectionSpotlight from '../components/live/SongSelectionSpotlight';
 import { MOTION_TRANSITIONS, STAGGER_CONTAINER, STAGGER_ITEM } from '../utils/motion';
+import BettingPanel from '../components/betting/BettingPanel';
 
 export default function Stage4Page() {
   const store = useMSC2026Store();
@@ -130,6 +131,8 @@ export default function Stage4Page() {
           <p className="text-4xl md:text-6xl font-black text-white mt-3 truncate" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>{stage4.p2?.username || '—'}</p>
         </div>
       </div>
+
+      <BettingPanel stage="stage4" />
 
       {/* 公开的表课题曲；里课题曲只能由 songs[4] 在揭晓后进入前端状态。 */}
       {stage4.designatedSong && (

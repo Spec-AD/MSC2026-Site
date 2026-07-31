@@ -42,6 +42,7 @@ const Stage1Page = lazy(() => import('./features/msc2026/pages/Stage1Page'));
 const Stage4Page = lazy(() => import('./features/msc2026/pages/Stage4Page'));
 const RacePage = lazy(() => import('./features/msc2026/pages/RacePage'));
 const LiveMatchPage = lazy(() => import('./features/msc2026/pages/LiveMatchPage'));
+const PointsStorePage = lazy(() => import('./features/msc2026/pages/PointsStorePage'));
 
 // 引入页面组件
 import Home from './pages/Home';
@@ -115,6 +116,7 @@ function App() {
                 <Route path="stage2" element={<RacePage stage="stage2" />} />
                 <Route path="stage3" element={<RacePage stage="stage3" />} />
                 <Route path="stage4" element={<Stage4Page />} />
+                <Route path="store" element={<PointsStorePage />} />
               </Route>
               <Route path="/daily-history" element={<DailyHistory />} />
               <Route path="/letter-game" element={<LetterGame />} />

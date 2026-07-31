@@ -42,6 +42,7 @@ export function useMSCSSE(handlers, { enabled = true, since } = {}) {
       'song_drawn', 'item_armed',
       'race_started', 'round_started', 'round_adjudication',
       'challenge_queue_advanced', 'item_pickup_queued',
+      'betting_update', 'points_updated',
     ];
 
     eventNames.forEach((eventName) => {

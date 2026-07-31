@@ -162,6 +162,31 @@ export const createSSEUrl = (since) => {
   return url;
 };
 
+// ==================== 积分 / 竞猜 / 商店 ====================
+
+export const getPointsAccount = () =>
+  axios.get(`${BASE}/points/account`, { headers: authHeaders() });
+
+export const getCurrentBettingMarket = (stage, groupIndex) =>
+  axios.get(`${BASE}/betting/current`, {
+    params: { stage, ...(groupIndex != null ? { groupIndex } : {}) },
+    headers: getToken() ? authHeaders() : undefined
+  });
+
+export const placeBet = (marketId, selectionId, stake) =>
+  axios.post(`${BASE}/betting/bets`, { marketId, selectionId, stake }, { headers: authHeaders() });
+
+export const getStoreProducts = () => axios.get(`${BASE}/store/products`);
+
+export const getStoreRedemptions = () =>
+  axios.get(`${BASE}/store/redemptions`, { headers: authHeaders() });
+
+export const redeemStoreProduct = (productId) =>
+  axios.post(`${BASE}/store/redeem`, { productId }, { headers: authHeaders() });
+
+export const verifyStoreVoucher = (code) =>
+  axios.post(`${BASE}/store/admin/verify`, { code }, { headers: authHeaders() });
+
 // ==================== 旧赛事数据 ====================
 
 /** 获取旧赛事报名列表 + 预选赛成绩 */
