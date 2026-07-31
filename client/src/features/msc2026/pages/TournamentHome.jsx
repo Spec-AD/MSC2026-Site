@@ -10,7 +10,8 @@ import { useMSC2026Store } from '../store';
 import PlayerList from '../components/PlayerList';
 import AdminPanel from '../components/admin/AdminPanel';
 import { STAGE_CONFIG } from '../constants/publicGameData';
-import { FaArrowRight, FaTrophy } from 'react-icons/fa';
+import { FaArrowRight } from 'react-icons/fa';
+import TournamentPodium from '../components/live/TournamentPodium';
 
 const STAGE_PHASES = ['stage1', 'stage2', 'stage3', 'stage4'];
 
@@ -157,13 +158,7 @@ export default function TournamentHome() {
 
       {/* 已结束状态 */}
       {status === 'finished' && (
-        <div className="msc-panel grid gap-6 border-l-4 border-l-amber-300 p-8 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
-          <FaTrophy className="text-5xl text-amber-300" />
-          <h3 className="text-4xl font-black text-amber-200 mb-2" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
-            比赛已结束
-          </h3>
-          <p className="msc-technical text-zinc-400 text-base">MSC26 / ALL PHASES COMPLETE</p>
-        </div>
+        <TournamentPodium />
       )}
     </div>
   );

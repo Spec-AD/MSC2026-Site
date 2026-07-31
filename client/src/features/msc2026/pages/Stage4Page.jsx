@@ -7,7 +7,7 @@ import { useMSC2026Store } from '../store';
 import SongPicker from '../components/stage1/SongPicker';
 import ScoreEntryForm from '../components/stage1/ScoreEntryForm';
 import { useMSCSSE } from '../hooks/useSSE';
-import { FaCrown, FaMusic } from 'react-icons/fa';
+import { FaCrown } from 'react-icons/fa';
 import SongReveal from '../components/live/SongReveal';
 import ScoreDuelResult from '../components/live/ScoreDuelResult';
 import WinnerReveal from '../components/live/WinnerReveal';
@@ -34,6 +34,7 @@ export default function Stage4Page() {
   const [scoreResult, setScoreResult] = useState(null);
   const [randomReveal, setRandomReveal] = useState(null);
   const [finalChallengeReveal, setFinalChallengeReveal] = useState(null);
+  const [challengeReveal, setChallengeReveal] = useState(null);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
@@ -48,6 +49,8 @@ export default function Stage4Page() {
       const latestPlay = nextState.songs?.[nextState.songs.length - 1];
       if (latestPlay?.pickType === 'secret_designated' && latestPlay.song) {
         setFinalChallengeReveal(latestPlay.song);
+      } else if (latestPlay?.pickType === 'designated' && latestPlay.song) {
+        setChallengeReveal(latestPlay.song);
       } else if (latestPlay?.pickType === 'random' && latestPlay.song) {
         setRandomReveal(latestPlay.song);
       }
@@ -73,7 +76,7 @@ export default function Stage4Page() {
     p1_pick: 'P1 自选',
     p2_pick: 'P2 自选',
     random: '系统随机',
-    designated: '表课题曲',
+    designated: '课题曲',
     secret_designated: 'FINAL CHALLENGE',
   };
 
@@ -115,7 +118,7 @@ export default function Stage4Page() {
         </div>
         <div className="min-w-48 border-l border-white/10 text-left">
           <p className="text-6xl md:text-8xl font-black text-white leading-none tabular-nums" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>2</p>
-          <p className="text-lg md:text-2xl text-zinc-400">进 1 · {stage4.secretRevealed ? '最终挑战' : '4 首公开曲目'}</p>
+          <p className="text-lg md:text-2xl text-zinc-400">进 1 · {stage4.secretRevealed ? '最终挑战' : '4 首曲目'}</p>
         </div>
       </div>
 
@@ -133,20 +136,6 @@ export default function Stage4Page() {
       </div>
 
       <BettingPanel stage="stage4" />
-
-      {/* 公开的表课题曲；里课题曲只能由 songs[4] 在揭晓后进入前端状态。 */}
-      {stage4.designatedSong && (
-        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/[0.06] p-5">
-          <div className="flex items-center gap-3">
-            <FaMusic className="text-amber-300 text-xl" />
-            <span className="text-sm uppercase tracking-[0.18em] text-amber-300/80">表课题曲</span>
-          </div>
-          <p className="text-3xl font-black text-white mt-2 truncate">{stage4.designatedSong.title}</p>
-          {stage4.designatedSong.artist && (
-            <p className="text-lg text-zinc-400 mt-1">{stage4.designatedSong.artist}</p>
-          )}
-        </div>
-      )}
 
       {/* 曲目进度 */}
       <div className="border-y border-white/10 py-6">
@@ -182,7 +171,7 @@ export default function Stage4Page() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-base text-zinc-400">{pickLabels[type]}</p>
-                  <p className="text-2xl font-bold text-white truncate">{getSongTitle(song)}</p>
+                  <p className="text-2xl font-bold text-white truncate">{song ? getSongTitle(song) : (type === 'designated' || type === 'secret_designated') ? '???' : '—'}</p>
                 </div>
                 {song?.p1Score && song?.p2Score && (
                   <span className="text-2xl text-emerald-300">✓</span>
@@ -237,7 +226,7 @@ export default function Stage4Page() {
                 initialScores={currentSong}
                 advanceLabel={{
                   p1_pick: '进入 P2 选曲',
-                  random: '进入表课题曲',
+                  random: '揭晓课题曲',
                   designated: '揭晓最终挑战',
                   secret_designated: '确认决赛结果',
                 }[currentSong.pickType] || '推进下一轮'}
@@ -256,6 +245,9 @@ export default function Stage4Page() {
                 }}
                 onAdvance={async () => {
                   const advanceResult = await advanceStage4();
+                  if (advanceResult.data?.pickType === 'designated' && advanceResult.data.song) {
+                    setChallengeReveal(advanceResult.data.song);
+                  }
                   if (advanceResult.data?.nextStep === 'final_challenge' && advanceResult.data.song) {
                     setFinalChallengeReveal(advanceResult.data.song);
                   }
@@ -312,8 +304,13 @@ export default function Stage4Page() {
         onClose={() => setRandomReveal(null)}
       />
       <SongSelectionSpotlight
+        song={challengeReveal}
+        pickLabel="CHALLENGE TRACK · 课题曲"
+        onClose={() => setChallengeReveal(null)}
+      />
+      <SongSelectionSpotlight
         song={finalChallengeReveal}
-        pickLabel="FINAL CHALLENGE · 里课题曲"
+        pickLabel="FINAL CHALLENGE · 课题曲"
         onClose={() => setFinalChallengeReveal(null)}
       />
     </div>

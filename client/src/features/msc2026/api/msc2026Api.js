@@ -15,6 +15,9 @@ const authHeaders = () => ({ Authorization: `Bearer ${getToken()}` });
 export const getStatus = () =>
   axios.get(`${BASE}/status`);
 
+export const getResults = () =>
+  axios.get(`${BASE}/results`);
+
 /** 获取赛事配置（管理员） */
 export const getConfig = () =>
   axios.get(`${BASE}/config`, { headers: authHeaders() });

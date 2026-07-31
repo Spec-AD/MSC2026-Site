@@ -254,10 +254,29 @@ async function submitScore(tournament, userId, body) {
     // P2 选曲成绩录入完毕 → 等待裁判手动触发随机选曲
     group.status = 'random_pick';
   } else if (songCount === 3 && lastSong.pickType === 'random') {
-    // 随机曲成绩录入完毕 → 判定胜负 → 组结束
+    // 随机曲成绩录入完毕 → 判定胜负 → 停留在赛后总结，等待主办方手动开下一组
     await _determineGroupWinner(group);
     group.status = 'done';
-    return _advanceCompletedGroup(tournament, stage1);
+    await tournament.save();
+    broadcast('score_updated', {
+      stage: 'stage1',
+      groupIndex: stage1.currentGroupIndex,
+      songIndex: lastSong.order,
+      groupStatus: group.status
+    });
+    broadcast('match_finished', {
+      type: 'group',
+      groupIndex: stage1.currentGroupIndex,
+      winnerId: group.winner ? group.winner.toString() : null,
+      needTiebreak: !!group.needTiebreak,
+      awaitingNextGroup: true
+    });
+    return {
+      group,
+      nextStep: group.needTiebreak ? 'group_done_need_tiebreak' : 'group_complete_waiting',
+      groupIndex: stage1.currentGroupIndex,
+      winnerId: group.winner ? group.winner.toString() : null
+    };
   }
 
   await tournament.save();
@@ -484,8 +503,16 @@ async function forfeitPlayer(tournament, playerId) {
   group.winner = group.p1.toString() === pidStr ? group.p2 : group.p1;
   group.status = 'done';
   group.needTiebreak = false;
+  await tournament.save();
+  broadcast('match_finished', {
+    type: 'group',
+    groupIndex: stage1.currentGroupIndex,
+    winnerId: group.winner.toString(),
+    forfaitBy: pidStr,
+    awaitingNextGroup: true
+  });
 
-  const result = await _advanceCompletedGroup(tournament, stage1);
+  const result = { nextStep: 'group_complete_waiting', groupIndex: stage1.currentGroupIndex };
 
   return { group, result, forfaitBy: pidStr };
 }
@@ -514,24 +541,14 @@ async function resolveGroupTie(tournament, groupIndex, winnerId) {
   group.needTiebreak = false;
   group.status = 'done';
 
-  if (groupIndex === stage1.currentGroupIndex) {
-    await _advanceCompletedGroup(tournament, stage1);
-  } else {
-    const allGroupsDone = stage1.groups.every(g => g.status === 'done');
-    const hasUnresolved = stage1.groups.some(g => !g.winner);
-
-    if (allGroupsDone && !hasUnresolved) {
-      await _completeStage1(tournament, stage1);
-    } else {
-      await tournament.save();
-      broadcast('match_finished', {
-        type: 'group',
-        groupIndex,
-        winnerId: String(group.winner),
-        resolvedByTiebreak: true
-      });
-    }
-  }
+  await tournament.save();
+  broadcast('match_finished', {
+    type: 'group',
+    groupIndex,
+    winnerId: String(group.winner),
+    resolvedByTiebreak: true,
+    awaitingNextGroup: groupIndex === stage1.currentGroupIndex
+  });
 
   return group;
 }

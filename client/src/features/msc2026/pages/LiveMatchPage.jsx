@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { AlertTriangle, Clock3, Loader2, LogOut, Maximize2, Minimize2, Radio, RefreshCw, Trophy } from 'lucide-react';
+import { AlertTriangle, Clock3, Loader2, LogOut, Maximize2, Minimize2, Radio, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useMSC2026Store } from '../store';
 import { STAGE_CONFIG } from '../constants/publicGameData';
@@ -14,6 +14,7 @@ import RacePage from './RacePage';
 import Stage4Page from './Stage4Page';
 import { EASE_ACCEL, MOTION_TRANSITIONS } from '../utils/motion';
 import '../styles/industrialEditorial.css';
+import TournamentPodium from '../components/live/TournamentPodium';
 
 const ADMIN_ROLES = ['ADM', 'TO', 'CHM'];
 
@@ -27,17 +28,7 @@ function formatClock(date) {
 }
 
 function FinishedScreen() {
-  return (
-    <div className="relative flex min-h-[calc(100dvh-76px)] items-end overflow-hidden px-6 py-12 text-left md:px-12 md:py-16">
-      <span className="msc-display pointer-events-none absolute -right-8 -top-12 text-[16rem] font-black leading-none text-white/[0.04] md:text-[28rem]">00</span>
-      <div className="relative z-10 max-w-6xl border-l border-white/15 pl-6 md:pl-10">
-        <Trophy className="h-16 w-16 text-amber-300" />
-        <p className="mt-5 text-sm font-bold uppercase text-zinc-500">MATCH COMPLETE</p>
-        <h1 className="msc-editorial-heading mt-4 text-5xl text-white md:text-8xl">MSC 2026 已结束</h1>
-        <p className="mt-4 text-lg text-zinc-400 md:text-2xl">最终比赛结果已经确认</p>
-      </div>
-    </div>
-  );
+  return <TournamentPodium live />;
 }
 
 function SystemGate({ loading, error, onRetry, onExit }) {

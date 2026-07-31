@@ -520,6 +520,7 @@ export default function RacePage({ stage }) {
                         #{index + 1} 出手位 · {finished ? `第 ${p.finishOrder} 名抵达中心` : isActive ? '行动中…' : '等待回合'}
                         {p.itemCount > 0 && <span className="text-sky-400/80 ml-1.5">道具 {p.itemCount}</span>}
                         <span className="ml-1.5 text-red-300/75">失败 {p.challengeFailureCount || 0}</span>
+                        {(p.fixedWallFailureCount || 0) > 0 && p.currentLayer === 1 && <span className="ml-1.5 text-emerald-300/75">攻坚 {p.fixedWallFailureCount}/3</span>}
                       </p>
                     </div>
                     {/* 大数字：坐标 / ★ */}

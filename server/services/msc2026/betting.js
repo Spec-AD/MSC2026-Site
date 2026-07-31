@@ -29,6 +29,14 @@ function calculateOdds(totalPool, selectionPool) {
   return Number((totalPool / selectionPool).toFixed(2));
 }
 
+function isStakeAllowed(stake, minimumStake, balance) {
+  const normalizedStake = Number(stake);
+  const normalizedMinimum = Number(minimumStake);
+  const normalizedBalance = Number(balance);
+  if (!Number.isSafeInteger(normalizedStake) || normalizedStake <= 0 || normalizedStake > normalizedBalance) return false;
+  return normalizedStake >= normalizedMinimum || (normalizedBalance < normalizedMinimum && normalizedStake === normalizedBalance);
+}
+
 function serializeMarket(market, viewerBet = null, now = Date.now()) {
   if (!market) return null;
   const status = effectiveStatus(market, now);
@@ -118,14 +126,16 @@ async function placeBet({ marketId, userId, selectionId, stake }) {
       const market = await MSCBettingMarket.findById(marketId).session(session);
       if (!market) throw new Error('竞猜场次不存在');
       if (effectiveStatus(market) !== 'open') throw new Error('本场竞猜尚未开放或已经封盘');
-      if (normalizedStake < market.minimumStake) throw new Error(`本场最低下注 ${market.minimumStake.toLocaleString()} 积分`);
       const playerIndex = market.players.findIndex(player => String(player.userId) === String(selectionId));
       if (playerIndex < 0) throw new Error('所选选手不属于本场比赛');
 
       const existing = await MSCBet.findOne({ marketId: market._id, userId }).session(session);
       if (existing) throw new Error('每场比赛仅可下注一次，确认后不可更改');
 
-      await ensureAccount(userId, session);
+      const currentAccount = await ensureAccount(userId, session);
+      if (!isStakeAllowed(normalizedStake, market.minimumStake, currentAccount.balance)) {
+        throw new Error(`本场最低下注 ${market.minimumStake.toLocaleString()} 积分；余额不足时可选择 ALL IN`);
+      }
       const account = await PointsAccount.findOneAndUpdate(
         { userId, balance: { $gte: normalizedStake } },
         { $inc: { balance: -normalizedStake, lifetimeSpent: normalizedStake } },
@@ -270,6 +280,7 @@ module.exports = {
   MINIMUM_STAKES,
   effectiveStatus,
   calculateOdds,
+  isStakeAllowed,
   allocatePayouts,
   serializeMarket,
   createMarket,

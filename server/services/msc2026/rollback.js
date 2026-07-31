@@ -277,6 +277,9 @@ function undoRaceLastChallengeResult(race, tournament = null, stageKey = null) {
       player.silentUntilTurn = null;
       player.disableItemsUntilTurn = null;
       player.challengeFailureCount = Math.max(0, (player.challengeFailureCount || 0) - 1);
+      if (Number(lastChallenge.wallIndex) === 1) {
+        player.fixedWallFailureCount = Math.max(0, (player.fixedWallFailureCount || 0) - 1);
+      }
     }
     race.currentPlayerIndex = race.players.findIndex(p => p.userId.toString() === lastChallenge.playerId.toString());
     if (race.currentPlayerIndex < 0) race.currentPlayerIndex = 0;
@@ -290,6 +293,7 @@ function undoRaceLastChallengeResult(race, tournament = null, stageKey = null) {
   lastChallenge.passed = null;
   lastChallenge.judgedBy = null;
   lastChallenge.judgedAt = null;
+  lastChallenge.breakthroughGranted = false;
 
   if (!snapshot && race.terminated && race.terminatedReason === 'all_qualified') {
     race.terminated = false;

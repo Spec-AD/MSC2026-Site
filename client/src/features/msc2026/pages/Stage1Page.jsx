@@ -13,14 +13,16 @@ import { ArrowLeft } from 'lucide-react';
 import SongReveal from '../components/live/SongReveal';
 import MotionButton from '../components/live/MotionButton';
 import ScoreDuelResult from '../components/live/ScoreDuelResult';
-import WinnerReveal from '../components/live/WinnerReveal';
 import RandomDrawPrompt from '../components/live/RandomDrawPrompt';
 import SongSelectionSpotlight from '../components/live/SongSelectionSpotlight';
 import GroupDrawReveal from '../components/live/GroupDrawReveal';
 import { FADE_SLIDE, MOTION_TRANSITIONS } from '../utils/motion';
 import BettingPanel from '../components/betting/BettingPanel';
+import GroupResultSummary from '../components/stage1/GroupResultSummary';
+import { useAuth } from '../../../context/AuthContext';
 
 export default function Stage1Page() {
+  const { user } = useAuth();
   const {
     stage1,
     status,
@@ -40,7 +42,10 @@ export default function Stage1Page() {
   const [decisionError, setDecisionError] = useState(null);
   const [scoreResult, setScoreResult] = useState(null);
   const [randomReveal, setRandomReveal] = useState(null);
+  const [nextGroupPending, setNextGroupPending] = useState(false);
+  const [nextGroupError, setNextGroupError] = useState(null);
   const reduceMotion = useReducedMotion();
+  const canManage = Boolean(user && ['ADM', 'TO', 'CHM'].includes(user.role));
 
   // 初始加载（仅挂载时执行一次）
   useEffect(() => {
@@ -72,11 +77,7 @@ export default function Stage1Page() {
     ? stage1.groups?.find((g) => g.groupId === selectedGroupId)
     : null;
   const currentGroup = stage1.groups?.find(group => group.order === stage1.currentGroupIndex) || null;
-  const selectedWinnerId = selectedGroup?.winner?.toString?.() || selectedGroup?.winner;
   const selectedP1Id = (selectedGroup?.p1?._id || selectedGroup?.p1?.userId)?.toString?.() || selectedGroup?.p1?._id || selectedGroup?.p1?.userId;
-  const selectedWinnerName = selectedWinnerId === selectedP1Id
-    ? selectedGroup?.p1?.username
-    : selectedGroup?.p2?.username;
   const selectedP2Id = (selectedGroup?.p2?._id || selectedGroup?.p2?.userId)?.toString?.() || selectedGroup?.p2?._id || selectedGroup?.p2?.userId;
   const currentSong = selectedGroup?.songs?.[selectedGroup.songs.length - 1] || null;
 
@@ -181,7 +182,7 @@ export default function Stage1Page() {
             </div>
 
             {/* 比分展示 */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-6">
+            {selectedGroup.status !== 'done' && <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-6">
               {/* P1 */}
               <div className="msc-panel border-l-2 border-l-sky-300 p-6">
                 <div className="flex items-center gap-3 mb-5">
@@ -220,12 +221,33 @@ export default function Stage1Page() {
                   </div>
                 ))}
               </div>
-            </div>
+            </div>}
 
-            {/* 胜者 */}
-            {selectedGroup.winner && (
-              <div className="mb-5">
-                <WinnerReveal name={selectedWinnerName} eyebrow="GROUP WINNER" detail={`第 ${selectedGroup.order + 1} 组晋级`} />
+            {selectedGroup.status === 'done' && (
+              <div className="mb-6">
+                <GroupResultSummary
+                  group={selectedGroup}
+                  isCurrent={selectedGroup.order === stage1.currentGroupIndex}
+                  isLastGroup={selectedGroup.order === stage1.totalGroups - 1}
+                  canControl={canManage}
+                  pending={nextGroupPending}
+                  error={nextGroupError}
+                  onContinue={async () => {
+                    setNextGroupPending(true);
+                    setNextGroupError(null);
+                    try {
+                      await advanceStage1();
+                      await fetchStage1State();
+                      await fetchStatus();
+                      setView('bracket');
+                      setSelectedGroupId(null);
+                    } catch (err) {
+                      setNextGroupError(err?.msg || '推进失败，请稍后重试');
+                    } finally {
+                      setNextGroupPending(false);
+                    }
+                  }}
+                />
               </div>
             )}
 
@@ -337,7 +359,7 @@ export default function Stage1Page() {
                     ? `确认录入 ${decisionPlayerName} 为加赛胜者？`
                     : `确认 ${decisionPlayerName} 弃权并让对手晋级？`}
                 </p>
-                <p className="text-sm text-zinc-400 mt-1">确认后将立即推进比赛状态。</p>
+                <p className="text-sm text-zinc-400 mt-1">确认后只记录赛果，并停留在本组总结画面。</p>
                 {decisionError && <p className="text-red-200 mt-3">{decisionError}</p>}
                 <div className="flex gap-3 mt-4">
                   <button disabled={decisionPending} onClick={executeDecision} className="px-5 py-2.5 rounded-xl bg-red-500/20 border border-red-400/35 text-red-100 font-bold disabled:opacity-50">

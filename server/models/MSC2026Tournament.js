@@ -72,6 +72,7 @@ const RacePlayerSchema = new Schema({
   finishOrder: { type: Number, default: null },
   finishTimestamp: { type: Number, default: null },       // ms 时间戳
   challengeFailureCount: { type: Number, min: 0, default: 0 },
+  fixedWallFailureCount: { type: Number, min: 0, default: 0 },
   successfulChallengeAchievementTotal: { type: Number, min: 0, default: 0 },
   successfulChallengeCount: { type: Number, min: 0, default: 0 },
   cumulativeDxScore: { type: Number, min: 0, default: 0 },
@@ -105,6 +106,7 @@ const ChallengeLogSchema = new Schema({
   itemEffectResults: [{ type: Schema.Types.Mixed }],
   resultSnapshot: { type: Schema.Types.Mixed, default: null },
   rollbackSnapshot: { type: Schema.Types.Mixed, default: null },
+  breakthroughGranted: { type: Boolean, default: false },
   // patch-02 P1-R1: 本次挑战绑定的 armed 道具引用，失败时仅对此列表触发双面惩罚
   usedItemRefs: [{ type: Number, default: [] }],
   roundNumber: { type: Number, default: 1 },

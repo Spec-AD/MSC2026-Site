@@ -254,6 +254,44 @@ router.get('/status', async (req, res) => {
   }
 });
 
+router.get('/results', async (req, res) => {
+  try {
+    const t = await MSC2026Tournament.findOne()
+      .populate('stage4.p1', 'username avatarUrl')
+      .populate('stage4.p2', 'username avatarUrl')
+      .populate('stage4.winner', 'username avatarUrl')
+      .populate('stage3.players.userId', 'username avatarUrl');
+    if (!t || !t.stage4?.winner) return res.json({ msg: '赛果尚未确认', data: { placements: [] } });
+
+    const idOf = value => String(value?._id || value || '');
+    const profileOf = value => ({
+      userId: idOf(value),
+      username: value?.username || '—',
+      avatarUrl: value?.avatarUrl || ''
+    });
+    const winnerId = idOf(t.stage4.winner);
+    const p1Id = idOf(t.stage4.p1);
+    const runnerUp = winnerId === p1Id ? t.stage4.p2 : t.stage4.p1;
+    const finalistIds = new Set([idOf(t.stage4.p1), idOf(t.stage4.p2)]);
+    const raceProfiles = new Map((t.stage3?.players || []).map(player => [idOf(player.userId), player.userId]));
+    const remaining = calculateRaceRankings(t.stage3?.players || [])
+      .filter(entry => !finalistIds.has(idOf(entry.userId)))
+      .map(entry => raceProfiles.get(idOf(entry.userId)))
+      .filter(Boolean);
+
+    const podium = [t.stage4.winner, runnerUp, remaining[0], remaining[1]].filter(Boolean);
+    res.json({
+      msg: 'ok',
+      data: {
+        placements: podium.map((player, index) => ({ place: index + 1, ...profileOf(player) }))
+      }
+    });
+  } catch (err) {
+    console.error('获取最终名次失败:', err);
+    res.status(500).json({ msg: '最终名次暂时不可用' });
+  }
+});
+
 // ── 配置 ──
 router.get('/config', authMiddleware, async (req, res) => {
   try {
@@ -1183,6 +1221,7 @@ router.get('/race/state', async (req, res) => {
           finishOrder: p.finishOrder,
           finishTimestamp: p.finishTimestamp,
           challengeFailureCount: p.challengeFailureCount || 0,
+          fixedWallFailureCount: p.fixedWallFailureCount || 0,
           successfulChallengeAverage: p.successfulChallengeCount
             ? (p.successfulChallengeAchievementTotal || 0) / p.successfulChallengeCount
             : 0,
@@ -1223,7 +1262,7 @@ router.get('/race/map', async (req, res) => {
     const wallsBroken = [];
     for (let i = 0; i < race.mapConfig.layers - 1; i++) {
       const breachedBy = race.challengeHistory
-        .filter(ch => ch.wallIndex === i && ch.passed === true)
+        .filter(ch => ch.wallIndex === i && (ch.passed === true || ch.breakthroughGranted === true))
         .map(ch => ch.playerId.toString());
       wallsBroken.push({
         wallIndex: i,
@@ -1233,7 +1272,7 @@ router.get('/race/map', async (req, res) => {
         perPlayer: race.players.map(p => ({
           userId: String(p.userId._id || p.userId),
           breached: race.challengeHistory.some(
-            ch => ch.wallIndex === i && ch.passed === true && ch.playerId.toString() === String(p.userId._id || p.userId)
+            ch => ch.wallIndex === i && (ch.passed === true || ch.breakthroughGranted === true) && ch.playerId.toString() === String(p.userId._id || p.userId)
           )
         }))
       });
@@ -1253,6 +1292,7 @@ router.get('/race/map', async (req, res) => {
           status: p.finishOrder ? 'finished' : 'racing',
           finishOrder: p.finishOrder,
           challengeFailureCount: p.challengeFailureCount || 0,
+          fixedWallFailureCount: p.fixedWallFailureCount || 0,
           successfulChallengeAverage: p.successfulChallengeCount
             ? (p.successfulChallengeAchievementTotal || 0) / p.successfulChallengeCount
             : 0,
@@ -1353,6 +1393,10 @@ router.get('/race/challenge', authMiddleware, async (req, res) => {
           effectiveChallenge,
           activeItemEffects: pending.activeItemEffects || [],
           itemEffectResults: pending.itemEffectResults || [],
+          breakthrough: pending.wallIndex === 1 ? {
+            failures: race.players.find(player => String(player.userId) === String(pending.playerId))?.fixedWallFailureCount || 0,
+            threshold: 3
+          } : null,
           pendingJudgement: race.status === 'adjudicating',
           raceStatus: race.status,
           roundNumber: race.roundNumber || 1
@@ -1378,6 +1422,10 @@ router.get('/race/challenge', authMiddleware, async (req, res) => {
         effectiveChallenge: originalChallenge,
         activeItemEffects: [],
         itemEffectResults: [],
+        breakthrough: pending.wallIndex === 1 ? {
+          failures: race.players.find(player => String(player.userId) === String(pending.playerId))?.fixedWallFailureCount || 0,
+          threshold: 3
+        } : null,
         pendingJudgement: race.status === 'adjudicating',
         raceStatus: race.status,
         roundNumber: race.roundNumber || 1
@@ -1404,6 +1452,8 @@ router.post('/race/challenge-result', authMiddleware, async (req, res) => {
         } else {
           res.json({ msg: '挑战成功', data: result });
         }
+      } else if (result.breakthroughGranted) {
+        res.json({ msg: '触发攻坚保底，已突破第二道墙', data: result });
       } else {
         res.json({ msg: '挑战失败，弹回', data: result });
       }
@@ -1754,7 +1804,9 @@ router.get('/stage4/state', async (req, res) => {
         p1: s4.p1 ? { userId: String(s4.p1._id), username: s4.p1.username, avatarUrl: s4.p1.avatarUrl } : null,
         p2: s4.p2 ? { userId: String(s4.p2._id), username: s4.p2.username, avatarUrl: s4.p2.avatarUrl } : null,
         songPool: (s4.songPool || []).map(song => serializeSongDoc(song, s4.difficultyIndexes?.[String(song._id)])),
-        designatedSong: serializeSongDoc(s4.designatedSongId, s4.designatedDifficultyIndex),
+        designatedSong: s4.songs?.some(song => song.pickType === 'designated')
+          ? serializeSongDoc(s4.designatedSongId, s4.designatedDifficultyIndex)
+          : null,
         songs: (s4.songs || []).map(serializeSongPlay),
         secretRevealed: Boolean(s4.secretRevealedAt),
         currentTurn,

@@ -83,6 +83,20 @@ export default function ChallengeCard({ challenge, pendingJudgement, isJudge = f
 
         {/* 详情 */}
         <div className="space-y-4 mb-7">
+          {challenge.breakthrough && (
+            <div className="border border-emerald-300/25 bg-emerald-300/[0.07] px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="font-black text-emerald-100">第二道墙 · 攻坚保底</p>
+                <p className="font-mono text-lg font-black text-emerald-200">{challenge.breakthrough.failures} / {challenge.breakthrough.threshold}</p>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {Array.from({ length: challenge.breakthrough.threshold }, (_, index) => (
+                  <span key={index} className={`h-2 ${index < challenge.breakthrough.failures ? 'bg-emerald-300' : 'bg-white/10'}`} />
+                ))}
+              </div>
+              <p className="mt-3 text-sm text-zinc-400">第三次判定失败时自动突破；失败次数仍计入排名，先成功者保留回合优势。</p>
+            </div>
+          )}
           <div className="grid gap-3 border-l-4 border-l-cyan-300 border-y border-r border-white/10 bg-white/[0.035] px-5 py-5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
             <FaMusic className="text-xl text-cyan-200" />
             <span className="truncate text-2xl font-black text-white md:text-4xl">{task.songTitle}</span>

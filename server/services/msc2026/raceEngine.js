@@ -29,6 +29,8 @@ const { rollProbability } = require('./probabilityRoll');
 const { snapshotChallenge } = require('./challengePresentation');
 const { getGlobalEffectTurnRange } = require('./itemLifecycle');
 
+const FIXED_WALL_BREAKTHROUGH_THRESHOLD = 3;
+
 // ── 阶段配置映射 ──
 const RACE_CONFIGS = {
   stage2: {
@@ -94,6 +96,7 @@ async function initRace(tournament, playerIds) {
     finishOrder: null,
     finishTimestamp: null,
     challengeFailureCount: 0,
+    fixedWallFailureCount: 0,
     successfulChallengeAchievementTotal: 0,
     successfulChallengeCount: 0,
     cumulativeDxScore: 0
@@ -637,7 +640,11 @@ async function _handleAdvance(tournament, race, player, userId) {
       originalChallenge,
       effectiveChallenge: resolvedChallenge,
       activeItemEffects,
-      itemEffectResults
+      itemEffectResults,
+      breakthrough: wallIndex === 1 ? {
+        failures: player.fixedWallFailureCount || 0,
+        threshold: FIXED_WALL_BREAKTHROUGH_THRESHOLD
+      } : null
     },
     turnEnded: true,
     queuedForRoundJudgement: true,
@@ -751,6 +758,7 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
        finishTimestamp: player.finishTimestamp,
        finishedRound: player.finishedRound,
        challengeFailureCount: player.challengeFailureCount,
+      fixedWallFailureCount: player.fixedWallFailureCount,
       successfulChallengeAchievementTotal: player.successfulChallengeAchievementTotal,
       successfulChallengeCount: player.successfulChallengeCount,
       cumulativeDxScore: player.cumulativeDxScore
@@ -778,11 +786,22 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
   const resultDxScore = Number(resultSnapshot?.dxScore);
   if (Number.isInteger(resultDxScore) && resultDxScore >= 0) player.cumulativeDxScore += resultDxScore;
 
-  if (passed) {
-    const achievement = Number(resultSnapshot?.achievement);
-    if (Number.isFinite(achievement) && achievement >= 0 && achievement <= 101) {
-      player.successfulChallengeAchievementTotal += achievement;
-      player.successfulChallengeCount += 1;
+  const isFixedSecondWall = Number(lastChallenge.wallIndex) === 1;
+  if (!passed) {
+    player.challengeFailureCount = Number(player.challengeFailureCount || 0) + 1;
+    if (isFixedSecondWall) player.fixedWallFailureCount = Number(player.fixedWallFailureCount || 0) + 1;
+  }
+  const breakthroughGranted = !passed && isFixedSecondWall && player.fixedWallFailureCount >= FIXED_WALL_BREAKTHROUGH_THRESHOLD;
+  const wallBreached = passed || breakthroughGranted;
+  lastChallenge.breakthroughGranted = breakthroughGranted;
+
+  if (wallBreached) {
+    if (passed) {
+      const achievement = Number(resultSnapshot?.achievement);
+      if (Number.isFinite(achievement) && achievement >= 0 && achievement <= 101) {
+        player.successfulChallengeAchievementTotal += achievement;
+        player.successfulChallengeCount += 1;
+      }
     }
     // 挑战成功：进入下一层
     player.currentLayer++;
@@ -792,21 +811,23 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
       playerId: lastChallenge.playerId,
       turn: race.currentTurn,
       actionType: 'challenge_passed',
-      detail: { taskId: lastChallenge.taskId, newLayer: player.currentLayer },
+      detail: { taskId: lastChallenge.taskId, newLayer: player.currentLayer, breakthroughGranted },
       timestamp: new Date()
     });
 
     broadcast('challenge_resolved', {
       playerId: lastChallenge.playerId.toString(),
       taskId: lastChallenge.taskId,
-      passed: true,
-      wallBreached: true
+      passed,
+      wallBreached: true,
+      breakthroughGranted
     });
 
     broadcast('wall_broken', {
       wallIndex: player.currentLayer - 1,
       wallLabel,
-      playerId: lastChallenge.playerId.toString()
+      playerId: lastChallenge.playerId.toString(),
+      breakthroughGranted
     });
 
     // 检查是否到达终点
@@ -831,7 +852,6 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
       });
     }
   } else {
-    player.challengeFailureCount += 1;
     // 挑战失败：弹回该层起点（currentLayer 不变）
 
     // P1-R1: 精准惩罚——仅对本次挑战绑定的道具（lastChallenge.usedItemRefs）触发双面惩罚
@@ -916,9 +936,11 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
   return {
     passed,
     wallLabel: race.mapConfig.wallLabels[player.currentLayer] || '???',
-    wallBreached: passed,
+    wallBreached,
     newLayer: player.currentLayer,
-    bounceBack: !passed,
+    bounceBack: !wallBreached,
+    breakthroughGranted,
+    fixedWallFailureCount: player.fixedWallFailureCount || 0,
     penaltiesApplied,
     nextPlayerId: raceTerminated ? null : race.players[race.currentPlayerIndex]?.userId?.toString(),
     nextTurn: race.currentTurn,
@@ -1360,5 +1382,6 @@ module.exports = {
   // 内部导出以支持测试
   getTaskById,
   getFallbackTask,
-  _drawTask
+  _drawTask,
+  FIXED_WALL_BREAKTHROUGH_THRESHOLD
 };

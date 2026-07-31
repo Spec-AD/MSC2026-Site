@@ -274,6 +274,11 @@ async function advance(tournament) {
     s4.status = 'playing';
     await tournament.save();
 
+    broadcast('song_drawn', {
+      stage: 'stage4',
+      songId: s4.designatedSongId.toString(),
+      pickType: 'designated'
+    });
     broadcast('turn_change', {
       stage: 'stage4',
       phase: 'designated_pick'

@@ -89,6 +89,8 @@ export default function BettingPanel({ stage, groupIndex = null }) {
   const isOpen = phase.status === 'open';
   const hasBet = Boolean(market.myBet);
   const selectedPlayer = market.players.find(player => player.userId === selectedId);
+  const canAllIn = Boolean(account && account.balance > 0 && account.balance < market.minimumStake);
+  const validStake = Boolean(account) && Number(stake) <= account.balance && (Number(stake) >= market.minimumStake || (canAllIn && Number(stake) === account.balance));
 
   return (
     <section className={`relative overflow-hidden border border-amber-300/25 bg-[#0e0d09] ${compact ? 'p-4 md:p-5' : 'p-5 md:p-7'}`}>
@@ -140,27 +142,28 @@ export default function BettingPanel({ stage, groupIndex = null }) {
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-400">
         <span>总池 <strong className="text-white">{number.format(market.totalPool)}</strong> 积分</span>
-        <span>最低下注 <strong className="text-amber-200">{number.format(market.minimumStake)}</strong></span>
+        <span>最低下注 <strong className="text-amber-200">{number.format(market.minimumStake)}</strong>{canAllIn ? ' · 当前余额可 ALL IN' : ''}</span>
       </div>
 
       {!compact && !hasBet && (
         <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 md:grid-cols-[minmax(0,1fr)_auto]">
-          <label className="block">
+          <label className="relative block">
             <span className="sr-only">下注积分</span>
             <input
               type="number"
-              min={market.minimumStake}
+              min={canAllIn ? 1 : market.minimumStake}
               step="100"
               value={stake}
               onChange={event => setStake(event.target.value)}
               disabled={!isOpen}
-              className="h-14 w-full border border-white/15 bg-black/30 px-4 text-xl font-black text-white outline-none focus:border-amber-300 disabled:opacity-40"
+              className={`h-14 w-full border border-white/15 bg-black/30 px-4 text-xl font-black text-white outline-none focus:border-amber-300 disabled:opacity-40 ${canAllIn ? 'pr-48' : ''}`}
               placeholder={`最低 ${number.format(market.minimumStake)}`}
             />
+            {canAllIn && <button type="button" onClick={() => setStake(String(account.balance))} className="absolute right-2 top-2 h-10 border border-amber-300/35 bg-amber-300/10 px-4 text-sm font-black text-amber-100">ALL IN · {number.format(account.balance)}</button>}
           </label>
           <button
             onClick={submit}
-            disabled={!isOpen || !user || !selectedId || pending || Number(stake) < market.minimumStake}
+            disabled={!isOpen || !user || !selectedId || pending || !validStake}
             className="h-14 min-w-52 bg-amber-300 px-6 text-lg font-black text-black disabled:cursor-not-allowed disabled:opacity-35"
           >
             {pending ? '正在锁定...' : selectedPlayer ? `确认支持 ${selectedPlayer.username}` : user ? '先选择选手' : '登录后参与'}

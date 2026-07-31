@@ -38,6 +38,7 @@ export const useRaceStore = create((set, get) => ({
   // 当前挑战（弹窗状态）
   activeChallenge: null,
   pendingJudgement: false,
+  previewLocked: false,
 
   // 当前道具拾取/使用状态
   activeItemPickup: null,
@@ -128,12 +129,18 @@ export const useRaceStore = create((set, get) => ({
       }
       if (data.action === 'advance' && data.challenge) {
         if (data.raceStatus === 'adjudicating') {
-          set({ activeChallenge: null, pendingJudgement: true, activeItemPickup: null, status: 'adjudicating' });
-          await get().fetchChallenge();
+          set({
+            activeChallenge: { ...data.challenge, pendingJudgement: false, queuedForRoundJudgement: true },
+            pendingJudgement: false,
+            previewLocked: true,
+            activeItemPickup: null,
+            status: 'adjudicating'
+          });
         } else {
           set({
             activeChallenge: { ...data.challenge, pendingJudgement: false },
             pendingJudgement: false,
+            previewLocked: true,
             activeItemPickup: null,
             status: data.raceStatus || get().status,
           });
@@ -172,11 +179,13 @@ export const useRaceStore = create((set, get) => ({
 
   /** 获取当前挑战详情 */
   fetchChallenge: async () => {
+    if (get().previewLocked && get().activeChallenge) return get().activeChallenge;
     try {
       const res = await api.getRaceChallenge();
       set({
         activeChallenge: res.data.data,
         pendingJudgement: Boolean(res.data.data.pendingJudgement),
+        previewLocked: false,
         status: res.data.data.raceStatus || get().status,
       });
       return res.data;
@@ -193,6 +202,7 @@ export const useRaceStore = create((set, get) => ({
       set({
         activeChallenge: null,
         pendingJudgement: false,
+        previewLocked: false,
         status: data.raceStatus || get().status,
         pendingJudgementCount: data.remainingJudgements ?? get().pendingJudgementCount,
       });
@@ -245,7 +255,7 @@ export const useRaceStore = create((set, get) => ({
   // ---- 本地 UI 状态 ----
 
   /** 关闭挑战弹窗 */
-  dismissChallenge: () => set({ activeChallenge: null, pendingJudgement: false }),
+  dismissChallenge: () => set({ activeChallenge: null, pendingJudgement: false, previewLocked: false }),
 
   /** 关闭道具拾取弹窗 */
   dismissItemPickup: () => set({ activeItemPickup: null }),
@@ -300,6 +310,7 @@ export const useRaceStore = create((set, get) => ({
     turnStartedAt: data.turnStartedAt,
     activeChallenge: null,
     pendingJudgement: false,
+    previewLocked: false,
     pendingJudgementCount: 0,
   }),
 
@@ -351,6 +362,7 @@ export const useRaceStore = create((set, get) => ({
       players: [], finishOrder: [], itemsOnMap: [], wallsBroken: [],
       actionLog: [], challengeHistory: [],
       activeChallenge: null, pendingJudgement: false,
+      previewLocked: false,
       activeItemPickup: null, activeItemUse: null,
       loading: false, error: null,
       turnRemainingMs: null, totalRemainingMs: null,
