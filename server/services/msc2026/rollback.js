@@ -421,6 +421,7 @@ async function resetAll(tournament) {
   tournament.qualifiedStage2 = [];
   tournament.qualifiedStage3 = [];
   tournament.qualifierRankings = [];
+  tournament.preMatchCheckIns = [];
   tournament.status = 'pending';
   // 不重置 oldTournamentId（关联保留）
   // patch-03: 适配层完全重置也不回写 tournament.status。

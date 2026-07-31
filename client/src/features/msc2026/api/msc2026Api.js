@@ -176,6 +176,14 @@ export const backfillRegistrationTokens = () =>
 export const getQualifierRankings = () =>
   axios.get(`${BASE}/old/qualifier-rankings`, { headers: authHeaders() });
 
+/** 读取预选赛前 12 名现场签到状态 */
+export const getPreMatchCheckIns = () =>
+  axios.get(`${BASE}/pre-match/check-ins`, { headers: authHeaders() });
+
+/** 签到或撤销签到 */
+export const setPreMatchCheckIn = (playerId, checkedIn) =>
+  axios.put(`${BASE}/pre-match/check-ins/${playerId}`, { checkedIn }, { headers: authHeaders() });
+
 // ==================== 新初始化方式 ====================
 
 /** 从预选赛自动初始化阶段一 */

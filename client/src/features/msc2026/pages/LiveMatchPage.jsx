@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { AlertTriangle, Clock3, Loader2, LogOut, Maximize2, Minimize2, Play, Radio, Trophy } from 'lucide-react';
+import { AlertTriangle, Clock3, Loader2, LogOut, Maximize2, Minimize2, Radio, RefreshCw, Trophy } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useMSC2026Store } from '../store';
 import { STAGE_CONFIG } from '../constants/publicGameData';
 import { useMSCSSE } from '../hooks/useSSE';
 import { useMatchEventQueue } from '../hooks/useMatchEventQueue';
 import EventCueOverlay from '../components/live/EventCueOverlay';
+import PreMatchLobby from '../components/live/PreMatchLobby';
 import Stage1Page from './Stage1Page';
 import RacePage from './RacePage';
 import Stage4Page from './Stage4Page';
 import { EASE_ACCEL, MOTION_TRANSITIONS } from '../utils/motion';
-import * as api from '../api/msc2026Api';
 import '../styles/industrialEditorial.css';
 
 const ADMIN_ROLES = ['ADM', 'TO', 'CHM'];
@@ -26,70 +26,32 @@ function formatClock(date) {
   }).format(date);
 }
 
-function StandbyScreen({ finished, onInitialized }) {
-  const [readiness, setReadiness] = useState(null);
-  const [initializing, setInitializing] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (finished) return;
-    Promise.all([api.getConfig(), api.getQualifierRankings()])
-      .then(([configResponse, rankResponse]) => {
-        setReadiness({
-          songCount: configResponse.data.data?.stage1SongPool?.length || 0,
-          playerCount: rankResponse.data.data?.rankings?.slice(0, 12)?.length || 0,
-        });
-      })
-      .catch(err => setError(err.response?.data?.msg || '初始化条件检查失败'));
-  }, [finished]);
-
-  const ready = readiness?.songCount >= 3 && readiness?.playerCount === 12;
-
+function FinishedScreen() {
   return (
     <div className="relative flex min-h-[calc(100dvh-76px)] items-end overflow-hidden px-6 py-12 text-left md:px-12 md:py-16">
       <span className="msc-display pointer-events-none absolute -right-8 -top-12 text-[16rem] font-black leading-none text-white/[0.04] md:text-[28rem]">00</span>
       <div className="relative z-10 max-w-6xl border-l border-white/15 pl-6 md:pl-10">
-        {finished ? <Trophy className="h-16 w-16 text-amber-300" /> : <Radio className="h-16 w-16 text-cyan-300" />}
-        <p className="mt-5 text-sm font-bold uppercase tracking-[0.2em] text-zinc-500">
-          {finished ? 'MATCH COMPLETE' : 'SYSTEM STANDBY'}
-        </p>
-        <h1 className="msc-editorial-heading mt-4 text-5xl text-white md:text-8xl">
-          {finished ? 'MSC 2026 已结束' : '等待比赛初始化'}
-        </h1>
-        <p className="mt-4 text-lg md:text-2xl text-zinc-400">
-          {finished ? '最终比赛结果已经确认' : '完成阶段一配置后，运行画面会自动进入比赛流程'}
-        </p>
-        {!finished && (
-          <div className="mt-8 max-w-2xl border-t border-white/10 pt-7">
-            {readiness && (
-              <p className="mb-4 text-base font-bold text-zinc-400">
-                参赛选手 <span className="text-white">{readiness.playerCount}/12</span>
-                <span className="mx-3 text-zinc-700">|</span>
-                阶段一图池 <span className="text-white">{readiness.songCount} 首</span>
-              </p>
-            )}
-            <button
-              type="button"
-              disabled={!ready || initializing}
-              onClick={async () => {
-                setInitializing(true);
-                setError('');
-                try {
-                  await api.initStage1FromQualifier({ advanceCount: 12 });
-                  await onInitialized?.();
-                } catch (err) {
-                  setError(err.response?.data?.msg || '阶段一初始化失败');
-                } finally {
-                  setInitializing(false);
-                }
-              }}
-              className="flex min-h-16 min-w-[280px] items-center justify-center gap-3 border border-amber-300/40 bg-amber-400/15 px-8 text-2xl font-black text-amber-100 transition-colors hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-zinc-600"
-            >
-              {initializing ? <Loader2 className="h-6 w-6 animate-spin" /> : <Play className="h-6 w-6 fill-current" />}
-              {initializing ? '正在生成抽签' : '初始化阶段一'}
-            </button>
-            {error && <p className="mt-4 flex items-center gap-2 text-base text-red-300"><AlertTriangle className="h-5 w-5" />{error}</p>}
-            {readiness && !ready && !error && <p className="mt-4 text-base text-amber-200/75">请先在管理页补齐 12 人排名与阶段一图池配置</p>}
+        <Trophy className="h-16 w-16 text-amber-300" />
+        <p className="mt-5 text-sm font-bold uppercase text-zinc-500">MATCH COMPLETE</p>
+        <h1 className="msc-editorial-heading mt-4 text-5xl text-white md:text-8xl">MSC 2026 已结束</h1>
+        <p className="mt-4 text-lg text-zinc-400 md:text-2xl">最终比赛结果已经确认</p>
+      </div>
+    </div>
+  );
+}
+
+function SystemGate({ loading, error, onRetry, onExit }) {
+  return (
+    <div className="preset-industrial-editorial flex h-[100dvh] items-end overflow-hidden px-7 py-12 text-white md:px-14 md:py-16">
+      <div className="max-w-4xl border-l border-white/15 pl-6 md:pl-10">
+        {loading ? <Loader2 className="h-14 w-14 animate-spin text-cyan-300" /> : <AlertTriangle className="h-14 w-14 text-amber-300" />}
+        <p className="msc-technical mt-5 text-base font-bold text-zinc-500">MATCH SYSTEM / STATE GUARD</p>
+        <h1 className="mt-3 text-4xl font-black text-white md:text-7xl">{loading ? '正在核验比赛状态' : '比赛状态需要处理'}</h1>
+        {!loading && <p className="mt-5 text-xl leading-8 text-zinc-300 md:text-2xl">{error}</p>}
+        {!loading && (
+          <div className="mt-8 flex flex-wrap gap-3">
+            <button type="button" onClick={onRetry} className="flex min-h-14 items-center gap-3 bg-amber-300 px-6 text-lg font-black text-black hover:bg-amber-200"><RefreshCw className="h-5 w-5" />重新核验</button>
+            <button type="button" onClick={onExit} className="flex min-h-14 items-center gap-3 border border-white/15 px-6 text-lg font-black text-zinc-200 hover:bg-white/10"><LogOut className="h-5 w-5" />退出比赛模式</button>
           </div>
         )}
       </div>
@@ -97,27 +59,36 @@ function StandbyScreen({ finished, onInitialized }) {
   );
 }
 
-function StageSurface({ status, onInitialized }) {
+function StageSurface({ status }) {
   if (status === 'stage1') return <Stage1Page />;
   if (status === 'stage2' || status === 'stage3') return <RacePage stage={status} />;
   if (status === 'stage4') return <Stage4Page />;
-  return <StandbyScreen finished={status === 'finished'} onInitialized={onInitialized} />;
+  return <FinishedScreen />;
 }
 
 export default function LiveMatchPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { status, stage1, stage4, fetchStatus } = useMSC2026Store();
+  const { status, stage1, stage4, summary, fetchStatus } = useMSC2026Store();
   const { activeCue, enqueue, queuedCount } = useMatchEventQueue();
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const [clock, setClock] = useState(() => new Date());
   const [booting, setBooting] = useState(true);
+  const [statusResolved, setStatusResolved] = useState(false);
+  const [statusError, setStatusError] = useState('');
   const wakeLockRef = useRef(null);
   const reduceMotion = useReducedMotion();
   const isAdmin = Boolean(user && ADMIN_ROLES.includes(user.role));
 
-  const refreshStatus = useCallback(() => {
-    fetchStatus().catch(() => {});
+  const refreshStatus = useCallback(async () => {
+    try {
+      await fetchStatus();
+      setStatusError('');
+    } catch (requestError) {
+      setStatusError(requestError.response?.data?.msg || '无法读取 MSC 2026 比赛状态，请检查服务连接');
+    } finally {
+      setStatusResolved(true);
+    }
   }, [fetchStatus]);
 
   useEffect(() => {
@@ -197,6 +168,36 @@ export default function LiveMatchPage() {
   if (!user) return <Navigate to="/login" replace />;
   if (!isAdmin) return <Navigate to="/matches/msc2026" replace />;
 
+  if (!statusResolved) {
+    return <SystemGate loading onRetry={refreshStatus} onExit={exitLiveMode} />;
+  }
+
+  if (statusError) {
+    return <SystemGate error={statusError} onRetry={refreshStatus} onExit={exitLiveMode} />;
+  }
+
+  const stage1GroupCount = summary.stage1?.totalGroups || 0;
+  if (status === 'pending' && stage1GroupCount === 0) {
+    return (
+      <PreMatchLobby
+        onInitialized={refreshStatus}
+        onExit={exitLiveMode}
+        onToggleFullscreen={toggleFullscreen}
+        isFullscreen={isFullscreen}
+      />
+    );
+  }
+
+  if (status === 'pending') {
+    return (
+      <SystemGate
+        error="系统处于待初始化状态，但检测到已生成的阶段一分组。为防止覆盖现场数据，请先在管理页执行阶段一重置或完全重置。"
+        onRetry={refreshStatus}
+        onExit={exitLiveMode}
+      />
+    );
+  }
+
   const stageConfig = STAGE_CONFIG[status];
 
   return (
@@ -239,7 +240,7 @@ export default function LiveMatchPage() {
             transition={MOTION_TRANSITIONS.flow}
             className="mx-auto w-full max-w-[1920px] px-4 md:px-7 py-5 md:py-7"
           >
-            <StageSurface status={status} onInitialized={refreshStatus} />
+            <StageSurface status={status} />
           </Motion.div>
         </AnimatePresence>
       </main>

@@ -231,6 +231,13 @@ const MSC2026TournamentSchema = new Schema({
     qualified: { type: Boolean, default: true }
   }],
 
+  // 赛前大厅签到，仅覆盖预选赛前 12，不参与比赛成绩与晋级判定
+  preMatchCheckIns: [{
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    checkedInAt: { type: Date, required: true },
+    checkedInBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+  }],
+
   // 阶段一
   stage1: {
     songPool: [{ type: Schema.Types.ObjectId, ref: 'Song' }],

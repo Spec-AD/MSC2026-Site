@@ -228,6 +228,37 @@
 .msc-crosshair::before { left: 16px; top: 9px; width: 1px; height: 15px; }
 .msc-crosshair::after { left: 9px; top: 16px; width: 15px; height: 1px; }
 
+.msc-prematch-lobby::before {
+  filter: blur(8px) saturate(0.32) brightness(0.32) contrast(1.18);
+}
+
+.msc-prematch-lobby::after {
+  background-size: 64px 64px;
+  box-shadow: inset 0 0 240px rgba(0, 0, 0, 0.82);
+}
+
+.msc-prematch-title {
+  width: max-content;
+  transform: translateX(-0.035em);
+  text-shadow: 0 0 48px rgba(139, 185, 212, 0.12);
+}
+
+.msc-prematch-scan {
+  animation: msc-prematch-scan 7s linear infinite;
+  box-shadow: 0 0 22px rgba(139, 185, 212, 0.4);
+}
+
+@keyframes msc-prematch-scan {
+  from { transform: translateY(-2px); opacity: 0; }
+  8% { opacity: 0.55; }
+  92% { opacity: 0.3; }
+  to { transform: translateY(100vh); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msc-prematch-scan { animation: none; top: 38%; }
+}
+
 @media (max-width: 767px) {
   .preset-industrial-editorial::after { background-size: 42px 42px; }
   .msc-industrial-anchor { top: 0; font-size: 7rem; }
