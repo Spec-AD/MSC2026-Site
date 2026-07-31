@@ -22,7 +22,7 @@ export default function WinnerReveal({ name, eyebrow = 'QUALIFIED', detail, cham
         <Icon className="h-8 w-8" />
       </Motion.div>
       <p className="mt-5 text-xs md:text-sm font-bold uppercase tracking-[0.2em] text-amber-300/80">{eyebrow}</p>
-      <h2 className="mt-2 text-4xl md:text-7xl font-black text-white break-words" style={{ fontFamily: 'Torus, sans-serif' }}>
+      <h2 className="mt-2 text-4xl md:text-7xl font-black text-white break-words" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
         {name || '结果待确认'}
       </h2>
       {detail && <p className="mt-3 text-base md:text-xl text-zinc-400">{detail}</p>}

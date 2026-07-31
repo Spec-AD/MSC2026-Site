@@ -117,8 +117,10 @@ function WallRing({ vertices, y, height = 0.72, label = '', breachedCount = 0, t
   );
   const labelPosition = useMemo(() => {
     const anchor = vertices[labelAnchorIndex] || vertices[0];
-    return [anchor[0] * 0.88, y + height + 0.52, anchor[1] * 0.88];
-  }, [vertices, y, height, labelAnchorIndex]);
+    const radialFactor = coord === 1 ? 0.88 : 1.05;
+    const verticalOffset = coord === 1 ? 0.9 : 0.52;
+    return [anchor[0] * radialFactor, y + height + verticalOffset, anchor[1] * radialFactor];
+  }, [vertices, y, height, labelAnchorIndex, coord]);
 
   return (
     <group>
@@ -152,8 +154,8 @@ function WallRing({ vertices, y, height = 0.72, label = '', breachedCount = 0, t
       <Line points={topLoop} color={baseColor} lineWidth={2.2} transparent opacity={0.95} />
 
       {/* 标签：墙名 · 坐标 · 攻破进度 */}
-      <Html position={labelPosition} center distanceFactor={8} zIndexRange={[10, 0]}>
-        <div className={`flex items-center gap-1 whitespace-nowrap border border-l-4 px-2 py-1 text-[11px] font-bold backdrop-blur-md pointer-events-none shadow-lg sm:gap-2 sm:px-4 sm:py-2 sm:text-sm md:text-base
+      <Html position={labelPosition} center distanceFactor={9.5} zIndexRange={[10, 0]}>
+        <div className={`flex items-center gap-1 whitespace-nowrap border border-l-4 px-2 py-1 text-xs font-bold backdrop-blur-md pointer-events-none shadow-lg sm:gap-2 sm:px-4 sm:py-2 sm:text-base md:text-lg
           ${fully ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30'
             : partial ? 'bg-amber-500/15 text-amber-300 border-amber-400/30'
             : 'bg-red-500/15 text-red-300 border-red-400/30'}`}>
@@ -333,8 +335,8 @@ function FinishCore({ centerCoord }) {
       </mesh>
       <Sparkles count={34} scale={[1.25, 2, 1.25]} size={2.6} speed={0.3} color="#fde68a" position={[0, 0.7, 0]} />
       <pointLight color="#fbbf24" intensity={1.25} distance={3.2} />
-      <Html position={[0, 1.35, 0]} center distanceFactor={7} zIndexRange={[10, 0]}>
-        <div className="px-2 py-1 rounded-full text-[11px] sm:px-3 sm:text-xs md:text-sm font-bold whitespace-nowrap bg-amber-500/25 text-amber-200 border border-amber-400/40 backdrop-blur-md pointer-events-none shadow-lg">
+      <Html position={[0, 1.35, 0]} center distanceFactor={8} zIndexRange={[10, 0]}>
+        <div className="px-2 py-1 rounded-full text-xs sm:px-3 sm:text-sm md:text-base font-bold whitespace-nowrap bg-amber-500/25 text-amber-200 border border-amber-400/40 backdrop-blur-md pointer-events-none shadow-lg">
           中心<span className="hidden sm:inline"> · 终点</span>{centerCoord != null ? <><span> · </span><span className="hidden sm:inline">坐标</span>{centerCoord}</> : ''}
         </div>
       </Html>
@@ -346,8 +348,8 @@ function FinishCore({ centerCoord }) {
 
 function StartLabels({ vertices }) {
   return vertices.map((v, i) => (
-    <Html key={i} position={[v[0] * 0.96, 0.08, v[1] * 0.96]} center distanceFactor={8} zIndexRange={[10, 0]}>
-      <div className="px-1.5 py-1 rounded-lg text-[11px] text-zinc-400 bg-black/35 border border-white/10 whitespace-nowrap pointer-events-none backdrop-blur-sm sm:px-2 sm:text-xs">
+    <Html key={i} position={[v[0] * 0.96, 0.08, v[1] * 0.96]} center distanceFactor={9} zIndexRange={[10, 0]}>
+      <div className="px-1.5 py-1 rounded-lg text-xs text-zinc-300 bg-black/50 border border-white/10 whitespace-nowrap pointer-events-none backdrop-blur-sm sm:px-2 sm:text-sm">
         <span className="sm:hidden">S{i} · 0</span><span className="hidden sm:inline">起点 {i} · 坐标0</span>
       </div>
     </Html>
@@ -398,8 +400,9 @@ export default function RaceMap3D({
           rotation: [-Math.atan2(maxR * 2 + 0.18, maxR * 2.3), 0, 0],
           fov: 42,
         }}
-        gl={{ antialias: true, alpha: true }}
-        dpr={1}
+        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+        dpr={[1, 1.5]}
+        performance={{ min: 0.65 }}
         style={{ width: '100%', height: '100%' }}
       >
         <color attach="background" args={['#08080f']} />
@@ -416,7 +419,7 @@ export default function RaceMap3D({
         <CameraSetup maxR={maxR} />
 
         <SceneFloor maxR={maxR} />
-        <ContactShadows position={[0, -0.65, 0]} opacity={0.58} scale={maxR * 3} blur={3.2} far={4.6} resolution={768} color="#000000" />
+        <ContactShadows position={[0, -0.65, 0]} opacity={0.58} scale={maxR * 3} blur={3.2} far={4.6} resolution={512} frames={1} color="#000000" />
 
         {/* 层环 + 墙壁 */}
         {Array.from({ length: layers + 1 }).map((_, l) => {

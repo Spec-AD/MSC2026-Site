@@ -36,13 +36,13 @@ function GroupCard({ group, isCurrent, isCompleted, onClick }) {
       whileHover={!reduceMotion && (isCompleted || isCurrent) ? { y: -3, scale: 1.008 } : undefined}
       whileTap={!reduceMotion && (isCompleted || isCurrent) ? { scale: 0.985 } : undefined}
       transition={MOTION_TRANSITIONS.spring}
-      className={`w-full rounded-2xl border ${statusBg} p-5 md:p-6 text-left transition-all
+      className={`w-full border ${statusBg} p-5 md:p-6 text-left transition-all
         ${isCompleted ? 'cursor-pointer' : isCurrent ? 'cursor-pointer' : 'cursor-default'}
         ${!isCompleted && !isCurrent ? 'opacity-65' : 'opacity-100'}`}
     >
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
-          <span className="text-sm px-3 py-1 rounded-lg bg-white/[0.06] text-zinc-300 font-semibold tabular-nums">
+          <span className="msc-technical border-l border-white/20 px-3 py-1 text-sm font-semibold text-zinc-300 tabular-nums">
             第 {order + 1} 组
           </span>
           {statusIcon}
@@ -54,20 +54,20 @@ function GroupCard({ group, isCurrent, isCompleted, onClick }) {
 
       {/* P1 vs P2 */}
       <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-3">
-        <div className={`min-w-0 flex items-center gap-3 px-4 py-4 rounded-xl border
-          ${p1Won ? 'bg-emerald-500/10 border-emerald-400/35' : 'bg-black/20 border-white/10'}`}
+        <div className={`min-w-0 flex items-center gap-3 border-l-2 px-4 py-4
+          ${p1Won ? 'border-l-emerald-300 bg-emerald-500/10' : 'border-l-sky-300/50 bg-black/15'}`}
         >
-          <span className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-base font-black ${p1Won ? 'bg-emerald-400/20 text-emerald-200' : 'bg-sky-400/10 text-sky-200'}`}>P1</span>
+          <span className={`msc-display shrink-0 flex h-10 w-10 items-center justify-center text-base font-black ${p1Won ? 'bg-emerald-400/20 text-emerald-200' : 'bg-sky-400/10 text-sky-200'}`}>P1</span>
           <span className={`text-xl md:text-2xl truncate font-bold ${p1Won ? 'text-emerald-200' : 'text-white'}`}>
             {p1?.username || '—'}
           </span>
           {p1Won && <FaCrown className="ml-auto shrink-0 text-amber-300 text-lg" />}
         </div>
         <span className="self-center text-zinc-500 text-lg font-black">VS</span>
-        <div className={`min-w-0 flex items-center gap-3 px-4 py-4 rounded-xl border
-          ${p2Won ? 'bg-emerald-500/10 border-emerald-400/35' : 'bg-black/20 border-white/10'}`}
+        <div className={`min-w-0 flex items-center gap-3 border-l-2 px-4 py-4
+          ${p2Won ? 'border-l-emerald-300 bg-emerald-500/10' : 'border-l-orange-300/50 bg-black/15'}`}
         >
-          <span className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-base font-black ${p2Won ? 'bg-emerald-400/20 text-emerald-200' : 'bg-fuchsia-400/10 text-fuchsia-200'}`}>P2</span>
+          <span className={`msc-display shrink-0 flex h-10 w-10 items-center justify-center text-base font-black ${p2Won ? 'bg-emerald-400/20 text-emerald-200' : 'bg-orange-300/10 text-orange-200'}`}>P2</span>
           <span className={`text-xl md:text-2xl truncate font-bold ${p2Won ? 'text-emerald-200' : 'text-white'}`}>
             {p2?.username || '—'}
           </span>

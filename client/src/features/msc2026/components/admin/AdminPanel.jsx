@@ -382,7 +382,7 @@ export default function AdminPanel() {
       <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 bg-zinc-900/80">
         <div className="flex items-center gap-2">
           <FaCog className="text-amber-400/70 text-sm" />
-          <h3 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>管理员面板</h3>
+          <h3 className="text-sm font-semibold text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>管理员面板</h3>
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400/80 border border-amber-500/30">{user.role}</span>
         </div>
         <div className="flex items-center gap-1">
@@ -523,7 +523,7 @@ export default function AdminPanel() {
               <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs font-bold">1</div>
-                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>阶段一 · 12进6</h4>
+                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>阶段一 · 12进6</h4>
                 </div>
                 <p className="text-xs text-zinc-500">系统将自动从预选赛排名取前 {advanceCount} 名选手，随机分组并决定 P1/P2 及出场顺序。</p>
                 <div>
@@ -546,7 +546,7 @@ export default function AdminPanel() {
               <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs font-bold">1</div>
-                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>阶段一 进行中</h4>
+                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>阶段一 进行中</h4>
                 </div>
                 <p className="text-xs text-zinc-500">小组比赛进行中，以下为重置/回退操作（慎用）。</p>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -562,7 +562,7 @@ export default function AdminPanel() {
               <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">2</div>
-                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>阶段二 · 6进4 跑图</h4>
+                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>阶段二 · 6进4 跑图</h4>
                 </div>
                 <p className="text-xs text-zinc-500">阶段一结束后，系统固定使用后端确认的 6 名晋级选手。</p>
                 <div>
@@ -573,6 +573,9 @@ export default function AdminPanel() {
                   {status === 'stage2' && !store.summary?.stage2 && (
                     <ActionButton onClick={handleInitRace} loading={loading} disabled={stage2Players.length !== 6}
                       icon={<FaPlay />} label={stage2Players.length !== 6 ? `等待晋级名单 ${stage2Players.length}/6` : '初始化跑图'} />
+                  )}
+                  {status === 'stage2' && store.summary?.stage2?.status === 'waiting' && (
+                    <ActionButton onClick={quickAction(api.startRace, '阶段二跑图已开始')} loading={loading} icon={<FaPlay />} label="核验席位并开始" />
                   )}
                   {status === 'stage2' && (
                     <>
@@ -593,7 +596,7 @@ export default function AdminPanel() {
               <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-xs font-bold">3</div>
-                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>阶段三 · 4进2 跑图</h4>
+                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>阶段三 · 4进2 跑图</h4>
                 </div>
                 <p className="text-xs text-zinc-500">系统固定使用阶段二排名产生的 4 名晋级选手。</p>
                 <div>
@@ -604,6 +607,9 @@ export default function AdminPanel() {
                   {!store.summary?.stage3 && (
                     <ActionButton onClick={handleInitRace} loading={loading} disabled={stage3Players.length !== 4}
                       icon={<FaPlay />} label={stage3Players.length !== 4 ? `等待晋级名单 ${stage3Players.length}/4` : '初始化跑图'} />
+                  )}
+                  {store.summary?.stage3?.status === 'waiting' && (
+                    <ActionButton onClick={quickAction(api.startRace, '阶段三跑图已开始')} loading={loading} icon={<FaPlay />} label="核验席位并开始" />
                   )}
                   <ActionButton onClick={quickAction(api.terminateRace, '终止跑图')} loading={loading} disabled={!store.summary?.stage3 || store.summary?.stage3?.terminated} icon={<FaTimes />} label="终止" variant="danger" />
                   <ActionButton onClick={quickAction(api.undoRaceLastAction, '撤销行动')} loading={loading} icon={<FaUndo />} label="撤销行动" variant="undo" />
@@ -618,7 +624,7 @@ export default function AdminPanel() {
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 text-xs font-bold">4</div>
-                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>阶段四 · 决赛</h4>
+                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>阶段四 · 决赛</h4>
                 </div>
                 <p className="text-xs text-zinc-500">阶段三结束后自动锁定 2 名决赛选手，只需确认图池与课题曲。</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

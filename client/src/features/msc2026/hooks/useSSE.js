@@ -40,6 +40,8 @@ export function useMSCSSE(handlers, { enabled = true, since } = {}) {
       'wall_broken', 'player_bounced', 'match_finished',
       'stage_advanced', 'map_timeout', 'timer_tick',
       'song_drawn', 'item_armed',
+      'race_started', 'round_started', 'round_adjudication',
+      'challenge_queue_advanced', 'item_pickup_queued',
     ];
 
     eventNames.forEach((eventName) => {

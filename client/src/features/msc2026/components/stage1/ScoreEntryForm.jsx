@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { FaClipboardCheck, FaUser } from 'react-icons/fa';
-import { SCORE_LIMITS } from '../../constants/gameData';
+import { SCORE_LIMITS } from '../../constants/publicGameData';
 import MotionButton from '../live/MotionButton';
 import { MOTION_TRANSITIONS } from '../../utils/motion';
 
@@ -243,7 +243,7 @@ export default function ScoreEntryForm({
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-6 space-y-5">
-      <h3 className="text-2xl font-bold text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
+      <h3 className="text-2xl font-bold text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
         裁判成绩录入
       </h3>
 

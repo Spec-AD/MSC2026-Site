@@ -9,7 +9,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useMSC2026Store } from '../store';
 import PlayerList from '../components/PlayerList';
 import AdminPanel from '../components/admin/AdminPanel';
-import { STAGE_CONFIG } from '../constants/gameData';
+import { STAGE_CONFIG } from '../constants/publicGameData';
 import { FaArrowRight, FaTrophy } from 'react-icons/fa';
 
 const STAGE_PHASES = ['stage1', 'stage2', 'stage3', 'stage4'];
@@ -39,42 +39,41 @@ export default function TournamentHome() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       {/* Hero */}
-      <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-8 md:p-10 backdrop-blur-xl">
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-8 items-end">
+      <section className="msc-editorial-hero px-5 py-8 md:px-9 md:py-8">
+        <span className="msc-display pointer-events-none absolute -bottom-10 right-[-0.04em] select-none font-black leading-none text-white/[0.045] text-[9rem] md:text-[18rem]">2026</span>
+        <div className="relative z-10 grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.6fr)] xl:items-end">
           <div>
-            <h2 className="text-sm md:text-base font-semibold text-amber-300/80 mb-3 uppercase tracking-[0.18em]" style={{ fontFamily: 'Torus, sans-serif' }}>
-              PureBeat 首届正式比赛
-            </h2>
-            <h1 className="text-6xl md:text-8xl font-black mb-5 tracking-tight" style={{ fontFamily: 'Torus, sans-serif' }}>
-              MSC 2026
+            <p className="msc-kicker mb-5">PUREBEAT COMPETITION ARCHIVE / LIVE CONTROL</p>
+            <h1 className="msc-editorial-heading text-7xl text-white md:text-[8rem]">
+              <span>MSC</span><span className="text-zinc-400">2026</span>
             </h1>
-            <p className="text-zinc-300 text-xl max-w-3xl leading-relaxed">
+            <p className="mt-5 max-w-3xl border-l border-sky-200/40 pl-5 text-xl leading-relaxed text-zinc-300 md:text-2xl">
               资格赛、12进6 小组赛、六边形与正方形跑图、最终决赛。
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
-              <p className="text-5xl font-black text-white tabular-nums">12</p>
-              <p className="text-zinc-500 mt-1">正赛</p>
+          <div className="grid grid-cols-3 border-y border-white/15">
+            <div className="border-r border-white/15 px-4 py-5 text-left">
+              <p className="text-5xl font-black text-white tabular-nums md:text-7xl">12</p>
+              <p className="mt-2 font-mono text-sm text-zinc-500">PLAYERS</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
-              <p className="text-5xl font-black text-white tabular-nums">4</p>
-              <p className="text-zinc-500 mt-1">阶段</p>
+            <div className="border-r border-white/15 px-4 py-5 text-left">
+              <p className="text-5xl font-black text-white tabular-nums md:text-7xl">04</p>
+              <p className="mt-2 font-mono text-sm text-zinc-500">STAGES</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
-              <p className="text-5xl font-black text-white tabular-nums">1</p>
-              <p className="text-zinc-500 mt-1">冠军</p>
+            <div className="px-4 py-5 text-left">
+              <p className="text-5xl font-black text-amber-200 tabular-nums md:text-7xl">01</p>
+              <p className="mt-2 font-mono text-sm text-zinc-500">CHAMPION</p>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 mt-7">
+        <div className="relative z-10 mt-6 flex flex-wrap items-center gap-3">
           {canLaunchLive && (
             <button
               onClick={launchLiveMode}
-              className="inline-flex items-center gap-3 px-7 py-4 bg-amber-400 text-black border border-amber-200 hover:bg-amber-300 transition-colors text-xl font-black"
+              className="msc-command inline-flex items-center gap-3 px-7 py-4 text-xl font-black"
             >
               <Maximize2 className="h-6 w-6" />
               启动比赛模式
@@ -90,52 +89,32 @@ export default function TournamentHome() {
           {status !== 'pending' && status !== 'finished' && (
             <Link
               to={`/matches/msc2026/${status}`}
-              className="inline-flex items-center gap-3 px-7 py-4 rounded-xl bg-white/[0.05] text-zinc-200 border border-white/10 hover:bg-white/10 transition-all text-xl font-black"
+              className="inline-flex items-center gap-3 border border-white/15 bg-white/[0.04] px-7 py-4 text-xl font-black text-zinc-200 transition-colors hover:bg-white/10"
             >
               普通页面
               <FaArrowRight />
             </Link>
           )}
         </div>
-      </div>
+      </section>
 
       {/* 阶段进度条 */}
-      <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6">
-        <h3 className="text-2xl font-bold text-zinc-100 mb-6" style={{ fontFamily: 'Torus, sans-serif' }}>
-          比赛进度
-        </h3>
-        <div className="flex items-start gap-0">
+      <div className="msc-panel p-6 md:p-8">
+        <p className="msc-kicker mb-2">PROGRESSION MATRIX / 04 PHASES</p>
+        <h3 className="mb-7 text-3xl font-black text-zinc-100 md:text-5xl">比赛进度</h3>
+        <div className="grid gap-px border border-white/10 bg-white/10 sm:grid-cols-2 xl:grid-cols-4">
           {STAGE_PHASES.map((phase, idx) => {
             const config = STAGE_CONFIG[phase];
             const isDone = idx < currentIdx;
             const isCurrent = idx === currentIdx;
-            const isPending = idx > currentIdx;
-
             return (
-              <div key={phase} className="flex-1 flex items-start min-w-0">
-                {/* 节点 */}
-                <div className="flex flex-col items-center flex-1">
-                  <div
-                    className={`
-                      w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black border-2 transition-all
-                      ${isDone ? 'bg-green-500/20 border-green-500 text-green-400' : ''}
-                      ${isCurrent ? 'bg-amber-500/30 border-amber-500 text-amber-300 shadow-lg shadow-amber-500/10' : ''}
-                      ${isPending ? 'bg-zinc-800 border-zinc-700 text-zinc-600' : ''}
-                    `}
-                  >
-                    {isDone ? '✓' : config.icon}
-                  </div>
-                  <span
-                    className={`text-base md:text-lg mt-2 font-bold text-center leading-tight
-                      ${isCurrent ? 'text-amber-400' : isDone ? 'text-green-400/70' : 'text-zinc-600'}`}
-                  >
-                    {config.label}
-                  </span>
-                </div>
-                {/* 连线 */}
-                {idx < STAGE_PHASES.length - 1 && (
-                  <div className={`h-1 mt-8 flex-1 min-w-[2rem] ${isDone ? 'bg-green-500/30' : 'bg-zinc-800'}`} />
-                )}
+              <div key={phase} className={`relative min-h-36 overflow-hidden p-5 ${isCurrent ? 'bg-amber-300 text-black' : 'bg-[#090c0f]'}`}>
+                <span className={`msc-display absolute -bottom-5 right-1 text-8xl font-black ${isCurrent ? 'text-black/10' : 'text-white/[0.035]'}`}>{config.icon}</span>
+                <p className={`msc-technical text-xs font-black ${isCurrent ? 'text-black/55' : isDone ? 'text-emerald-300' : 'text-zinc-600'}`}>
+                  PHASE {String(idx + 1).padStart(2, '0')} / {isDone ? 'COMPLETE' : isCurrent ? 'ACTIVE' : 'STANDBY'}
+                </p>
+                <p className={`mt-6 text-2xl font-black ${isCurrent ? 'text-black' : isDone ? 'text-emerald-100' : 'text-zinc-400'}`}>{config.label}</p>
+                <p className={`mt-1 text-sm ${isCurrent ? 'text-black/65' : 'text-zinc-600'}`}>{config.desc}</p>
               </div>
             );
           })}
@@ -164,10 +143,10 @@ export default function TournamentHome() {
                 key={phase}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl border border-white/10 bg-white/[0.035] p-5"
+                className="msc-panel p-5"
               >
                 <div className="text-base text-zinc-500 mb-2">{config.label}</div>
-                <div className="text-4xl font-black" style={{ fontFamily: 'Torus, sans-serif' }}>
+                <div className="text-4xl font-black" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
                   {info?.completedGroups != null ? `${info.completedGroups}/${info.totalGroups}` : '-'}
                 </div>
               </Motion.div>
@@ -178,12 +157,12 @@ export default function TournamentHome() {
 
       {/* 已结束状态 */}
       {status === 'finished' && (
-        <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-10 text-center">
-          <FaTrophy className="text-5xl text-amber-300 mx-auto mb-4" />
-          <h3 className="text-4xl font-black text-amber-200 mb-2" style={{ fontFamily: 'Torus, sans-serif' }}>
+        <div className="msc-panel grid gap-6 border-l-4 border-l-amber-300 p-8 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
+          <FaTrophy className="text-5xl text-amber-300" />
+          <h3 className="text-4xl font-black text-amber-200 mb-2" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
             比赛已结束
           </h3>
-          <p className="text-zinc-400 text-xl">MSC 2026 所有阶段已完成</p>
+          <p className="msc-technical text-zinc-400 text-base">MSC26 / ALL PHASES COMPLETE</p>
         </div>
       )}
     </div>

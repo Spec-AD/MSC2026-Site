@@ -111,9 +111,11 @@ export default function Stage1Page() {
   return (
     <div className="space-y-6">
       {/* 顶部信息栏 */}
-      <div className="flex items-center justify-between">
+      <div className="msc-index-strip">
+        <div className="msc-display flex items-center justify-center bg-sky-300/10 text-5xl text-sky-200">01</div>
         <div>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight" style={{ fontFamily: 'Torus, sans-serif' }}>
+          <p className="msc-kicker">GROUP ELIMINATION / 12 PLAYERS</p>
+          <h2 className="mt-2 text-4xl md:text-6xl font-black" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
             12进6 · 淘汰赛
           </h2>
           <p className="text-base md:text-xl text-zinc-400 mt-2">
@@ -122,10 +124,10 @@ export default function Stage1Page() {
               : `${stage1.completedGroups}/${stage1.totalGroups} 组已完成`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center">
           <button
             onClick={() => fetchStage1State()}
-            className="p-4 rounded-xl border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 transition-all"
+            className="p-4 border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 transition-all"
             title="刷新"
           >
             <FaSync className={`text-lg ${stage1.loading ? 'animate-spin' : ''}`} />
@@ -178,9 +180,9 @@ export default function Stage1Page() {
             {/* 比分展示 */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-6">
               {/* P1 */}
-              <div className="rounded-2xl border border-sky-400/20 bg-white/[0.04] p-6">
+              <div className="msc-panel border-l-2 border-l-sky-300 p-6">
                 <div className="flex items-center gap-3 mb-5">
-                  <div className="w-14 h-14 rounded-2xl bg-sky-400/15 flex items-center justify-center text-sky-200 font-black text-xl">
+                  <div className="msc-display w-14 h-14 bg-sky-400/15 flex items-center justify-center text-sky-200 font-black text-xl">
                     P1
                   </div>
                   <span className="font-bold text-3xl text-white truncate">
@@ -197,9 +199,9 @@ export default function Stage1Page() {
                 ))}
               </div>
               {/* P2 */}
-              <div className="rounded-2xl border border-fuchsia-400/20 bg-white/[0.04] p-6">
+              <div className="msc-panel border-l-2 border-l-orange-300 p-6">
                 <div className="flex items-center gap-3 mb-5">
-                  <div className="w-14 h-14 rounded-2xl bg-fuchsia-400/15 flex items-center justify-center text-fuchsia-200 font-black text-xl">
+                  <div className="msc-display w-14 h-14 bg-orange-300/15 flex items-center justify-center text-orange-200 font-black text-xl">
                     P2
                   </div>
                   <span className="font-bold text-3xl text-white truncate">

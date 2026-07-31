@@ -22,7 +22,7 @@ const User = require('../models/User');
 
 const { loadTournament, checkPermission, calculateRaceRankings, shuffle, assertObjectIdList } = require('../services/msc2026/utils');
 const { initStage1, startFirstGroup, completeGroupReveal, selectSong, submitScore, advance: advanceStage1, forfeitPlayer, resolveGroupTie } = require('../services/msc2026/stage1');
-const { initRace, currentRace, playerAction, useItem, challengeResult, skipTurn, terminateRace } = require('../services/msc2026/raceEngine');
+const { initRace, startRace, currentRace, playerAction, useItem, challengeResult, skipTurn, terminateRace } = require('../services/msc2026/raceEngine');
 const { initStage4, selectSong: selectSong4, submitScore: submitScore4, advance: advanceStage4, resolveTie: resolveTie4 } = require('../services/msc2026/stage4');
 const { addClient, broadcast } = require('../services/msc2026/ssePool');
 const {
@@ -85,6 +85,13 @@ function normalizeRaceResultSnapshot(raw) {
     const value = Number(raw.dxScore);
     if (!Number.isInteger(value) || value < 0 || value > 2147483647) throw new Error('挑战原始 DX 分须为非负整数');
     result.dxScore = value;
+  }
+  if (raw.completionMs !== undefined && raw.completionMs !== '') {
+    const value = Number(raw.completionMs);
+    if (!Number.isInteger(value) || value < 0 || value > 24 * 60 * 60 * 1000) {
+      throw new Error('挑战完成用时须为 0-86400000 的整数毫秒');
+    }
+    result.completionMs = value;
   }
   return Object.keys(result).length ? result : null;
 }
@@ -187,13 +194,15 @@ router.get('/status', async (req, res) => {
           shape: t.stage2.mapConfig?.shape,
           finishCount: t.stage2.finishOrder?.length || 0,
           totalPlayers: t.stage2.players?.length || 0,
-          terminated: t.stage2.terminated
+          terminated: t.stage2.terminated,
+          status: t.stage2.terminated ? 'terminated' : (t.stage2.status || (t.stage2.totalTimeStartedAt ? 'racing' : 'waiting'))
         } : null,
         stage3: t.stage3 ? {
           shape: t.stage3.mapConfig?.shape,
           finishCount: t.stage3.finishOrder?.length || 0,
           totalPlayers: t.stage3.players?.length || 0,
-          terminated: t.stage3.terminated
+          terminated: t.stage3.terminated,
+          status: t.stage3.terminated ? 'terminated' : (t.stage3.status || (t.stage3.totalTimeStartedAt ? 'racing' : 'waiting'))
         } : null,
         stage4: t.stage4 ? {
           winner: t.stage4.winner,
@@ -1090,6 +1099,20 @@ router.post('/race/init', authMiddleware, async (req, res) => {
   }
 });
 
+router.post('/race/start', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    await withLockedTournament(res, async (t) => {
+      const result = await startRace(t);
+      res.json({ msg: '跑图已开始', data: result });
+    });
+  } catch (err) {
+    console.error('开始跑图失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
 router.get('/race/state', async (req, res) => {
   try {
     const t = await MSC2026Tournament.findOne()
@@ -1104,7 +1127,7 @@ router.get('/race/state', async (req, res) => {
     if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
 
     const now = Date.now();
-    const totalElapsed = now - new Date(race.totalTimeStartedAt).getTime();
+    const totalElapsed = race.totalTimeStartedAt ? now - new Date(race.totalTimeStartedAt).getTime() : 0;
     const turnElapsed = race.turnStartedAt ? now - new Date(race.turnStartedAt).getTime() : 0;
     const pendingChallenge = race.challengeHistory?.some(ch => ch.passed === null);
 
@@ -1112,13 +1135,17 @@ router.get('/race/state', async (req, res) => {
       msg: 'ok',
       data: {
         stage: t.status,
-        status: race.terminated ? 'terminated' : 'racing',
+        status: race.terminated ? 'terminated' : (race.status || (race.totalTimeStartedAt ? (pendingChallenge ? 'adjudicating' : 'racing') : 'waiting')),
         mapConfig: race.mapConfig,
         timeLimitMs: race.timeLimitMs,
         turnTimeLimitMs: race.turnTimeLimitMs,
         totalTimeStartedAt: race.totalTimeStartedAt,
         turnStartedAt: race.turnStartedAt,
         currentTurn: race.currentTurn,
+        roundNumber: race.roundNumber || 1,
+        roundPosition: race.roundPosition || 0,
+        turnOrder: (race.turnOrder || []).map(index => String(race.players[index]?.userId?._id || race.players[index]?.userId)),
+        pendingJudgementCount: race.challengeHistory?.filter(ch => ch.passed === null).length || 0,
         currentPlayerIndex: race.currentPlayerIndex,
         currentPlayerId: String(race.players[race.currentPlayerIndex]?.userId?._id || race.players[race.currentPlayerIndex]?.userId),
         players: race.players.map(p => ({
@@ -1146,8 +1173,10 @@ router.get('/race/state', async (req, res) => {
           if (value.actionType === 'pickup') value.detail = { zoneIndex: value.detail?.zoneIndex };
           return value;
         }),
-        turnRemainingMs: pendingChallenge || !race.turnStartedAt ? null : Math.max(0, race.turnTimeLimitMs - turnElapsed),
-        totalRemainingMs: Math.max(0, race.timeLimitMs - totalElapsed),
+        turnRemainingMs: race.status === 'adjudicating' || (!race.status && pendingChallenge) || !race.turnStartedAt
+          ? null
+          : Math.max(0, race.turnTimeLimitMs - turnElapsed),
+        totalRemainingMs: race.totalTimeStartedAt ? Math.max(0, race.timeLimitMs - totalElapsed) : race.timeLimitMs,
         terminated: race.terminated,
         terminatedReason: race.terminatedReason
       }
@@ -1216,6 +1245,9 @@ router.get('/race/map', async (req, res) => {
         }),
         wallsBroken,
         currentTurn: race.currentTurn,
+        roundNumber: race.roundNumber || 1,
+        roundPosition: race.roundPosition || 0,
+        turnOrder: (race.turnOrder || []).map(index => String(race.players[index]?.userId?._id || race.players[index]?.userId)),
         currentPlayerIndex: race.currentPlayerIndex,
         currentPlayerId: String(race.players[race.currentPlayerIndex]?.userId?._id || race.players[race.currentPlayerIndex]?.userId)
       }
@@ -1276,8 +1308,10 @@ router.get('/race/challenge', authMiddleware, async (req, res) => {
     const race = currentRace(t);
     if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
 
-    // 找最近被揭晓但未判定的挑战
-    const pending = [...race.challengeHistory].reverse().find(ch => ch.passed === null);
+    // 统一判定按本圈行动顺序处理，禁止裁判录入顺序反向影响结果。
+    const pending = race.status === 'adjudicating'
+      ? race.challengeHistory.find(ch => ch.passed === null)
+      : [...race.challengeHistory].reverse().find(ch => ch.passed === null);
     if (!pending) return res.status(400).json({ msg: '无待判定的挑战' });
 
     // P1-4: 优先返回 resolvedChallenge 快照（含道具修改后的挑战条件）
@@ -1298,7 +1332,9 @@ router.get('/race/challenge', authMiddleware, async (req, res) => {
           effectiveChallenge,
           activeItemEffects: pending.activeItemEffects || [],
           itemEffectResults: pending.itemEffectResults || [],
-          pendingJudgement: true
+          pendingJudgement: race.status === 'adjudicating',
+          raceStatus: race.status,
+          roundNumber: race.roundNumber || 1
         }
       });
       return;
@@ -1321,7 +1357,9 @@ router.get('/race/challenge', authMiddleware, async (req, res) => {
         effectiveChallenge: originalChallenge,
         activeItemEffects: [],
         itemEffectResults: [],
-        pendingJudgement: true
+        pendingJudgement: race.status === 'adjudicating',
+        raceStatus: race.status,
+        roundNumber: race.roundNumber || 1
       }
     });
   } catch (err) {

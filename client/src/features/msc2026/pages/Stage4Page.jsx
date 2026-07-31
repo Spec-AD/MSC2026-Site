@@ -101,32 +101,33 @@ export default function Stage4Page() {
   return (
     <div className="space-y-6">
       {/* 标题 */}
-      <div className="flex items-end justify-between gap-5">
+      <div className="msc-index-strip">
+        <div className="msc-display flex items-center justify-center bg-amber-300/10 text-5xl text-amber-200">04</div>
         <div>
           <div className="flex items-center gap-3 text-amber-300 mb-2">
             <FaCrown className="text-2xl" />
             <span className="text-sm uppercase tracking-[0.18em]">Final Protocol</span>
           </div>
-          <h2 className="text-5xl md:text-7xl font-black tracking-tight" style={{ fontFamily: 'Torus, sans-serif' }}>
+          <h2 className="text-5xl md:text-7xl font-black" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
             决赛
           </h2>
         </div>
-        <div className="text-right">
-          <p className="text-6xl md:text-8xl font-black text-white leading-none tabular-nums" style={{ fontFamily: 'Torus, sans-serif' }}>2</p>
+        <div className="min-w-48 border-l border-white/10 text-left">
+          <p className="text-6xl md:text-8xl font-black text-white leading-none tabular-nums" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>2</p>
           <p className="text-lg md:text-2xl text-zinc-400">进 1 · {stage4.secretRevealed ? '最终挑战' : '4 首公开曲目'}</p>
         </div>
       </div>
 
       {/* P1 vs P2 总览 */}
       <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-4">
-        <div className="rounded-2xl border border-sky-400/20 bg-white/[0.045] p-6">
+        <div className="msc-panel border-l-2 border-l-sky-300 p-6">
           <span className="text-sm text-sky-300/80 uppercase tracking-[0.18em]">P1</span>
-          <p className="text-4xl md:text-6xl font-black text-white mt-3 truncate" style={{ fontFamily: 'Torus, sans-serif' }}>{stage4.p1?.username || '—'}</p>
+          <p className="text-4xl md:text-6xl font-black text-white mt-3 truncate" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>{stage4.p1?.username || '—'}</p>
         </div>
         <div className="self-center text-3xl md:text-5xl font-black text-zinc-500">VS</div>
-        <div className="rounded-2xl border border-fuchsia-400/20 bg-white/[0.045] p-6 text-right">
-          <span className="text-sm text-fuchsia-300/80 uppercase tracking-[0.18em]">P2</span>
-          <p className="text-4xl md:text-6xl font-black text-white mt-3 truncate" style={{ fontFamily: 'Torus, sans-serif' }}>{stage4.p2?.username || '—'}</p>
+        <div className="msc-panel border-l-2 border-l-orange-300 p-6 text-left">
+          <span className="text-sm text-orange-300/80 uppercase">P2</span>
+          <p className="text-4xl md:text-6xl font-black text-white mt-3 truncate" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>{stage4.p2?.username || '—'}</p>
         </div>
       </div>
 
@@ -145,8 +146,8 @@ export default function Stage4Page() {
       )}
 
       {/* 曲目进度 */}
-      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
-        <h3 className="text-2xl font-bold text-white mb-5" style={{ fontFamily: 'Torus, sans-serif' }}>
+      <div className="border-y border-white/10 py-6">
+        <h3 className="text-2xl font-bold text-white mb-5" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
           曲目进度
         </h3>
         <Motion.div

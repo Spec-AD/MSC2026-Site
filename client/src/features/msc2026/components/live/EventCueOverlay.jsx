@@ -51,7 +51,7 @@ export default function EventCueOverlay({ cue }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ ...MOTION_TRANSITIONS.enter, delay: reduceMotion ? 0 : 0.12 }}
                 className="mt-2 text-4xl md:text-7xl font-black text-white leading-tight break-words"
-                style={{ fontFamily: 'Torus, sans-serif' }}
+                style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}
               >
                 {cue.title}
               </Motion.h2>

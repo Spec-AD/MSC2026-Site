@@ -6,13 +6,14 @@ function hasPendingChallenge(race) {
 
 function getRaceTimerDecision(race, now = Date.now()) {
   if (!race || race.terminated) return { type: 'none' };
+  if (race.status === 'waiting') return { type: 'waiting' };
 
   if (race.totalTimeStartedAt && race.timeLimitMs != null) {
     const totalElapsed = now - new Date(race.totalTimeStartedAt).getTime();
     if (totalElapsed >= race.timeLimitMs) return { type: 'map_timeout' };
   }
 
-  if (hasPendingChallenge(race) || !race.turnStartedAt) {
+  if (race.status === 'adjudicating' || (!race.status && hasPendingChallenge(race)) || !race.turnStartedAt) {
     return { type: 'turn_paused' };
   }
 

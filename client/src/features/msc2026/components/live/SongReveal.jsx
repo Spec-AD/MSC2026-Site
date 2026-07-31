@@ -47,7 +47,7 @@ export default function SongReveal({ play, label, order }) {
             <p className="text-xs md:text-sm font-bold uppercase tracking-[0.18em] text-amber-300/75">
               {label || (isRandom ? '系统随机曲目' : '当前曲目')}
             </p>
-            <h3 className="mt-1 text-3xl md:text-5xl font-black text-white truncate" style={{ fontFamily: 'Torus, sans-serif' }}>
+            <h3 className="mt-1 text-3xl md:text-5xl font-black text-white truncate" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
               {meta.title}
             </h3>
             {meta.artist && <p className="mt-1 text-base md:text-xl text-zinc-400 truncate">{meta.artist}</p>}
@@ -55,7 +55,7 @@ export default function SongReveal({ play, label, order }) {
           {order != null && (
             <div className="hidden sm:block shrink-0 text-right">
               <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">TRACK</p>
-              <p className="text-5xl font-black tabular-nums text-zinc-200" style={{ fontFamily: 'Torus, sans-serif' }}>
+              <p className="text-5xl font-black tabular-nums text-zinc-200" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
                 {String(order).padStart(2, '0')}
               </p>
             </div>

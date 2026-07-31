@@ -31,7 +31,7 @@ function ScoreSide({ player, score, side, leading, reduceMotion }) {
         </span>
       )}
       <p className={`text-xs font-bold uppercase tracking-[0.18em] ${accent}`}>{side.toUpperCase()}</p>
-      <h3 className="mt-2 text-2xl md:text-4xl font-black text-white truncate" style={{ fontFamily: 'Torus, sans-serif' }}>
+      <h3 className="mt-2 text-2xl md:text-4xl font-black text-white truncate" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
         {player?.username || '未命名选手'}
       </h3>
       <Motion.p
@@ -39,7 +39,7 @@ function ScoreSide({ player, score, side, leading, reduceMotion }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ ...MOTION_TRANSITIONS.enter, delay: reduceMotion ? 0 : 0.12 }}
         className="mt-6 text-4xl md:text-6xl font-black tabular-nums text-white"
-        style={{ fontFamily: 'Torus, sans-serif' }}
+        style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}
       >
         {Number(score?.achievement || 0).toFixed(4)}<span className="text-xl md:text-2xl text-zinc-500">%</span>
       </Motion.p>
@@ -85,7 +85,7 @@ export default function ScoreDuelResult({ result, onContinue }) {
       >
         <div className="text-center">
           <p className="text-xs md:text-sm font-bold uppercase tracking-[0.2em] text-amber-300">TRACK RESULT</p>
-          <h2 id="msc-track-result-title" className="mt-2 text-3xl md:text-5xl font-black text-white truncate" style={{ fontFamily: 'Torus, sans-serif' }}>
+          <h2 id="msc-track-result-title" className="mt-2 text-3xl md:text-5xl font-black text-white truncate" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
             {result.songTitle || '本曲成绩'}
           </h2>
           <p className="mt-2 text-base md:text-xl text-zinc-400">

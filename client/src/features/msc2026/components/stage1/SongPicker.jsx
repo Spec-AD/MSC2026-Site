@@ -59,10 +59,10 @@ export default function SongPicker({ pool, excludedSongIds = [], pickType, onPic
       className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-6"
     >
       <div className="flex items-end justify-between mb-5 gap-4">
-        <h3 className="text-3xl font-black text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
+        <h3 className="text-3xl font-black text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
           {pickLabel}
         </h3>
-        <span className="text-4xl font-black text-zinc-300 tabular-nums" style={{ fontFamily: 'Torus, sans-serif' }}>{availableSongs.length}<span className="text-lg text-zinc-500 ml-2">首可选</span></span>
+        <span className="text-4xl font-black text-zinc-300 tabular-nums" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>{availableSongs.length}<span className="text-lg text-zinc-500 ml-2">首可选</span></span>
       </div>
 
       <AnimatePresence mode="wait">

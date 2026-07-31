@@ -6,29 +6,29 @@ import {
   Flag, Footprints, Hand, List, RotateCcw, ShieldAlert, SkipForward, Timer, Trophy, X,
 } from 'lucide-react';
 import RaceMap3D from '../components/race/RaceMap3D';
-import { ITEMS_SIGH, ITEMS_WALLS } from '../constants/gameData';
+import { ITEMS_SIGH, ITEMS_WALLS } from '../constants/publicGameData';
 import { EASE_ACCEL } from '../utils/motion';
 
 const STEPS = [
   {
     key: 'goal', eyebrow: '01 / OBJECTIVE', title: '从顶点抵达中心',
     body: '每名选手只沿自己的顶点到中心这条直线移动。六边形轮次前四名晋级，正方形轮次前两名晋级。',
-    points: ['起点坐标为 0', '通过两面墙后自动抵达中心坐标 3', '终点名次按实际抵达顺序记录'],
+    points: ['起点坐标为 0', '通过两面墙后自动抵达中心坐标 3', '同圈抵达时优先比较完成用时与比赛数据'],
   },
   {
     key: 'turn', eyebrow: '02 / TURN', title: '每回合只选择一种行动',
-    body: '轮到你时，可以前进、拾取相邻区域的隐藏道具，或主动跳过。裁判大屏会明确显示当前行动选手。',
-    points: ['前进：遇墙时进入挑战', '拾取：立即结束本回合', '跳过：不移动并交给下一位'],
+    body: '轮到你时，可以前进、拾取相邻区域的隐藏道具，或什么都不做。每人行动一次构成一圈，下一圈采用本圈的完整倒序。',
+    points: ['前进：遇墙时登记挑战', '拾取：登记区域并结束行动', '下一圈：本圈第一位改为最后一位'],
   },
   {
     key: 'wall', eyebrow: '03 / WALL', title: '墙壁必须由挑战击破',
-    body: '第一面墙从 33 项挑战中无重复抽取；第二面墙是阶段固定挑战。成功后通过，失败则退回墙前坐标。',
-    points: ['裁判人工确认成功或失败', '道具可以改变本次挑战条件', '结果有误时只能在后续人工行动前撤回'],
+    body: '第一面墙从 33 项挑战中优先无重复抽取；整池用完会重新洗牌继续使用。所有人完成本圈行动后，裁判再统一确认成功或失败。',
+    points: ['本圈结束前不会提前推进或后退', '道具可以改变本次挑战条件', '第二面墙仍使用阶段固定挑战'],
   },
   {
     key: 'item', eyebrow: '04 / ITEM', title: '道具隐藏在相邻三角区域',
-    body: '每位选手只可拾取起始射线两侧的区域。拾取时其他人看不到道具内容，持有者可在自己的操作界面查看。',
-    points: ['拾取道具消耗本回合', '主动使用普通道具不消耗回合', '双面道具失败时可能触发惩罚'],
+    body: '每位选手只可申请起始射线两侧的区域。所有申请在圈末统一随机匹配并发放，避免先手先拿走同一区域道具。',
+    points: ['拾取申请消耗本次行动', '圈末发放后仅持有者可见内容', '主动使用普通道具不消耗行动'],
   },
   {
     key: 'ranking', eyebrow: '05 / TIMEOUT', title: '时间到也会产生明确排名',
@@ -104,9 +104,9 @@ function MapDemo({ square = false }) {
 
 function TurnDemo() {
   const actions = [
-    { icon: <Footprints className="h-10 w-10" />, label: '前进一步', note: '遇墙时抽取挑战', color: 'border-cyan-300/45 text-cyan-100' },
-    { icon: <Hand className="h-10 w-10" />, label: '拾取道具', note: '拾取后结束回合', color: 'border-amber-300/45 text-amber-100' },
-    { icon: <SkipForward className="h-10 w-10" />, label: '跳过行动', note: '保持当前位置', color: 'border-white/20 text-zinc-200' },
+    { icon: <Footprints className="h-10 w-10" />, label: '前进一步', note: '挑战留到圈末判定', color: 'border-cyan-300/45 text-cyan-100' },
+    { icon: <Hand className="h-10 w-10" />, label: '拾取道具', note: '圈末统一随机发放', color: 'border-amber-300/45 text-amber-100' },
+    { icon: <SkipForward className="h-10 w-10" />, label: '什么都不做', note: '保持当前位置', color: 'border-white/20 text-zinc-200' },
   ];
   return <div className="grid min-h-[430px] content-center gap-4 p-6 md:grid-cols-3 md:p-10">{actions.map(({ icon, label, note, color }, index) => <Motion.div key={label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08 }} className={`border-t-4 bg-black/25 p-6 ${color}`}>{icon}<p className="mt-8 text-3xl font-black">{label}</p><p className="mt-3 text-lg text-zinc-400">{note}</p></Motion.div>)}</div>;
 }

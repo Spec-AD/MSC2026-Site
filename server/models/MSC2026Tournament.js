@@ -74,7 +74,8 @@ const RacePlayerSchema = new Schema({
   challengeFailureCount: { type: Number, min: 0, default: 0 },
   successfulChallengeAchievementTotal: { type: Number, min: 0, default: 0 },
   successfulChallengeCount: { type: Number, min: 0, default: 0 },
-  cumulativeDxScore: { type: Number, min: 0, default: 0 }
+  cumulativeDxScore: { type: Number, min: 0, default: 0 },
+  finishedRound: { type: Number, default: null }
 });
 
 // ── 跑图回合日志 ──
@@ -105,11 +106,18 @@ const ChallengeLogSchema = new Schema({
   resultSnapshot: { type: Schema.Types.Mixed, default: null },
   rollbackSnapshot: { type: Schema.Types.Mixed, default: null },
   // patch-02 P1-R1: 本次挑战绑定的 armed 道具引用，失败时仅对此列表触发双面惩罚
-  usedItemRefs: [{ type: Number, default: [] }]
+  usedItemRefs: [{ type: Number, default: [] }],
+  roundNumber: { type: Number, default: 1 },
+  sequence: { type: Number, default: 0 }
 });
 
 // ── 跑图状态（阶段二 & 三共用） ──
 const RaceStateSchema = new Schema({
+  status: {
+    type: String,
+    enum: ['waiting', 'racing', 'adjudicating', 'terminated'],
+    default: 'waiting'
+  },
   mapConfig: {
     shape: { type: String, enum: ['hexagon', 'square'] },
     layers: { type: Number },
@@ -121,6 +129,10 @@ const RaceStateSchema = new Schema({
   turnStartedAt: { type: Date },
   currentPlayerIndex: { type: Number },
   currentTurn: { type: Number, default: 0 },
+  roundNumber: { type: Number, default: 1 },
+  roundPosition: { type: Number, default: 0 },
+  turnOrder: [{ type: Number }],
+  pendingRoundActions: [{ type: Schema.Types.Mixed }],
   players: [RacePlayerSchema],
   actionLog: [ActionLogSchema],
   challengeHistory: [ChallengeLogSchema],
@@ -133,6 +145,7 @@ const RaceStateSchema = new Schema({
     used: [Number],
     remaining: [Number],
     fallbackCount: { type: Number, default: 0 },
+    cycle: { type: Number, default: 1 },
     // patch-02: 持久化补充任务信息（不再依赖运行时 _taskMap）
     fallbackTasks: [{ type: Schema.Types.Mixed }]
   },

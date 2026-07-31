@@ -124,10 +124,12 @@ async function initRace(tournament, playerIds) {
     [allTaskIds[i], allTaskIds[j]] = [allTaskIds[j], allTaskIds[i]];
   }
 
-  // 随机先手位
-  const firstPlayer = Math.floor(Math.random() * players.length);
+  // 行动顺序与顶点分配独立随机；后续每圈严格倒序。
+  const turnOrder = shuffle(players.map((_, index) => index));
+  const firstPlayer = turnOrder[0];
 
   const raceState = {
+    status: 'waiting',
     mapConfig: {
       shape: config.shape,
       layers: config.layers,
@@ -135,10 +137,14 @@ async function initRace(tournament, playerIds) {
     },
     timeLimitMs: config.timeLimitMs,
     turnTimeLimitMs: config.turnTimeLimitMs,
-    totalTimeStartedAt: new Date(),
-    turnStartedAt: new Date(),                    // P1-1: 首回合立即开始计时
+    totalTimeStartedAt: null,
+    turnStartedAt: null,
     currentPlayerIndex: firstPlayer,
     currentTurn: 0,
+    roundNumber: 1,
+    roundPosition: 0,
+    turnOrder,
+    pendingRoundActions: [],
     players,
     actionLog: [],
     challengeHistory: [],
@@ -147,7 +153,8 @@ async function initRace(tournament, playerIds) {
       used: [],
       remaining: [...allTaskIds],
       fallbackCount: 0,
-      fallbackTasks: []
+      fallbackTasks: [],
+      cycle: 1
     },
     globalEffect: {                               // P0-2: schema 化，不含函数
       sourceItemRef: null,
@@ -170,14 +177,42 @@ async function initRace(tournament, playerIds) {
     playerCount: players.length
   });
 
-  // 推送首个回合
-  broadcast('turn_change', {
-    turn: 0,
-    currentPlayerId: players[firstPlayer].userId.toString(),
-    turnStartedAt: raceState.turnStartedAt
-  });
-
   return raceState;
+}
+
+/** 初始化后由管理员显式开始；开始前地图和席位可供现场核验。 */
+async function startRace(tournament) {
+  const stageKey = tournament.status;
+  const race = tournament[stageKey];
+  if (!race || (stageKey !== 'stage2' && stageKey !== 'stage3')) throw new Error('跑图尚未初始化');
+  if (race.terminated || race.status === 'terminated') throw new Error('地图已终止');
+  if (race.status && race.status !== 'waiting') throw new Error('跑图已经开始');
+  if (!Array.isArray(race.players) || race.players.length === 0) throw new Error('跑图选手为空');
+
+  if (!Array.isArray(race.turnOrder) || race.turnOrder.length !== race.players.length) {
+    race.turnOrder = shuffle(race.players.map((_, index) => index));
+  }
+  race.status = 'racing';
+  race.roundNumber = Math.max(1, Number(race.roundNumber) || 1);
+  race.roundPosition = 0;
+  race.currentPlayerIndex = race.turnOrder[0];
+  race.currentTurn = Math.max(0, Number(race.currentTurn) || 0);
+  race.totalTimeStartedAt = new Date();
+  race.turnStartedAt = new Date();
+  await tournament.save();
+
+  const payload = {
+    stage: stageKey,
+    roundNumber: race.roundNumber,
+    turn: race.currentTurn,
+    currentPlayerId: race.players[race.currentPlayerIndex].userId.toString(),
+    turnStartedAt: race.turnStartedAt,
+    turnOrder: race.turnOrder.map(index => race.players[index].userId.toString())
+  };
+  broadcast('race_started', payload);
+  broadcast('round_started', payload);
+  broadcast('turn_change', payload);
+  return payload;
 }
 
 /**
@@ -197,11 +232,14 @@ async function playerAction(tournament, targetPlayerId, actionType, zoneIndex) {
   const stageKey = tournament.status;
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
+  _ensureRoundState(race);
+  if (race.status === 'waiting') throw new Error('地图已初始化，等待管理员开始');
+  if (race.status === 'adjudicating') throw new Error('本圈行动已结束，请先完成统一判定');
+  if (race.status !== 'racing') throw new Error('跑图当前不可操作');
 
   // 超时检测
   await _checkMapTimeout(tournament, race, stageKey);
   if (race.terminated) throw new Error('地图已终止');
-  if (hasPendingChallenge(race)) throw new Error('当前有待判定挑战，请先由裁判判定成功或失败');
 
   const targetId = targetPlayerId.toString();
 
@@ -251,8 +289,9 @@ async function useItem(tournament, targetPlayerId, itemRef) {
   const stageKey = tournament.status;
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
+  _ensureRoundState(race);
   if (race.terminated) throw new Error('地图已终止');
-  if (hasPendingChallenge(race)) throw new Error('当前有待判定挑战，判定前不可使用道具');
+  if (race.status !== 'racing') throw new Error('仅可在行动阶段使用道具');
 
   const targetId = targetPlayerId.toString();
   itemRef = Number(itemRef);
@@ -409,6 +448,38 @@ async function useItem(tournament, targetPlayerId, itemRef) {
 
 // ── 内部实现 ──
 
+function _ensureRoundState(race) {
+  if (!race.status) {
+    race.status = race.terminated
+      ? 'terminated'
+      : race.totalTimeStartedAt
+        ? (hasPendingChallenge(race) ? 'adjudicating' : 'racing')
+        : 'waiting';
+  }
+  if (!Number.isInteger(race.roundNumber) || race.roundNumber < 1) race.roundNumber = 1;
+  if (!Array.isArray(race.turnOrder) || race.turnOrder.length !== race.players.length) {
+    race.turnOrder = race.players.map((_, index) => index);
+  }
+  if (!Number.isInteger(race.roundPosition) || race.roundPosition < 0) {
+    const position = race.turnOrder.indexOf(race.currentPlayerIndex);
+    race.roundPosition = position >= 0 ? position : 0;
+  }
+  if (!Array.isArray(race.pendingRoundActions)) race.pendingRoundActions = [];
+  if (!race.taskPool) race.taskPool = { used: [], remaining: [], fallbackTasks: [], fallbackCount: 0, cycle: 1 };
+  if (!Number.isInteger(race.taskPool.cycle) || race.taskPool.cycle < 1) race.taskPool.cycle = 1;
+}
+
+function _refillTaskPool(race) {
+  const taskIds = shuffle(CHALLENGE_TASKS.map(task => task.id));
+  const lastDrawn = race.taskPool.used?.[race.taskPool.used.length - 1];
+  if (taskIds.length > 1 && taskIds[taskIds.length - 1] === lastDrawn) {
+    [taskIds[0], taskIds[taskIds.length - 1]] = [taskIds[taskIds.length - 1], taskIds[0]];
+  }
+  race.taskPool.remaining = taskIds;
+  race.taskPool.used = [];
+  race.taskPool.cycle = (Number(race.taskPool.cycle) || 1) + 1;
+}
+
 /**
  * 从任务池中取一个任务（纯函数方式：CHALLENGE_TASKS + fallbackTasks）
  */
@@ -419,7 +490,7 @@ function _drawTask(race, stageKey, wallIndex) {
     return { taskId: task.id, task: { ...task } };
   }
   if (race.taskPool.remaining.length === 0) {
-    throw new Error('第一墙任务池已耗尽；同场任务禁止重复，请由裁判终止并按规则处理');
+    _refillTaskPool(race);
   }
 
   const taskId = race.taskPool.remaining.pop();
@@ -511,7 +582,18 @@ async function _handleAdvance(tournament, race, player, userId) {
     originalChallenge,
     resolvedChallenge,
     activeItemEffects,
-    itemEffectResults
+    itemEffectResults,
+    roundNumber: race.roundNumber,
+    sequence: race.pendingRoundActions.length
+  });
+
+  race.pendingRoundActions.push({
+    playerId: userId.toString(),
+    actionType: 'advance',
+    turn: race.currentTurn,
+    roundNumber: race.roundNumber,
+    taskId,
+    wallIndex
   });
 
   // 记录行动日志
@@ -531,8 +613,7 @@ async function _handleAdvance(tournament, race, player, userId) {
     timestamp: new Date()
   });
 
-  // turnStartedAt 设为 null，等待裁判判定
-  race.turnStartedAt = null;
+  await _advanceTurn(tournament, race);
 
   await tournament.save();
 
@@ -558,7 +639,13 @@ async function _handleAdvance(tournament, race, player, userId) {
       activeItemEffects,
       itemEffectResults
     },
-    turnEnded: false
+    turnEnded: true,
+    queuedForRoundJudgement: true,
+    raceStatus: race.status,
+    roundNumber: race.roundNumber,
+    nextPlayerId: race.status === 'racing'
+      ? race.players[race.currentPlayerIndex].userId.toString()
+      : null
   };
 }
 
@@ -577,23 +664,24 @@ async function _handlePickup(tournament, race, player, zoneIndex) {
   const isValidZone = _isAdjacentZone(player, zoneIndex, zoneCount);
   if (!isValidZone) throw new Error('该区域不可达');
 
-  // 查找未收集道具
-  const availableItem = race.itemsOnMap.find(
-    i => i.zoneIndex === zoneIndex && !i.collected
-  );
-  if (!availableItem) throw new Error('该区域无可用道具');
+  const availableCount = race.itemsOnMap.filter(i => i.zoneIndex === zoneIndex && !i.collected).length;
+  if (availableCount === 0) throw new Error('该区域无可用道具');
 
-  availableItem.collected = true;
-
-  // P1-5: 拾取时 status 统一为 'unused'
-  player.items.push({ itemRef: availableItem.itemRef, status: 'unused' });
+  race.pendingRoundActions.push({
+    playerId: player.userId.toString(),
+    actionType: 'pickup',
+    zoneIndex,
+    turn: race.currentTurn,
+    roundNumber: race.roundNumber,
+    resolved: false
+  });
 
   // 记录日志
   race.actionLog.push({
     playerId: player.userId,
     turn: race.currentTurn,
     actionType: 'pickup',
-    detail: { itemRef: availableItem.itemRef, zoneIndex },
+    detail: { zoneIndex, pendingRoundSettlement: true },
     timestamp: new Date()
   });
 
@@ -602,22 +690,25 @@ async function _handlePickup(tournament, race, player, zoneIndex) {
 
   await tournament.save();
 
-  broadcast('item_collected', {
+  broadcast('item_pickup_queued', {
     playerId: player.userId.toString(),
-    zoneIndex
+    zoneIndex,
+    roundNumber: race.roundNumber
   });
 
   return {
     action: 'pickup',
     item: {
       hidden: true,
-      name: '隐藏道具',
+      name: '拾取申请已登记',
       type: 'hidden',
-      description: '道具内容仅对持有选手可见'
+      description: '本圈全部行动结束后统一随机发放，道具内容仅对持有选手可见'
     },
     zoneIndex,
     turnEnded: true,
-    nextPlayerId: race.players[race.currentPlayerIndex].userId.toString()
+    raceStatus: race.status,
+    roundNumber: race.roundNumber,
+    nextPlayerId: race.status === 'racing' ? race.players[race.currentPlayerIndex].userId.toString() : null
   };
 }
 
@@ -628,14 +719,15 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
   const stageKey = tournament.status;
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
+  _ensureRoundState(race);
 
   await _checkMapTimeout(tournament, race, stageKey);
   if (race.terminated) throw new Error('地图已终止');
+  if (race.status !== 'adjudicating') throw new Error('尚未进入本圈统一判定阶段');
   if (typeof passed !== 'boolean') throw new Error('passed 必须是布尔值');
 
-  // 找最后一个待判定的挑战（数组末尾即为最近插入）
-  const pendingChallenges = race.challengeHistory.filter(ch => ch.passed === null);
-  const lastChallenge = pendingChallenges[pendingChallenges.length - 1];
+  // 按本圈行动顺序逐一录入，但直到全部录入完成才开启下一圈。
+  const lastChallenge = _nextPendingChallenge(race);
 
   if (!lastChallenge) throw new Error('无待判定的挑战');
 
@@ -655,9 +747,10 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
       currentLayer: player.currentLayer,
       silentUntilTurn: player.silentUntilTurn,
       disableItemsUntilTurn: player.disableItemsUntilTurn,
-      finishOrder: player.finishOrder,
-      finishTimestamp: player.finishTimestamp,
-      challengeFailureCount: player.challengeFailureCount,
+       finishOrder: player.finishOrder,
+       finishTimestamp: player.finishTimestamp,
+       finishedRound: player.finishedRound,
+       challengeFailureCount: player.challengeFailureCount,
       successfulChallengeAchievementTotal: player.successfulChallengeAchievementTotal,
       successfulChallengeCount: player.successfulChallengeCount,
       cumulativeDxScore: player.cumulativeDxScore
@@ -669,8 +762,13 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
       terminated: race.terminated,
       terminatedReason: race.terminatedReason,
       finishOrder: race.finishOrder.map(entry => entry.toObject ? entry.toObject() : { ...entry }),
-      globalEffect: race.globalEffect?.toObject ? race.globalEffect.toObject() : { ...race.globalEffect },
-      actionLogLength: race.actionLog.length
+       globalEffect: race.globalEffect?.toObject ? race.globalEffect.toObject() : { ...race.globalEffect },
+       actionLogLength: race.actionLog.length,
+       status: race.status,
+       roundNumber: race.roundNumber,
+       roundPosition: race.roundPosition,
+       turnOrder: [...race.turnOrder],
+       pendingRoundActions: race.pendingRoundActions.map(action => action?.toObject ? action.toObject() : { ...action })
     },
     qualifiedIds: stageKey === 'stage2'
       ? (tournament.qualifiedStage2 || []).map(String)
@@ -719,40 +817,10 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
       const breachedWallIndex = wallCount - 1;
       // 自动推进到中心坐标（stage2 → 3，stage3 → 2）
       player.currentLayer = race.mapConfig.layers;
-      const order = race.finishOrder.length + 1;
-      player.finishOrder = order;
-      player.finishTimestamp = Date.now();
-      race.finishOrder.push({
-        userId: player.userId,
-        finishTimestamp: player.finishTimestamp,
-        order
-      });
-
-      broadcast('player_moved', {
-        playerId: lastChallenge.playerId.toString(),
-        fromLayer: breachedWallIndex,
-        toLayer: player.currentLayer,
-        wallIndex: breachedWallIndex,
-        wallLabel,
-        reachedEnd: true,
-        finishOrder: order
-      });
-
-      // 检查是否足够晋级
-      const config = RACE_CONFIGS[stageKey];
-      if (race.finishOrder.length >= config.advanceCount) {
-        await _terminateRace(tournament, race, stageKey, 'all_qualified');
-        return {
-          passed: true,
-          wallLabel,
-          wallBreached: true,
-          newLayer: player.currentLayer,
-          reachedEnd: true,
-          finishOrder: order,
-          raceTerminated: true,
-          qualifiedIds: race.finishOrder.map(f => f.userId.toString())
-        };
-      }
+      player.finishedRound = race.roundNumber;
+      player.finishTimestamp = Number.isFinite(Number(resultSnapshot?.completionMs))
+        ? Number(resultSnapshot.completionMs)
+        : null;
     } else {
       broadcast('player_moved', {
         playerId: lastChallenge.playerId.toString(),
@@ -831,8 +899,17 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
     });
   }
 
-  // 推进回合
-  await _advanceTurn(tournament, race);
+  const remainingChallenge = _activatePendingChallenge(race);
+  let raceTerminated = false;
+  if (!remainingChallenge) {
+    raceTerminated = await _settleRoundAndContinue(tournament, race, stageKey);
+  } else {
+    broadcast('challenge_queue_advanced', {
+      roundNumber: race.roundNumber,
+      currentPlayerId: remainingChallenge.playerId.toString(),
+      remainingCount: race.challengeHistory.filter(ch => ch.passed === null && Number(ch.roundNumber || 1) === race.roundNumber).length
+    });
+  }
 
   await tournament.save();
 
@@ -843,9 +920,54 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
     newLayer: player.currentLayer,
     bounceBack: !passed,
     penaltiesApplied,
-    nextPlayerId: race.players[race.currentPlayerIndex].userId.toString(),
-    nextTurn: race.currentTurn
+    nextPlayerId: raceTerminated ? null : race.players[race.currentPlayerIndex]?.userId?.toString(),
+    nextTurn: race.currentTurn,
+    roundNumber: race.roundNumber,
+    raceStatus: race.status,
+    raceTerminated,
+    remainingJudgements: race.challengeHistory.filter(ch => ch.passed === null && Number(ch.roundNumber || 1) === race.roundNumber).length
   };
+}
+
+function _roundFinisherComparator(a, b) {
+  const aTime = Number.isFinite(Number(a.finishTimestamp)) ? Number(a.finishTimestamp) : Number.POSITIVE_INFINITY;
+  const bTime = Number.isFinite(Number(b.finishTimestamp)) ? Number(b.finishTimestamp) : Number.POSITIVE_INFINITY;
+  if (aTime !== bTime) return aTime - bTime;
+  if ((a.challengeFailureCount || 0) !== (b.challengeFailureCount || 0)) {
+    return (a.challengeFailureCount || 0) - (b.challengeFailureCount || 0);
+  }
+  const aAverage = a.successfulChallengeCount ? a.successfulChallengeAchievementTotal / a.successfulChallengeCount : 0;
+  const bAverage = b.successfulChallengeCount ? b.successfulChallengeAchievementTotal / b.successfulChallengeCount : 0;
+  if (aAverage !== bAverage) return bAverage - aAverage;
+  if ((a.cumulativeDxScore || 0) !== (b.cumulativeDxScore || 0)) return (b.cumulativeDxScore || 0) - (a.cumulativeDxScore || 0);
+  return (a.startVertex || 0) - (b.startVertex || 0);
+}
+
+async function _settleRoundAndContinue(tournament, race, stageKey) {
+  const finishers = race.players
+    .filter(player => player.finishOrder == null && Number(player.finishedRound) === race.roundNumber)
+    .sort(_roundFinisherComparator);
+
+  for (const player of finishers) {
+    const order = race.finishOrder.length + 1;
+    player.finishOrder = order;
+    race.finishOrder.push({ userId: player.userId, finishTimestamp: player.finishTimestamp ?? Date.now(), order });
+    broadcast('player_moved', {
+      playerId: player.userId.toString(),
+      toLayer: player.currentLayer,
+      reachedEnd: true,
+      finishOrder: order,
+      roundNumber: race.roundNumber
+    });
+  }
+
+  const config = RACE_CONFIGS[stageKey];
+  if (race.finishOrder.length >= config.advanceCount) {
+    await _terminateRace(tournament, race, stageKey, 'all_qualified');
+    return true;
+  }
+  await _startNextRound(tournament, race);
+  return false;
 }
 
 /**
@@ -855,8 +977,9 @@ async function skipTurn(tournament, reason = 'skip_manual') {
   const stageKey = tournament.status;
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
+  _ensureRoundState(race);
   if (race.terminated) throw new Error('地图已终止');
-  if (hasPendingChallenge(race)) throw new Error('当前有待判定挑战，不能跳过回合');
+  if (race.status !== 'racing') throw new Error('当前不在行动阶段');
 
   return await _skipTurn(tournament, race, reason, race.players[race.currentPlayerIndex].userId);
 }
@@ -864,6 +987,14 @@ async function skipTurn(tournament, reason = 'skip_manual') {
 async function _skipTurn(tournament, race, reason, userId) {
   const currentPlayer = race.players[race.currentPlayerIndex];
   const skippedTurn = race.currentTurn;
+
+  race.pendingRoundActions.push({
+    playerId: currentPlayer.userId.toString(),
+    actionType: 'skip',
+    reason,
+    turn: race.currentTurn,
+    roundNumber: race.roundNumber
+  });
 
   race.actionLog.push({
     playerId: currentPlayer.userId,
@@ -880,32 +1011,165 @@ async function _skipTurn(tournament, race, reason, userId) {
     playerId: userId.toString(),
     turn: skippedTurn,
     nextTurn: race.currentTurn,
-    nextPlayerId: race.players[race.currentPlayerIndex].userId.toString(),
+    nextPlayerId: race.status === 'racing' ? race.players[race.currentPlayerIndex].userId.toString() : null,
     reason
   });
 
-  return { nextPlayerId: race.players[race.currentPlayerIndex].userId.toString(), turn: race.currentTurn };
+  return {
+    nextPlayerId: race.status === 'racing' ? race.players[race.currentPlayerIndex].userId.toString() : null,
+    turn: race.currentTurn,
+    roundNumber: race.roundNumber,
+    raceStatus: race.status
+  };
 }
 
 /**
- * 推进到下一玩家回合
+ * 圈末统一发放道具。同一区域按服务端随机顺序匹配，结果写回行动日志。
  */
-async function _advanceTurn(tournament, race, skipAllFinished = false) {
-  const playerCount = race.players.length;
-  if (playerCount <= 0) throw new Error('跑图选手为空');
-  let attempts = 0;
+function _resolveRoundPickups(race) {
+  const intents = race.pendingRoundActions.filter(action => action.actionType === 'pickup' && !action.resolved);
+  const events = [];
+  const zones = [...new Set(intents.map(action => action.zoneIndex))];
 
-  do {
-    race.currentPlayerIndex = (race.currentPlayerIndex + 1) % playerCount;
-    race.currentTurn++;
-    attempts++;
+  for (const zoneIndex of zones) {
+    const claimants = shuffle(intents.filter(action => action.zoneIndex === zoneIndex));
+    const availableItems = shuffle(race.itemsOnMap.filter(item => item.zoneIndex === zoneIndex && !item.collected));
+    claimants.forEach((claim, index) => {
+      claim.resolved = true;
+      const item = availableItems[index];
+      const player = race.players.find(entry => entry.userId.toString() === String(claim.playerId));
+      const log = [...race.actionLog].reverse().find(entry =>
+        entry.actionType === 'pickup' &&
+        entry.turn === claim.turn &&
+        entry.playerId.toString() === String(claim.playerId)
+      );
+      if (!item || !player) {
+        claim.allocated = false;
+        if (log) log.detail = { zoneIndex, allocated: false };
+        return;
+      }
+      item.collected = true;
+      player.items.push({ itemRef: item.itemRef, status: 'unused' });
+      claim.allocated = true;
+      claim.itemRef = item.itemRef;
+      if (log) log.detail = { zoneIndex, itemRef: item.itemRef, allocated: true };
+      events.push({ playerId: player.userId.toString(), zoneIndex });
+    });
+  }
+  return events;
+}
 
-    const nextPlayer = race.players[race.currentPlayerIndex];
+function _nextPendingChallenge(race) {
+  return race.challengeHistory.find(challenge =>
+    challenge.passed === null && Number(challenge.roundNumber || 1) === Number(race.roundNumber || 1)
+  ) || null;
+}
 
-    // 跳过已到终点的
-    if (nextPlayer.finishOrder != null) continue;
+function _activatePendingChallenge(race) {
+  const pending = _nextPendingChallenge(race);
+  if (!pending) return null;
+  const playerIndex = race.players.findIndex(player => player.userId.toString() === pending.playerId.toString());
+  if (playerIndex >= 0) race.currentPlayerIndex = playerIndex;
+  race.status = 'adjudicating';
+  race.turnStartedAt = null;
+  return pending;
+}
 
-    // 跳过被静默的
+async function _closeRound(tournament, race) {
+  const pickupEvents = _resolveRoundPickups(race);
+  pickupEvents.forEach(event => broadcast('item_collected', { ...event, roundNumber: race.roundNumber }));
+
+  const pending = _activatePendingChallenge(race);
+  if (pending) {
+    broadcast('round_adjudication', {
+      roundNumber: race.roundNumber,
+      pendingCount: race.challengeHistory.filter(ch => ch.passed === null && Number(ch.roundNumber || 1) === race.roundNumber).length,
+      currentPlayerId: pending.playerId.toString()
+    });
+    return;
+  }
+  await _startNextRound(tournament, race);
+}
+
+function _isPlayerAvailable(race, player) {
+  const finishLayer = Number(race.mapConfig?.layers ?? Number.POSITIVE_INFINITY);
+  return player && player.finishOrder == null && Number(player.currentLayer || 0) < finishLayer;
+}
+
+async function _startNextRound(tournament, race) {
+  const activePlayers = race.players.filter(player => _isPlayerAvailable(race, player));
+  if (activePlayers.length === 0) {
+    await _terminateRace(tournament, race, tournament.status, 'no_active_players');
+    return;
+  }
+
+  race.roundNumber += 1;
+  race.turnOrder = [...race.turnOrder].reverse();
+  race.roundPosition = 0;
+  race.pendingRoundActions = [];
+  race.status = 'racing';
+
+  while (race.roundPosition < race.turnOrder.length) {
+    const playerIndex = race.turnOrder[race.roundPosition];
+    const player = race.players[playerIndex];
+    if (!_isPlayerAvailable(race, player)) {
+      race.roundPosition += 1;
+      continue;
+    }
+    if (player.silentUntilTurn != null && race.currentTurn <= player.silentUntilTurn) {
+      race.actionLog.push({
+        playerId: player.userId,
+        turn: race.currentTurn,
+        actionType: 'skip_timeout',
+        detail: { reason: 'silent' },
+        timestamp: new Date()
+      });
+      race.pendingRoundActions.push({
+        playerId: player.userId.toString(), actionType: 'skip', reason: 'silent',
+        turn: race.currentTurn, roundNumber: race.roundNumber
+      });
+      race.currentTurn += 1;
+      race.roundPosition += 1;
+      continue;
+    }
+    race.currentPlayerIndex = playerIndex;
+    race.turnStartedAt = new Date();
+    break;
+  }
+
+  if (race.roundPosition >= race.turnOrder.length) {
+    await _closeRound(tournament, race);
+    return;
+  }
+
+  if (race.globalEffect && race.globalEffect.sourceItemRef != null && race.currentTurn > race.globalEffect.endsAtTurn) {
+    race.globalEffect = { sourceItemRef: null, startsAtTurn: null, endsAtTurn: null };
+  }
+
+  const payload = {
+    roundNumber: race.roundNumber,
+    turn: race.currentTurn,
+    currentPlayerId: race.players[race.currentPlayerIndex].userId.toString(),
+    turnStartedAt: race.turnStartedAt,
+    turnOrder: race.turnOrder.map(index => race.players[index].userId.toString())
+  };
+  broadcast('round_started', payload);
+  broadcast('turn_change', payload);
+}
+
+/** 推进当前圈；圈末进入统一结算，下一圈使用本圈完整倒序。 */
+async function _advanceTurn(tournament, race) {
+  if (!Array.isArray(race.turnOrder) || race.turnOrder.length === 0) throw new Error('跑图行动顺序为空');
+  race.currentTurn += 1;
+  race.roundPosition += 1;
+
+  while (race.roundPosition < race.turnOrder.length) {
+    const playerIndex = race.turnOrder[race.roundPosition];
+    const nextPlayer = race.players[playerIndex];
+    if (!_isPlayerAvailable(race, nextPlayer)) {
+      race.roundPosition += 1;
+      continue;
+    }
     if (nextPlayer.silentUntilTurn != null && race.currentTurn <= nextPlayer.silentUntilTurn) {
       race.actionLog.push({
         playerId: nextPlayer.userId,
@@ -914,32 +1178,27 @@ async function _advanceTurn(tournament, race, skipAllFinished = false) {
         detail: { reason: 'silent' },
         timestamp: new Date()
       });
+      race.pendingRoundActions.push({
+        playerId: nextPlayer.userId.toString(), actionType: 'skip', reason: 'silent',
+        turn: race.currentTurn, roundNumber: race.roundNumber
+      });
+      race.currentTurn += 1;
+      race.roundPosition += 1;
       continue;
     }
-
+    race.currentPlayerIndex = playerIndex;
     race.turnStartedAt = new Date();
-    break;
-  } while (attempts < playerCount * 2);
-
-  // 所有人都到达终点或全部被静默 → 终止
-  const activePlayers = race.players.filter(
-    p => p.finishOrder == null && !(p.silentUntilTurn != null && race.currentTurn <= p.silentUntilTurn)
-  );
-  if (activePlayers.length === 0) {
-    await _terminateRace(tournament, race, tournament.status, 'no_active_players');
+    broadcast('turn_change', {
+      roundNumber: race.roundNumber,
+      turn: race.currentTurn,
+      currentPlayerId: nextPlayer.userId.toString(),
+      turnStartedAt: race.turnStartedAt
+    });
     return;
   }
 
-  // P0-2: 清除过期的全局效果
-  if (race.globalEffect && race.globalEffect.sourceItemRef != null && race.currentTurn > race.globalEffect.endsAtTurn) {
-    race.globalEffect = { sourceItemRef: null, startsAtTurn: null, endsAtTurn: null };
-  }
-
-  broadcast('turn_change', {
-    turn: race.currentTurn,
-    currentPlayerId: race.players[race.currentPlayerIndex].userId.toString(),
-    turnStartedAt: race.turnStartedAt
-  });
+  race.turnStartedAt = null;
+  await _closeRound(tournament, race);
 }
 
 /**
@@ -961,6 +1220,7 @@ async function processRaceTimersUnlocked(tournament, now = Date.now()) {
   const stageKey = tournament.status;
   const race = tournament[stageKey];
   if (!race || (stageKey !== 'stage2' && stageKey !== 'stage3')) return { type: 'none' };
+  _ensureRoundState(race);
 
   const decision = getRaceTimerDecision(race, now);
   if (decision.type === 'map_timeout') {
@@ -991,6 +1251,8 @@ async function _terminateRace(tournament, race, stageKey, reason) {
   }
   race.terminated = true;
   race.terminatedReason = reason;
+  race.status = 'terminated';
+  race.turnStartedAt = null;
 
   const config = RACE_CONFIGS[stageKey];
   const rankings = calculateRaceRankings(race.players);
@@ -1058,7 +1320,7 @@ async function _peekChallenge(race, player) {
     return fixed ? { ...snapshotChallenge(fixed, fixed.id), wallLabel: race.mapConfig.wallLabels[wallIndex] } : null;
   }
   if (race.taskPool.remaining.length === 0) {
-    return null;
+    _refillTaskPool(race);
   }
   const nextTaskId = race.taskPool.remaining[race.taskPool.remaining.length - 1];
 
@@ -1085,6 +1347,7 @@ function getRaceConfig(stageKey) {
 
 module.exports = {
   initRace,
+  startRace,
   currentRace,
   playerAction,
   useItem,
@@ -1096,5 +1359,6 @@ module.exports = {
   RACE_CONFIGS,
   // 内部导出以支持测试
   getTaskById,
-  getFallbackTask
+  getFallbackTask,
+  _drawTask
 };

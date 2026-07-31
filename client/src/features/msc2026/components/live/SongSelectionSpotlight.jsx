@@ -199,7 +199,7 @@ export default function SongSelectionSpotlight({ song, onClose, pickLabel }) {
               <AnimatePresence>
                 {!detailsVisible && (
                   <Motion.div exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15, ease: EASE_ACCEL }} className="absolute inset-x-[-12vw] top-full mt-4 text-center">
-                    <h2 id="msc-song-spotlight-title" className="truncate text-3xl font-black text-white md:text-5xl" style={{ fontFamily: 'Torus, sans-serif', letterSpacing: 0 }}>{song.title || '未命名曲目'}</h2>
+                    <h2 id="msc-song-spotlight-title" className="truncate text-3xl font-black text-white md:text-5xl" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif', letterSpacing: 0 }}>{song.title || '未命名曲目'}</h2>
                     {bpm && <p className="mt-2 font-mono text-sm font-bold text-amber-200/75">BPM {bpm}</p>}
                   </Motion.div>
                 )}
@@ -215,7 +215,7 @@ export default function SongSelectionSpotlight({ song, onClose, pickLabel }) {
                 >
                   <div className="flex items-start justify-between gap-5">
                     <div className="min-w-0">
-                      <h2 id="msc-song-spotlight-title" className="text-3xl font-black text-white md:text-5xl" style={{ fontFamily: 'Torus, sans-serif', letterSpacing: 0 }}>{song.title || '未命名曲目'}</h2>
+                      <h2 id="msc-song-spotlight-title" className="text-3xl font-black text-white md:text-5xl" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif', letterSpacing: 0 }}>{song.title || '未命名曲目'}</h2>
                       <p className="mt-2 text-lg font-bold text-zinc-300 md:text-2xl">{artist}</p>
                     </div>
                     <div className={`shrink-0 border px-4 py-3 text-center ${DIFFICULTY_STYLES[difficultyName] || DIFFICULTY_STYLES.MASTER}`}>

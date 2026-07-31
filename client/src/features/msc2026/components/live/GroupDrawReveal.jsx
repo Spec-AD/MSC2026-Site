@@ -50,7 +50,7 @@ export default function GroupDrawReveal({ group, onComplete }) {
           <Shuffle className="h-9 w-9" />
         </Motion.div>
         <p className="mt-7 text-lg font-black text-zinc-500">GROUP DRAW / {String(group.order + 1).padStart(2, '0')}</p>
-        <h1 className="mt-2 text-5xl font-black md:text-8xl" style={{ fontFamily: 'Torus, sans-serif' }}>
+        <h1 className="mt-2 text-5xl font-black md:text-8xl" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
           {revealed ? `第 ${group.order + 1} 组` : '抽签进行中'}
         </h1>
 
@@ -66,7 +66,7 @@ export default function GroupDrawReveal({ group, onComplete }) {
                 className={`min-w-0 border p-5 md:p-9 ${index === 0 ? 'border-sky-400/35 bg-sky-500/10' : 'border-fuchsia-400/35 bg-fuchsia-500/10'}`}
               >
                 <p className={`text-2xl font-black ${index === 0 ? 'text-sky-300' : 'text-fuchsia-300'}`}>{side.toUpperCase()}</p>
-                <p className="mt-3 truncate text-3xl font-black md:text-6xl" style={{ fontFamily: 'Torus, sans-serif' }}>
+                <p className="mt-3 truncate text-3xl font-black md:text-6xl" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
                   {revealed ? player?.username || '待确认' : '---'}
                 </p>
               </Motion.div>

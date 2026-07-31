@@ -27,19 +27,19 @@ function PlayerCard({ player, isWinner }) {
 
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all
+      className={`flex min-h-20 items-center gap-3 border-l-2 px-4 py-3 transition-colors
         ${isWinner
-          ? 'border-amber-500/30 bg-amber-500/5 ring-1 ring-amber-500/10'
+          ? 'border-l-amber-300 bg-amber-500/5'
           : isEliminated
-            ? 'border-white/5 bg-zinc-800/20 opacity-50'
+            ? 'border-l-zinc-700 bg-zinc-800/20 opacity-50'
             : isFinished
-              ? 'border-green-500/20 bg-green-500/5'
-              : 'border-white/5 bg-zinc-800/40 hover:border-white/10 hover:bg-zinc-800/60'
+              ? 'border-l-emerald-400 bg-emerald-500/5'
+              : 'border-l-sky-300/35 bg-zinc-800/40 hover:bg-zinc-800/60'
         }`}
     >
       <div className="w-20 flex-shrink-0 border-r border-white/10 pr-3">
         <span className="block text-[10px] text-zinc-500 font-black uppercase tracking-wider">NO.</span>
-        <span className="block text-3xl leading-none font-black text-white font-mono">{drawToken}</span>
+        <span className="msc-display block text-3xl leading-none font-black text-white">{drawToken}</span>
       </div>
 
       {/* 头像 */}
@@ -105,9 +105,9 @@ export default function PlayerList({ players = [], winner }) {
   const eliminated = players.filter((p) => p.inStage1 && !p.isQualifiedStage1).length;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5">
+    <div className="msc-panel p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-black text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
+        <h3 className="text-3xl font-black text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
           参赛选手
         </h3>
         <div className="flex items-center gap-3 text-sm font-bold text-zinc-500">

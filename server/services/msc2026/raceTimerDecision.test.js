@@ -39,6 +39,15 @@ test('pauses only the turn timer while a challenge is pending', () => {
   assert.equal(decision.type, 'turn_paused');
 });
 
+test('keeps the next player timer running while challenges queue during a round', () => {
+  const decision = getRaceTimerDecision(race({
+    status: 'racing',
+    turnStartedAt: new Date(NOW - 45_000),
+    challengeHistory: [{ passed: null }]
+  }), NOW);
+  assert.equal(decision.type, 'turn_timeout');
+});
+
 test('does nothing while both timers are within their limits', () => {
   assert.equal(getRaceTimerDecision(race(), NOW).type, 'none');
 });

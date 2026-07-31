@@ -3,7 +3,7 @@
 // ============================================================
 import { create } from 'zustand';
 import * as api from '../api/msc2026Api';
-import { STAGE_CONFIG } from '../constants/gameData';
+import { STAGE_CONFIG } from '../constants/publicGameData';
 import { collectSongs, warmSongCache } from '../utils/songCache';
 
 export const useMSC2026Store = create((set, get) => ({

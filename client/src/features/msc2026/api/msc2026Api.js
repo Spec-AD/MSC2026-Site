@@ -75,6 +75,10 @@ export const resolveStage1Tie = (groupIndex, winnerId) =>
 export const initRace = (data) =>
   axios.post(`${BASE}/race/init`, data, { headers: authHeaders() });
 
+/** 核验席位后显式开始跑图 */
+export const startRace = () =>
+  axios.post(`${BASE}/race/start`, {}, { headers: authHeaders() });
+
 /** 获取跑图全量状态 */
 export const getRaceState = () =>
   axios.get(`${BASE}/race/state`);

@@ -18,6 +18,10 @@ export const useRaceStore = create((set, get) => ({
   currentTurn: 0,
   currentPlayerIndex: -1,
   currentPlayerId: null,
+  roundNumber: 1,
+  roundPosition: 0,
+  turnOrder: [],
+  pendingJudgementCount: 0,
 
   // 选手
   players: [],                    // RacePlayerState[]
@@ -68,11 +72,19 @@ export const useRaceStore = create((set, get) => ({
         currentTurn: data.currentTurn,
         currentPlayerIndex: data.currentPlayerIndex,
         currentPlayerId: data.currentPlayerId,
+        roundNumber: data.roundNumber || 1,
+        roundPosition: data.roundPosition || 0,
+        turnOrder: data.turnOrder || [],
+        pendingJudgementCount: data.pendingJudgementCount || 0,
         players: data.players,
         finishOrder: data.finishOrder || [],
         actionLog: data.actionLog || [],
-        totalRemainingMs: data.totalRemainingMs ?? Math.max(0, (data.timeLimitMs || 0) - (now - (data.totalTimeStartedAt || now))),
-        turnRemainingMs: data.turnRemainingMs ?? Math.max(0, (data.turnTimeLimitMs || 0) - (now - (data.turnStartedAt || now))),
+        totalRemainingMs: data.totalRemainingMs === undefined
+          ? Math.max(0, (data.timeLimitMs || 0) - (now - (data.totalTimeStartedAt || now)))
+          : data.totalRemainingMs,
+        turnRemainingMs: data.turnRemainingMs === undefined
+          ? Math.max(0, (data.turnTimeLimitMs || 0) - (now - (data.turnStartedAt || now)))
+          : data.turnRemainingMs,
         loading: false,
       });
       return data;
@@ -95,6 +107,9 @@ export const useRaceStore = create((set, get) => ({
         currentTurn: data.currentTurn,
         currentPlayerIndex: data.currentPlayerIndex ?? get().currentPlayerIndex,
         currentPlayerId: data.currentPlayerId,
+        roundNumber: data.roundNumber || get().roundNumber,
+        roundPosition: data.roundPosition ?? get().roundPosition,
+        turnOrder: data.turnOrder || get().turnOrder,
       });
       return data;
     } catch (err) {
@@ -109,16 +124,20 @@ export const useRaceStore = create((set, get) => ({
       const data = res.data.data;
 
       if (data.action === 'pickup') {
-        set({ activeItemPickup: data.item, activeChallenge: null });
+        set({ activeItemPickup: data.item, activeChallenge: null, status: data.raceStatus || get().status });
       }
       if (data.action === 'advance' && data.challenge) {
-        set({
-          activeChallenge: { ...data.challenge, pendingJudgement: true },
-          pendingJudgement: true,
-          activeItemPickup: null,
-          turnStartedAt: null,
-          turnRemainingMs: null,
-        });
+        if (data.raceStatus === 'adjudicating') {
+          set({ activeChallenge: null, pendingJudgement: true, activeItemPickup: null, status: 'adjudicating' });
+          await get().fetchChallenge();
+        } else {
+          set({
+            activeChallenge: { ...data.challenge, pendingJudgement: false },
+            pendingJudgement: false,
+            activeItemPickup: null,
+            status: data.raceStatus || get().status,
+          });
+        }
       }
       if (data.turnEnded && data.nextPlayerId) {
         set({ currentPlayerId: data.nextPlayerId });
@@ -126,6 +145,17 @@ export const useRaceStore = create((set, get) => ({
       return data;
     } catch (err) {
       throw err.response?.data || { msg: '行动失败' };
+    }
+  },
+
+  /** 管理员核验席位后开始跑图 */
+  startRace: async () => {
+    try {
+      const res = await api.startRace();
+      await get().fetchRaceState();
+      return res.data.data;
+    } catch (err) {
+      throw err.response?.data || { msg: '开始跑图失败' };
     }
   },
 
@@ -144,7 +174,11 @@ export const useRaceStore = create((set, get) => ({
   fetchChallenge: async () => {
     try {
       const res = await api.getRaceChallenge();
-      set({ activeChallenge: { ...res.data.data, pendingJudgement: true } });
+      set({
+        activeChallenge: res.data.data,
+        pendingJudgement: Boolean(res.data.data.pendingJudgement),
+        status: res.data.data.raceStatus || get().status,
+      });
       return res.data;
     } catch (err) {
       throw err.response?.data || { msg: '获取挑战失败' };
@@ -156,7 +190,12 @@ export const useRaceStore = create((set, get) => ({
     try {
       const res = await api.submitChallengeResult(passed, resultSnapshot);
       const data = res.data.data;
-      set({ activeChallenge: null, pendingJudgement: false });
+      set({
+        activeChallenge: null,
+        pendingJudgement: false,
+        status: data.raceStatus || get().status,
+        pendingJudgementCount: data.remainingJudgements ?? get().pendingJudgementCount,
+      });
       return data;
     } catch (err) {
       throw err.response?.data || { msg: '判定提交失败' };
@@ -246,8 +285,32 @@ export const useRaceStore = create((set, get) => ({
       currentPlayerId: data.currentPlayerId,
       turnStartedAt: data.turnStartedAt,
       turnRemainingMs: get().turnTimeLimitMs,
+      roundNumber: data.roundNumber || get().roundNumber,
+      status: 'racing',
     });
   },
+
+  sseRoundStarted: (data) => set({
+    status: 'racing',
+    roundNumber: data.roundNumber || get().roundNumber,
+    turnOrder: data.turnOrder || get().turnOrder,
+    currentPlayerId: data.currentPlayerId,
+    currentTurn: data.turn ?? get().currentTurn,
+    roundPosition: 0,
+    turnStartedAt: data.turnStartedAt,
+    activeChallenge: null,
+    pendingJudgement: false,
+    pendingJudgementCount: 0,
+  }),
+
+  sseRoundAdjudication: (data) => set({
+    status: 'adjudicating',
+    roundNumber: data.roundNumber || get().roundNumber,
+    currentPlayerId: data.currentPlayerId,
+    turnStartedAt: null,
+    turnRemainingMs: null,
+    pendingJudgementCount: data.pendingCount || 0,
+  }),
 
   /** SSE 事件：更新倒计时 */
   sseTimerTick: (data) => {
@@ -284,6 +347,7 @@ export const useRaceStore = create((set, get) => ({
       timeLimitMs: null, turnTimeLimitMs: null,
       totalTimeStartedAt: null, turnStartedAt: null,
       currentTurn: 0, currentPlayerIndex: -1, currentPlayerId: null,
+      roundNumber: 1, roundPosition: 0, turnOrder: [], pendingJudgementCount: 0,
       players: [], finishOrder: [], itemsOnMap: [], wallsBroken: [],
       actionLog: [], challengeHistory: [],
       activeChallenge: null, pendingJudgement: false,

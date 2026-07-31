@@ -184,9 +184,22 @@ function undoRaceLastAction(race, tournament = null, stageKey = null) {
 
   race.actionLog.pop();
 
-  // 回退回合指针
-  race.currentPlayerIndex = (race.currentPlayerIndex - 1 + race.players.length) % race.players.length;
+  if (Array.isArray(race.pendingRoundActions)) {
+    const pendingIndex = race.pendingRoundActions.findLastIndex(action =>
+      String(action.playerId) === String(lastLog.playerId) && Number(action.turn) === Number(lastLog.turn)
+    );
+    if (pendingIndex >= 0) race.pendingRoundActions.splice(pendingIndex, 1);
+  }
+
+  // 回退到本圈上一行动位；若圈末尚未判定，则重新开放最后一位操作。
+  if (Array.isArray(race.turnOrder) && race.turnOrder.length > 0) {
+    race.roundPosition = Math.max(0, Math.min(race.turnOrder.length - 1, (race.roundPosition || race.turnOrder.length) - 1));
+    race.currentPlayerIndex = race.turnOrder[race.roundPosition];
+  } else {
+    race.currentPlayerIndex = (race.currentPlayerIndex - 1 + race.players.length) % race.players.length;
+  }
   race.currentTurn = Math.max(0, race.currentTurn - 1);
+  race.status = 'racing';
   race.turnStartedAt = new Date();
 }
 
@@ -242,12 +255,18 @@ function undoRaceLastChallengeResult(race, tournament = null, stageKey = null) {
     race.terminatedReason = snapshot.race.terminatedReason;
     race.finishOrder = snapshot.race.finishOrder || [];
     race.globalEffect = snapshot.race.globalEffect || { sourceItemRef: null, startsAtTurn: null, endsAtTurn: null };
+    race.status = snapshot.race.status || 'adjudicating';
+    race.roundNumber = snapshot.race.roundNumber || 1;
+    race.roundPosition = snapshot.race.roundPosition || 0;
+    race.turnOrder = snapshot.race.turnOrder || race.players.map((_, index) => index);
+    race.pendingRoundActions = snapshot.race.pendingRoundActions || [];
     if (tournament && stageKey === 'stage2') tournament.qualifiedStage2 = snapshot.qualifiedIds || [];
     if (tournament && stageKey === 'stage3') tournament.qualifiedStage3 = snapshot.qualifiedIds || [];
   } else {
     const dxScore = Number(lastChallenge.resultSnapshot?.dxScore);
     if (Number.isFinite(dxScore)) player.cumulativeDxScore = Math.max(0, (player.cumulativeDxScore || 0) - dxScore);
     player.currentLayer = Math.max(0, lastChallenge.wallIndex || 0);
+    player.finishedRound = null;
     if (wasPassed) {
       const achievement = Number(lastChallenge.resultSnapshot?.achievement);
       if (Number.isFinite(achievement)) {
@@ -284,15 +303,20 @@ function undoRaceLastChallengeResult(race, tournament = null, stageKey = null) {
 function resetRace(race) {
   // 清空 race 的所有动态数据，保留 mapConfig
   Object.assign(race, {
+    status: 'waiting',
     totalTimeStartedAt: null,
     turnStartedAt: null,
     currentPlayerIndex: 0,
     currentTurn: 0,
+    roundNumber: 1,
+    roundPosition: 0,
+    turnOrder: [],
+    pendingRoundActions: [],
     players: [],
     actionLog: [],
     challengeHistory: [],
     itemsOnMap: [],
-    taskPool: { used: [], remaining: [], fallbackCount: 0, fallbackTasks: [] },
+    taskPool: { used: [], remaining: [], fallbackCount: 0, fallbackTasks: [], cycle: 1 },
     globalEffect: { sourceItemRef: null, startsAtTurn: null, endsAtTurn: null },
     finishOrder: [],
     terminated: false,

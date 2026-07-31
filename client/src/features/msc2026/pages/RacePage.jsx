@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion as Motion, useReducedMotion } from 'framer-motion';
 import { useRaceStore } from '../store';
 import { useMSCSSE } from '../hooks/useSSE';
-import { STAGE_CONFIG, getItemDef } from '../constants/gameData';
+import { STAGE_CONFIG, getItemDef } from '../constants/publicGameData';
 import { formatChallengeCondition } from '../utils/challengeFormat';
 import RaceMap3D from '../components/race/RaceMap3D';
 import RaceStatBar from '../components/race/RaceStatBar';
@@ -17,6 +17,7 @@ import { HiOutlineCube } from 'react-icons/hi';
 import MotionButton from '../components/live/MotionButton';
 import MapEventSignal from '../components/race/MapEventSignal';
 import { MOTION_TRANSITIONS } from '../utils/motion';
+import { useAuth } from '../../../context/AuthContext';
 
 /** 倒计时格式化 */
 function fmtMs(ms) {
@@ -29,9 +30,12 @@ function fmtMs(ms) {
 
 export default function RacePage({ stage }) {
   const race = useRaceStore();
+  const { user } = useAuth();
+  const canManage = Boolean(user && ['ADM', 'TO', 'CHM'].includes(user.role));
   const {
     fetchRaceState, fetchRaceMap, fetchChallenge, dismissChallenge,
     tickTimers, sseTurnChange, sseTurnTimeout, ssePlayerMoved, sseTimerTick,
+    sseRoundStarted, sseRoundAdjudication,
   } = race;
   const config = STAGE_CONFIG[stage] || {};
   const [itemViewer, setItemViewer] = useState(null);
@@ -85,8 +89,18 @@ export default function RacePage({ stage }) {
     challenge_revealed: useCallback(() => fetchChallenge(), [fetchChallenge]),
     challenge_resolved: useCallback(() => {
       dismissChallenge();
-      fetchRaceMap();
-    }, [dismissChallenge, fetchRaceMap]),
+      fetchRaceState();
+    }, [dismissChallenge, fetchRaceState]),
+    race_started: useCallback(() => fetchRaceState(), [fetchRaceState]),
+    round_started: useCallback((data) => {
+      sseRoundStarted(data);
+      fetchRaceState();
+    }, [fetchRaceState, sseRoundStarted]),
+    round_adjudication: useCallback((data) => {
+      sseRoundAdjudication(data);
+      fetchChallenge();
+    }, [fetchChallenge, sseRoundAdjudication]),
+    challenge_queue_advanced: useCallback(() => fetchChallenge(), [fetchChallenge]),
     wall_broken: useCallback((data) => {
       fetchRaceMap();
       showMapSignal('success', data);
@@ -111,7 +125,27 @@ export default function RacePage({ stage }) {
     return () => clearTimeout(timer);
   }, [mapSignal]);
 
-  const canOperate = race.status === 'racing' && !race.activeChallenge && !pendingAction;
+  // The last action can be advance, pickup, skip, or timeout. Once the persisted
+  // state enters adjudication, always load the first challenge in round order.
+  useEffect(() => {
+    if (race.status !== 'adjudicating' || race.activeChallenge) return;
+    fetchChallenge().catch(() => {});
+  }, [fetchChallenge, race.activeChallenge, race.status]);
+
+  const canOperate = canManage && race.status === 'racing' && !race.activeChallenge && !pendingAction;
+
+  const handleStartRace = async () => {
+    if (!canManage || pendingAction) return;
+    try {
+      setPendingAction('start');
+      setActionError(null);
+      await race.startRace();
+    } catch (err) {
+      setActionError(err.msg || '开始跑图失败');
+    } finally {
+      setPendingAction(null);
+    }
+  };
 
   /** 处理行动 */
   const handleAdvance = async (force = false) => {
@@ -262,27 +296,16 @@ export default function RacePage({ stage }) {
   // 派生统计
   const advanceCount = stage === 'stage2' ? 4 : stage === 'stage3' ? 2 : 0;
   const finishedCount = race.players?.filter((p) => p.finishOrder != null).length || 0;
-  // 榜单排序：按回合先手顺序展示，第一个行动的选手排在最上面。
+  // 榜单按本圈权威行动顺序展示；每圈结束后由后端完整倒序。
   const ranked = useMemo(() => {
     const players = [...(race.players || [])];
     if (players.length === 0) return players;
-
-    const firstLog = race.actionLog?.find((log) => log.playerId);
-    const firstPlayerId = firstLog ? String(firstLog.playerId?._id || firstLog.playerId) : null;
-    let startIndex = firstPlayerId
-      ? players.findIndex((p) => String(p._id || p.userId) === firstPlayerId)
-      : Number(race.currentPlayerIndex);
-
-    if (!Number.isInteger(startIndex) || startIndex < 0) startIndex = 0;
-
-    return players
-      .map((player, index) => ({
-        player,
-        order: (index - startIndex + players.length) % players.length,
-      }))
-      .sort((a, b) => a.order - b.order)
-      .map(({ player }) => player);
-  }, [race.players, race.currentPlayerIndex, race.actionLog]);
+    if (!race.turnOrder?.length) return players;
+    const playerById = new Map(players.map(player => [String(player._id || player.userId), player]));
+    const ordered = race.turnOrder.map(playerId => playerById.get(String(playerId))).filter(Boolean);
+    const included = new Set(ordered.map(player => String(player._id || player.userId)));
+    return [...ordered, ...players.filter(player => !included.has(String(player._id || player.userId)))];
+  }, [race.players, race.turnOrder]);
 
   return (
     <div className="flex flex-col gap-5 md:gap-6">
@@ -295,17 +318,48 @@ export default function RacePage({ stage }) {
         advanceCount={advanceCount}
         playerCount={race.players?.length || 0}
         stageLabel={config.label || ''}
+        roundNumber={race.roundNumber}
+        raceStatus={race.status}
       />
 
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_380px] gap-5 md:gap-6">
         {/* 地图区 */}
         <div className="min-w-0 flex flex-col">
+          {race.status === 'waiting' && (
+            <div className="msc-panel mb-4 grid gap-5 p-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:p-7">
+              <div>
+                <p className="msc-kicker">MAP READY / POSITION LOCKED</p>
+                <p className="mt-2 text-4xl font-black text-white md:text-6xl">地图待启动</p>
+                <p className="mt-3 max-w-3xl text-lg text-zinc-400">顶点与首圈顺序已随机并持久化。请现场核验全部选手位置，点击开始后才会启动总计时与首位选手的 45 秒行动计时。</p>
+              </div>
+              {canManage ? (
+                <MotionButton onClick={handleStartRace} loading={pendingAction === 'start'} disabled={Boolean(pendingAction)} className="msc-command flex min-h-16 items-center justify-center gap-3 px-8 text-xl font-black">
+                  <FaPlay /> {pendingAction === 'start' ? '启动中' : '开始跑图'}
+                </MotionButton>
+              ) : (
+                <p className="font-mono text-sm text-zinc-500">AWAITING OPERATOR COMMAND</p>
+              )}
+            </div>
+          )}
+          {race.status === 'adjudicating' && (
+            <div className="msc-panel mb-4 flex flex-col gap-3 border-l-2 border-l-amber-300 p-5 md:flex-row md:items-end md:justify-between md:p-7">
+              <div>
+                <p className="msc-kicker text-amber-300">ROUND {String(race.roundNumber).padStart(2, '0')} / BATCH JUDGEMENT</p>
+                <p className="mt-2 text-4xl font-black text-white md:text-6xl">本圈统一判定</p>
+              </div>
+              <p className="font-mono text-lg text-zinc-300">PENDING {String(race.pendingJudgementCount || 0).padStart(2, '0')}</p>
+            </div>
+          )}
           {race.status === 'racing' && (
-            <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.055] backdrop-blur-xl p-4 shadow-[0_18px_54px_rgba(0,0,0,0.24)]">
+            <div className="msc-panel msc-index-strip mb-4">
+              <div className="msc-display flex items-center justify-center bg-white/[0.035] text-4xl text-zinc-500">
+                {String((race.roundPosition || 0) + 1).padStart(2, '0')}
+              </div>
+              <div className="p-4">
               <div className="flex flex-col xl:flex-row xl:items-center gap-3">
                 <div className="min-w-0 xl:w-56">
                   <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">当前回合</p>
-                  <p className="text-2xl font-bold text-white truncate" style={{ fontFamily: 'Torus, sans-serif' }}>
+                  <p className="text-2xl font-black text-white truncate">
                     {currentPlayer?.username || '等待选手'}
                   </p>
                 </div>
@@ -319,7 +373,7 @@ export default function RacePage({ stage }) {
                         ? 'bg-amber-500/20 text-amber-200 border-amber-500/35 hover:bg-amber-500/30'
                         : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
                   >
-                    <FaPlay className="text-xs" /> {pendingAction === 'advance' ? '前进中' : '前进'}
+                    <FaPlay className="text-xs" /> {pendingAction === 'advance' ? '登记中' : '前进 / 撞墙'}
                   </MotionButton>
                   {availablePickupSectors.length > 0 ? (
                     availablePickupSectors.map((item, index) => (
@@ -333,7 +387,7 @@ export default function RacePage({ stage }) {
                             ? 'bg-sky-500/18 text-sky-200 border-sky-500/30 hover:bg-sky-500/28'
                             : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
                       >
-                        <HiOutlineCube /> {pendingAction === 'pickup' ? '拾取中' : `拾取道具${availablePickupSectors.length > 1 ? ` ${index + 1}` : ''}`}
+                        <HiOutlineCube /> {pendingAction === 'pickup' ? '登记中' : `拾取（圈末发放）${availablePickupSectors.length > 1 ? ` ${index + 1}` : ''}`}
                       </MotionButton>
                     ))
                   ) : (
@@ -353,7 +407,7 @@ export default function RacePage({ stage }) {
                         ? 'bg-red-500/14 text-red-200 border-red-500/25 hover:bg-red-500/22'
                         : 'bg-zinc-800 text-zinc-600 border-white/5 cursor-not-allowed'}`}
                   >
-                    <FaForward className="text-xs" /> {pendingAction === 'skip' ? '结束中' : '弃权'}
+                    <FaForward className="text-xs" /> {pendingAction === 'skip' ? '结束中' : '什么都不做'}
                   </MotionButton>
                 </div>
               </div>
@@ -362,6 +416,11 @@ export default function RacePage({ stage }) {
                   {actionError}
                 </div>
               )}
+              </div>
+              <div className="msc-technical flex min-w-40 flex-col justify-center text-sm text-zinc-500">
+                <span>ROUND {String(race.roundNumber || 1).padStart(2, '0')}</span>
+                <span>ORDER {String((race.roundPosition || 0) + 1).padStart(2, '0')} / {String(race.players?.length || 0).padStart(2, '0')}</span>
+              </div>
             </div>
           )}
           <Motion.div
@@ -390,9 +449,9 @@ export default function RacePage({ stage }) {
 
             {/* 当前行动选手标识（左上） */}
             {currentPlayer && (
-              <div className="absolute top-5 left-5 flex items-center gap-3 px-5 py-3 rounded-2xl bg-black/55 backdrop-blur-xl border border-amber-400/30 pointer-events-none shadow-[0_0_34px_rgba(245,158,11,0.12)]">
+              <div className="absolute top-5 left-5 flex items-center gap-3 border-l-2 border-amber-300 bg-black/60 px-5 py-3 backdrop-blur-xl pointer-events-none">
                 <span className="text-sm uppercase tracking-[0.16em] text-zinc-400">行动中</span>
-                <span className="text-2xl md:text-3xl font-bold text-amber-200 truncate max-w-[46vw]" style={{ fontFamily: 'Torus, sans-serif' }}>
+                <span className="text-2xl md:text-3xl font-black text-amber-200 truncate max-w-[46vw]">
                   {currentPlayer.username}
                 </span>
                 <span className="w-3 h-3 rounded-full bg-amber-300 animate-pulse" />
@@ -406,8 +465,7 @@ export default function RacePage({ stage }) {
                   ? 'bg-red-500/20 border-red-400/40'
                   : 'bg-black/55 border-white/10'}`}>
                 <span className="text-sm uppercase tracking-[0.16em] text-zinc-400">{race.activeChallenge ? '挑战判定' : '本回合'}</span>
-                <span className={`text-5xl md:text-6xl font-bold leading-none tabular-nums ${race.turnRemainingMs != null && race.turnRemainingMs < 10000 ? 'text-red-300 animate-pulse' : 'text-zinc-100'}`}
-                  style={{ fontFamily: 'Torus, sans-serif' }}>
+                <span className={`text-5xl md:text-6xl font-black leading-none tabular-nums ${race.turnRemainingMs != null && race.turnRemainingMs < 10000 ? 'text-red-300 animate-pulse' : 'text-zinc-100'}`}>
                   {race.activeChallenge ? '暂停' : fmtMs(race.turnRemainingMs)}
                 </span>
               </div>
@@ -418,12 +476,12 @@ export default function RacePage({ stage }) {
         {/* 右侧面板 */}
         <div className="w-full space-y-4">
           {/* 选手排名榜 */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.045] backdrop-blur-xl p-5">
+          <div className="border-y border-white/10 bg-black/10 py-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl md:text-2xl font-bold text-white">实时榜单</h3>
               <span className="text-base text-zinc-400">回合顺序</span>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-px bg-white/10">
               {ranked.map((p, index) => {
                 const playerId = p._id || p.userId;
                 const isActive = String(playerId) === String(race.currentPlayerId);
@@ -435,16 +493,16 @@ export default function RacePage({ stage }) {
                     initial={reduceMotion ? false : { opacity: 0, x: 12 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={MOTION_TRANSITIONS.spring}
-                    className={`flex items-center gap-4 px-4 py-4 rounded-2xl border transition-all
-                      ${isActive ? 'bg-amber-500/10 border-amber-500/25'
-                        : finished ? 'bg-emerald-500/[0.06] border-emerald-500/20'
-                        : 'bg-transparent border-white/[0.06]'}`}
+                    className={`flex min-h-24 items-center gap-4 border-l-2 px-4 py-4 transition-colors
+                      ${isActive ? 'border-l-amber-300 bg-[#18170f]'
+                        : finished ? 'border-l-emerald-300 bg-[#0d1714]'
+                        : 'border-l-white/10 bg-[#090c0f]'}`}
                   >
                     <button
                       type="button"
                       onClick={() => loadPlayerItems(p)}
                       title="查看道具"
-                      className={`shrink-0 w-12 h-12 rounded-2xl overflow-hidden border transition-all flex items-center justify-center
+                      className={`shrink-0 w-12 h-12 overflow-hidden border transition-all flex items-center justify-center
                         ${isActive ? 'border-amber-400/45 bg-amber-500/15'
                           : p.itemCount > 0 ? 'border-sky-400/35 bg-sky-500/10'
                           : 'border-white/10 bg-zinc-800 hover:bg-zinc-700'}`}
@@ -468,7 +526,7 @@ export default function RacePage({ stage }) {
                     <div className="flex flex-col items-end shrink-0">
                       <span className={`text-5xl font-bold leading-none tabular-nums
                         ${finished ? 'text-emerald-400' : isActive ? 'text-amber-300' : 'text-zinc-300'}`}
-                        style={{ fontFamily: 'Torus, sans-serif' }}>
+                        style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
                         {finished ? '★' : (p.currentLayer ?? 0)}
                       </span>
                       <span className="text-sm text-zinc-500 mt-1">{finished ? '完赛' : '坐标'}</span>
@@ -483,7 +541,7 @@ export default function RacePage({ stage }) {
           </div>
 
           {/* 行动日志 */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-5 max-h-64 overflow-y-auto">
+          <div className="border-y border-white/10 bg-black/10 p-5 max-h-64 overflow-y-auto">
             <h3 className="text-lg font-bold text-zinc-200 mb-3">行动日志</h3>
             <div className="space-y-2">
               {race.actionLog?.slice(-6).reverse().map((log, i) => (
@@ -564,7 +622,7 @@ export default function RacePage({ stage }) {
                   <img src={itemViewer.player.avatarUrl} alt="" className="w-12 h-12 rounded-xl object-cover" />
                 )}
                 <div className="min-w-0">
-                  <h3 className="text-2xl font-bold text-white truncate" style={{ fontFamily: 'Torus, sans-serif' }}>
+                  <h3 className="text-2xl font-bold text-white truncate" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
                     {itemViewer.player?.username || '选手'} · 道具
                   </h3>
                   <p className="text-sm text-zinc-500">

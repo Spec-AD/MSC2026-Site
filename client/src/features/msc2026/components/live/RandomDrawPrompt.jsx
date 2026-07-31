@@ -41,7 +41,7 @@ export default function RandomDrawPrompt({ onDraw, label = '第三首随机曲�
       <p className="mt-5 text-xs font-black uppercase text-amber-300/70" style={{ letterSpacing: 0 }}>
         RANDOM DRAW READY
       </p>
-      <h3 className="mt-1 text-3xl font-black text-white md:text-5xl" style={{ fontFamily: 'Torus, sans-serif' }}>
+      <h3 className="mt-1 text-3xl font-black text-white md:text-5xl" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
         {label}
       </h3>
       <p className="mt-2 text-base font-semibold text-zinc-400 md:text-xl">两首自选曲成绩已确认</p>

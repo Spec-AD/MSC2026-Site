@@ -29,10 +29,10 @@ export function Stat({ label, value, unit, sub, tone = 'default', size = 'lg', p
   return (
     <Motion.div
       variants={reduceMotion ? undefined : STAGGER_ITEM}
-      className="flex flex-col items-start px-5 py-4 md:px-6 md:py-5 rounded-2xl border border-white/10 bg-white/[0.045] backdrop-blur-xl min-h-[118px] overflow-hidden"
+      className="msc-panel relative flex min-h-[126px] flex-col items-start overflow-hidden border-t-2 border-t-white/25 px-5 py-4 md:min-h-[142px] md:px-6 md:py-5"
     >
-      <span className="text-xs md:text-sm font-semibold uppercase tracking-[0.16em] text-zinc-400 mb-2">{label}</span>
-      <div className="flex items-baseline gap-2 min-w-0">
+      <span className="mb-3 font-mono text-xs font-black text-zinc-400 md:text-sm">{label}</span>
+      <div className="flex min-w-0 items-baseline gap-2">
         <AnimatePresence mode="popLayout" initial={false}>
           <Motion.span
             key={String(value)}
@@ -40,22 +40,23 @@ export function Stat({ label, value, unit, sub, tone = 'default', size = 'lg', p
             animate={{ opacity: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
             transition={MOTION_TRANSITIONS.quick}
-            className={`${sizeCls} font-bold leading-none tabular-nums ${toneCls} ${pulse ? 'animate-pulse' : ''}`}
-            style={{ fontFamily: 'Torus, sans-serif' }}
+            className={`${sizeCls} font-black leading-none tabular-nums ${toneCls} ${pulse ? 'animate-pulse' : ''}`}
+            style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}
           >
             {value}
           </Motion.span>
         </AnimatePresence>
-        {unit && <span className="text-lg md:text-xl text-zinc-400 font-semibold">{unit}</span>}
+        {unit && <span className="font-mono text-lg font-black text-zinc-400 md:text-xl">{unit}</span>}
       </div>
-      {sub && <span className="text-sm md:text-base text-zinc-500 mt-2 tracking-wide truncate max-w-full">{sub}</span>}
+      {sub && <span className="mt-auto max-w-full truncate pt-3 font-mono text-xs font-bold text-zinc-500 md:text-sm">{sub}</span>}
+      <span className="absolute bottom-0 right-0 h-5 w-5 border-b border-r border-white/25" />
     </Motion.div>
   );
 }
 
 export default function RaceStatBar({
   totalRemainingMs, turnRemainingMs, currentTurn,
-  finishedCount = 0, advanceCount = 0, playerCount = 0, stageLabel = '',
+  finishedCount = 0, advanceCount = 0, playerCount = 0, stageLabel = '', roundNumber = 1, raceStatus = '',
 }) {
   const reduceMotion = useReducedMotion();
   const totalLow = totalRemainingMs != null && totalRemainingMs < 5 * 60 * 1000;
@@ -66,11 +67,11 @@ export default function RaceStatBar({
       variants={reduceMotion ? undefined : STAGGER_CONTAINER}
       initial="initial"
       animate="animate"
-      className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 w-full"
+      className="grid w-full grid-cols-2 gap-px border border-white/10 bg-white/10 lg:grid-cols-5"
     >
       <Stat label="总时长" value={fmtMs(totalRemainingMs)} sub="剩余时间" tone={totalLow ? 'red' : 'default'} pulse={totalLow} size="xl" />
       <Stat label="本回合" value={fmtMs(turnRemainingMs)} sub="行动倒计时" tone={turnLow ? 'red' : 'amber'} pulse={turnLow} />
-      <Stat label="回合数" value={currentTurn ?? 0} sub="已进行" />
+      <Stat label="行动序号" value={currentTurn ?? 0} sub={`第 ${roundNumber} 圈 · ${raceStatus === 'adjudicating' ? '统一判定' : raceStatus === 'waiting' ? '待启动' : raceStatus === 'racing' ? '行动中' : '未初始化'}`} />
       <Stat label="已抵达中心" value={finishedCount} unit={`/ ${advanceCount}`} sub="晋级名额" tone="emerald" />
       <Stat label="赛场" value={playerCount} unit="人" sub={stageLabel} tone="blue" />
     </Motion.div>

@@ -4,7 +4,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Clock3, Loader2, LogOut, Maximize2, Minimize2, Play, Radio, Trophy } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useMSC2026Store } from '../store';
-import { STAGE_CONFIG } from '../constants/gameData';
+import { STAGE_CONFIG } from '../constants/publicGameData';
 import { useMSCSSE } from '../hooks/useSSE';
 import { useMatchEventQueue } from '../hooks/useMatchEventQueue';
 import EventCueOverlay from '../components/live/EventCueOverlay';
@@ -13,6 +13,7 @@ import RacePage from './RacePage';
 import Stage4Page from './Stage4Page';
 import { EASE_ACCEL, MOTION_TRANSITIONS } from '../utils/motion';
 import * as api from '../api/msc2026Api';
+import '../styles/industrialEditorial.css';
 
 const ADMIN_ROLES = ['ADM', 'TO', 'CHM'];
 
@@ -45,20 +46,21 @@ function StandbyScreen({ finished, onInitialized }) {
   const ready = readiness?.songCount >= 3 && readiness?.playerCount === 12;
 
   return (
-    <div className="min-h-[calc(100dvh-76px)] flex items-center justify-center px-6 text-center">
-      <div>
-        {finished ? <Trophy className="mx-auto h-16 w-16 text-amber-300" /> : <Radio className="mx-auto h-16 w-16 text-cyan-300" />}
+    <div className="relative flex min-h-[calc(100dvh-76px)] items-end overflow-hidden px-6 py-12 text-left md:px-12 md:py-16">
+      <span className="msc-display pointer-events-none absolute -right-8 -top-12 text-[16rem] font-black leading-none text-white/[0.04] md:text-[28rem]">00</span>
+      <div className="relative z-10 max-w-6xl border-l border-white/15 pl-6 md:pl-10">
+        {finished ? <Trophy className="h-16 w-16 text-amber-300" /> : <Radio className="h-16 w-16 text-cyan-300" />}
         <p className="mt-5 text-sm font-bold uppercase tracking-[0.2em] text-zinc-500">
           {finished ? 'MATCH COMPLETE' : 'SYSTEM STANDBY'}
         </p>
-        <h1 className="mt-2 text-5xl md:text-8xl font-black text-white" style={{ fontFamily: 'Torus, sans-serif' }}>
+        <h1 className="msc-editorial-heading mt-4 text-5xl text-white md:text-8xl">
           {finished ? 'MSC 2026 已结束' : '等待比赛初始化'}
         </h1>
         <p className="mt-4 text-lg md:text-2xl text-zinc-400">
           {finished ? '最终比赛结果已经确认' : '完成阶段一配置后，运行画面会自动进入比赛流程'}
         </p>
         {!finished && (
-          <div className="mx-auto mt-8 max-w-2xl border-t border-white/10 pt-7">
+          <div className="mt-8 max-w-2xl border-t border-white/10 pt-7">
             {readiness && (
               <p className="mb-4 text-base font-bold text-zinc-400">
                 参赛选手 <span className="text-white">{readiness.playerCount}/12</span>
@@ -81,12 +83,12 @@ function StandbyScreen({ finished, onInitialized }) {
                   setInitializing(false);
                 }
               }}
-              className="mx-auto flex min-h-16 min-w-[280px] items-center justify-center gap-3 border border-amber-300/40 bg-amber-400/15 px-8 text-2xl font-black text-amber-100 transition-colors hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-zinc-600"
+              className="flex min-h-16 min-w-[280px] items-center justify-center gap-3 border border-amber-300/40 bg-amber-400/15 px-8 text-2xl font-black text-amber-100 transition-colors hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-zinc-600"
             >
               {initializing ? <Loader2 className="h-6 w-6 animate-spin" /> : <Play className="h-6 w-6 fill-current" />}
               {initializing ? '正在生成抽签' : '初始化阶段一'}
             </button>
-            {error && <p className="mt-4 flex items-center justify-center gap-2 text-base text-red-300"><AlertTriangle className="h-5 w-5" />{error}</p>}
+            {error && <p className="mt-4 flex items-center gap-2 text-base text-red-300"><AlertTriangle className="h-5 w-5" />{error}</p>}
             {readiness && !ready && !error && <p className="mt-4 text-base text-amber-200/75">请先在管理页补齐 12 人排名与阶段一图池配置</p>}
           </div>
         )}
@@ -198,7 +200,7 @@ export default function LiveMatchPage() {
   const stageConfig = STAGE_CONFIG[status];
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-[#05070a] text-white selection:bg-amber-400/25">
+    <div className="preset-industrial-editorial msc-industrial h-[100dvh] overflow-hidden text-white selection:bg-amber-400/25">
       <header className="h-[76px] border-b border-white/10 bg-[#080b10] px-4 md:px-7 flex items-center justify-between gap-4 relative z-[80]">
         <div className="flex items-center gap-4 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
@@ -207,7 +209,7 @@ export default function LiveMatchPage() {
           </div>
           <div className="h-8 w-px bg-white/10" />
           <div className="min-w-0">
-            <p className="text-xl md:text-2xl font-black text-white truncate" style={{ fontFamily: 'Torus, sans-serif' }}>MSC 2026</p>
+            <p className="text-xl md:text-2xl font-black text-white truncate" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>MSC 2026</p>
             <p className="text-xs md:text-sm text-zinc-500 truncate">{stageConfig?.label || (status === 'finished' ? '比赛结束' : '等待开始')}</p>
           </div>
         </div>
@@ -260,7 +262,7 @@ export default function LiveMatchPage() {
             >
               <Radio className="mx-auto h-12 w-12 text-amber-300" />
               <p className="mt-5 text-sm font-bold tracking-[0.24em] text-amber-300">MATCH SYSTEM ONLINE</p>
-              <h1 className="mt-2 text-5xl md:text-8xl font-black text-white" style={{ fontFamily: 'Torus, sans-serif' }}>MSC 2026</h1>
+              <h1 className="mt-2 text-5xl md:text-8xl font-black text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>MSC 2026</h1>
               {!reduceMotion && (
                 <div className="mx-auto mt-7 h-1 w-56 overflow-hidden bg-white/10">
                   <Motion.div
