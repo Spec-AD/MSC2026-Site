@@ -14,6 +14,22 @@ const PICK_LABELS = {
 
 const pct = value => value == null ? '—' : `${Number(value).toFixed(4)}%`;
 const integer = value => value == null ? '—' : Number(value).toLocaleString('zh-CN');
+const isGoldenAchievement = value => Number.isFinite(Number(value)) && Number(value) > 100.7;
+
+const STAGE1_SPOTLIGHTS = new Map([
+  ['2-2', 'excellent'],
+  ['3-2', 'watchable'],
+  ['3-3', 'watchable'],
+  ['4-3', 'excellent'],
+  ['5-1', 'excellent'],
+  ['6-3', 'excellent']
+]);
+
+const FINAL_SPOTLIGHTS = new Map([
+  [1, 'watchable'],
+  [2, 'excellent'],
+  [3, 'excellent']
+]);
 
 function Player({ player, compact = false }) {
   if (!player) return <span className="text-zinc-600">—</span>;
@@ -37,9 +53,10 @@ function Metric({ label, value, accent = false, note, tone = '' }) {
 }
 
 function ScoreTriplet({ score, unavailableBreak = false }) {
+  const golden = isGoldenAchievement(score?.achievement);
   return (
-    <div className="grid grid-cols-3 gap-2 text-right">
-      <span className="font-black tabular-nums text-zinc-100">{pct(score?.achievement)}</span>
+    <div className="relative z-10 grid grid-cols-3 gap-2 text-right">
+      <span className={`font-black tabular-nums ${golden ? 'msc-golden-score text-amber-200' : 'text-zinc-100'}`}>{pct(score?.achievement)}</span>
       <span className="font-black tabular-nums text-sky-200">{integer(score?.dxScore)}</span>
       <span className="font-black tabular-nums text-amber-200" title={unavailableBreak ? '现场系统未记录跑图完美 BREAK' : undefined}>
         {unavailableBreak ? '未记录' : integer(score?.perfectBreak)}
@@ -58,7 +75,7 @@ function TableHeader({ first = '曲目' }) {
   );
 }
 
-function SongRows({ songs, p1, p2 }) {
+function SongRows({ songs, p1, p2, spotlightFor }) {
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[760px]">
@@ -68,9 +85,12 @@ function SongRows({ songs, p1, p2 }) {
           <Player player={p2} compact />
         </div>
         <TableHeader />
-        {songs.map(song => (
-          <div key={`${song.order}-${song.song?.songId}`} className="grid grid-cols-[minmax(220px,1fr)_180px_180px] items-center gap-4 border-b border-white/[0.07] px-4 py-3 text-sm last:border-b-0">
-            <div className="flex min-w-0 items-center gap-3">
+        {songs.map(song => {
+          const spotlight = spotlightFor?.(song) || '';
+          return (
+          <div key={`${song.order}-${song.song?.songId}`} className={`msc-song-row relative isolate grid grid-cols-[minmax(220px,1fr)_180px_180px] items-center gap-4 overflow-hidden border-b border-white/[0.07] px-4 py-3 text-sm last:border-b-0 ${spotlight ? `msc-song-row--${spotlight}` : ''}`}>
+            {spotlight && <span aria-hidden="true" className="msc-song-row__mark msc-display">{spotlight.toUpperCase()}</span>}
+            <div className="relative z-10 flex min-w-0 items-center gap-3">
               {song.song && <img src={getSongCover({ id: song.song.catalogId })} alt="" className="h-11 w-11 shrink-0 object-cover" loading="lazy" />}
               <div className="min-w-0">
                 <p className="truncate font-black text-zinc-100">{song.song?.title || '未知曲目'}</p>
@@ -80,7 +100,8 @@ function SongRows({ songs, p1, p2 }) {
             <ScoreTriplet score={song.p1Score} />
             <ScoreTriplet score={song.p2Score} />
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -114,7 +135,7 @@ function Stage1({ stage }) {
             <AggregateFace player={group.p1} totals={group.p1Totals} />
             <AggregateFace player={group.p2} totals={group.p2Totals} side="right" />
           </div>
-          <SongRows songs={group.songs} p1={group.p1} p2={group.p2} />
+          <SongRows songs={group.songs} p1={group.p1} p2={group.p2} spotlightFor={song => STAGE1_SPOTLIGHTS.get(`${group.group}-${song.order}`)} />
         </article>
       ))}
     </section>
@@ -137,7 +158,7 @@ function RaceStage({ stage, index }) {
                 <div><Player player={entry.player} />{entry.qualified && <p className="ml-11 mt-1 text-xs font-black text-emerald-300">晋级</p>}</div>
                 <span className="font-black tabular-nums">{entry.attempts}</span>
                 <span className="font-black tabular-nums text-emerald-300">{entry.clears}</span>
-                <span className="font-black tabular-nums">{pct(entry.averageAchievement)}</span>
+                <span className={`font-black tabular-nums ${isGoldenAchievement(entry.averageAchievement) ? 'msc-golden-score text-amber-200' : ''}`}>{pct(entry.averageAchievement)}</span>
                 <span className="font-black tabular-nums text-sky-200">{integer(entry.totalDxScore)}</span>
                 <span className="text-xs font-black text-zinc-500">未记录</span>
               </div>
@@ -156,7 +177,7 @@ function RaceStage({ stage, index }) {
                 <div key={`${challenge.taskName}-${challengeIndex}`} className="grid grid-cols-[24px_1fr_auto] gap-3 border-b border-white/[0.06] py-3 last:border-0">
                   {challenge.passed ? <Check className="h-4 w-4 text-emerald-300" /> : <X className="h-4 w-4 text-rose-300" />}
                   <div><p className="font-bold text-zinc-200">{challenge.taskName}</p><p className="text-xs text-zinc-500">{challenge.songTitle || `第 ${challenge.wallIndex + 1} 道墙`}{challenge.itemEffects.length ? ` · ${challenge.itemEffects.join('；')}` : ''}</p></div>
-                  <div className="text-right text-xs tabular-nums"><p>{pct(challenge.achievement)}</p><p className="text-sky-200">DX {integer(challenge.dxScore)}</p></div>
+                  <div className="text-right text-xs tabular-nums"><p className={isGoldenAchievement(challenge.achievement) ? 'msc-golden-score font-black text-amber-200' : ''}>{pct(challenge.achievement)}</p><p className="text-sky-200">DX {integer(challenge.dxScore)}</p></div>
                 </div>
               ))}
             </div>
@@ -186,7 +207,7 @@ function FinalStage({ stage }) {
           <AggregateFace player={stage.p1} totals={stage.p1Totals} />
           <AggregateFace player={stage.p2} totals={stage.p2Totals} side="right" />
         </div>
-        <SongRows songs={stage.songs} p1={stage.p1} p2={stage.p2} />
+        <SongRows songs={stage.songs} p1={stage.p1} p2={stage.p2} spotlightFor={song => FINAL_SPOTLIGHTS.get(song.order)} />
       </article>
     </section>
   );
@@ -202,13 +223,13 @@ function SectionTitle({ index, eyebrow, title, description }) {
   );
 }
 
-function HighlightCard({ icon, label, performance, metric }) {
+function HighlightCard({ icon, label, performance, metric, golden = false }) {
   if (!performance) return null;
   return (
     <div className="msc-panel p-5">
       {icon}
       <p className="msc-kicker mt-6">{label}</p>
-      <p className="mt-2 text-2xl font-black text-white">{metric}</p>
+      <p className={`mt-2 text-2xl font-black ${golden ? 'msc-golden-score text-amber-200' : 'text-white'}`}>{metric}</p>
       <p className="mt-3"><Player player={performance.player} compact /></p>
       <p className="mt-2 truncate text-sm text-zinc-500">{performance.song?.title} · {performance.stage}</p>
     </div>
@@ -221,12 +242,12 @@ function PlayerArchives({ players }) {
       <SectionTitle index="06" eyebrow="PLAYER DOSSIERS" title="选手赛事数据档案" description="只汇总本届赛事的逐曲与跑图数据；随机路线与道具会影响晋级结果，不据此评价选手实力。" />
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {players.map((entry, index) => (
-          <article key={entry.player.userId} className={`msc-panel relative overflow-hidden border-t-2 p-5 ${entry.averageAchievement >= 100.7 ? 'border-t-amber-300' : entry.averageAchievement >= 100.4 ? 'border-t-cyan-300' : 'border-t-white/15'}`}>
+          <article key={entry.player.userId} className={`msc-panel relative overflow-hidden border-t-2 p-5 ${isGoldenAchievement(entry.averageAchievement) ? 'border-t-amber-300' : entry.averageAchievement >= 100.4 ? 'border-t-cyan-300' : 'border-t-white/15'}`}>
             <span className="msc-display absolute -bottom-5 right-2 text-8xl font-black text-white/[0.045]">{entry.finalRank ? String(entry.finalRank).padStart(2, '0') : '—'}</span>
             <div className="relative flex items-start justify-between gap-3"><Player player={entry.player} />{entry.finalRank && <span className="border border-white/15 px-2 py-1 font-black text-zinc-300">#{entry.finalRank}</span>}</div>
             <p className="relative mt-4 text-xs text-zinc-500">{entry.stages.join(' → ')}{entry.finalRank ? ` · 最终第 ${entry.finalRank} 名` : ''}</p>
             <div className="relative mt-5 grid grid-cols-2 gap-4">
-              <Metric label="平均完成率" value={pct(entry.averageAchievement)} tone={entry.averageAchievement >= 100.7 ? 'gold' : entry.averageAchievement >= 100.4 ? 'cyan' : ''} />
+              <Metric label="平均完成率" value={pct(entry.averageAchievement)} tone={isGoldenAchievement(entry.averageAchievement) ? 'gold' : entry.averageAchievement >= 100.4 ? 'cyan' : ''} />
               <Metric label="累计 DX 分" value={integer(entry.totalDxScore)} />
               <Metric label="完美 BREAK" value={integer(entry.perfectBreak)} />
               <Metric label="跑图通过" value={`${entry.raceClears} / ${entry.raceAttempts}`} />
@@ -278,8 +299,8 @@ export default function MSC2026ArchivePage() {
 
   const { stages, highlights } = archive;
   return (
-    <div className="space-y-16 pb-20">
-      <section className="msc-editorial-hero px-5 py-9 md:px-9 md:py-12">
+    <div className="msc-archive-page space-y-16 pb-20">
+      <section className="msc-editorial-hero msc-archive-reveal px-5 py-9 md:px-9 md:py-12">
         <span className="msc-display pointer-events-none absolute -bottom-10 right-[-0.04em] select-none text-[9rem] font-black leading-none text-white/[0.04] md:text-[18rem]">END</span>
         <div className="relative z-10 grid gap-10 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)] xl:items-end">
           <div>
@@ -297,7 +318,7 @@ export default function MSC2026ArchivePage() {
         </div>
       </section>
 
-      <section className="grid gap-px border border-white/10 bg-white/10 md:grid-cols-4">
+      <section className="msc-archive-reveal grid gap-px border border-white/10 bg-white/10 md:grid-cols-4">
         {archive.placements.map(place => (
           <div key={place.rank} className={`relative overflow-hidden bg-[#090c0f] p-6 ${place.rank === 1 ? 'md:col-span-2' : ''}`}>
             <span className="msc-display absolute -bottom-8 right-1 text-9xl font-black text-white/[0.04]">{place.rank}</span>
@@ -320,7 +341,7 @@ export default function MSC2026ArchivePage() {
       <section className="space-y-4">
         <SectionTitle index="HL" eyebrow="HIGHLIGHTS" title="精度峰值与终局瞬间" description="从全部逐曲成绩中自动提取完成率、DX 分与完美 BREAK 的单曲峰值。" />
         <div className="grid gap-3 md:grid-cols-3">
-          <HighlightCard icon={<Gauge className="h-5 w-5 text-amber-200" />} label="最高单曲完成率" performance={highlights.highestAchievement} metric={pct(highlights.highestAchievement?.score?.achievement)} />
+          <HighlightCard icon={<Gauge className="h-5 w-5 text-amber-200" />} label="最高单曲完成率" performance={highlights.highestAchievement} metric={pct(highlights.highestAchievement?.score?.achievement)} golden={isGoldenAchievement(highlights.highestAchievement?.score?.achievement)} />
           <HighlightCard icon={<BarChart3 className="h-5 w-5 text-amber-200" />} label="最高单曲 DX 分" performance={highlights.highestDxScore} metric={integer(highlights.highestDxScore?.score?.dxScore)} />
           <HighlightCard icon={<Sparkles className="h-5 w-5 text-amber-200" />} label="最多完美 BREAK" performance={highlights.mostPerfectBreak} metric={integer(highlights.mostPerfectBreak?.score?.perfectBreak)} />
         </div>
