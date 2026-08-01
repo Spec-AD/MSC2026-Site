@@ -106,6 +106,16 @@ async function start() {
   });
   console.log('✅ MongoDB Connected');
 
+  // MSC 2026 已结束：启动时幂等修正替补归属、写入权威赛事战果并锁定档案。
+  try {
+    const { reconcileMSC2026Archive } = require('./services/msc2026/archiveSummary');
+    const archiveResult = await reconcileMSC2026Archive();
+    if (archiveResult.reconciled) console.log('✅ MSC 2026 archive reconciled');
+  } catch (err) {
+    // 归档失败不阻断站点启动；公开接口会保留原始数据并记录错误。
+    console.error('⚠️ MSC 2026 archive reconciliation failed:', err.message);
+  }
+
   const { startSyncAliases } = require('./tasks/syncAliases');
   startSyncAliases();
   const { checkTimeoutMatches, checkStageAutoAdvance } = require('./tasks/tournamentTimeout');

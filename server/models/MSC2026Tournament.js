@@ -305,7 +305,20 @@ const MSC2026TournamentSchema = new Schema({
   qualifiedStage3: [{ type: Schema.Types.ObjectId, ref: 'User' }],  // 2人
 
   // 审计
-  operationLogs: [OperationLogSchema]
+  operationLogs: [OperationLogSchema],
+
+  // 赛后归档。锁定后，MSC 专用接口仅保留公开只读查询。
+  archive: {
+    locked: { type: Boolean, default: false },
+    lockedAt: { type: Date, default: null },
+    summaryVersion: { type: Number, default: 1 },
+    substitutions: [{
+      fromUser: { type: Schema.Types.ObjectId, ref: 'User' },
+      toUser: { type: Schema.Types.ObjectId, ref: 'User' },
+      effectiveFrom: { type: String, enum: ['stage3'], default: 'stage3' },
+      reason: { type: String, default: '' }
+    }]
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('MSC2026Tournament', MSC2026TournamentSchema);

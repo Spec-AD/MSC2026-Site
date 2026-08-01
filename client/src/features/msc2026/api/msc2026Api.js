@@ -18,6 +18,10 @@ export const getStatus = () =>
 export const getResults = () =>
   axios.get(`${BASE}/results`);
 
+/** 获取赛后完整纪念档案 */
+export const getArchive = () =>
+  axios.get(`${BASE}/archive`);
+
 /** 获取赛事配置（管理员） */
 export const getConfig = () =>
   axios.get(`${BASE}/config`, { headers: authHeaders() });

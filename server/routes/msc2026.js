@@ -57,6 +57,7 @@ const {
   advanceFromDecode,
   serializeDecodeState
 } = require('../services/msc2026/decodeGame');
+const { loadArchiveSummary } = require('../services/msc2026/archiveSummary');
 
 const SONG_DISPLAY_FIELDS = 'id title type basic_info.artist basic_info.bpm ds level aliases charts';
 const coverCache = new Map();
@@ -266,6 +267,33 @@ function serializePreMatchRoster(tournament, roster) {
 // ==========================================
 // 🌐 全局状态
 // ==========================================
+
+// 赛后纪念页的唯一公开数据源。只返回赛事表现，不泄露报名联系方式或裁判信息。
+router.get('/archive', async (_req, res) => {
+  try {
+    const data = await loadArchiveSummary();
+    if (!data) return res.status(404).json({ msg: '赛事档案不存在' });
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    return res.json({ msg: 'ok', data });
+  } catch (err) {
+    console.error('生成 MSC 2026 赛事档案失败:', err);
+    return res.status(500).json({ msg: '赛事档案暂时不可用' });
+  }
+});
+
+// 赛事结束后，MSC 专用控制面永久转为只读。公开查询仍可用于纪念页和赛事详情页。
+router.use(async (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  try {
+    const tournament = await MSC2026Tournament.findOne().select('status archive.locked').lean();
+    if (tournament && (tournament.status === 'finished' || tournament.archive?.locked)) {
+      return res.status(423).json({ msg: 'MSC 2026 已归档，赛事控制面已锁定' });
+    }
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+});
 
 router.get('/status', async (req, res) => {
   try {

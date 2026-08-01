@@ -48,14 +48,7 @@ const OsuMap = lazy(() => import('./features/osu/pages/OsuMap'));
 const OsuLeaderboard = lazy(() => import('./features/osu/pages/OsuLeaderboard'));
 const OsuProfileRedirect = lazy(() => import('./features/osu/pages/OsuProfileRedirect'));
 const MSC2026Layout = lazy(() => import('./features/msc2026/pages/MSC2026Layout'));
-const TournamentHome = lazy(() => import('./features/msc2026/pages/TournamentHome'));
-const RaceTutorialPage = lazy(() => import('./features/msc2026/pages/RaceTutorialPage'));
-const Stage1Page = lazy(() => import('./features/msc2026/pages/Stage1Page'));
-const DecodeStagePage = lazy(() => import('./features/msc2026/pages/DecodeStagePage'));
-const Stage4Page = lazy(() => import('./features/msc2026/pages/Stage4Page'));
-const RacePage = lazy(() => import('./features/msc2026/pages/RacePage'));
-const LiveMatchPage = lazy(() => import('./features/msc2026/pages/LiveMatchPage'));
-const PointsStorePage = lazy(() => import('./features/msc2026/pages/PointsStorePage'));
+const MSC2026ArchivePage = lazy(() => import('./features/msc2026/pages/MSC2026ArchivePage'));
 
 function App() {
     return (
@@ -64,7 +57,6 @@ function App() {
         <ThemeProvider>
           <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#06070b] px-6 text-center text-xl font-bold text-zinc-300">正在加载当前页面，请稍候...</div>}>
           <Routes>
-            <Route path="/matches/msc2026/live" element={<MSCErrorBoundary><LiveMatchPage /></MSCErrorBoundary>} />
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />
               <Route path="register" element={<Register />} />
@@ -109,14 +101,9 @@ function App() {
               </Route>
               {/* MSC 2026 独立路由 */}
               <Route path="/matches/msc2026" element={<MSCErrorBoundary><MSC2026Layout /></MSCErrorBoundary>}>
-                <Route index element={<TournamentHome />} />
-                <Route path="tutorial" element={<RaceTutorialPage />} />
-                <Route path="stage1" element={<Stage1Page />} />
-                <Route path="decode" element={<DecodeStagePage />} />
-                <Route path="stage2" element={<RacePage stage="stage2" />} />
-                <Route path="stage3" element={<RacePage stage="stage3" />} />
-                <Route path="stage4" element={<Stage4Page />} />
-                <Route path="store" element={<PointsStorePage />} />
+                <Route index element={<MSC2026ArchivePage />} />
+                <Route path="archive" element={<Navigate to="/matches/msc2026" replace />} />
+                <Route path="*" element={<Navigate to="/matches/msc2026" replace />} />
               </Route>
               <Route path="/daily-history" element={<DailyHistory />} />
               <Route path="/letter-game" element={<LetterGame />} />

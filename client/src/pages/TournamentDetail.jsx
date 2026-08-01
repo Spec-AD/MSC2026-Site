@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { useTournamentStore, useBracketStore } from '../features/tournament/store';
 import { selectStatusLabel, selectStatusColor } from '../features/tournament/store/tournamentStore';
 import { createEventSource, getResults, getMyRegistration, updateMyRegistration, getAuditLog } from '../features/tournament/api/tournamentApi';
+import { getArchive as getMSC2026Archive } from '../features/msc2026/api/msc2026Api';
 import QualifierRanking from '../features/tournament/components/qualifier/QualifierRanking';
 import BracketView from '../features/tournament/components/bracket/BracketView';
 import ResultPodium from '../features/tournament/components/common/ResultPodium';
@@ -15,7 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaArrowLeft, FaSpinner, FaUsers, FaMusic, FaSitemap, FaTrophy,
   FaCalendarAlt, FaCheckCircle, FaCog, FaClipboardList, FaMedal, FaInfoCircle, FaBook,
-  FaEdit, FaHistory, FaTimes
+  FaEdit, FaHistory, FaTimes, FaLock
 } from 'react-icons/fa';
 
 const TournamentDetail = () => {
@@ -40,6 +41,7 @@ const TournamentDetail = () => {
   const [formAnswers, setFormAnswers] = useState({});
   const [results, setResults] = useState([]);
   const [resultsLoaded, setResultsLoaded] = useState(false);
+  const [mscArchive, setMscArchive] = useState(null);
 
   // #1: 报名查看/修改
   const [myRegistration, setMyRegistration] = useState(null);
@@ -74,6 +76,12 @@ const TournamentDetail = () => {
   }, [id, fetchTournament]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // MSC 2026 的赛事大厅记录使用已修正替补归属的公开归档。
+  useEffect(() => {
+    if (!tournament?._id || !/^MSC\s*2026$/i.test(String(tournament.title || '').trim())) return;
+    getMSC2026Archive().then(res => setMscArchive(res.data.data)).catch(() => {});
+  }, [tournament?._id, tournament?.title]);
 
   // #1: 加载当前选手报名信息
   useEffect(() => {
@@ -170,6 +178,17 @@ const TournamentDetail = () => {
 
   const statusColor = selectStatusColor(tournament.status);
   const statusLabel = selectStatusLabel(tournament.status);
+  const isMSC2026Archive = /^MSC\s*2026$/i.test(String(tournament.title || '').trim()) && String(id || '').startsWith('6');
+  const publicResults = mscArchive?.placements?.length
+    ? mscArchive.placements.map(place => ({
+        rank: place.rank,
+        userId: place.player,
+        username: place.player.username,
+        avatarUrl: place.player.avatarUrl,
+        note: place.rank === 2 ? 'MSC 2026 亚军（替补参赛）' : `MSC 2026 ${place.label}`,
+        announcement: mscArchive.correction?.note || '',
+      }))
+    : results;
 
   // #5.3: 审计日志 — 赛后公开/赛前仅管理
   const showAuditTab = ['FINISHED', 'ARCHIVED'].includes(tournament?.status) || canManage;
@@ -195,12 +214,26 @@ const TournamentDetail = () => {
           <button onClick={() => navigate('/tournaments')} className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm">
             <FaArrowLeft /> 返回赛事大厅
           </button>
-          {canManage && (
+          {canManage && !isMSC2026Archive && (
             <button onClick={() => navigate(`/tournament-manage/${id}`)} className="flex items-center gap-2 px-4 py-2 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-400 border border-cyan-500/30 rounded-xl text-sm font-bold transition-all">
               <FaCog /> 管理赛事
             </button>
           )}
         </div>
+
+        {isMSC2026Archive && (
+          <div className="mb-8 grid gap-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-5 md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <p className="flex items-center gap-2 font-bold text-amber-200"><FaLock /> MSC 2026 已锁定为公开赛事档案</p>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                {mscArchive?.correction?.note || '最终战果已确认；完整逐组、逐曲与跑图统计收录于赛事纪念页。'}
+              </p>
+            </div>
+            <button onClick={() => navigate('/matches/msc2026')} className="flex items-center justify-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-5 py-3 text-sm font-bold text-amber-100 transition hover:bg-amber-300/20">
+              查看完整战报 <FaTrophy />
+            </button>
+          </div>
+        )}
 
         {/* Hero */}
         <div className="relative rounded-3xl overflow-hidden mb-8">
@@ -502,14 +535,14 @@ const TournamentDetail = () => {
             <motion.div key="results" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="bg-[#15151e] border border-white/[0.05] rounded-2xl p-6 md:p-8">
               <ResultPodium
                 tournamentId={id}
-                results={results.length > 0 ? results : (tournament.results || []).map(r => ({
+                results={publicResults.length > 0 ? publicResults : (tournament.results || []).map(r => ({
                   ...r,
                   userId: r.userId || r,
                   username: r.userId?.username || r.username,
                   avatarUrl: r.userId?.avatarUrl || r.avatarUrl,
                   rank: r.rank,
                 }))}
-                isManager={canManage}
+                isManager={canManage && !isMSC2026Archive}
               />
             </motion.div>
           )}
