@@ -3,11 +3,13 @@ import { Check, Coins, Copy, PackageOpen, ShieldCheck, ShoppingBag } from 'lucid
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import * as api from '../api/msc2026Api';
+import StoreInventoryManager from '../components/store/StoreInventoryManager';
 
 const number = new Intl.NumberFormat('zh-CN');
 
 export default function PointsStorePage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'ADM';
   const [products, setProducts] = useState([]);
   const [redemptions, setRedemptions] = useState([]);
   const [account, setAccount] = useState(null);
@@ -88,6 +90,8 @@ export default function PointsStorePage() {
         <div className="msc-panel p-6 text-center"><p className="text-xl font-black text-white">登录后即可查看余额并兑换</p><Link to="/login" className="mt-4 inline-block bg-amber-300 px-6 py-3 font-black text-black">前往登录</Link></div>
       )}
 
+      {isAdmin && <StoreInventoryManager onChanged={load} />}
+
       <section>
         <div className="mb-4 flex items-end justify-between gap-4"><div><p className="msc-kicker">CATALOG / 兑换目录</p><h2 className="mt-2 text-3xl font-black text-white">本期商品</h2></div><span className="font-mono text-sm text-zinc-600">{products.length} ITEMS</span></div>
         {products.length === 0 ? (
@@ -99,10 +103,12 @@ export default function PointsStorePage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {products.map(product => (
-              <article key={product._id} className="msc-panel flex min-h-64 flex-col p-6">
-                <ShoppingBag className="h-8 w-8 text-amber-200" /><h3 className="mt-5 text-2xl font-black text-white">{product.name}</h3><p className="mt-2 flex-1 text-zinc-400">{product.description}</p>
+              <article key={product._id} className="msc-panel flex min-h-64 flex-col overflow-hidden">
+                <div className="aspect-[4/3] bg-black/30">{product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full items-center justify-center"><ShoppingBag className="h-12 w-12 text-zinc-700" /></div>}</div>
+                <div className="flex flex-1 flex-col p-6"><ShoppingBag className="h-8 w-8 text-amber-200" /><h3 className="mt-5 text-2xl font-black text-white">{product.name}</h3><p className="mt-2 flex-1 whitespace-pre-wrap text-zinc-400">{product.description}</p>
                 <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4"><span className="text-2xl font-black text-amber-100">{number.format(product.cost)} 分</span><span className="text-sm text-zinc-500">库存 {product.stock}</span></div>
                 <button disabled={!user || pendingId === product._id || (account?.balance || 0) < product.cost} onClick={() => redeem(product)} className="mt-4 h-12 bg-amber-300 font-black text-black disabled:opacity-30">{pendingId === product._id ? '正在签发凭证...' : '确认兑换'}</button>
+                </div>
               </article>
             ))}
           </div>

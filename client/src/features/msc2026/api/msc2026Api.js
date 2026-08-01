@@ -181,6 +181,24 @@ export const placeBet = (marketId, selectionId, stake) =>
 
 export const getStoreProducts = () => axios.get(`${BASE}/store/products`);
 
+export const getAdminStoreProducts = () =>
+  axios.get(`${BASE}/store/admin/products`, { headers: authHeaders() });
+
+export const createStoreProduct = (data) =>
+  axios.post(`${BASE}/store/admin/products`, data, { headers: authHeaders() });
+
+export const updateStoreProduct = (productId, data) =>
+  axios.patch(`${BASE}/store/admin/products/${productId}`, data, { headers: authHeaders() });
+
+export const uploadStoreProductImage = (file) => {
+  const body = new FormData();
+  body.append('image', file);
+  return axios.post(`${BASE}/store/admin/upload`, body, {
+    headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
+    timeout: 30_000
+  });
+};
+
 export const getStoreRedemptions = () =>
   axios.get(`${BASE}/store/redemptions`, { headers: authHeaders() });
 
