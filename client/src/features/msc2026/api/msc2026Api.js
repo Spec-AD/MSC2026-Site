@@ -95,6 +95,10 @@ export const advanceFromDecode = () =>
 export const initRace = (data) =>
   axios.post(`${BASE}/race/init`, data, { headers: authHeaders() });
 
+/** 现场事故恢复跑图 */
+export const recoverRace = (data) =>
+  axios.post(`${BASE}/race/recover`, data, { headers: authHeaders() });
+
 /** 核验席位后显式开始跑图 */
 export const startRace = () =>
   axios.post(`${BASE}/race/start`, {}, { headers: authHeaders() });

@@ -17,6 +17,7 @@ function getRaceTimerDecision(race, now = Date.now()) {
   if (race.status === 'adjudicating' || (!race.status && hasPendingChallenge(race)) || !race.turnStartedAt) {
     return { type: 'turn_paused' };
   }
+  if (race.turnTimeLimitMs == null) return { type: 'none' };
 
   const turnElapsed = now - new Date(race.turnStartedAt).getTime();
   if (turnElapsed >= race.turnTimeLimitMs) return { type: 'turn_timeout' };

@@ -36,29 +36,17 @@ function tournamentWithRace(overrides = {}) {
   return { tournament, getSaveCount: () => saves };
 }
 
-test('turn timeout advances exactly one player and persists the result', async () => {
+test('MSC race processing disables legacy map and turn timeouts', async () => {
   const { tournament, getSaveCount } = tournamentWithRace();
   const result = await processRaceTimersUnlocked(tournament, NOW);
 
-  assert.equal(result.type, 'turn_timeout');
-  assert.equal(tournament.stage2.currentPlayerIndex, 1);
-  assert.equal(tournament.stage2.currentTurn, 1);
-  assert.equal(tournament.stage2.actionLog.length, 1);
-  assert.equal(tournament.stage2.actionLog[0].actionType, 'skip_timeout');
-  assert.equal(getSaveCount(), 1);
-});
-
-test('map timeout terminates the race and stores the qualified ranking', async () => {
-  const { tournament, getSaveCount } = tournamentWithRace({
-    totalTimeStartedAt: new Date(NOW - 45 * 60_000)
-  });
-  const result = await processRaceTimersUnlocked(tournament, NOW);
-
-  assert.equal(result.type, 'map_timeout');
-  assert.equal(tournament.stage2.terminated, true);
-  assert.equal(tournament.stage2.terminatedReason, 'timeout');
-  assert.deepEqual(tournament.qualifiedStage2, ['player-1', 'player-2']);
-  assert.equal(getSaveCount(), 1);
+  assert.equal(result.type, 'none');
+  assert.equal(tournament.stage2.currentPlayerIndex, 0);
+  assert.equal(tournament.stage2.currentTurn, 0);
+  assert.equal(tournament.stage2.terminated, false);
+  assert.equal(tournament.stage2.timeLimitMs, null);
+  assert.equal(tournament.stage2.turnTimeLimitMs, null);
+  assert.equal(getSaveCount(), 0);
 });
 
 test('global pause blocks automatic expiry and resume shifts both active clocks', async () => {

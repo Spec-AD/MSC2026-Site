@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { initRace, startRace, playerAction, skipTurn, _drawTask, _replenishEmptyItemZones } = require('./raceEngine');
+const { initRace, recoverRace, startRace, playerAction, skipTurn, _drawTask, _replenishEmptyItemZones } = require('./raceEngine');
 const { CHALLENGE_TASKS } = require('./challengeDefinitions');
 
 const PLAYER_IDS = Array.from({ length: 6 }, (_, index) => (index + 1).toString(16).padStart(24, '0'));
@@ -32,6 +32,32 @@ test('race initialization randomizes seats and order but waits for an explicit s
   assert.equal(race.status, 'racing');
   assert.ok(race.totalTimeStartedAt instanceof Date);
   assert.ok(race.turnStartedAt instanceof Date);
+});
+
+test('incident recovery rebuilds round eight with coordinates, two items each and fresh pools', async () => {
+  const tournament = createTournament();
+  tournament.operationLogs = [];
+  const positions = PLAYER_IDS.map((playerId, index) => ({
+    playerId,
+    startVertex: index,
+    currentLayer: index % 3,
+  }));
+
+  const race = await recoverRace(tournament, PLAYER_IDS, positions, { roundNumber: 8, itemCount: 2 });
+
+  assert.equal(race.status, 'waiting');
+  assert.equal(race.roundNumber, 8);
+  assert.equal(race.currentTurn, 42);
+  assert.equal(race.challengeHistory.length, 0);
+  assert.equal(race.taskPool.used.length, 0);
+  assert.equal(race.taskPool.remaining.length, CHALLENGE_TASKS.length);
+  assert.ok(race.itemsOnMap.length >= 6);
+  race.players.forEach((player) => {
+    const expected = positions.find(position => position.playerId === player.userId.toString());
+    assert.equal(player.startVertex, expected.startVertex);
+    assert.equal(player.currentLayer, expected.currentLayer);
+    assert.equal(player.items.length, 2);
+  });
 });
 
 test('a completed round reverses the complete action order for the next round', async () => {
@@ -78,7 +104,7 @@ test('pickup is allocated only after every player has acted', async () => {
   assert.equal(race.roundNumber, 2);
 });
 
-test('contested pickup is randomized at round settlement instead of favoring the first claimant', async () => {
+test('same-zone pickup replenishes immediately so every claimant receives an item', async () => {
   const tournament = createTournament();
   const race = await initRace(tournament, PLAYER_IDS);
   await startRace(tournament);
@@ -99,17 +125,11 @@ test('contested pickup is randomized at round settlement instead of favoring the
   });
   assert.equal(keptOne, true);
 
-  const originalRandom = Math.random;
-  try {
-    // Fisher-Yates with zero reverses the two claimants, so the later claimant wins.
-    Math.random = () => 0;
-    for (let index = 2; index < PLAYER_IDS.length; index += 1) await skipTurn(tournament);
-  } finally {
-    Math.random = originalRandom;
-  }
+  for (let index = 2; index < PLAYER_IDS.length; index += 1) await skipTurn(tournament);
 
-  assert.equal(first.items.length, 0);
+  assert.equal(first.items.length, 1);
   assert.equal(second.items.length, 1);
+  assert.equal(race.itemsOnMap.filter(item => item.zoneIndex === 0 && !item.collected).length, 1);
 });
 
 test('the 33-task pool avoids repeats per cycle and refills indefinitely', () => {

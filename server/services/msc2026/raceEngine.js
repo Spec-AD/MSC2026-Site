@@ -39,8 +39,8 @@ const RACE_CONFIGS = {
     wallLabels: ['密锁之墙', '准锁之墙'],
     itemPoolRefs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     zoneCount: 6,
-    timeLimitMs: 60 * 60 * 1000,
-    turnTimeLimitMs: 45 * 1000,         // 45s
+    timeLimitMs: null,
+    turnTimeLimitMs: null,
     advanceCount: 4
   },
   stage3: {
@@ -49,8 +49,8 @@ const RACE_CONFIGS = {
     wallLabels: ['叹息之墙', '终局之墙'],
     itemPoolRefs: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     zoneCount: 4,
-    timeLimitMs: 45 * 60 * 1000,
-    turnTimeLimitMs: 45 * 1000,          // 45s
+    timeLimitMs: null,
+    turnTimeLimitMs: null,
     advanceCount: 2
   }
 };
@@ -186,6 +186,80 @@ async function initRace(tournament, playerIds) {
   return raceState;
 }
 
+/**
+ * 现场事故恢复：重新生成全部动态池，从指定圈数和坐标恢复选手，
+ * 并给每位选手随机发放指定数量的本阶段道具。
+ */
+async function recoverRace(tournament, playerIds, positions, options = {}) {
+  const stageKey = tournament.status;
+  const config = RACE_CONFIGS[stageKey];
+  if (!config) throw new Error('当前不在跑图阶段');
+
+  await initRace(tournament, playerIds);
+  const race = tournament[stageKey];
+  const expectedIds = new Set(race.players.map(player => player.userId.toString()));
+  const normalizedPositions = Array.isArray(positions) ? positions : [];
+  if (normalizedPositions.length !== expectedIds.size) throw new Error('请为每位跑图选手指定坐标');
+
+  const byPlayer = new Map();
+  for (const position of normalizedPositions) {
+    const playerId = String(position?.playerId || '');
+    const startVertex = Number(position?.startVertex);
+    const currentLayer = Number(position?.currentLayer);
+    if (!expectedIds.has(playerId) || byPlayer.has(playerId)) throw new Error('事故恢复选手名单与晋级名单不一致');
+    if (!Number.isInteger(startVertex) || startVertex < 0 || startVertex >= config.zoneCount) {
+      throw new Error(`选手区域坐标必须为 0-${config.zoneCount - 1}`);
+    }
+    if (!Number.isInteger(currentLayer) || currentLayer < 0 || currentLayer >= config.layers) {
+      throw new Error(`选手层级坐标必须为 0-${config.layers - 1}`);
+    }
+    byPlayer.set(playerId, { startVertex, currentLayer });
+  }
+
+  const itemCount = Number(options.itemCount ?? 2);
+  if (!Number.isInteger(itemCount) || itemCount < 0 || itemCount > 10) throw new Error('随机道具数量非法');
+  const itemPool = getItemPool(stageKey);
+  const eligibleRefs = config.itemPoolRefs.filter(ref => itemPool[ref]);
+  if (!eligibleRefs.length) throw new Error('当前阶段道具池为空');
+
+  for (const player of race.players) {
+    const position = byPlayer.get(player.userId.toString());
+    player.startVertex = position.startVertex;
+    player.currentLayer = position.currentLayer;
+    player.items = Array.from({ length: itemCount }, () => ({
+      itemRef: eligibleRefs[Math.floor(Math.random() * eligibleRefs.length)],
+      status: 'unused'
+    }));
+  }
+
+  race.roundNumber = Number(options.roundNumber ?? 8);
+  if (!Number.isInteger(race.roundNumber) || race.roundNumber < 1) throw new Error('恢复圈数非法');
+  race.currentTurn = (race.roundNumber - 1) * race.players.length;
+  race.status = 'waiting';
+  race.totalTimeStartedAt = null;
+  race.turnStartedAt = null;
+  race.paused = false;
+  race.pausedAt = null;
+  race.actionLog = [];
+  race.challengeHistory = [];
+  race.pendingRoundActions = [];
+  race.finishOrder = [];
+  race.terminated = false;
+  race.terminatedReason = null;
+
+  if (Array.isArray(tournament.operationLogs)) {
+    tournament.operationLogs.push({
+      action: 'race_incident_recovery',
+      stage: stageKey,
+      detail: { roundNumber: race.roundNumber, itemCount, positions: normalizedPositions },
+      operatedBy: options.operatedBy || null
+    });
+  }
+  await tournament.save();
+  broadcast('stage_advanced', { stage: stageKey, phase: 'incident_recovery', roundNumber: race.roundNumber });
+  return race;
+}
+
 /** 初始化后由管理员显式开始；开始前地图和席位可供现场核验。 */
 async function startRace(tournament) {
   const stageKey = tournament.status;
@@ -289,7 +363,9 @@ async function resumeRace(tournament, operatedBy = null, now = Date.now()) {
 function currentRace(tournament) {
   const stageKey = tournament.status;
   if (stageKey !== 'stage2' && stageKey !== 'stage3') return null;
-  return tournament[stageKey];
+  const race = tournament[stageKey];
+  if (race) _ensureRoundState(race);
+  return race;
 }
 
 /**
@@ -327,7 +403,7 @@ async function playerAction(tournament, targetPlayerId, actionType, zoneIndex) {
   }
 
   // 检查回合超时
-  if (race.turnStartedAt) {
+  if (race.turnStartedAt && race.turnTimeLimitMs != null) {
     const elapsed = Date.now() - new Date(race.turnStartedAt).getTime();
     if (elapsed > race.turnTimeLimitMs) {
       await _skipTurn(tournament, race, 'skip_timeout', targetPlayerId);
@@ -519,6 +595,9 @@ async function useItem(tournament, targetPlayerId, itemRef) {
 // ── 内部实现 ──
 
 function _ensureRoundState(race) {
+  // MSC 2026 现场规则：阶段二、三均不再设置地图或单回合时间限制。
+  race.timeLimitMs = null;
+  race.turnTimeLimitMs = null;
   if (!race.status) {
     race.status = race.terminated
       ? 'terminated'
@@ -1124,14 +1203,19 @@ async function _skipTurn(tournament, race, reason, userId) {
 function _resolveRoundPickups(race, stageKey) {
   const intents = race.pendingRoundActions.filter(action => action.actionType === 'pickup' && !action.resolved);
   const events = [];
+  const replenished = [];
   const zones = [...new Set(intents.map(action => action.zoneIndex))];
 
   for (const zoneIndex of zones) {
     const claimants = shuffle(intents.filter(action => action.zoneIndex === zoneIndex));
-    const availableItems = shuffle(race.itemsOnMap.filter(item => item.zoneIndex === zoneIndex && !item.collected));
-    claimants.forEach((claim, index) => {
+    claimants.forEach((claim) => {
       claim.resolved = true;
-      const item = availableItems[index];
+      let item = shuffle(race.itemsOnMap.filter(entry => entry.zoneIndex === zoneIndex && !entry.collected))[0];
+      if (!item) {
+        const refills = _replenishEmptyItemZones(race, stageKey);
+        replenished.push(...refills);
+        item = race.itemsOnMap.find(entry => entry.zoneIndex === zoneIndex && !entry.collected);
+      }
       const player = race.players.find(entry => entry.userId.toString() === String(claim.playerId));
       const log = [...race.actionLog].reverse().find(entry =>
         entry.actionType === 'pickup' &&
@@ -1149,24 +1233,16 @@ function _resolveRoundPickups(race, stageKey) {
       claim.itemRef = item.itemRef;
       if (log) log.detail = { zoneIndex, itemRef: item.itemRef, allocated: true };
       events.push({ playerId: player.userId.toString(), zoneIndex });
+
+      // 每次拿走后立即补回，保证同一区域下一位选手仍然有道具可拿。
+      const refills = _replenishEmptyItemZones(race, stageKey);
+      replenished.push(...refills);
+      const ownRefill = refills.find(refill => refill.zoneIndex === zoneIndex);
+      if (ownRefill && log) log.detail = { ...log.detail, replenishedItemRef: ownRefill.itemRef };
     });
   }
 
-  const replenished = _replenishEmptyItemZones(race, stageKey);
-  for (const refill of replenished) {
-    const refillClaim = [...intents].reverse().find(claim =>
-      claim.allocated === true && Number(claim.zoneIndex) === refill.zoneIndex
-    );
-    if (!refillClaim) continue;
-    const refillLog = [...race.actionLog].reverse().find(entry =>
-      entry.actionType === 'pickup' &&
-      entry.detail?.allocated === true &&
-      Number(entry.detail?.zoneIndex) === refill.zoneIndex &&
-      Number(entry.turn) === Number(refillClaim.turn) &&
-      entry.playerId.toString() === String(refillClaim.playerId)
-    );
-    if (refillLog) refillLog.detail = { ...refillLog.detail, replenishedItemRef: refill.itemRef };
-  }
+  replenished.push(..._replenishEmptyItemZones(race, stageKey));
   return { events, replenished };
 }
 
@@ -1348,7 +1424,7 @@ async function _advanceTurn(tournament, race) {
 async function _checkMapTimeout(tournament, race, stageKey) {
   if (race.terminated) return;
   if (race.paused) return;
-  if (!race.totalTimeStartedAt) return;
+  if (!race.totalTimeStartedAt || race.timeLimitMs == null) return;
   const elapsed = Date.now() - new Date(race.totalTimeStartedAt).getTime();
   if (elapsed >= race.timeLimitMs) {
     // 修复 #3：超时不再只置内存标志，而是正式结算（算排名 + 写晋级 + 落库 + 广播），
@@ -1491,6 +1567,7 @@ function getRaceConfig(stageKey) {
 
 module.exports = {
   initRace,
+  recoverRace,
   startRace,
   pauseRace,
   resumeRace,

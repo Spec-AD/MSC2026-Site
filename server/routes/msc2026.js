@@ -23,12 +23,12 @@ const User = require('../models/User');
 
 const { loadTournament, checkPermission, calculateRaceRankings, shuffle, assertObjectIdList } = require('../services/msc2026/utils');
 const { initStage1, startFirstGroup, completeGroupReveal, selectSong, submitScore, advance: advanceStage1, forfeitPlayer, resolveGroupTie } = require('../services/msc2026/stage1');
-const { initRace, startRace, pauseRace, resumeRace, currentRace, playerAction, useItem, challengeResult, skipTurn, terminateRace } = require('../services/msc2026/raceEngine');
+const { initRace, recoverRace, startRace, pauseRace, resumeRace, currentRace, playerAction, useItem, challengeResult, skipTurn, terminateRace } = require('../services/msc2026/raceEngine');
 const { initStage4, selectSong: selectSong4, submitScore: submitScore4, advance: advanceStage4, resolveTie: resolveTie4 } = require('../services/msc2026/stage4');
 const { addClient, broadcast } = require('../services/msc2026/ssePool');
 const {
   undoStage1LastSong, undoStage1LastScore, revertStage1Group, resetStage1,
-  undoRaceLastAction, undoRaceItemUse, undoRaceLastChallengeResult, resetRace,
+  undoRaceLastAction, undoRaceItemUse, undoRaceLastChallengeResult,
   undoStage4LastSong, undoStage4LastScore, resetStage4,
   revertStage, resetAll
 } = require('../services/msc2026/rollback');
@@ -1311,6 +1311,30 @@ router.post('/race/init', authMiddleware, async (req, res) => {
   }
 });
 
+router.post('/race/recover', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+
+    await withLockedTournament(res, async (t) => {
+      if (t.status !== 'stage2' && t.status !== 'stage3') throw new Error('当前不在跑图阶段');
+      const playerIds = getQualifiedIdsForStage(t, t.status);
+      const race = await recoverRace(t, playerIds, req.body.positions, {
+        roundNumber: req.body.roundNumber ?? 8,
+        itemCount: req.body.itemCount ?? 2,
+        operatedBy: req.user.id
+      });
+      res.json({
+        msg: `事故状态已恢复至第 ${race.roundNumber} 圈，请核验后开始`,
+        data: { stage: t.status, roundNumber: race.roundNumber, playerCount: race.players.length }
+      });
+    });
+  } catch (err) {
+    console.error('恢复跑图事故状态失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
 router.post('/race/start', authMiddleware, async (req, res) => {
   try {
     const perm = await checkPermission(req.user, null, 'admin');
@@ -1418,10 +1442,12 @@ router.get('/race/state', async (req, res) => {
           if (value.actionType === 'pickup') value.detail = { zoneIndex: value.detail?.zoneIndex };
           return value;
         }),
-        turnRemainingMs: race.status === 'adjudicating' || (!race.status && pendingChallenge) || !race.turnStartedAt
+        turnRemainingMs: race.turnTimeLimitMs == null || race.status === 'adjudicating' || (!race.status && pendingChallenge) || !race.turnStartedAt
           ? null
           : Math.max(0, race.turnTimeLimitMs - turnElapsed),
-        totalRemainingMs: race.totalTimeStartedAt ? Math.max(0, race.timeLimitMs - totalElapsed) : race.timeLimitMs,
+        totalRemainingMs: race.timeLimitMs == null
+          ? null
+          : race.totalTimeStartedAt ? Math.max(0, race.timeLimitMs - totalElapsed) : race.timeLimitMs,
         terminated: race.terminated,
         terminatedReason: race.terminatedReason
       }
@@ -2243,13 +2269,15 @@ router.post('/race/reset', authMiddleware, async (req, res) => {
   try {
     await withRaceMutationLock(async () => {
       const t = await loadAndCheck(req, res); if (!t) return;
+      const stageKey = t.status;
       const race = currentRace(t);
       if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
-      resetRace(race);
+      const playerIds = getQualifiedIdsForStage(t, stageKey);
+      await initRace(t, playerIds);
       t.operationLogs.push({ action: 'race_reset', stage: t.status, operatedBy: req.user.id, operatedAt: new Date() });
       await t.save();
       broadcast('map_timeout', { event: 'reset' });
-      res.json({ msg: '跑图已重置' });
+      res.json({ msg: '跑图已安全重置，晋级选手已重新就位，可直接核验并开始' });
     });
   } catch (err) { res.status(400).json({ msg: err.message }); }
 });

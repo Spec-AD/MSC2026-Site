@@ -165,6 +165,52 @@ function QualifiedPlayerList({ players, emptyText }) {
   );
 }
 
+function IncidentRecoveryPanel({ stage, players, loading, onRecover }) {
+  const zoneCount = stage === 'stage2' ? 6 : 4;
+  const [positions, setPositions] = useState(() => players.map((player, index) => ({
+      playerId: String(player.userId),
+      username: player.username,
+      startVertex: index % zoneCount,
+      currentLayer: 0,
+    })));
+
+  const updatePosition = (playerId, key, value) => {
+    setPositions(current => current.map(position =>
+      position.playerId === playerId ? { ...position, [key]: Number(value) } : position
+    ));
+  };
+
+  const submit = () => {
+    if (!window.confirm('将覆盖当前跑图状态，并刷新挑战池和地图道具池。确认执行事故恢复？')) return;
+    onRecover(positions.map(({ playerId, startVertex, currentLayer }) => ({ playerId, startVertex, currentLayer })));
+  };
+
+  return (
+    <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 space-y-3">
+      <div>
+        <p className="text-sm font-bold text-red-200">现场事故恢复</p>
+        <p className="text-xs text-zinc-500 mt-1">恢复至第 8 圈；每人随机 2 个本阶段道具；挑战记录、挑战池和地图道具池全部刷新。</p>
+      </div>
+      <div className="space-y-2">
+        {positions.map(position => (
+          <div key={position.playerId} className="grid grid-cols-[minmax(0,1fr)_90px_90px] gap-2 items-center">
+            <span className="text-xs text-zinc-200 truncate">{position.username}</span>
+            <select value={position.startVertex} onChange={event => updatePosition(position.playerId, 'startVertex', event.target.value)} className="bg-zinc-900 border border-white/10 rounded-lg px-2 py-2 text-xs text-white">
+              {Array.from({ length: zoneCount }, (_, index) => <option key={index} value={index}>区域 {index + 1}</option>)}
+            </select>
+            <select value={position.currentLayer} onChange={event => updatePosition(position.playerId, 'currentLayer', event.target.value)} className="bg-zinc-900 border border-white/10 rounded-lg px-2 py-2 text-xs text-white">
+              <option value={0}>外圈</option>
+              <option value={1}>第1墙后</option>
+              <option value={2}>第2墙后</option>
+            </select>
+          </div>
+        ))}
+      </div>
+      <ActionButton onClick={submit} loading={loading} icon={<FaExclamationTriangle />} label="按以上坐标恢复第8圈" variant="danger" />
+    </div>
+  );
+}
+
 // ==================== 主面板 ====================
 
 export default function AdminPanel() {
@@ -333,6 +379,11 @@ export default function AdminPanel() {
       '跑图初始化完成，后端晋级选手已就位'
     );
   };
+
+  const handleRecoverRace = (positions) => handleAction(
+    () => api.recoverRace({ roundNumber: 8, itemCount: 2, positions }),
+    '事故状态已恢复，请核验地图后开始跑图'
+  );
 
   const handleInitStage4 = () =>
     handleAction(
@@ -610,6 +661,7 @@ export default function AdminPanel() {
                     </>
                   )}
                 </div>
+                {status === 'stage2' && stage2Players.length === 6 && <IncidentRecoveryPanel key={stage2Players.map(player => player.userId).join(':')} stage="stage2" players={stage2Players} loading={loading} onRecover={handleRecoverRace} />}
               </div>
             )}
 
@@ -641,6 +693,7 @@ export default function AdminPanel() {
                   <ActionButton onClick={quickAction(api.revertChallengeResult, '撤回判定')} loading={loading} icon={<FaUndo />} label="撤回判定" variant="undo" />
                   <ActionButton onClick={quickAction(api.resetRace, '重置跑图')} loading={loading} icon={<FaTrash />} label="重置" variant="danger" />
                 </div>
+                {stage3Players.length === 4 && <IncidentRecoveryPanel key={stage3Players.map(player => player.userId).join(':')} stage="stage3" players={stage3Players} loading={loading} onRecover={handleRecoverRace} />}
               </div>
             )}
 
