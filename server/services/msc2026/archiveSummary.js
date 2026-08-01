@@ -198,7 +198,7 @@ function addPlayerStat(map, player, stage, score = null, extras = {}) {
   record.totalDxScore += Number(extras.raceDxScore || 0);
 }
 
-function buildPlayerArchives(stages, placements) {
+function buildPlayerArchives(stages, standings) {
   const map = new Map();
   for (const group of stages.stage1.groups) {
     for (const [side, totalsKey] of [['p1', 'p1Totals'], ['p2', 'p2Totals']]) {
@@ -220,32 +220,70 @@ function buildPlayerArchives(stages, placements) {
     stages.stage4.songs.map(song => song[`${side}Score`]).filter(Boolean)
       .forEach(score => addPlayerStat(map, player, '决赛', score));
   }
-  placements.forEach(place => {
+  standings.forEach(place => {
     const record = map.get(idOf(place.player));
     if (record) record.finalRank = place.rank;
   });
 
-  const maxStage = record => record.finalRank === 1 ? 100 : record.finalRank === 2 ? 96 :
-    record.stages.has('4进2') ? (record.finalRank ? 90 - (record.finalRank - 3) * 4 : 84) :
-      record.stages.has('6进4') ? 78 : 68;
-
   return Array.from(map.values()).map(record => {
     const achievements = record.scores.map(score => score.achievement).filter(Number.isFinite);
-    const strengthIndex = Math.max(0, Math.min(100, maxStage(record)));
+    const username = record.player?.username;
     return {
       player: record.player,
       stages: Array.from(record.stages),
       finalRank: record.finalRank,
-      strengthIndex,
-      strengthTier: strengthIndex >= 98 ? 'S+' : strengthIndex >= 92 ? 'S' : strengthIndex >= 84 ? 'A+' : strengthIndex >= 74 ? 'A' : 'B+',
       songsPlayed: record.scores.length,
       averageAchievement: achievements.length ? round4(sum(achievements) / achievements.length) : null,
       totalDxScore: record.totalDxScore,
       perfectBreak: record.perfectBreak,
       raceAttempts: record.raceAttempts,
-      raceClears: record.raceClears
+      raceClears: record.raceClears,
+      contextNote: username === 'Tpale'
+        ? '跑图阶段随机道具收益有限，未能将逐曲精度表现转化为晋级。'
+        : username === 'CTSs2317'
+          ? '跑图阶段随机道具收益有限；后续接替空缺席位完成余下赛程。'
+          : null
     };
-  }).sort((a, b) => b.strengthIndex - a.strengthIndex || (b.averageAchievement || 0) - (a.averageAchievement || 0));
+  }).sort((a, b) => (a.finalRank || 99) - (b.finalRank || 99) || (b.averageAchievement || 0) - (a.averageAchievement || 0));
+}
+
+function buildStandings(stages, placements, withdrawn) {
+  const standings = placements.map(place => ({
+    ...place,
+    resultLabel: place.rank === 1 ? '冠军' : place.rank === 2 ? '亚军' : '四强'
+  }));
+  const used = new Set(standings.map(entry => idOf(entry.player)));
+
+  const stage2Eliminated = stages.stage2.rankings
+    .filter(entry => !entry.qualified && !used.has(idOf(entry.player)))
+    .map(entry => entry.player);
+  const fifth = stage2Eliminated.find(player => idOf(player) !== idOf(withdrawn));
+  if (fifth) {
+    standings.push({ rank: 5, player: fifth, label: '六强', resultLabel: '止步 6进4' });
+    used.add(idOf(fifth));
+  }
+  if (withdrawn && !used.has(idOf(withdrawn))) {
+    standings.push({ rank: 6, player: publicPlayer(withdrawn), label: '六强', resultLabel: '6进4 晋级后退赛' });
+    used.add(idOf(withdrawn));
+  }
+
+  const stage1Losers = stages.stage1.groups.map(group => {
+    const loserSide = idOf(group.winner) === idOf(group.p1) ? 'p2' : 'p1';
+    return { player: group[loserSide], totals: group[`${loserSide}Totals`] };
+  }).filter(entry => entry.player && !used.has(idOf(entry.player)));
+  stage1Losers.sort((a, b) =>
+    Number(b.totals?.totalAchievement || 0) - Number(a.totals?.totalAchievement || 0) ||
+    Number(b.totals?.totalDxScore || 0) - Number(a.totals?.totalDxScore || 0) ||
+    Number(b.totals?.perfectBreak || 0) - Number(a.totals?.perfectBreak || 0)
+  );
+  stage1Losers.forEach((entry, index) => standings.push({
+    rank: 7 + index,
+    player: entry.player,
+    label: '十二强',
+    resultLabel: '止步 12进6',
+    stats: entry.totals
+  }));
+  return standings.sort((a, b) => a.rank - b.rank);
 }
 
 function buildHighlights(stages) {
@@ -279,6 +317,7 @@ function buildArchiveSummary(tournament, withdrawn, substitute) {
     ...stage3Others.slice(0, 2).map((player, index) => ({ rank: index + 3, player, label: '四强' }))
   ].filter(place => place.player);
   const stages = { stage1, stage2, stage3, stage4 };
+  const standings = buildStandings(stages, placements, withdrawn);
 
   return {
     status: tournament.status,
@@ -288,16 +327,17 @@ function buildArchiveSummary(tournament, withdrawn, substitute) {
       withdrawn: publicPlayer(withdrawn),
       substitute: publicPlayer(substitute),
       effectiveFrom: '4进2',
-      note: '7XDawn 在 6 进 4 晋级后因个人原因弃权；自 4 进 2 起，其席位与后续成绩统一归档为 CTSs2317。'
+      note: '7XDawn 完成 6进4 后退出后续赛程，4进2 起由 CTSs2317 接替席位。'
     },
     placements,
+    standings,
     stages,
     highlights: buildHighlights(stages),
-    players: buildPlayerArchives(stages, placements),
+    players: buildPlayerArchives(stages, standings),
     dataNotes: [
       '完成率保留四位小数；DX 分与完美 BREAK 依照现场录入原值统计。',
       '跑图阶段现场系统未录入完美 BREAK，档案中以“未记录”展示，不作推算。',
-      '实力分级仅反映本届 MSC 2026 的晋级深度与赛场表现，不代表玩家常规 Rating。'
+      '跑图包含随机路线与道具因素，赛事名次不能单独作为选手硬实力评价。'
     ]
   };
 }
@@ -339,7 +379,6 @@ async function reconcileMSC2026Archive() {
   ]);
   if (!withdrawn || !substitute) return { reconciled: false, reason: 'replacement_players_missing' };
   const fromId = idOf(withdrawn);
-  const toId = idOf(substitute);
 
   // 保留 7XDawn 的 6进4 战果；从 4进2 起修正为替补 CTSs2317。
   for (const player of tournament.stage3?.players || []) player.userId = replaceId(player.userId, fromId, substitute._id);
@@ -377,16 +416,14 @@ async function reconcileMSC2026Archive() {
     const previousStatus = oldT.status;
     oldT.qualifierLocked = true;
     oldT.status = 'ARCHIVED';
-    oldT.results = summary.placements.map(place => ({
+    oldT.results = summary.standings.map(place => ({
       rank: place.rank,
       userId: place.player.userId,
-      note: place.rank === 1 ? 'MSC 2026 冠军' : place.rank === 2 ? 'MSC 2026 亚军（替补参赛）' : 'MSC 2026 四强'
+      note: `MSC 2026 · ${place.resultLabel}`
     }));
     oldT.resultAnnouncement = [
       'MSC 2026 最终战果',
-      ...summary.placements.map(place => `${place.rank}. ${place.player.username} — ${place.label}`),
-      '',
-      '席位说明：7XDawn 在 6进4 晋级后弃权，自 4进2 起由 CTSs2317 替补，后续成绩归 CTSs2317。'
+      ...summary.standings.map(place => `${place.rank}. ${place.player.username} — ${place.resultLabel}`),
     ].join('\n');
     for (const match of oldT.matches || []) {
       if (match.round !== '4进2') continue;

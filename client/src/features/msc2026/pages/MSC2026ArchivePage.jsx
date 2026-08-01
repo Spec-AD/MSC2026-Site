@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle, ArrowUpRight, BarChart3, Check, ChevronDown, Crown,
-  Gauge, LockKeyhole, Medal, Sparkles, Swords, Trophy, UserRoundCheck, X
+  Gauge, LockKeyhole, Medal, Sparkles, Swords, Trophy, X
 } from 'lucide-react';
 import { getArchive } from '../api/msc2026Api';
 import { getSongCover } from '../utils/songPresentation';
@@ -25,11 +25,12 @@ function Player({ player, compact = false }) {
   );
 }
 
-function Metric({ label, value, accent = false, note }) {
+function Metric({ label, value, accent = false, note, tone = '' }) {
+  const toneClass = tone === 'gold' ? 'text-amber-200' : tone === 'cyan' ? 'text-cyan-200' : accent ? 'text-amber-200' : 'text-zinc-100';
   return (
     <div className="border-l border-white/15 pl-3">
       <p className="msc-technical text-[10px] font-black uppercase text-zinc-500">{label}</p>
-      <p className={`mt-1 text-lg font-black tabular-nums ${accent ? 'text-amber-200' : 'text-zinc-100'}`}>{value}</p>
+      <p className={`mt-1 text-lg font-black tabular-nums ${toneClass}`}>{value}</p>
       {note && <p className="mt-1 text-[10px] text-zinc-600">{note}</p>}
     </div>
   );
@@ -85,12 +86,15 @@ function SongRows({ songs, p1, p2 }) {
   );
 }
 
-function Totals({ label, totals }) {
+function AggregateFace({ player, totals, side = 'left' }) {
+  const total = totals?.totalAchievement == null ? '—' : Number(totals.totalAchievement).toFixed(4);
   return (
-    <div className="grid grid-cols-3 gap-4 border-t border-white/10 pt-4">
-      <Metric label={`${label} 平均完成率`} value={pct(totals?.averageAchievement)} />
-      <Metric label="DX 分合计" value={integer(totals?.totalDxScore)} />
-      <Metric label="完美 BREAK" value={integer(totals?.perfectBreak)} />
+    <div className={`relative min-h-36 overflow-hidden border border-white/10 bg-black/20 p-5 ${side === 'right' ? 'text-right' : ''}`}>
+      <span className={`msc-display pointer-events-none absolute -bottom-3 text-[4.4rem] font-black leading-none text-white/[0.11] md:text-[5.6rem] ${side === 'right' ? '-left-2' : '-right-2'}`}>{total}</span>
+      <div className={`relative flex ${side === 'right' ? 'justify-end' : ''}`}><Player player={player} compact /></div>
+      <p className="msc-technical relative mt-5 text-[10px] font-black uppercase text-zinc-500">完成率总和</p>
+      <p className="msc-display relative mt-1 text-3xl font-black text-white tabular-nums md:text-5xl">{total}<span className="ml-1 text-base text-zinc-500">%</span></p>
+      <p className="relative mt-3 text-sm font-black text-sky-200">DX 总分 {integer(totals?.totalDxScore)} <span className="ml-2 text-amber-200">PF BREAK {integer(totals?.perfectBreak)}</span></p>
     </div>
   );
 }
@@ -106,11 +110,11 @@ function Stage1({ stage }) {
             <div className="flex flex-wrap items-center gap-3 text-lg"><Player player={group.p1} /><Swords className="h-4 w-4 text-zinc-600" /><Player player={group.p2} /></div>
             <div className="inline-flex items-center gap-2 text-sm font-black text-emerald-300"><Check className="h-4 w-4" />晋级 <Player player={group.winner} compact /></div>
           </div>
-          <SongRows songs={group.songs} p1={group.p1} p2={group.p2} />
-          <div className="grid gap-5 bg-black/20 p-5 md:grid-cols-2">
-            <Totals label={group.p1.username} totals={group.p1Totals} />
-            <Totals label={group.p2.username} totals={group.p2Totals} />
+          <div className="grid gap-px bg-white/10 md:grid-cols-2">
+            <AggregateFace player={group.p1} totals={group.p1Totals} />
+            <AggregateFace player={group.p2} totals={group.p2Totals} side="right" />
           </div>
+          <SongRows songs={group.songs} p1={group.p1} p2={group.p2} />
         </article>
       ))}
     </section>
@@ -159,7 +163,11 @@ function RaceStage({ stage, index }) {
           </details>
         ))}
       </div>
-      <p className="flex items-center gap-2 text-xs text-zinc-500"><AlertTriangle className="h-4 w-4" />跑图录入结构没有保存完美 BREAK 原值；本页据实标记为“未记录”。</p>
+      <div className="space-y-1 text-xs text-zinc-500">
+        {stage.key === 'stage2' && <p>数据说明：由于现场记录故障，本阶段仅统计系统修复后留存的对局数据。</p>}
+        {stage.key === 'stage2' && <p>席位记录：7XDawn 完成 6进4 后退出后续赛程，4进2 起由 CTSs2317 接替席位。</p>}
+        <p className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" />跑图录入未保存完美 BREAK 原值，本页以“未记录”展示。</p>
+      </div>
     </section>
   );
 }
@@ -174,11 +182,11 @@ function FinalStage({ stage }) {
           <div className="text-center"><Crown className="mx-auto h-7 w-7 text-amber-200" /><p className="mt-2 text-xs font-black text-zinc-500">WINNER</p><p className="text-xl font-black text-amber-100">{stage.winner.username}</p></div>
           <Player player={stage.p2} />
         </div>
-        <SongRows songs={stage.songs} p1={stage.p1} p2={stage.p2} />
-        <div className="grid gap-5 bg-black/20 p-5 md:grid-cols-2">
-          <Totals label={stage.p1.username} totals={stage.p1Totals} />
-          <Totals label={stage.p2.username} totals={stage.p2Totals} />
+        <div className="grid gap-px bg-white/10 md:grid-cols-2">
+          <AggregateFace player={stage.p1} totals={stage.p1Totals} />
+          <AggregateFace player={stage.p2} totals={stage.p2Totals} side="right" />
         </div>
+        <SongRows songs={stage.songs} p1={stage.p1} p2={stage.p2} />
       </article>
     </section>
   );
@@ -210,21 +218,43 @@ function HighlightCard({ icon, label, performance, metric }) {
 function PlayerArchives({ players }) {
   return (
     <section id="players" className="scroll-mt-32 space-y-4">
-      <SectionTitle index="05" eyebrow="PLAYER DOSSIERS" title="选手赛事档案" description="实力等级按本届赛事晋级深度与实战数据计算，只描述 MSC 2026 赛场表现。" />
+      <SectionTitle index="06" eyebrow="PLAYER DOSSIERS" title="选手赛事数据档案" description="只汇总本届赛事的逐曲与跑图数据；随机路线与道具会影响晋级结果，不据此评价选手实力。" />
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {players.map((entry, index) => (
-          <article key={entry.player.userId} className="msc-panel relative overflow-hidden p-5">
-            <span className="msc-display absolute -bottom-4 right-2 text-8xl font-black text-white/[0.035]">{entry.strengthTier}</span>
-            <div className="relative flex items-start justify-between gap-3"><Player player={entry.player} /><span className="border border-amber-200/25 px-2 py-1 font-black text-amber-100">{entry.strengthTier} / {entry.strengthIndex}</span></div>
+          <article key={entry.player.userId} className={`msc-panel relative overflow-hidden border-t-2 p-5 ${entry.averageAchievement >= 100.7 ? 'border-t-amber-300' : entry.averageAchievement >= 100.4 ? 'border-t-cyan-300' : 'border-t-white/15'}`}>
+            <span className="msc-display absolute -bottom-5 right-2 text-8xl font-black text-white/[0.045]">{entry.finalRank ? String(entry.finalRank).padStart(2, '0') : '—'}</span>
+            <div className="relative flex items-start justify-between gap-3"><Player player={entry.player} />{entry.finalRank && <span className="border border-white/15 px-2 py-1 font-black text-zinc-300">#{entry.finalRank}</span>}</div>
             <p className="relative mt-4 text-xs text-zinc-500">{entry.stages.join(' → ')}{entry.finalRank ? ` · 最终第 ${entry.finalRank} 名` : ''}</p>
             <div className="relative mt-5 grid grid-cols-2 gap-4">
-              <Metric label="平均完成率" value={pct(entry.averageAchievement)} />
+              <Metric label="平均完成率" value={pct(entry.averageAchievement)} tone={entry.averageAchievement >= 100.7 ? 'gold' : entry.averageAchievement >= 100.4 ? 'cyan' : ''} />
               <Metric label="累计 DX 分" value={integer(entry.totalDxScore)} />
               <Metric label="完美 BREAK" value={integer(entry.perfectBreak)} />
               <Metric label="跑图通过" value={`${entry.raceClears} / ${entry.raceAttempts}`} />
             </div>
+            {entry.contextNote && <p className="relative mt-5 border-t border-white/10 pt-3 text-xs leading-relaxed text-zinc-400">{entry.contextNote}</p>}
             <span className="msc-technical absolute left-2 top-2 text-[9px] text-zinc-700">DOSSIER {String(index + 1).padStart(2, '0')}</span>
           </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Standings({ standings }) {
+  return (
+    <section id="standings" className="scroll-mt-32 space-y-4">
+      <SectionTitle index="05" eyebrow="OFFICIAL STANDINGS" title="选手最终排名" description="依照各阶段晋级结果公示；同阶段未晋级选手按该阶段的有效成绩排序。" />
+      <div className="msc-panel overflow-hidden">
+        <div className="grid grid-cols-[70px_minmax(160px,1fr)_minmax(120px,0.7fr)] gap-4 border-b border-white/10 px-5 py-3 msc-technical text-[10px] font-black uppercase text-zinc-500 md:grid-cols-[90px_minmax(220px,1fr)_180px_180px]">
+          <span>排名</span><span>选手</span><span>赛事结果</span><span className="hidden md:block">阶段</span>
+        </div>
+        {standings.map(entry => (
+          <div key={`${entry.rank}-${entry.player.userId}`} className={`grid grid-cols-[70px_minmax(160px,1fr)_minmax(120px,0.7fr)] items-center gap-4 border-b border-white/[0.07] px-5 py-4 last:border-0 md:grid-cols-[90px_minmax(220px,1fr)_180px_180px] ${entry.rank <= 3 ? 'bg-amber-200/[0.035]' : ''}`}>
+            <span className={`msc-display text-3xl font-black ${entry.rank === 1 ? 'text-amber-200' : entry.rank <= 3 ? 'text-zinc-200' : 'text-zinc-500'}`}>{String(entry.rank).padStart(2, '0')}</span>
+            <Player player={entry.player} />
+            <span className="text-sm font-black text-zinc-300">{entry.resultLabel}</span>
+            <span className="hidden text-sm text-zinc-500 md:block">{entry.label}</span>
+          </div>
         ))}
       </div>
     </section>
@@ -240,7 +270,7 @@ export default function MSC2026ArchivePage() {
   }, []);
 
   const nav = useMemo(() => [
-    ['stage1', '12进6'], ['stage2', '6进4'], ['stage3', '4进2'], ['stage4', '决赛'], ['players', '选手档案']
+    ['stage1', '12进6'], ['stage2', '6进4'], ['stage3', '4进2'], ['stage4', '决赛'], ['standings', '最终排名'], ['players', '选手档案']
   ], []);
 
   if (error) return <div className="msc-panel mx-auto max-w-2xl p-8 text-center"><AlertTriangle className="mx-auto h-8 w-8 text-rose-300" /><p className="mt-4 text-xl font-black">{error}</p></div>;
@@ -253,16 +283,16 @@ export default function MSC2026ArchivePage() {
         <span className="msc-display pointer-events-none absolute -bottom-10 right-[-0.04em] select-none text-[9rem] font-black leading-none text-white/[0.04] md:text-[18rem]">END</span>
         <div className="relative z-10 grid gap-10 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)] xl:items-end">
           <div>
-            <p className="msc-kicker">FINAL RECORD / NOT A VICTORY LAP</p>
-            <h1 className="msc-editorial-heading mt-5 text-6xl text-white md:text-[7.4rem]"><span>不圆满，</span><span className="text-zinc-400">但有结果。</span></h1>
+            <p className="msc-kicker">MSC 2026 / OFFICIAL FINAL RECORD</p>
+            <h1 className="msc-editorial-heading mt-5 text-6xl text-white md:text-[7.4rem]"><span>终局已定，</span><span className="text-zinc-400">数据留存。</span></h1>
             <p className="mt-6 max-w-4xl border-l border-amber-200/40 pl-5 text-lg leading-relaxed text-zinc-300 md:text-xl">
-              MSC 2026 在磕绊与临场补丁中勉强完成。这里不粉饰过程，只把每一组、每一曲、每一次跑图和最终名次如实封存。
+              MSC 2026 已完成全部赛程。本页汇总每一组、每一曲、跑图阶段与最终名次，作为本届赛事的正式公开档案。
             </p>
           </div>
           <div className="grid grid-cols-2 border-y border-white/15">
             <div className="border-r border-white/15 p-5"><p className="msc-display text-5xl font-black">12</p><p className="msc-technical mt-2 text-xs text-zinc-500">MAIN EVENT</p></div>
             <div className="p-5"><p className="msc-display text-5xl font-black text-amber-200">01</p><p className="msc-technical mt-2 text-xs text-zinc-500">CHAMPION</p></div>
-            <div className="col-span-2 border-t border-white/15 p-5"><p className="text-sm font-black text-zinc-200">全局暂停、道具补充、回退机制</p><p className="mt-1 text-xs text-zinc-500">均为赛事进行中紧急补入；档案保留这些事实。</p></div>
+            <div className="col-span-2 border-t border-white/15 p-5"><p className="text-sm font-black text-zinc-200">04 个正式阶段 · 完整赛果公开</p><p className="mt-1 text-xs text-zinc-500">12进6 / 6进4 / 4进2 / GRAND FINAL</p></div>
           </div>
         </div>
       </section>
@@ -277,11 +307,6 @@ export default function MSC2026ArchivePage() {
         ))}
       </section>
 
-      <aside className="border border-amber-200/25 bg-amber-200/[0.06] p-5 md:flex md:items-center md:justify-between md:gap-8">
-        <div className="flex gap-4"><UserRoundCheck className="mt-1 h-6 w-6 shrink-0 text-amber-200" /><div><p className="font-black text-amber-100">替补归属已统一修正</p><p className="mt-1 leading-relaxed text-zinc-300">{archive.correction.note}</p></div></div>
-        <div className="mt-4 flex shrink-0 items-center gap-3 md:mt-0"><Player player={archive.correction.withdrawn} compact /><span className="text-zinc-600">→</span><Player player={archive.correction.substitute} compact /></div>
-      </aside>
-
       <nav aria-label="赛事战报章节" className="sticky top-[104px] z-30 flex gap-px overflow-x-auto border border-white/10 bg-[#07090b]/95 p-1 backdrop-blur-xl">
         {nav.map(([id, label], index) => <a key={id} href={`#${id}`} className="whitespace-nowrap px-4 py-3 text-sm font-black text-zinc-400 transition hover:bg-white/10 hover:text-white"><span className="mr-2 text-zinc-700">0{index + 1}</span>{label}</a>)}
       </nav>
@@ -290,6 +315,7 @@ export default function MSC2026ArchivePage() {
       <RaceStage stage={stages.stage2} index="02" />
       <RaceStage stage={stages.stage3} index="03" />
       <FinalStage stage={stages.stage4} />
+      <Standings standings={archive.standings} />
 
       <section className="space-y-4">
         <SectionTitle index="HL" eyebrow="HIGHLIGHTS" title="精度峰值与终局瞬间" description="从全部逐曲成绩中自动提取完成率、DX 分与完美 BREAK 的单曲峰值。" />

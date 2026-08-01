@@ -59,6 +59,8 @@ test('archive keeps 7XDawn in 6-to-4 and assigns all later records to CTSs2317',
   assert.equal(archive.stages.stage4.p1.username, 'CTSs2317');
   assert.equal(archive.placements[0].player.username, '蕾米');
   assert.equal(archive.placements[1].player.username, 'CTSs2317');
+  assert.equal(archive.standings.find(entry => entry.player.username === 'CTSs2317').rank, 2);
+  assert.equal(archive.standings.find(entry => entry.player.username === '7XDawn').rank, 6);
   assert.equal(archive.stages.stage1.groups[0].p1Totals.averageAchievement, 100.5);
   assert.equal(archive.stages.stage1.groups[0].p1Totals.totalDxScore, 2900);
   assert.equal(archive.stages.stage1.groups[0].p1Totals.perfectBreak, 20);

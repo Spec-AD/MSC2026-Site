@@ -179,14 +179,13 @@ const TournamentDetail = () => {
   const statusColor = selectStatusColor(tournament.status);
   const statusLabel = selectStatusLabel(tournament.status);
   const isMSC2026Archive = /^MSC\s*2026$/i.test(String(tournament.title || '').trim()) && String(id || '').startsWith('6');
-  const publicResults = mscArchive?.placements?.length
-    ? mscArchive.placements.map(place => ({
+  const publicResults = mscArchive?.standings?.length
+    ? mscArchive.standings.map(place => ({
         rank: place.rank,
         userId: place.player,
         username: place.player.username,
         avatarUrl: place.player.avatarUrl,
-        note: place.rank === 2 ? 'MSC 2026 亚军（替补参赛）' : `MSC 2026 ${place.label}`,
-        announcement: mscArchive.correction?.note || '',
+        note: `MSC 2026 · ${place.resultLabel}`,
       }))
     : results;
 
@@ -222,14 +221,14 @@ const TournamentDetail = () => {
         </div>
 
         {isMSC2026Archive && (
-          <div className="mb-8 grid gap-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-5 md:grid-cols-[1fr_auto] md:items-center">
+          <div className="mb-8 grid gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <p className="flex items-center gap-2 font-bold text-amber-200"><FaLock /> MSC 2026 已锁定为公开赛事档案</p>
+              <p className="flex items-center gap-2 font-bold text-zinc-200"><FaLock /> MSC 2026 最终战果已归档</p>
               <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                {mscArchive?.correction?.note || '最终战果已确认；完整逐组、逐曲与跑图统计收录于赛事纪念页。'}
+                完整逐组、逐曲、跑图统计与选手最终排名已收录于赛事纪念页。
               </p>
             </div>
-            <button onClick={() => navigate('/matches/msc2026')} className="flex items-center justify-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-5 py-3 text-sm font-bold text-amber-100 transition hover:bg-amber-300/20">
+            <button onClick={() => navigate('/matches/msc2026')} className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-5 py-3 text-sm font-bold text-zinc-100 transition hover:bg-white/10">
               查看完整战报 <FaTrophy />
             </button>
           </div>
