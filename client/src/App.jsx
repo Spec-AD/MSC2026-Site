@@ -51,6 +51,7 @@ const MSC2026Layout = lazy(() => import('./features/msc2026/pages/MSC2026Layout'
 const TournamentHome = lazy(() => import('./features/msc2026/pages/TournamentHome'));
 const RaceTutorialPage = lazy(() => import('./features/msc2026/pages/RaceTutorialPage'));
 const Stage1Page = lazy(() => import('./features/msc2026/pages/Stage1Page'));
+const DecodeStagePage = lazy(() => import('./features/msc2026/pages/DecodeStagePage'));
 const Stage4Page = lazy(() => import('./features/msc2026/pages/Stage4Page'));
 const RacePage = lazy(() => import('./features/msc2026/pages/RacePage'));
 const LiveMatchPage = lazy(() => import('./features/msc2026/pages/LiveMatchPage'));
@@ -111,6 +112,7 @@ function App() {
                 <Route index element={<TournamentHome />} />
                 <Route path="tutorial" element={<RaceTutorialPage />} />
                 <Route path="stage1" element={<Stage1Page />} />
+                <Route path="decode" element={<DecodeStagePage />} />
                 <Route path="stage2" element={<RacePage stage="stage2" />} />
                 <Route path="stage3" element={<RacePage stage="stage3" />} />
                 <Route path="stage4" element={<Stage4Page />} />

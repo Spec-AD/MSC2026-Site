@@ -91,6 +91,7 @@ function revertStage1Group(tournament, groupIdx) {
   tournament.qualifiedStage2 = [];
   tournament.qualifiedStage3 = [];
   tournament.stage2 = null;
+  tournament.decode = null;
   tournament.stage3 = null;
   tournament.stage4 = null;
 }
@@ -98,6 +99,7 @@ function revertStage1Group(tournament, groupIdx) {
 /** R1.4 重置阶段一 */
 function resetStage1(tournament) {
   tournament.stage1 = null;
+  tournament.decode = null;
   tournament.stage2 = null;
   tournament.stage3 = null;
   tournament.stage4 = null;
@@ -164,6 +166,15 @@ function undoRaceLastAction(race, tournament = null, stageKey = null) {
         i => i.itemRef === detail.itemRef && i.zoneIndex === detail.zoneIndex && i.collected
       );
       if (mapItem) mapItem.collected = false;
+      if (detail.replenishedItemRef != null) {
+        const replenishedIndex = race.itemsOnMap.findLastIndex(i =>
+          i.itemRef === detail.replenishedItemRef &&
+          i.zoneIndex === detail.zoneIndex &&
+          !i.collected &&
+          i.source === 'replenished'
+        );
+        if (replenishedIndex >= 0) race.itemsOnMap.splice(replenishedIndex, 1);
+      }
       break;
     }
 
@@ -385,13 +396,18 @@ async function revertStage(tournament) {
   switch (currentStatus) {
     case 'stage1':
       tournament.stage1 = null;
+      tournament.decode = null;
       tournament.qualifiedStage1 = [];
       tournament.status = 'pending';
+      break;
+    case 'decode':
+      tournament.decode = null;
+      tournament.status = 'stage1';
       break;
     case 'stage2':
       tournament.stage2 = null;
       tournament.qualifiedStage2 = [];
-      tournament.status = 'stage1';
+      tournament.status = tournament.decode ? 'decode' : 'stage1';
       break;
     case 'stage3':
       tournament.stage3 = null;
@@ -418,6 +434,7 @@ async function revertStage(tournament) {
 /** R5.2 完全重置 */
 async function resetAll(tournament) {
   tournament.stage1 = null;
+  tournament.decode = null;
   tournament.stage2 = null;
   tournament.stage3 = null;
   tournament.stage4 = null;

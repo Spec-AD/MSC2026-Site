@@ -43,6 +43,7 @@ export const getItemDef = (itemRef) => ALL_ITEMS[itemRef] || null;
 
 export const STAGE_CONFIG = {
   stage1: { label: '12进6', desc: '淘汰赛', icon: '01' },
+  decode: { label: '开字母', desc: '赛间游戏 · 15分钟 / 8首', icon: 'DX' },
   stage2: { label: '6进4', desc: '跑图 · 六边形', icon: '02', mapShape: 'hexagon', layers: 3, wallLabels: ['密锁之墙', '准锁之墙'], totalTimeMs: 60 * 60 * 1000, turnTimeMs: 45 * 1000, playerCount: 6 },
   stage3: { label: '4进2', desc: '跑图 · 正方形', icon: '03', mapShape: 'square', layers: 3, wallLabels: ['叹息之墙', '终局之墙'], totalTimeMs: 45 * 60 * 1000, turnTimeMs: 45 * 1000, playerCount: 4 },
   stage4: { label: '决赛', desc: '2进1', icon: '04' },

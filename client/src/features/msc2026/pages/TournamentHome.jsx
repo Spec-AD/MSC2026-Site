@@ -13,7 +13,7 @@ import { STAGE_CONFIG } from '../constants/publicGameData';
 import { FaArrowRight } from 'react-icons/fa';
 import TournamentPodium from '../components/live/TournamentPodium';
 
-const STAGE_PHASES = ['stage1', 'stage2', 'stage3', 'stage4'];
+const STAGE_PHASES = ['stage1', 'decode', 'stage2', 'stage3', 'stage4'];
 
 export default function TournamentHome() {
   const { user } = useAuth();
@@ -25,7 +25,7 @@ export default function TournamentHome() {
     fetchPlayers().catch(() => {});
   }, [fetchStatus, fetchPlayers]);
 
-  const currentIdx = STAGE_PHASES.indexOf(status);
+  const currentIdx = status === 'finished' ? STAGE_PHASES.length : STAGE_PHASES.indexOf(status);
   const canLaunchLive = user && ['ADM', 'TO', 'CHM'].includes(user.role);
 
   const launchLiveMode = async () => {
@@ -51,7 +51,7 @@ export default function TournamentHome() {
               <span>MSC</span><span className="text-zinc-400">2026</span>
             </h1>
             <p className="mt-5 max-w-3xl border-l border-sky-200/40 pl-5 text-xl leading-relaxed text-zinc-300 md:text-2xl">
-              资格赛、12进6 小组赛、六边形与正方形跑图、最终决赛。
+              资格赛、12进6 小组赛、15分钟开字母、六边形与正方形跑图、最终决赛。
             </p>
           </div>
           <div className="grid grid-cols-3 border-y border-white/15">
@@ -101,9 +101,9 @@ export default function TournamentHome() {
 
       {/* 阶段进度条 */}
       <div className="msc-panel p-6 md:p-8">
-        <p className="msc-kicker mb-2">PROGRESSION MATRIX / 04 PHASES</p>
+        <p className="msc-kicker mb-2">PROGRESSION MATRIX / 05 PHASES</p>
         <h3 className="mb-7 text-3xl font-black text-zinc-100 md:text-5xl">比赛进度</h3>
-        <div className="grid gap-px border border-white/10 bg-white/10 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-px border border-white/10 bg-white/10 sm:grid-cols-2 xl:grid-cols-5">
           {STAGE_PHASES.map((phase, idx) => {
             const config = STAGE_CONFIG[phase];
             const isDone = idx < currentIdx;
@@ -148,7 +148,11 @@ export default function TournamentHome() {
               >
                 <div className="text-base text-zinc-500 mb-2">{config.label}</div>
                 <div className="text-4xl font-black" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>
-                  {info?.completedGroups != null ? `${info.completedGroups}/${info.totalGroups}` : '-'}
+                  {info?.completedGroups != null
+                    ? `${info.completedGroups}/${info.totalGroups}`
+                    : info?.clearedCount != null
+                      ? `${info.clearedCount}/${info.totalSongs}`
+                      : '-'}
                 </div>
               </Motion.div>
             );

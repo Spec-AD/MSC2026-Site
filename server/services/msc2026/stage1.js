@@ -4,13 +4,14 @@
  *
  * b1.7.11.patch-02
  * - P0-3: 强制P1/P2成绩均完整后才推进
- * - P1-8: 阶段完成自动推进 status → stage2
+ * - 阶段完成自动推进 status → decode（15分钟赛间开字母）
  * - 旧赛事同步：全部组完成时回写 groups/matches
  */
 
 const { shuffle, validateScore, normalizeScoreInput, determineWinner, assertObjectIdList } = require('./utils');
 const { broadcast } = require('./ssePool');
 const { syncToOldTournament } = require('./oldTournamentSync');
+const { createDecodeState } = require('./decodeGame');
 const { assertScoreTarget } = require('./scoreTarget');
 const { drawRandomSong } = require('./randomSongDraw');
 
@@ -415,8 +416,9 @@ async function _completeStage1(tournament, stage1) {
   const qualifiers = stage1.groups.map(g => g.winner).filter(Boolean);
 
   tournament.qualifiedStage1 = qualifiers;
-  // P1-8: 阶段一完成后自动推进到 stage2
-  tournament.status = 'stage2';
+  // 12进6 完成后无缝进入共享赛间开字母，再由主办方推进到 stage2。
+  tournament.decode = await createDecodeState();
+  tournament.status = 'decode';
 
   await tournament.save();
 
@@ -435,7 +437,7 @@ async function _completeStage1(tournament, stage1) {
     stage: 'stage1',
     phase: 'completed',
     qualifiedIds: qualifiers.map(q => q.toString()),
-    nextStage: 'stage2'
+    nextStage: 'decode'
   });
 
   return { nextStep: 'stage_done', qualifiedIds: qualifiers };

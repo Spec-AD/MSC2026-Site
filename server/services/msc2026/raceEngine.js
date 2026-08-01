@@ -6,7 +6,7 @@
  * 核心机制：
  * - 回合制行动（advance / pickup）
  * - 墙壁挑战（33 任务随机池 + 各阶段固定第二墙）
- * - 道具系统（unused → armed → consumed 生命周期）
+ * - 道具系统（unused → armed → consumed 生命周期；区域库存耗尽后自动补货）
  * - 超时机制（回合45s / 地图总限时）
  * - 鬼面人心全局效果（持久化为纯数据）
  *
@@ -112,7 +112,7 @@ async function initRace(tournament, playerIds) {
   for (const ref of itemRefs) {
     if (itemPool[ref]) {
       const zoneIdx = itemCounter % config.zoneCount;
-      itemsOnMap.push({ itemRef: ref, zoneIndex: zoneIdx, collected: false });
+      itemsOnMap.push({ itemRef: ref, zoneIndex: zoneIdx, collected: false, source: 'initial', spawnedRound: 1 });
       itemCounter++;
     }
   }
@@ -468,6 +468,7 @@ function _ensureRoundState(race) {
     race.roundPosition = position >= 0 ? position : 0;
   }
   if (!Array.isArray(race.pendingRoundActions)) race.pendingRoundActions = [];
+  if (!Array.isArray(race.itemsOnMap)) race.itemsOnMap = [];
   if (!race.taskPool) race.taskPool = { used: [], remaining: [], fallbackTasks: [], fallbackCount: 0, cycle: 1 };
   if (!Number.isInteger(race.taskPool.cycle) || race.taskPool.cycle < 1) race.taskPool.cycle = 1;
 }
@@ -1048,7 +1049,7 @@ async function _skipTurn(tournament, race, reason, userId) {
 /**
  * 圈末统一发放道具。同一区域按服务端随机顺序匹配，结果写回行动日志。
  */
-function _resolveRoundPickups(race) {
+function _resolveRoundPickups(race, stageKey) {
   const intents = race.pendingRoundActions.filter(action => action.actionType === 'pickup' && !action.resolved);
   const events = [];
   const zones = [...new Set(intents.map(action => action.zoneIndex))];
@@ -1078,7 +1079,52 @@ function _resolveRoundPickups(race) {
       events.push({ playerId: player.userId.toString(), zoneIndex });
     });
   }
-  return events;
+
+  const replenished = _replenishEmptyItemZones(race, stageKey);
+  for (const refill of replenished) {
+    const refillClaim = [...intents].reverse().find(claim =>
+      claim.allocated === true && Number(claim.zoneIndex) === refill.zoneIndex
+    );
+    if (!refillClaim) continue;
+    const refillLog = [...race.actionLog].reverse().find(entry =>
+      entry.actionType === 'pickup' &&
+      entry.detail?.allocated === true &&
+      Number(entry.detail?.zoneIndex) === refill.zoneIndex &&
+      Number(entry.turn) === Number(refillClaim.turn) &&
+      entry.playerId.toString() === String(refillClaim.playerId)
+    );
+    if (refillLog) refillLog.detail = { ...refillLog.detail, replenishedItemRef: refill.itemRef };
+  }
+  return { events, replenished };
+}
+
+/**
+ * 每圈发放结束后为所有空区域补入一个本阶段道具。
+ * 区域只公开“有无库存”，实际道具内容仍保持隐藏。
+ */
+function _replenishEmptyItemZones(race, stageKey) {
+  const config = RACE_CONFIGS[stageKey];
+  if (!config) throw new Error(`无效的跑图阶段: ${stageKey}`);
+  const itemPool = getItemPool(stageKey);
+  const eligibleRefs = config.itemPoolRefs.filter(ref => itemPool[ref]);
+  if (eligibleRefs.length === 0) throw new Error(`${stageKey} 道具池为空，无法补货`);
+
+  if (!Array.isArray(race.itemsOnMap)) race.itemsOnMap = [];
+  const replenished = [];
+  for (let zoneIndex = 0; zoneIndex < config.zoneCount; zoneIndex += 1) {
+    const hasStock = race.itemsOnMap.some(item => Number(item.zoneIndex) === zoneIndex && !item.collected);
+    if (hasStock) continue;
+    const itemRef = eligibleRefs[Math.floor(Math.random() * eligibleRefs.length)];
+    race.itemsOnMap.push({
+      itemRef,
+      zoneIndex,
+      collected: false,
+      source: 'replenished',
+      spawnedRound: Number(race.roundNumber || 1) + 1,
+    });
+    replenished.push({ zoneIndex, itemRef });
+  }
+  return replenished;
 }
 
 function _nextPendingChallenge(race) {
@@ -1098,8 +1144,9 @@ function _activatePendingChallenge(race) {
 }
 
 async function _closeRound(tournament, race) {
-  const pickupEvents = _resolveRoundPickups(race);
+  const { events: pickupEvents, replenished } = _resolveRoundPickups(race, tournament.status);
   pickupEvents.forEach(event => broadcast('item_collected', { ...event, roundNumber: race.roundNumber }));
+  replenished.forEach(event => broadcast('item_replenished', { zoneIndex: event.zoneIndex, roundNumber: race.roundNumber + 1 }));
 
   const pending = _activatePendingChallenge(race);
   if (pending) {
@@ -1383,5 +1430,6 @@ module.exports = {
   getTaskById,
   getFallbackTask,
   _drawTask,
+  _replenishEmptyItemZones,
   FIXED_WALL_BREAKTHROUGH_THRESHOLD
 };

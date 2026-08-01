@@ -72,6 +72,23 @@ export const forfaitStage1 = (playerId) =>
 export const resolveStage1Tie = (groupIndex, winnerId) =>
   axios.post(`${BASE}/stage1/resolve-tie`, { groupIndex, winnerId }, { headers: authHeaders() });
 
+// ==================== 赛间开字母 ====================
+
+export const getDecodeState = () =>
+  axios.get(`${BASE}/decode/state`);
+
+export const openDecodeChar = (char) =>
+  axios.post(`${BASE}/decode/open`, { char }, { headers: authHeaders() });
+
+export const guessDecodeSong = (songIndex, guess) =>
+  axios.post(`${BASE}/decode/guess`, { songIndex, guess }, { headers: authHeaders() });
+
+export const finishDecode = () =>
+  axios.post(`${BASE}/decode/finish`, {}, { headers: authHeaders() });
+
+export const advanceFromDecode = () =>
+  axios.post(`${BASE}/decode/advance`, {}, { headers: authHeaders() });
+
 // ==================== 跑图（阶段二 & 三） ====================
 
 /** 初始化跑图 */

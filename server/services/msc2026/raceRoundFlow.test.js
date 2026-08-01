@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { initRace, startRace, playerAction, skipTurn, _drawTask } = require('./raceEngine');
+const { initRace, startRace, playerAction, skipTurn, _drawTask, _replenishEmptyItemZones } = require('./raceEngine');
 const { CHALLENGE_TASKS } = require('./challengeDefinitions');
 
 const PLAYER_IDS = Array.from({ length: 6 }, (_, index) => (index + 1).toString(16).padStart(24, '0'));
@@ -129,3 +129,24 @@ test('the 33-task pool avoids repeats per cycle and refills indefinitely', () =>
   assert.ok(CHALLENGE_TASKS.some(task => task.id === next.taskId));
   assert.equal(race.taskPool.cycle, 2);
 });
+
+for (const [stageKey, zoneCount, minRef, maxRef] of [
+  ['stage2', 6, 1, 10],
+  ['stage3', 4, 11, 20],
+]) {
+  test(`${stageKey} replenishes every empty item zone indefinitely from its own pool`, () => {
+    const race = { roundNumber: 1, itemsOnMap: [] };
+    for (let cycle = 0; cycle < 30; cycle += 1) {
+      race.itemsOnMap.forEach(item => { item.collected = true; });
+      const replenished = _replenishEmptyItemZones(race, stageKey);
+      assert.equal(replenished.length, zoneCount);
+      for (let zoneIndex = 0; zoneIndex < zoneCount; zoneIndex += 1) {
+        const stock = race.itemsOnMap.filter(item => item.zoneIndex === zoneIndex && !item.collected);
+        assert.equal(stock.length, 1);
+        assert.ok(stock[0].itemRef >= minRef && stock[0].itemRef <= maxRef);
+        assert.equal(stock[0].source, 'replenished');
+      }
+      race.roundNumber += 1;
+    }
+  });
+}

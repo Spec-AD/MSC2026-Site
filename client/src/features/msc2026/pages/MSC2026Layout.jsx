@@ -6,11 +6,12 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion as Motion } from 'framer-motion';
 import { useMSC2026Store } from '../store';
 import { STAGE_CONFIG } from '../constants/publicGameData';
-import { FaTrophy, FaFlag, FaPlay, FaShoppingBag } from 'react-icons/fa';
+import { FaTrophy, FaFlag, FaPlay, FaShoppingBag, FaKeyboard } from 'react-icons/fa';
 import '../styles/industrialEditorial.css';
 
 const STAGE_NAV = [
   { key: 'stage1', icon: <FaFlag className="text-sm" /> },
+  { key: 'decode', icon: <FaKeyboard className="text-sm" /> },
   { key: 'stage2', icon: <FaPlay className="text-sm" /> },
   { key: 'stage3', icon: <FaPlay className="text-sm" /> },
   { key: 'stage4', icon: <FaTrophy className="text-sm" /> },
@@ -29,7 +30,7 @@ export default function MSC2026Layout() {
   const currentConfig = STAGE_CONFIG[status] || null;
   const isActive = (key) => {
     if (key === 'store') return location.pathname.endsWith('/store') ? 'active' : 'pending';
-    const stageOrder = ['stage1', 'stage2', 'stage3', 'stage4'];
+    const stageOrder = ['stage1', 'decode', 'stage2', 'stage3', 'stage4'];
     const currentIdx = stageOrder.indexOf(status);
     const itemIdx = stageOrder.indexOf(key);
     if (currentIdx > itemIdx) return 'done';
@@ -61,7 +62,7 @@ export default function MSC2026Layout() {
           </div>
 
           {/* 阶段导航 */}
-          <div className="relative z-10 grid grid-cols-2 gap-px border border-white/10 bg-white/10 sm:grid-cols-5">
+          <div className="relative z-10 grid grid-cols-2 gap-px border border-white/10 bg-white/10 sm:grid-cols-6">
             {STAGE_NAV.map((item) => {
               const state = isActive(item.key);
               const config = STAGE_CONFIG[item.key] || { label: item.label };

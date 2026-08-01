@@ -8,7 +8,7 @@ import { collectSongs, warmSongCache } from '../utils/songCache';
 
 export const useMSC2026Store = create((set, get) => ({
   // ---- 全局状态 ----
-  status: 'pending',          // pending | stage1 | stage2 | stage3 | stage4 | finished
+  status: 'pending',          // pending | stage1 | decode | stage2 | stage3 | stage4 | finished
   currentStage: null,
   loading: false,
   error: null,
@@ -42,6 +42,7 @@ export const useMSC2026Store = create((set, get) => ({
   // ---- 汇总 ----
   summary: {
     stage1: null,
+    decode: null,
     stage2: null,
     stage3: null,
     stage4: null,
@@ -63,6 +64,7 @@ export const useMSC2026Store = create((set, get) => ({
         status: data.status,
         summary: {
           stage1: data.stage1 || null,
+          decode: data.decode || null,
           stage2: data.stage2 || null,
           stage3: data.stage3 || null,
           stage4: data.stage4 || null,

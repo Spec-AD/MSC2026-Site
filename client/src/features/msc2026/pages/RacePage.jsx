@@ -85,6 +85,7 @@ export default function RacePage({ stage }) {
     }, [showMapSignal, ssePlayerMoved]),
     timer_tick: useCallback((data) => sseTimerTick(data), [sseTimerTick]),
     item_collected: useCallback(() => fetchRaceMap(), [fetchRaceMap]),
+    item_replenished: useCallback(() => fetchRaceMap(), [fetchRaceMap]),
     item_used: useCallback(() => fetchRaceMap(), [fetchRaceMap]),
     challenge_revealed: useCallback(() => fetchChallenge(), [fetchChallenge]),
     challenge_resolved: useCallback(() => {

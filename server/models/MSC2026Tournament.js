@@ -58,6 +58,39 @@ const Stage1GroupSchema = new Schema({
   needTiebreak: { type: Boolean, default: false }       // 三项全平需加赛
 });
 
+// ── 12进6 后赛间开字母 ──
+const DecodeSongSchema = new Schema({
+  songId: { type: String, required: true },
+  realTitle: { type: String, required: true },
+  aliases: [{ type: String }],
+  status: {
+    type: String,
+    enum: ['playing', 'cleared', 'dead'],
+    default: 'playing'
+  },
+  mistakes: { type: Number, min: 0, default: 0 },
+  clearedAt: { type: Date, default: null }
+}, { _id: false });
+
+const DecodeStateSchema = new Schema({
+  status: {
+    type: String,
+    enum: ['playing', 'done'],
+    default: 'playing'
+  },
+  durationMs: { type: Number, default: 15 * 60 * 1000 },
+  startedAt: { type: Date, required: true },
+  expiresAt: { type: Date, required: true },
+  completedAt: { type: Date, default: null },
+  finishedReason: {
+    type: String,
+    enum: ['all_resolved', 'timeout', 'manual'],
+    default: null
+  },
+  openedChars: [{ type: String }],
+  songs: [DecodeSongSchema]
+}, { _id: false });
+
 // ── 跑图选手状态 ──
 const RacePlayerSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -141,7 +174,9 @@ const RaceStateSchema = new Schema({
   itemsOnMap: [{
     itemRef: { type: Number },
     zoneIndex: { type: Number },
-    collected: { type: Boolean, default: false }
+    collected: { type: Boolean, default: false },
+    source: { type: String, enum: ['initial', 'replenished'], default: 'initial' },
+    spawnedRound: { type: Number, default: 1 }
   }],
   taskPool: {
     used: [Number],
@@ -201,7 +236,7 @@ const MSC2026TournamentSchema = new Schema({
   version: { type: String, default: 'b1.7.11.patch-02' },
   status: {
     type: String,
-    enum: ['pending', 'stage1', 'stage2', 'stage3', 'stage4', 'finished'],
+    enum: ['pending', 'stage1', 'decode', 'stage2', 'stage3', 'stage4', 'finished'],
     default: 'pending'
   },
 
@@ -248,6 +283,9 @@ const MSC2026TournamentSchema = new Schema({
     status: { type: String, enum: ['pending', 'playing', 'done'], default: 'pending' },
     currentGroupIndex: { type: Number, default: -1 }
   },
+
+  // 12进6 与 6进4 之间的共享赛间游戏
+  decode: { type: DecodeStateSchema, default: null },
 
   // 阶段二
   stage2: { type: RaceStateSchema, default: null },

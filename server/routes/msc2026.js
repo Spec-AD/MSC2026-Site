@@ -49,6 +49,14 @@ const {
 const { snapshotChallenge } = require('../services/msc2026/challengePresentation');
 const { buildQualifierRankings } = require('../services/msc2026/qualifierRanking');
 const { createMarket, settleMarket, prepareMarketsForRollback, FINAL_REVEAL_MS } = require('../services/msc2026/betting');
+const {
+  settleExpiredDecode,
+  openDecodeChar,
+  guessDecodeSong,
+  finishDecode,
+  advanceFromDecode,
+  serializeDecodeState
+} = require('../services/msc2026/decodeGame');
 
 const SONG_DISPLAY_FIELDS = 'id title type basic_info.artist basic_info.bpm ds level aliases charts';
 const coverCache = new Map();
@@ -272,6 +280,12 @@ router.get('/status', async (req, res) => {
           totalGroups: t.stage1.groups?.length || 0,
           completedGroups: t.stage1.groups?.filter(g => g.status === 'done').length || 0,
           status: t.stage1.status
+        } : null,
+        decode: t.decode ? {
+          status: t.decode.status === 'done' || new Date(t.decode.expiresAt).getTime() <= Date.now() ? 'done' : 'playing',
+          clearedCount: t.decode.songs?.filter(song => song.status === 'cleared').length || 0,
+          totalSongs: t.decode.songs?.length || 0,
+          expiresAt: t.decode.expiresAt
         } : null,
         stage2: t.stage2 ? {
           shape: t.stage2.mapConfig?.shape,
@@ -1091,7 +1105,7 @@ router.post('/stage1/advance', authMiddleware, async (req, res) => {
     if (!result) return;
 
     if (result.nextStep === 'stage_done') {
-      res.json({ msg: '阶段一完成，6 人晋级', data: { qualifiedIds: result.qualifiedIds.map(String) } });
+      res.json({ msg: '阶段一完成，已进入 15 分钟开字母环节', data: { qualifiedIds: result.qualifiedIds.map(String), nextStage: 'decode' } });
     } else if (result.nextStep === 'random_pick') {
       const song = await Song.findById(result.songId).select(SONG_DISPLAY_FIELDS).lean();
       res.json({
@@ -1108,6 +1122,95 @@ router.post('/stage1/advance', authMiddleware, async (req, res) => {
     }
   } catch (err) {
     console.error('阶段推进失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+// ==========================================
+// 🔤 12进6 后赛间开字母（共享比赛状态）
+// ==========================================
+
+router.get('/decode/state', async (req, res) => {
+  try {
+    await withRaceMutationLock(async () => {
+      const t = await requireTournament(res);
+      if (!t) return;
+      if (!t.decode) {
+        return res.status(404).json({ msg: '开字母环节尚未初始化' });
+      }
+      const expired = settleExpiredDecode(t);
+      if (expired) {
+        await t.save();
+        broadcast('decode_updated', { action: 'timeout' });
+      }
+      res.json({ msg: 'ok', data: serializeDecodeState(t.decode) });
+    });
+  } catch (err) {
+    console.error('获取 MSC 开字母状态失败:', err);
+    res.status(500).json({ msg: '服务器错误' });
+  }
+});
+
+router.post('/decode/open', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    await withLockedTournament(res, async (t) => {
+      const char = openDecodeChar(t, req.body.char);
+      await t.save();
+      broadcast('decode_updated', { action: 'open', char });
+      res.json({ msg: `已开出 ${char.toUpperCase()}`, data: serializeDecodeState(t.decode) });
+    });
+  } catch (err) {
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/decode/guess', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    await withLockedTournament(res, async (t) => {
+      const result = guessDecodeSong(t, req.body.songIndex, req.body.guess);
+      await t.save();
+      broadcast('decode_updated', { action: 'guess', songIndex: Number(req.body.songIndex), correct: result.correct });
+      res.json({
+        msg: result.correct ? '回答正确' : '回答错误，扣除 15 秒',
+        data: { ...serializeDecodeState(t.decode), ...result }
+      });
+    });
+  } catch (err) {
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/decode/finish', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    await withLockedTournament(res, async (t) => {
+      finishDecode(t);
+      await t.save();
+      broadcast('decode_updated', { action: 'finish' });
+      res.json({ msg: '开字母已结束并揭晓答案', data: serializeDecodeState(t.decode) });
+    });
+  } catch (err) {
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/decode/advance', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    await withLockedTournament(res, async (t) => {
+      advanceFromDecode(t);
+      t.operationLogs.push({ action: 'decode_complete', stage: 'decode', operatedBy: req.user.id });
+      await t.save();
+      broadcast('stage_advanced', { stage: 'decode', phase: 'completed', nextStage: 'stage2' });
+      res.json({ msg: '开字母环节完成，已进入 6进4 跑图', data: { nextStage: 'stage2' } });
+    });
+  } catch (err) {
     res.status(400).json({ msg: err.message });
   }
 });

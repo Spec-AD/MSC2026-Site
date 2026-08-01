@@ -10,6 +10,7 @@ import { useMatchEventQueue } from '../hooks/useMatchEventQueue';
 import EventCueOverlay from '../components/live/EventCueOverlay';
 import PreMatchLobby from '../components/live/PreMatchLobby';
 import Stage1Page from './Stage1Page';
+import DecodeStagePage from './DecodeStagePage';
 import RacePage from './RacePage';
 import Stage4Page from './Stage4Page';
 import { EASE_ACCEL, MOTION_TRANSITIONS } from '../utils/motion';
@@ -52,6 +53,7 @@ function SystemGate({ loading, error, onRetry, onExit }) {
 
 function StageSurface({ status }) {
   if (status === 'stage1') return <Stage1Page />;
+  if (status === 'decode') return <DecodeStagePage />;
   if (status === 'stage2' || status === 'stage3') return <RacePage stage={status} />;
   if (status === 'stage4') return <Stage4Page />;
   return <FinishedScreen />;

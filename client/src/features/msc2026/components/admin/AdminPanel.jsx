@@ -9,7 +9,7 @@ import { useMSC2026Store } from '../../store';
 import * as api from '../../api/msc2026Api';
 import {
   FaCog, FaPlay, FaUsers, FaMusic, FaCheck, FaSpinner, FaTimes,
-  FaUndo, FaTrash, FaTrophy, FaMedal, FaExclamationTriangle, FaDownload
+  FaUndo, FaTrash, FaTrophy, FaMedal, FaExclamationTriangle, FaDownload, FaKeyboard
 } from 'react-icons/fa';
 import { collectSongs, readCachedSongConfig, readSongCacheStatus, warmSongCache, writeCachedSongConfig } from '../../utils/songCache';
 
@@ -363,13 +363,14 @@ export default function AdminPanel() {
   ];
 
   const statusLabel = {
-    pending: '未开始', stage1: '阶段一 · 12进6', stage2: '阶段二 · 6进4 跑图',
+    pending: '未开始', stage1: '阶段一 · 12进6', decode: '赛间 · 开字母', stage2: '阶段二 · 6进4 跑图',
     stage3: '阶段三 · 4进2 跑图', stage4: '阶段四 · 决赛', finished: '已结束',
   }[status] || status;
 
   const statusColorClass = {
     pending: 'bg-zinc-800 text-zinc-400 border-white/10',
     stage1: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    decode: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30',
     stage2: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
     stage3: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
     stage4: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
@@ -557,8 +558,26 @@ export default function AdminPanel() {
               </div>
             )}
 
+            {/* 赛间开字母 */}
+            {status === 'decode' && (
+              <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/5 p-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <FaKeyboard className="text-fuchsia-300" />
+                  <h4 className="text-sm font-semibold text-white" style={{ fontFamily: 'Novecento, NotoSansSC, sans-serif' }}>赛间开字母 · 15分钟 / 8首</h4>
+                </div>
+                <p className="text-xs text-zinc-500">比赛模式已自动进入共享开字母。答题操作请在开字母页面或比赛大屏完成。</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {store.summary?.decode?.status === 'playing' ? (
+                    <ActionButton onClick={quickAction(api.finishDecode, '开字母已提前结束')} loading={loading} icon={<FaTimes />} label="提前结束并揭晓" variant="danger" />
+                  ) : (
+                    <ActionButton onClick={quickAction(api.advanceFromDecode, '已进入阶段二')} loading={loading} icon={<FaPlay />} label="进入 6进4" />
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* 阶段二 */}
-            {(status === 'stage1' || status === 'stage2') && (
+            {(status === 'stage1' || status === 'decode' || status === 'stage2') && (
               <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">2</div>
