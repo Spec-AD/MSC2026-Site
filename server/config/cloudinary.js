@@ -16,6 +16,25 @@ const storage = new CloudinaryStorage({
   }
 });
 
-const upload = require('multer')({ storage });
+const multer = require('multer');
+const upload = multer({ storage });
 
-module.exports = { cloudinary, upload };
+const storeProductStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'msc2026_store_products',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+    transformation: [{ width: 1600, height: 1200, crop: 'limit', quality: 'auto' }]
+  }
+});
+
+const storeProductUpload = multer({
+  storage: storeProductStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    if (!file.mimetype?.startsWith('image/')) return callback(new Error('只能上传图片文件'));
+    callback(null, true);
+  }
+});
+
+module.exports = { cloudinary, upload, storeProductUpload };

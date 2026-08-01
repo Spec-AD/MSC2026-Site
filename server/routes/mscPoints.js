@@ -9,6 +9,18 @@ const { checkPermission } = require('../services/msc2026/utils');
 const { getAccountSummary } = require('../services/msc2026/points');
 const { getMarket, placeBet } = require('../services/msc2026/betting');
 const { serializeRedemption, redeemProduct, verifyAndRedeemVoucher } = require('../services/msc2026/pointsStore');
+const { normalizeStoreProductInput } = require('../services/msc2026/storeProductInput');
+const { storeProductUpload } = require('../config/cloudinary');
+
+async function requireStoreAdmin(req, res, next) {
+  try {
+    const perm = await checkPermission(req.user, null, 'admin');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    next();
+  } catch (err) {
+    res.status(500).json({ msg: err.message || '权限校验失败' });
+  }
+}
 
 async function currentTournament() {
   return MSC2026Tournament.findOne().select('_id status stage1.currentGroupIndex').lean();
@@ -102,25 +114,35 @@ router.post('/store/redeem', authMiddleware, async (req, res) => {
   }
 });
 
-router.post('/store/admin/products', authMiddleware, async (req, res) => {
+router.get('/store/admin/products', authMiddleware, requireStoreAdmin, async (_req, res) => {
   try {
-    const perm = await checkPermission(req.user, null, 'admin');
-    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
-    const { name, description = '', imageUrl = '', cost, stock = 0, active = false, sortOrder = 0 } = req.body;
-    if (!name || !Number.isSafeInteger(Number(cost)) || Number(cost) < 1) return res.status(400).json({ msg: '商品名称与正整数价格必填' });
-    const product = await PointsStoreProduct.create({ name, description, imageUrl, cost: Number(cost), stock: Number(stock), active, sortOrder });
+    const products = await PointsStoreProduct.find().sort({ sortOrder: 1, createdAt: -1 }).lean();
+    res.json({ msg: 'ok', data: products });
+  } catch (err) {
+    res.status(500).json({ msg: err.message || '库存列表暂时不可用' });
+  }
+});
+
+router.post('/store/admin/upload', authMiddleware, requireStoreAdmin, (req, res) => {
+  storeProductUpload.single('image')(req, res, err => {
+    if (err) return res.status(400).json({ msg: err.code === 'LIMIT_FILE_SIZE' ? '商品图片不能超过 5MB' : err.message });
+    if (!req.file?.path) return res.status(400).json({ msg: '请选择商品图片' });
+    return res.status(201).json({ msg: '图片上传成功', data: { imageUrl: req.file.path } });
+  });
+});
+
+router.post('/store/admin/products', authMiddleware, requireStoreAdmin, async (req, res) => {
+  try {
+    const product = await PointsStoreProduct.create(normalizeStoreProductInput(req.body));
     res.status(201).json({ msg: '商品已创建', data: product });
   } catch (err) {
     res.status(400).json({ msg: err.message });
   }
 });
 
-router.patch('/store/admin/products/:id', authMiddleware, async (req, res) => {
+router.patch('/store/admin/products/:id', authMiddleware, requireStoreAdmin, async (req, res) => {
   try {
-    const perm = await checkPermission(req.user, null, 'admin');
-    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
-    const allowed = ['name', 'description', 'imageUrl', 'cost', 'stock', 'active', 'sortOrder'];
-    const updates = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
+    const updates = normalizeStoreProductInput(req.body, { partial: true });
     const product = await PointsStoreProduct.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true, runValidators: true });
     if (!product) return res.status(404).json({ msg: '商品不存在' });
     res.json({ msg: '商品已更新', data: product });
