@@ -3,6 +3,7 @@
 // ============================================================
 import { useEffect, useRef, useCallback } from 'react';
 import { createSSEUrl } from '../api/msc2026Api';
+import { resolveApiUrl } from '../../../lib/network';
 
 /**
  * SSE 连接 Hook
@@ -14,6 +15,8 @@ import { createSSEUrl } from '../api/msc2026Api';
 export function useMSCSSE(handlers, { enabled = true, since } = {}) {
   const eventSourceRef = useRef(null);
   const reconnectTimerRef = useRef(null);
+  const retryDelayRef = useRef(2000);
+  const disposedRef = useRef(false);
   const handlersRef = useRef(handlers);
   const connectRef = useRef(null);
 
@@ -23,13 +26,16 @@ export function useMSCSSE(handlers, { enabled = true, since } = {}) {
   }, [handlers]);
 
   const connect = useCallback(() => {
-    if (!enabled) return;
+    if (!enabled || disposedRef.current || !navigator.onLine) return;
 
-    const url = createSSEUrl(since);
+    eventSourceRef.current?.close();
+    const url = resolveApiUrl(createSSEUrl(since));
     const es = new EventSource(url);
 
     es.onopen = () => {
       console.log('[MSC SSE] 已连接');
+      retryDelayRef.current = 2000;
+      window.dispatchEvent(new CustomEvent('purebeat:api-online'));
     };
 
     // 注册所有事件
@@ -60,10 +66,15 @@ export function useMSCSSE(handlers, { enabled = true, since } = {}) {
     });
 
     es.onerror = () => {
-      console.warn('[MSC SSE] 连接断开，3s 后重连...');
+      if (disposedRef.current) return;
       es.close();
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = setTimeout(() => connectRef.current(), 3000);
+      const baseDelay = retryDelayRef.current;
+      const delay = baseDelay + Math.round(Math.random() * 800);
+      retryDelayRef.current = Math.min(baseDelay * 2, 30_000);
+      console.warn(`[MSC SSE] 连接断开，${Math.round(delay / 1000)}s 后重连...`);
+      window.dispatchEvent(new CustomEvent('purebeat:api-offline'));
+      reconnectTimerRef.current = setTimeout(() => connectRef.current?.(), delay);
     };
 
     eventSourceRef.current = es;
@@ -74,8 +85,17 @@ export function useMSCSSE(handlers, { enabled = true, since } = {}) {
   });
 
   useEffect(() => {
+    disposedRef.current = false;
+    const handleOnline = () => {
+      retryDelayRef.current = 2000;
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      connectRef.current?.();
+    };
+    window.addEventListener('online', handleOnline);
     connect();
     return () => {
+      disposedRef.current = true;
+      window.removeEventListener('online', handleOnline);
       eventSourceRef.current?.close();
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     };

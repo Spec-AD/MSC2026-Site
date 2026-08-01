@@ -25,7 +25,7 @@ function serializeSongDoc(song, difficultyIndex = 3) {
     bpm: isPopulated ? (song.basic_info?.bpm || song.bpm || null) : null,
     type: isPopulated ? song.type : '',
     coverUrl: catalogId
-      ? `https://www.diving-fish.com/covers/${catalogId.padStart(5, '0')}.png`
+      ? `/api/msc2026/media/covers/${catalogId.padStart(5, '0')}.png`
       : '',
     ds: isPopulated ? song.ds : undefined,
     level: isPopulated ? song.level : undefined,

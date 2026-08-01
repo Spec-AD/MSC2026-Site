@@ -1,15 +1,21 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaCheckCircle, FaExclamationCircle, FaInfoCircle, FaTimes } from 'react-icons/fa';
+import { CircleCheck, CircleAlert, Info, X } from 'lucide-react';
 
 // 1. 创建 Context
 const ToastContext = createContext();
+const MotionDiv = motion.div;
 
 export const useToast = () => useContext(ToastContext);
 
 // 2. Provider 组件
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
+
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   // 触发 Toast 的核心函数
   const addToast = useCallback((message, type = 'info', duration = 5000) => {
@@ -20,11 +26,7 @@ export const ToastProvider = ({ children }) => {
     setTimeout(() => {
       removeToast(id);
     }, duration);
-  }, []);
-
-  const removeToast = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
+  }, [removeToast]);
 
   return (
     <ToastContext.Provider value={{ addToast }}>
@@ -45,13 +47,13 @@ export const ToastProvider = ({ children }) => {
 const ToastItem = ({ toast, onRemove }) => {
   // 根据类型配置不同的图标和颜色
   const theme = {
-    success: { icon: <FaCheckCircle className="text-green-400 text-xl drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]" />, border: 'border-green-500/50', bar: 'bg-gradient-to-r from-green-400 to-green-600' },
-    error: { icon: <FaExclamationCircle className="text-red-400 text-xl drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]" />, border: 'border-red-500/50', bar: 'bg-gradient-to-r from-red-400 to-red-600' },
-    info: { icon: <FaInfoCircle className="text-cyan-400 text-xl drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />, border: 'border-cyan-500/50', bar: 'bg-gradient-to-r from-cyan-400 to-blue-500' }
+    success: { icon: <CircleCheck className="text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]" size={20} />, border: 'border-green-500/50', bar: 'bg-gradient-to-r from-green-400 to-green-600' },
+    error: { icon: <CircleAlert className="text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]" size={20} />, border: 'border-red-500/50', bar: 'bg-gradient-to-r from-red-400 to-red-600' },
+    info: { icon: <Info className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" size={20} />, border: 'border-cyan-500/50', bar: 'bg-gradient-to-r from-cyan-400 to-blue-500' }
   }[toast.type] || theme.info;
 
   return (
-    <motion.layout
+    <MotionDiv
       layout // 使多条消息可以平滑推挤
       initial={{ opacity: 0, x: 100, scale: 0.9 }}
       animate={{ opacity: 1, x: 0, scale: 1 }}
@@ -63,16 +65,16 @@ const ToastItem = ({ toast, onRemove }) => {
         {toast.message}
       </div>
       <button onClick={onRemove} className="shrink-0 text-gray-500 hover:text-white transition-colors cursor-pointer">
-        <FaTimes />
+        <X size={16} />
       </button>
       
       {/* 倒计时进度条 */}
-      <motion.div
+      <MotionDiv
         initial={{ width: "100%" }}
         animate={{ width: 0 }}
         transition={{ duration: toast.duration / 1000, ease: "linear" }}
         className={`absolute bottom-0 left-0 h-1 ${theme.bar}`}
       />
-    </motion.layout>
+    </MotionDiv>
   );
 };

@@ -8,9 +8,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-framer': ['framer-motion'],
           'vendor-icons': ['react-icons'],
-          'vendor-utils': ['bbcode-to-react', 'axios'],
+          'vendor-axios': ['axios'],
         }
       }
     }

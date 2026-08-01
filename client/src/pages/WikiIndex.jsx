@@ -2,9 +2,18 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import * as FaIcons from 'react-icons/fa'; 
+import {
+  FaBook, FaChevronRight, FaEye, FaFolder, FaGamepad,
+  FaInfoCircle, FaMusic, FaPenNib, FaSearch, FaSpinner,
+  FaTimes, FaTrophy, FaUser
+} from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext'; 
 import { useToast } from '../context/ToastContext';
+
+const CATEGORY_ICONS = {
+  FaBook, FaFolder, FaGamepad, FaInfoCircle, FaMusic, FaTrophy, FaUser
+};
+const MotionDiv = motion.div;
 
 const WikiIndex = () => {
   const navigate = useNavigate();
@@ -90,7 +99,7 @@ const WikiIndex = () => {
         <div className="mb-10 md:mb-12 border-b border-white/[0.05] pb-6 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold text-zinc-100 tracking-tight flex items-center gap-3">
-              <FaIcons.FaBook className="text-zinc-400" />
+              <FaBook className="text-zinc-400" />
               维基大厅
             </h1>
             <p className="text-sm text-zinc-500 mt-2 font-medium">
@@ -103,11 +112,11 @@ const WikiIndex = () => {
               onClick={() => setShowSubmitModal(true)}
               className="flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-200 hover:bg-white text-zinc-900 rounded-xl transition-all text-sm font-bold shadow-sm active:scale-95 shrink-0"
             >
-              <FaIcons.FaPenNib /> 参与共建
+              <FaPenNib /> 参与共建
             </button>
 
             <div className="relative w-full sm:w-64">
-              <FaIcons.FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm" />
+              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm" />
               <input 
                 type="text" 
                 value={searchQuery}
@@ -120,15 +129,15 @@ const WikiIndex = () => {
         </div>
 
         {loading ? (
-          <div className="py-24 flex justify-center"><FaIcons.FaSpinner className="animate-spin text-3xl text-zinc-600" /></div>
+          <div className="py-24 flex justify-center"><FaSpinner className="animate-spin text-3xl text-zinc-600" /></div>
         ) : (
           <div className="space-y-6 md:space-y-8">
             {groupedArticles.map((group) => {
               const config = group.info;
-              const Icon = FaIcons[config.icon] || FaIcons.FaFolder;
+              const Icon = CATEGORY_ICONS[config.icon] || FaFolder;
 
               return (
-                <motion.div 
+                <MotionDiv
                   key={config._id}
                   initial={{ opacity: 0, y: 15 }}
                   whileInView={{ opacity: 1, y: 0 }}
@@ -164,22 +173,22 @@ const WikiIndex = () => {
                         </div>
                         <div className="flex items-center gap-4 shrink-0">
                           <div className="flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
-                            <FaIcons.FaEye /> {article.views || 0}
+                            <FaEye /> {article.views || 0}
                           </div>
                           <div className="w-6 h-6 rounded-full flex items-center justify-center bg-white/[0.02] group-hover:bg-zinc-200 group-hover:text-zinc-900 transition-all">
-                            <FaIcons.FaChevronRight className="text-[10px]" />
+                            <FaChevronRight className="text-[10px]" />
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </motion.div>
+                </MotionDiv>
               );
             })}
 
             {filteredArticles.length === 0 && (
               <div className="text-center py-20 text-zinc-500 text-sm font-medium border border-white/[0.05] rounded-2xl bg-[#18181c] flex flex-col items-center">
-                <FaIcons.FaSearch className="text-3xl mb-3 opacity-20" />
+                <FaSearch className="text-3xl mb-3 opacity-20" />
                 未找到匹配的词条
               </div>
             )}
@@ -190,20 +199,20 @@ const WikiIndex = () => {
         <AnimatePresence>
           {showSubmitModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-              <motion.div 
+              <MotionDiv
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 onClick={() => setShowSubmitModal(false)}
                 className="absolute inset-0 bg-[#0a0a0c]/80 backdrop-blur-sm"
               />
               
-              <motion.div 
+              <MotionDiv
                 initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 className="relative w-full max-w-2xl bg-[#18181c] border border-white/[0.05] rounded-2xl p-6 md:p-8 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
               >
                 <div className="flex justify-between items-start mb-6 border-b border-white/[0.05] pb-4">
                   <div>
                     <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
-                      <FaIcons.FaPenNib className="text-zinc-400" /> 参与维基共建
+                      <FaPenNib className="text-zinc-400" /> 参与维基共建
                     </h2>
                     <p className="text-xs text-zinc-500 mt-2 leading-relaxed">
                       感谢你为社区贡献力量。如果输入的 URL 标识与现有词条重复，将自动转为更新申请。
@@ -213,7 +222,7 @@ const WikiIndex = () => {
                     onClick={() => setShowSubmitModal(false)}
                     className="text-zinc-500 hover:text-zinc-200 transition-colors p-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-full active:scale-90"
                   >
-                    <FaIcons.FaTimes />
+                    <FaTimes />
                   </button>
                 </div>
 
@@ -265,11 +274,11 @@ const WikiIndex = () => {
                       type="submit" disabled={isSubmitting}
                       className="w-full py-3 bg-zinc-200 hover:bg-white text-zinc-900 font-bold rounded-xl transition-all shadow-sm disabled:opacity-50 active:scale-95 flex items-center justify-center gap-2"
                     >
-                      {isSubmitting ? <FaIcons.FaSpinner className="animate-spin" /> : '提交审核'}
+                      {isSubmitting ? <FaSpinner className="animate-spin" /> : '提交审核'}
                     </button>
                   </div>
                 </form>
-              </motion.div>
+              </MotionDiv>
             </div>
           )}
         </AnimatePresence>

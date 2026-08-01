@@ -13,6 +13,7 @@
  */
 
 const express = require('express');
+const axios = require('axios');
 const router = express.Router();
 const { authMiddleware, optionalAuth } = require('../middleware/auth');
 const MSC2026Tournament = require('../models/MSC2026Tournament');
@@ -50,6 +51,53 @@ const { buildQualifierRankings } = require('../services/msc2026/qualifierRanking
 const { createMarket, settleMarket, prepareMarketsForRollback, FINAL_REVEAL_MS } = require('../services/msc2026/betting');
 
 const SONG_DISPLAY_FIELDS = 'id title type basic_info.artist basic_info.bpm ds level aliases charts';
+const coverCache = new Map();
+const MAX_COVER_CACHE_ENTRIES = 256;
+
+function placeholderCover(res) {
+  res.set({
+    'Content-Type': 'image/svg+xml; charset=utf-8',
+    'Cache-Control': 'public, max-age=300'
+  });
+  return res.send('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><rect width="300" height="300" fill="#111318"/><text x="150" y="170" fill="#52525b" font-size="96" text-anchor="middle">?</text></svg>');
+}
+
+// 曲绘经香港服务端转发，避免比赛终端直接依赖大陆网络波动较大的第三方 CDN。
+router.get('/media/covers/:catalogId.png', async (req, res) => {
+  const catalogId = String(req.params.catalogId || '');
+  if (!/^\d{1,6}$/.test(catalogId)) return res.status(400).end();
+  const normalizedId = catalogId.padStart(5, '0');
+  const cached = coverCache.get(normalizedId);
+  if (cached) {
+    res.set({ 'Content-Type': cached.contentType, 'Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400' });
+    return res.send(cached.body);
+  }
+
+  const sources = [
+    `https://www.diving-fish.com/covers/${normalizedId}.png`,
+    `https://assets2.lxns.net/maimai/jacket/${Number(normalizedId)}.png`
+  ];
+  for (const source of sources) {
+    try {
+      const response = await axios.get(source, {
+        responseType: 'arraybuffer',
+        timeout: 6000,
+        maxContentLength: 5_000_000,
+        validateStatus: status => status === 200
+      });
+      const contentType = String(response.headers['content-type'] || 'image/png');
+      if (!contentType.startsWith('image/')) continue;
+      const entry = { body: Buffer.from(response.data), contentType };
+      if (coverCache.size >= MAX_COVER_CACHE_ENTRIES) coverCache.delete(coverCache.keys().next().value);
+      coverCache.set(normalizedId, entry);
+      res.set({ 'Content-Type': contentType, 'Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400' });
+      return res.send(entry.body);
+    } catch {
+      // 尝试备用曲绘源。
+    }
+  }
+  return placeholderCover(res);
+});
 
 // ── 辅助 ──
 async function requireTournament(res) {

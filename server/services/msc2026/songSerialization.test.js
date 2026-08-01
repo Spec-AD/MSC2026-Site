@@ -27,7 +27,7 @@ test('serializes a populated song play with a stable frontend shape', () => {
   assert.equal(result.song.title, 'Random Song');
   assert.equal(result.song.artist, 'Artist');
   assert.equal(result.song.bpm, 180);
-  assert.equal(result.song.coverUrl, 'https://www.diving-fish.com/covers/00123.png');
+  assert.equal(result.song.coverUrl, '/api/msc2026/media/covers/00123.png');
   assert.equal(result.song.difficultyName, 'MASTER');
   assert.equal(result.song.chartConstant, 14.3);
   assert.equal(result.song.charter, 'Chart Author');

@@ -7,7 +7,7 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  font-family: 'Quicksand', 'NotoSansSC', 'MPLUS1p', sans-serif;
+  font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   @apply bg-gray-50 text-zinc-900 dark:bg-[#0c0c11] dark:text-zinc-200 transition-colors duration-300;
   -webkit-font-smoothing: antialiased;
 }
@@ -23,18 +23,6 @@ body {
 @font-face {
   font-family: 'Quicksand';
   src: url('/fonts/Quicksand-VariableFont_wght.ttf') format('truetype');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-/* =======================================================
-   2. 中文字体 (Noto Sans SC 思源黑体 - 可变字体 Variable Font)
-   原生支持字重平滑过渡，极其清晰
-======================================================= */
-@font-face {
-  font-family: 'NotoSansSC';
-  src: url('/fonts/NotoSansSC-VariableFont_wght.ttf') format('truetype');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -121,10 +109,10 @@ body {
 }
 
 /* =======================================================
-   全局字体回退链：英文 (Quicksand) -> 中文 (NotoSansSC) -> 日文 (M PLUS) -> 系统后备
+   全局字体回退链：英文 (Quicksand) -> 系统中文字体 -> 日文 (M PLUS)
 ======================================================= */
 body {
-  font-family: 'Quicksand', 'NotoSansSC', 'MPLUS1p', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'MPLUS1p', sans-serif;
   font-weight: 500;
 }
 

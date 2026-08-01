@@ -1,5 +1,9 @@
+import { resolveApiUrl } from '../../../lib/network';
+
 export function getSongCover(song) {
-  if (song?.coverUrl || song?.jacketUrl) return song.coverUrl || song.jacketUrl;
-  if (song?.id == null || song.id === '') return '';
-  return `https://www.diving-fish.com/covers/${String(song.id).padStart(5, '0')}.png`;
+  const known = song?.coverUrl || song?.jacketUrl;
+  if (known?.startsWith('/api/')) return resolveApiUrl(known);
+  const id = song?.id ?? song?.catalogId;
+  if (id == null || id === '') return known || '';
+  return resolveApiUrl(`/api/msc2026/media/covers/${String(id).padStart(5, '0')}.png`);
 }

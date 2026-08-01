@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  FaHome, FaTrophy, FaUserCircle, FaSearch, FaSpinner, FaTimes, 
-  FaCompactDisc, FaBook, FaCrown, FaFlag
-} from 'react-icons/fa';
+import { Home, Trophy, CircleUserRound, Search, LoaderCircle, X, Disc3, BookOpen, Crown, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+
+const MotionDiv = motion.div;
 
 const Sidebar = () => {
   const location = useLocation();
@@ -22,12 +21,12 @@ const Sidebar = () => {
 
   // 导航路由配置
   const navItems = [
-    { path: '/', icon: <FaHome />, label: '枢纽' },
-    { path: '/tournaments', icon: <FaTrophy />, label: '赛事' },
-    { path: '/matches/msc2026', icon: <FaFlag />, label: 'MSC' },
-    { path: '/leaderboard', icon: <FaCrown />, label: '排行' },
-    { path: '/songs', icon: <FaCompactDisc />, label: '曲目' },
-    { path: '/wiki', icon: <FaBook />, label: '维基' },
+    { path: '/', icon: <Home size={20} />, label: '枢纽' },
+    { path: '/tournaments', icon: <Trophy size={20} />, label: '赛事' },
+    { path: '/matches/msc2026', icon: <Flag size={20} />, label: 'MSC' },
+    { path: '/leaderboard', icon: <Crown size={20} />, label: '排行' },
+    { path: '/songs', icon: <Disc3 size={20} />, label: '曲目' },
+    { path: '/wiki', icon: <BookOpen size={20} />, label: '维基' },
   ];
 
   // --- 搜索核心机制：防抖与请求 ---
@@ -127,7 +126,7 @@ const Sidebar = () => {
             className="group relative flex flex-col items-center justify-center w-full h-full md:w-16 md:h-14 rounded-xl hover:bg-white/[0.04] transition-all duration-200 active:scale-95 md:mt-2"
           >
             <div className="text-xl md:text-[22px] text-zinc-500 group-hover:text-zinc-300 transition-colors duration-200">
-              <FaSearch />
+              <Search size={20} />
             </div>
             <span className="mt-1 md:hidden text-[10px] font-medium text-zinc-500">
               搜索
@@ -144,7 +143,7 @@ const Sidebar = () => {
           className="flex flex-col items-center justify-center w-16 h-full md:w-16 md:h-14 rounded-xl hover:bg-white/[0.04] transition-all duration-200 active:scale-95 group relative"
         >
           <div className={`text-[22px] md:text-2xl transition-colors duration-200 ${user ? 'text-zinc-200' : 'text-zinc-500 group-hover:text-zinc-300'}`}>
-            <FaUserCircle />
+            <CircleUserRound size={20} />
           </div>
           <span className="mt-1 md:hidden text-[10px] font-medium text-zinc-500">
             {user ? '我的' : '登录'}
@@ -158,7 +157,7 @@ const Sidebar = () => {
       {/* ===================== 全屏搜索覆盖层 (Search Modal) ===================== */}
       <AnimatePresence>
         {isSearchOpen && (
-          <motion.div
+          <MotionDiv
             initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
             animate={{ opacity: 1, backdropFilter: 'blur(8px)' }}
             exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
@@ -169,10 +168,10 @@ const Sidebar = () => {
               onClick={closeSearch}
               className="absolute top-6 right-6 md:top-10 md:right-10 text-zinc-500 hover:text-zinc-200 text-2xl p-2 transition-all active:scale-90 bg-white/[0.02] hover:bg-white/[0.05] rounded-full"
             >
-              <FaTimes />
+              <X size={20} />
             </button>
 
-            <motion.div
+            <MotionDiv
               initial={{ y: -20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: -10, opacity: 0 }}
@@ -181,7 +180,7 @@ const Sidebar = () => {
             >
               {/* 搜索输入框主体 */}
               <div className="relative flex items-center shadow-2xl">
-                <FaSearch className="absolute left-6 text-zinc-500 text-lg" />
+                <Search className="absolute left-6 text-zinc-500" size={18} />
                 <input
                   ref={searchInputRef}
                   type="text"
@@ -190,7 +189,7 @@ const Sidebar = () => {
                   onChange={(e) => setQuery(e.target.value)}
                   className="w-full bg-[#18181c] border border-white/[0.05] text-zinc-100 placeholder-zinc-500 rounded-2xl py-4 pl-14 pr-14 focus:outline-none focus:border-zinc-500 focus:bg-[#1a1a20] transition-all text-base md:text-lg"
                 />
-                {isSearching && <FaSpinner className="absolute right-6 text-zinc-400 animate-spin text-lg" />}
+                {isSearching && <LoaderCircle className="absolute right-6 animate-spin text-zinc-400" size={18} />}
               </div>
 
               {/* 搜索结果下拉面板 */}
@@ -223,14 +222,14 @@ const Sidebar = () => {
                     ))
                   ) : (
                     <div className="py-12 flex flex-col items-center justify-center text-zinc-500">
-                      <FaSearch className="text-3xl mb-3 opacity-20" />
+                      <Search className="mb-3 opacity-20" size={30} />
                       <div className="text-sm font-medium">未找到匹配的玩家</div>
                     </div>
                   )}
                 </div>
               )}
-            </motion.div>
-          </motion.div>
+            </MotionDiv>
+          </MotionDiv>
         )}
       </AnimatePresence>
     </>

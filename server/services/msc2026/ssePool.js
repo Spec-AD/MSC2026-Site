@@ -14,8 +14,8 @@ const clients = [];
 // 角色权重（数字越大权限越高）
 const ROLE_WEIGHT = { anon: 0, user: 1, CHM: 2, TO: 2, ADM: 3 };
 
-// 心跳间隔 30s
-const HEARTBEAT_MS = 30_000;
+// 15 秒心跳可避免运营商/NAT/反向代理提前回收空闲连接。
+const HEARTBEAT_MS = 15_000;
 // 倒计时 tick 间隔 5s
 const TIMER_TICK_MS = 5_000;
 
@@ -27,11 +27,13 @@ const TIMER_TICK_MS = 5_000;
 function addClient(id, res, role = 'anon') {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
+    'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no'
+    'X-Accel-Buffering': 'no',
+    'Content-Encoding': 'identity'
   });
-  res.write(`:ok\n\n`);
+  res.flushHeaders?.();
+  res.write(`retry: 3000\n:ok\n\n`);
 
   const entry = { id, res, role };
   clients.push(entry);
