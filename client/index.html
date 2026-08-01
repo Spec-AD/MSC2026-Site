@@ -12,6 +12,21 @@
       .boot__title{font-size:22px;font-weight:800}.boot__hint{margin-top:10px;color:#a1a1aa;line-height:1.7}.boot__actions{display:none;margin-top:22px}.boot--slow .boot__actions{display:block}.boot__button{display:inline-block;border:1px solid #52525b;background:#18181b;color:#fff;padding:11px 18px;border-radius:8px;font:inherit;font-weight:700;cursor:pointer}
       @keyframes spin{to{transform:rotate(360deg)}}
     </style>
+    <script>
+      // Vite 在发布切换后发现旧哈希模块失效时会触发此事件。
+      // 使用带时间戳的入口地址自动绕过旧 HTML/CDN 缓存，且限制为 15 秒内一次。
+      window.addEventListener('vite:preloadError', function (event) {
+        event.preventDefault();
+        var key = 'purebeat:preload-recovery-at';
+        var now = Date.now();
+        var previous = Number(sessionStorage.getItem(key) || 0);
+        if (now - previous < 15000) return;
+        sessionStorage.setItem(key, String(now));
+        var target = new URL(window.location.href);
+        target.searchParams.set('__recover', String(now));
+        window.location.replace(target.toString());
+      });
+    </script>
   </head>
   <body>
     <div id="root">
