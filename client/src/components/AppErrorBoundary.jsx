@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { recoverChunkLoad } from '../utils/recoverChunkLoad';
 
 export default class AppErrorBoundary extends Component {
   constructor(props) {
@@ -12,6 +13,7 @@ export default class AppErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('[PureBeat] 页面渲染失败', error, info);
+    recoverChunkLoad(error);
   }
 
   render() {

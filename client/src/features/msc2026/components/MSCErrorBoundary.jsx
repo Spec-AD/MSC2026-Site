@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { recoverChunkLoad } from '../../../utils/recoverChunkLoad';
 
 export default class MSCErrorBoundary extends Component {
   constructor(props) {
@@ -12,6 +13,7 @@ export default class MSCErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('[MSC2026] interface crashed', error, info);
+    recoverChunkLoad(error);
   }
 
   render() {
