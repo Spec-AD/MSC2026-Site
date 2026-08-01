@@ -23,7 +23,7 @@ const User = require('../models/User');
 
 const { loadTournament, checkPermission, calculateRaceRankings, shuffle, assertObjectIdList } = require('../services/msc2026/utils');
 const { initStage1, startFirstGroup, completeGroupReveal, selectSong, submitScore, advance: advanceStage1, forfeitPlayer, resolveGroupTie } = require('../services/msc2026/stage1');
-const { initRace, startRace, currentRace, playerAction, useItem, challengeResult, skipTurn, terminateRace } = require('../services/msc2026/raceEngine');
+const { initRace, startRace, pauseRace, resumeRace, currentRace, playerAction, useItem, challengeResult, skipTurn, terminateRace } = require('../services/msc2026/raceEngine');
 const { initStage4, selectSong: selectSong4, submitScore: submitScore4, advance: advanceStage4, resolveTie: resolveTie4 } = require('../services/msc2026/stage4');
 const { addClient, broadcast } = require('../services/msc2026/ssePool');
 const {
@@ -292,6 +292,7 @@ router.get('/status', async (req, res) => {
           finishCount: t.stage2.finishOrder?.length || 0,
           totalPlayers: t.stage2.players?.length || 0,
           terminated: t.stage2.terminated,
+          paused: Boolean(t.stage2.paused),
           status: t.stage2.terminated ? 'terminated' : (t.stage2.status || (t.stage2.totalTimeStartedAt ? 'racing' : 'waiting'))
         } : null,
         stage3: t.stage3 ? {
@@ -299,6 +300,7 @@ router.get('/status', async (req, res) => {
           finishCount: t.stage3.finishOrder?.length || 0,
           totalPlayers: t.stage3.players?.length || 0,
           terminated: t.stage3.terminated,
+          paused: Boolean(t.stage3.paused),
           status: t.stage3.terminated ? 'terminated' : (t.stage3.status || (t.stage3.totalTimeStartedAt ? 'racing' : 'waiting'))
         } : null,
         stage4: t.stage4 ? {
@@ -1323,6 +1325,34 @@ router.post('/race/start', authMiddleware, async (req, res) => {
   }
 });
 
+router.post('/race/pause', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    await withLockedTournament(res, async (t) => {
+      const result = await pauseRace(t, req.user.id);
+      res.json({ msg: '跑图已全局暂停，全部计时已冻结', data: result });
+    });
+  } catch (err) {
+    console.error('暂停跑图失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
+router.post('/race/resume', authMiddleware, async (req, res) => {
+  try {
+    const perm = await checkPermission(req.user, null, 'referee');
+    if (!perm.allowed) return res.status(403).json({ msg: perm.msg });
+    await withLockedTournament(res, async (t) => {
+      const result = await resumeRace(t, req.user.id);
+      res.json({ msg: '跑图已恢复，全部计时继续', data: result });
+    });
+  } catch (err) {
+    console.error('恢复跑图失败:', err);
+    res.status(400).json({ msg: err.message });
+  }
+});
+
 router.get('/race/state', async (req, res) => {
   try {
     const t = await MSC2026Tournament.findOne()
@@ -1337,8 +1367,9 @@ router.get('/race/state', async (req, res) => {
     if (!race) return res.status(404).json({ msg: '不在跑图阶段' });
 
     const now = Date.now();
-    const totalElapsed = race.totalTimeStartedAt ? now - new Date(race.totalTimeStartedAt).getTime() : 0;
-    const turnElapsed = race.turnStartedAt ? now - new Date(race.turnStartedAt).getTime() : 0;
+    const clockNow = race.paused && race.pausedAt ? new Date(race.pausedAt).getTime() : now;
+    const totalElapsed = race.totalTimeStartedAt ? clockNow - new Date(race.totalTimeStartedAt).getTime() : 0;
+    const turnElapsed = race.turnStartedAt ? clockNow - new Date(race.turnStartedAt).getTime() : 0;
     const pendingChallenge = race.challengeHistory?.some(ch => ch.passed === null);
 
     res.json({
@@ -1351,6 +1382,9 @@ router.get('/race/state', async (req, res) => {
         turnTimeLimitMs: race.turnTimeLimitMs,
         totalTimeStartedAt: race.totalTimeStartedAt,
         turnStartedAt: race.turnStartedAt,
+        paused: Boolean(race.paused),
+        pausedAt: race.pausedAt,
+        totalPausedDurationMs: race.totalPausedDurationMs || 0,
         currentTurn: race.currentTurn,
         roundNumber: race.roundNumber || 1,
         roundPosition: race.roundPosition || 0,
@@ -1461,7 +1495,8 @@ router.get('/race/map', async (req, res) => {
         roundPosition: race.roundPosition || 0,
         turnOrder: (race.turnOrder || []).map(index => String(race.players[index]?.userId?._id || race.players[index]?.userId)),
         currentPlayerIndex: race.currentPlayerIndex,
-        currentPlayerId: String(race.players[race.currentPlayerIndex]?.userId?._id || race.players[race.currentPlayerIndex]?.userId)
+        currentPlayerId: String(race.players[race.currentPlayerIndex]?.userId?._id || race.players[race.currentPlayerIndex]?.userId),
+        paused: Boolean(race.paused)
       }
     });
   } catch (err) {

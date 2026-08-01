@@ -13,6 +13,9 @@ export const useRaceStore = create((set, get) => ({
   turnTimeLimitMs: null,
   totalTimeStartedAt: null,
   turnStartedAt: null,
+  paused: false,
+  pausedAt: null,
+  totalPausedDurationMs: 0,
 
   // 回合
   currentTurn: 0,
@@ -70,6 +73,9 @@ export const useRaceStore = create((set, get) => ({
         turnTimeLimitMs: data.turnTimeLimitMs,
         totalTimeStartedAt: data.totalTimeStartedAt,
         turnStartedAt: data.turnStartedAt,
+        paused: Boolean(data.paused),
+        pausedAt: data.pausedAt || null,
+        totalPausedDurationMs: data.totalPausedDurationMs || 0,
         currentTurn: data.currentTurn,
         currentPlayerIndex: data.currentPlayerIndex,
         currentPlayerId: data.currentPlayerId,
@@ -111,6 +117,7 @@ export const useRaceStore = create((set, get) => ({
         roundNumber: data.roundNumber || get().roundNumber,
         roundPosition: data.roundPosition ?? get().roundPosition,
         turnOrder: data.turnOrder || get().turnOrder,
+        paused: data.paused ?? get().paused,
       });
       return data;
     } catch (err) {
@@ -163,6 +170,27 @@ export const useRaceStore = create((set, get) => ({
       return res.data.data;
     } catch (err) {
       throw err.response?.data || { msg: '开始跑图失败' };
+    }
+  },
+
+  /** 全局暂停/恢复跑图 */
+  pauseRace: async () => {
+    try {
+      const res = await api.pauseRace();
+      await get().fetchRaceState();
+      return res.data.data;
+    } catch (err) {
+      throw err.response?.data || { msg: '暂停跑图失败' };
+    }
+  },
+
+  resumeRace: async () => {
+    try {
+      const res = await api.resumeRace();
+      await get().fetchRaceState();
+      return res.data.data;
+    } catch (err) {
+      throw err.response?.data || { msg: '恢复跑图失败' };
     }
   },
 
@@ -272,7 +300,7 @@ export const useRaceStore = create((set, get) => ({
       totalTimeStartedAt,
       turnStartedAt,
     } = get();
-    if (status !== 'racing') return;
+    if (status !== 'racing' || get().paused) return;
 
     const now = Date.now();
     const totalStart = totalTimeStartedAt ? new Date(totalTimeStartedAt).getTime() : null;
@@ -326,6 +354,7 @@ export const useRaceStore = create((set, get) => ({
   /** SSE 事件：更新倒计时 */
   sseTimerTick: (data) => {
     set({
+      paused: data.paused ?? get().paused,
       turnRemainingMs: data.turnRemainingMs ?? get().turnRemainingMs,
       totalRemainingMs: data.totalRemainingMs ?? get().totalRemainingMs,
     });
@@ -357,6 +386,7 @@ export const useRaceStore = create((set, get) => ({
       stage: null, status: null, mapConfig: null,
       timeLimitMs: null, turnTimeLimitMs: null,
       totalTimeStartedAt: null, turnStartedAt: null,
+      paused: false, pausedAt: null, totalPausedDurationMs: 0,
       currentTurn: 0, currentPlayerIndex: -1, currentPlayerId: null,
       roundNumber: 1, roundPosition: 0, turnOrder: [], pendingJudgementCount: 0,
       players: [], finishOrder: [], itemsOnMap: [], wallsBroken: [],

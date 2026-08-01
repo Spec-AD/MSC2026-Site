@@ -47,6 +47,7 @@ export function useMSCSSE(handlers, { enabled = true, since } = {}) {
       'stage_advanced', 'map_timeout', 'timer_tick',
       'song_drawn', 'item_armed',
       'race_started', 'round_started', 'round_adjudication',
+      'race_paused', 'race_resumed',
       'challenge_queue_advanced', 'item_pickup_queued',
       'item_replenished', 'decode_updated',
       'betting_update', 'points_updated',

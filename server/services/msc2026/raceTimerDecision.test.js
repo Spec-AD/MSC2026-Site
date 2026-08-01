@@ -51,3 +51,13 @@ test('keeps the next player timer running while challenges queue during a round'
 test('does nothing while both timers are within their limits', () => {
   assert.equal(getRaceTimerDecision(race(), NOW).type, 'none');
 });
+
+test('global pause takes priority over map and turn expiry', () => {
+  const decision = getRaceTimerDecision(race({
+    paused: true,
+    pausedAt: new Date(NOW - 60_000),
+    totalTimeStartedAt: new Date(NOW - 60 * 60_000),
+    turnStartedAt: new Date(NOW - 60_000),
+  }), NOW);
+  assert.equal(decision.type, 'globally_paused');
+});

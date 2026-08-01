@@ -142,6 +142,9 @@ async function initRace(tournament, playerIds) {
     turnTimeLimitMs: config.turnTimeLimitMs,
     totalTimeStartedAt: null,
     turnStartedAt: null,
+    paused: false,
+    pausedAt: null,
+    totalPausedDurationMs: 0,
     currentPlayerIndex: firstPlayer,
     currentTurn: 0,
     roundNumber: 1,
@@ -202,6 +205,9 @@ async function startRace(tournament) {
   race.currentTurn = Math.max(0, Number(race.currentTurn) || 0);
   race.totalTimeStartedAt = new Date();
   race.turnStartedAt = new Date();
+  race.paused = false;
+  race.pausedAt = null;
+  race.totalPausedDurationMs = 0;
   await tournament.save();
 
   const payload = {
@@ -215,6 +221,65 @@ async function startRace(tournament) {
   broadcast('race_started', payload);
   broadcast('round_started', payload);
   broadcast('turn_change', payload);
+  return payload;
+}
+
+/** 全局暂停：冻结总计时、回合计时、自动调度与全部写操作。 */
+async function pauseRace(tournament, operatedBy = null, now = Date.now()) {
+  const stageKey = tournament.status;
+  const race = tournament[stageKey];
+  if (!race || (stageKey !== 'stage2' && stageKey !== 'stage3')) throw new Error('不在跑图阶段');
+  _ensureRoundState(race);
+  if (race.terminated || race.status === 'terminated') throw new Error('地图已终止');
+  if (race.status === 'waiting') throw new Error('跑图尚未开始');
+  if (race.paused) throw new Error('跑图已经暂停');
+
+  race.paused = true;
+  race.pausedAt = new Date(now);
+  if (Array.isArray(tournament.operationLogs)) {
+    tournament.operationLogs.push({ action: 'race_pause', stage: stageKey, operatedBy });
+  }
+  await tournament.save();
+
+  const payload = { stage: stageKey, paused: true, pausedAt: race.pausedAt, status: race.status };
+  broadcast('race_paused', payload);
+  return payload;
+}
+
+/** 恢复时把所有活动计时基准整体顺延暂停时长。 */
+async function resumeRace(tournament, operatedBy = null, now = Date.now()) {
+  const stageKey = tournament.status;
+  const race = tournament[stageKey];
+  if (!race || (stageKey !== 'stage2' && stageKey !== 'stage3')) throw new Error('不在跑图阶段');
+  _ensureRoundState(race);
+  if (race.terminated || race.status === 'terminated') throw new Error('地图已终止');
+  if (!race.paused || !race.pausedAt) throw new Error('跑图当前未暂停');
+
+  const pausedDurationMs = Math.max(0, now - new Date(race.pausedAt).getTime());
+  if (race.totalTimeStartedAt) {
+    race.totalTimeStartedAt = new Date(new Date(race.totalTimeStartedAt).getTime() + pausedDurationMs);
+  }
+  if (race.turnStartedAt) {
+    race.turnStartedAt = new Date(new Date(race.turnStartedAt).getTime() + pausedDurationMs);
+  }
+  race.totalPausedDurationMs = Number(race.totalPausedDurationMs || 0) + pausedDurationMs;
+  race.paused = false;
+  race.pausedAt = null;
+  if (Array.isArray(tournament.operationLogs)) {
+    tournament.operationLogs.push({ action: 'race_resume', stage: stageKey, detail: { pausedDurationMs }, operatedBy });
+  }
+  await tournament.save();
+
+  const payload = {
+    stage: stageKey,
+    paused: false,
+    pausedDurationMs,
+    totalPausedDurationMs: race.totalPausedDurationMs,
+    totalTimeStartedAt: race.totalTimeStartedAt,
+    turnStartedAt: race.turnStartedAt,
+    status: race.status,
+  };
+  broadcast('race_resumed', payload);
   return payload;
 }
 
@@ -236,6 +301,7 @@ async function playerAction(tournament, targetPlayerId, actionType, zoneIndex) {
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
   _ensureRoundState(race);
+  if (race.paused) throw new Error('跑图已全局暂停');
   if (race.status === 'waiting') throw new Error('地图已初始化，等待管理员开始');
   if (race.status === 'adjudicating') throw new Error('本圈行动已结束，请先完成统一判定');
   if (race.status !== 'racing') throw new Error('跑图当前不可操作');
@@ -293,6 +359,7 @@ async function useItem(tournament, targetPlayerId, itemRef) {
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
   _ensureRoundState(race);
+  if (race.paused) throw new Error('跑图已全局暂停');
   if (race.terminated) throw new Error('地图已终止');
   if (race.status !== 'racing') throw new Error('仅可在行动阶段使用道具');
 
@@ -469,6 +536,8 @@ function _ensureRoundState(race) {
   }
   if (!Array.isArray(race.pendingRoundActions)) race.pendingRoundActions = [];
   if (!Array.isArray(race.itemsOnMap)) race.itemsOnMap = [];
+  if (typeof race.paused !== 'boolean') race.paused = false;
+  if (!Number.isFinite(Number(race.totalPausedDurationMs))) race.totalPausedDurationMs = 0;
   if (!race.taskPool) race.taskPool = { used: [], remaining: [], fallbackTasks: [], fallbackCount: 0, cycle: 1 };
   if (!Number.isInteger(race.taskPool.cycle) || race.taskPool.cycle < 1) race.taskPool.cycle = 1;
 }
@@ -728,6 +797,7 @@ async function challengeResult(tournament, judgeId, passed, resultSnapshot = nul
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
   _ensureRoundState(race);
+  if (race.paused) throw new Error('跑图已全局暂停');
 
   await _checkMapTimeout(tournament, race, stageKey);
   if (race.terminated) throw new Error('地图已终止');
@@ -1001,6 +1071,7 @@ async function skipTurn(tournament, reason = 'skip_manual') {
   const race = tournament[stageKey];
   if (!race) throw new Error('不在跑图阶段');
   _ensureRoundState(race);
+  if (race.paused) throw new Error('跑图已全局暂停');
   if (race.terminated) throw new Error('地图已终止');
   if (race.status !== 'racing') throw new Error('当前不在行动阶段');
 
@@ -1008,6 +1079,7 @@ async function skipTurn(tournament, reason = 'skip_manual') {
 }
 
 async function _skipTurn(tournament, race, reason, userId) {
+  if (race.paused) throw new Error('跑图已全局暂停');
   const currentPlayer = race.players[race.currentPlayerIndex];
   const skippedTurn = race.currentTurn;
 
@@ -1275,6 +1347,7 @@ async function _advanceTurn(tournament, race) {
  */
 async function _checkMapTimeout(tournament, race, stageKey) {
   if (race.terminated) return;
+  if (race.paused) return;
   if (!race.totalTimeStartedAt) return;
   const elapsed = Date.now() - new Date(race.totalTimeStartedAt).getTime();
   if (elapsed >= race.timeLimitMs) {
@@ -1322,6 +1395,8 @@ async function _terminateRace(tournament, race, stageKey, reason) {
   race.terminatedReason = reason;
   race.status = 'terminated';
   race.turnStartedAt = null;
+  race.paused = false;
+  race.pausedAt = null;
 
   const config = RACE_CONFIGS[stageKey];
   const rankings = calculateRaceRankings(race.players);
@@ -1417,6 +1492,8 @@ function getRaceConfig(stageKey) {
 module.exports = {
   initRace,
   startRace,
+  pauseRace,
+  resumeRace,
   currentRace,
   playerAction,
   useItem,

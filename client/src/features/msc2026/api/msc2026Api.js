@@ -99,6 +99,13 @@ export const initRace = (data) =>
 export const startRace = () =>
   axios.post(`${BASE}/race/start`, {}, { headers: authHeaders() });
 
+/** 全局暂停/恢复跑图 */
+export const pauseRace = () =>
+  axios.post(`${BASE}/race/pause`, {}, { headers: authHeaders() });
+
+export const resumeRace = () =>
+  axios.post(`${BASE}/race/resume`, {}, { headers: authHeaders() });
+
 /** 获取跑图全量状态 */
 export const getRaceState = () =>
   axios.get(`${BASE}/race/state`);

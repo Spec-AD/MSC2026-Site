@@ -71,7 +71,7 @@ export default function RaceStatBar({
     >
       <Stat label="总时长" value={fmtMs(totalRemainingMs)} sub="剩余时间" tone={totalLow ? 'red' : 'default'} pulse={totalLow} size="xl" />
       <Stat label="本回合" value={fmtMs(turnRemainingMs)} sub="行动倒计时" tone={turnLow ? 'red' : 'amber'} pulse={turnLow} />
-      <Stat label="行动序号" value={currentTurn ?? 0} sub={`第 ${roundNumber} 圈 · ${raceStatus === 'adjudicating' ? '统一判定' : raceStatus === 'waiting' ? '待启动' : raceStatus === 'racing' ? '行动中' : '未初始化'}`} />
+      <Stat label="行动序号" value={currentTurn ?? 0} sub={`第 ${roundNumber} 圈 · ${raceStatus === 'paused' ? '全局暂停' : raceStatus === 'adjudicating' ? '统一判定' : raceStatus === 'waiting' ? '待启动' : raceStatus === 'racing' ? '行动中' : '未初始化'}`} />
       <Stat label="已抵达中心" value={finishedCount} unit={`/ ${advanceCount}`} sub="晋级名额" tone="emerald" />
       <Stat label="赛场" value={playerCount} unit="人" sub={stageLabel} tone="blue" />
     </Motion.div>

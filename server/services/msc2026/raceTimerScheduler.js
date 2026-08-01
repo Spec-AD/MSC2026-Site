@@ -32,12 +32,14 @@ async function tickRaceTimer(now = Date.now()) {
       if (race && race.status !== 'waiting' && !race.terminated && now - lastBroadcastAt >= TIMER_BROADCAST_MS) {
         lastBroadcastAt = now;
         const pendingChallenge = race.challengeHistory?.some(ch => ch.passed === null);
+        const clockNow = race.paused && race.pausedAt ? new Date(race.pausedAt).getTime() : now;
         broadcast('timer_tick', {
           stage: tournament.status,
-          totalRemainingMs: remainingMs(race.timeLimitMs, race.totalTimeStartedAt, now),
+          paused: Boolean(race.paused),
+          totalRemainingMs: remainingMs(race.timeLimitMs, race.totalTimeStartedAt, clockNow),
           turnRemainingMs: race.status === 'adjudicating' || (!race.status && pendingChallenge)
             ? null
-            : remainingMs(race.turnTimeLimitMs, race.turnStartedAt, now)
+            : remainingMs(race.turnTimeLimitMs, race.turnStartedAt, clockNow)
         });
       }
       return result;

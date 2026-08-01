@@ -12,7 +12,7 @@ import RaceMap3D from '../components/race/RaceMap3D';
 import RaceStatBar from '../components/race/RaceStatBar';
 import ChallengeCard from '../components/race/ChallengeCard';
 import ItemCard from '../components/race/ItemCard';
-import { FaForward, FaPlay, FaSync } from 'react-icons/fa';
+import { FaForward, FaPause, FaPlay, FaSync } from 'react-icons/fa';
 import { HiOutlineCube } from 'react-icons/hi';
 import MotionButton from '../components/live/MotionButton';
 import MapEventSignal from '../components/race/MapEventSignal';
@@ -84,6 +84,8 @@ export default function RacePage({ stage }) {
       showMapSignal('advance', data);
     }, [showMapSignal, ssePlayerMoved]),
     timer_tick: useCallback((data) => sseTimerTick(data), [sseTimerTick]),
+    race_paused: useCallback(() => fetchRaceState(), [fetchRaceState]),
+    race_resumed: useCallback(() => fetchRaceState(), [fetchRaceState]),
     item_collected: useCallback(() => fetchRaceMap(), [fetchRaceMap]),
     item_replenished: useCallback(() => fetchRaceMap(), [fetchRaceMap]),
     item_used: useCallback(() => fetchRaceMap(), [fetchRaceMap]),
@@ -133,7 +135,7 @@ export default function RacePage({ stage }) {
     fetchChallenge().catch(() => {});
   }, [fetchChallenge, race.activeChallenge, race.status]);
 
-  const canOperate = canManage && race.status === 'racing' && !race.activeChallenge && !pendingAction;
+  const canOperate = canManage && !race.paused && race.status === 'racing' && !race.activeChallenge && !pendingAction;
 
   const handleStartRace = async () => {
     if (!canManage || pendingAction) return;
@@ -143,6 +145,21 @@ export default function RacePage({ stage }) {
       await race.startRace();
     } catch (err) {
       setActionError(err.msg || '开始跑图失败');
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handlePauseToggle = async () => {
+    if (!canManage || pendingAction) return;
+    const action = race.paused ? 'resume' : 'pause';
+    try {
+      setPendingAction(action);
+      setActionError(null);
+      if (race.paused) await race.resumeRace();
+      else await race.pauseRace();
+    } catch (err) {
+      setActionError(err.msg || (race.paused ? '恢复跑图失败' : '暂停跑图失败'));
     } finally {
       setPendingAction(null);
     }
@@ -320,8 +337,39 @@ export default function RacePage({ stage }) {
         playerCount={race.players?.length || 0}
         stageLabel={config.label || ''}
         roundNumber={race.roundNumber}
-        raceStatus={race.status}
+        raceStatus={race.paused ? 'paused' : race.status}
       />
+
+      {canManage && ['racing', 'adjudicating'].includes(race.status) && !race.terminated && (
+        <div className={`flex flex-col gap-3 border px-5 py-4 md:flex-row md:items-center md:justify-between ${race.paused ? 'border-red-300/35 bg-red-400/10' : 'border-white/10 bg-white/[0.025]'}`}>
+          <div>
+            <p className={`font-mono text-sm font-black ${race.paused ? 'text-red-200' : 'text-zinc-500'}`}>{race.paused ? 'GLOBAL PAUSE ACTIVE' : 'GLOBAL PAUSE CONTROL'}</p>
+            <p className="mt-1 text-base text-zinc-300">{race.paused ? '总计时、回合计时及全部比赛操作已冻结。' : '紧急情况可冻结整个跑图，恢复后计时从原剩余值继续。'}</p>
+          </div>
+          <MotionButton onClick={handlePauseToggle} loading={pendingAction === 'pause' || pendingAction === 'resume'} disabled={Boolean(pendingAction)} className={`flex min-h-12 items-center justify-center gap-2 px-6 text-base font-black ${race.paused ? 'bg-emerald-300 text-black' : 'border border-red-300/35 bg-red-400/10 text-red-100'}`}>
+            {race.paused ? <FaPlay /> : <FaPause />}{pendingAction === 'pause' ? '暂停中' : pendingAction === 'resume' ? '恢复中' : race.paused ? '恢复跑图' : '全局暂停'}
+          </MotionButton>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {race.paused && (
+          <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[250] flex items-center justify-center bg-[#05070a]/95 p-6 backdrop-blur-xl">
+            <Motion.div initial={{ y: 20, scale: 0.97 }} animate={{ y: 0, scale: 1 }} className="w-full max-w-4xl border border-red-300/35 border-t-4 border-t-red-300 bg-[#0a0d11] p-8 text-center shadow-[0_30px_100px_rgba(0,0,0,0.7)] md:p-12">
+              <FaPause className="mx-auto text-5xl text-red-200 md:text-7xl" />
+              <p className="mt-7 font-mono text-sm font-black tracking-[0.2em] text-red-200">MSC 2026 / GLOBAL PAUSE</p>
+              <h2 className="mt-3 text-5xl font-black text-white md:text-8xl">比赛已暂停</h2>
+              <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-zinc-300 md:text-2xl">总时限与当前回合倒计时均已冻结，后台不会触发自动跳过或地图结算。</p>
+              {canManage ? (
+                <MotionButton onClick={handlePauseToggle} loading={pendingAction === 'resume'} disabled={Boolean(pendingAction)} className="mx-auto mt-9 flex min-h-16 items-center justify-center gap-3 bg-emerald-300 px-9 text-xl font-black text-black">
+                  <FaPlay />{pendingAction === 'resume' ? '恢复中' : '恢复跑图'}
+                </MotionButton>
+              ) : <p className="mt-9 font-mono text-sm text-zinc-500">WAITING FOR OPERATOR</p>}
+              {actionError && <p className="mt-5 font-black text-red-200">{actionError}</p>}
+            </Motion.div>
+          </Motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_380px] gap-5 md:gap-6">
         {/* 地图区 */}

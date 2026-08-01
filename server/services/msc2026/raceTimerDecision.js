@@ -7,6 +7,7 @@ function hasPendingChallenge(race) {
 function getRaceTimerDecision(race, now = Date.now()) {
   if (!race || race.terminated) return { type: 'none' };
   if (race.status === 'waiting') return { type: 'waiting' };
+  if (race.paused) return { type: 'globally_paused' };
 
   if (race.totalTimeStartedAt && race.timeLimitMs != null) {
     const totalElapsed = now - new Date(race.totalTimeStartedAt).getTime();

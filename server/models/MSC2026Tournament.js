@@ -162,6 +162,9 @@ const RaceStateSchema = new Schema({
   turnTimeLimitMs: { type: Number },                     // 回合时限
   totalTimeStartedAt: { type: Date },
   turnStartedAt: { type: Date },
+  paused: { type: Boolean, default: false },
+  pausedAt: { type: Date, default: null },
+  totalPausedDurationMs: { type: Number, min: 0, default: 0 },
   currentPlayerIndex: { type: Number },
   currentTurn: { type: Number, default: 0 },
   roundNumber: { type: Number, default: 1 },

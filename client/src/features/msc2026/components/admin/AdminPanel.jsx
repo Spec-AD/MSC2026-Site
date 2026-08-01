@@ -8,7 +8,7 @@ import { useAuth } from '../../../../context/AuthContext';
 import { useMSC2026Store } from '../../store';
 import * as api from '../../api/msc2026Api';
 import {
-  FaCog, FaPlay, FaUsers, FaMusic, FaCheck, FaSpinner, FaTimes,
+  FaCog, FaPause, FaPlay, FaUsers, FaMusic, FaCheck, FaSpinner, FaTimes,
   FaUndo, FaTrash, FaTrophy, FaMedal, FaExclamationTriangle, FaDownload, FaKeyboard
 } from 'react-icons/fa';
 import { collectSongs, readCachedSongConfig, readSongCacheStatus, warmSongCache, writeCachedSongConfig } from '../../utils/songCache';
@@ -598,6 +598,9 @@ export default function AdminPanel() {
                   )}
                   {status === 'stage2' && (
                     <>
+                      {store.summary?.stage2 && !store.summary.stage2.terminated && store.summary.stage2.status !== 'waiting' && (
+                        <ActionButton onClick={quickAction(store.summary.stage2.paused ? api.resumeRace : api.pauseRace, store.summary.stage2.paused ? '跑图已恢复' : '跑图已全局暂停')} loading={loading} icon={store.summary.stage2.paused ? <FaPlay /> : <FaPause />} label={store.summary.stage2.paused ? '恢复跑图' : '全局暂停'} variant={store.summary.stage2.paused ? 'primary' : 'danger'} />
+                      )}
                       <ActionButton onClick={handleAdvanceToStage3} loading={loading} disabled={!store.summary?.stage2?.terminated || stage3Players.length !== 4}
                         icon={<FaPlay />} label={store.summary?.stage2?.terminated ? '推进到阶段三' : '跑图结束后可推进'} />
                       <ActionButton onClick={quickAction(api.terminateRace, '终止跑图')} loading={loading} disabled={!store.summary?.stage2 || store.summary?.stage2?.terminated} icon={<FaTimes />} label="终止" variant="danger" />
@@ -629,6 +632,9 @@ export default function AdminPanel() {
                   )}
                   {store.summary?.stage3?.status === 'waiting' && (
                     <ActionButton onClick={quickAction(api.startRace, '阶段三跑图已开始')} loading={loading} icon={<FaPlay />} label="核验席位并开始" />
+                  )}
+                  {store.summary?.stage3 && !store.summary.stage3.terminated && store.summary.stage3.status !== 'waiting' && (
+                    <ActionButton onClick={quickAction(store.summary.stage3.paused ? api.resumeRace : api.pauseRace, store.summary.stage3.paused ? '跑图已恢复' : '跑图已全局暂停')} loading={loading} icon={store.summary.stage3.paused ? <FaPlay /> : <FaPause />} label={store.summary.stage3.paused ? '恢复跑图' : '全局暂停'} variant={store.summary.stage3.paused ? 'primary' : 'danger'} />
                   )}
                   <ActionButton onClick={quickAction(api.terminateRace, '终止跑图')} loading={loading} disabled={!store.summary?.stage3 || store.summary?.stage3?.terminated} icon={<FaTimes />} label="终止" variant="danger" />
                   <ActionButton onClick={quickAction(api.undoRaceLastAction, '撤销行动')} loading={loading} icon={<FaUndo />} label="撤销行动" variant="undo" />

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { processRaceTimersUnlocked } = require('./raceEngine');
+const { pauseRace, resumeRace, processRaceTimersUnlocked } = require('./raceEngine');
 
 const NOW = Date.parse('2026-07-16T10:00:00.000Z');
 
@@ -59,4 +59,26 @@ test('map timeout terminates the race and stores the qualified ranking', async (
   assert.equal(tournament.stage2.terminatedReason, 'timeout');
   assert.deepEqual(tournament.qualifiedStage2, ['player-1', 'player-2']);
   assert.equal(getSaveCount(), 1);
+});
+
+test('global pause blocks automatic expiry and resume shifts both active clocks', async () => {
+  const { tournament, getSaveCount } = tournamentWithRace({
+    status: 'racing',
+    turnStartedAt: new Date(NOW - 10_000),
+  });
+  const originalTotalStart = tournament.stage2.totalTimeStartedAt.getTime();
+  const originalTurnStart = tournament.stage2.turnStartedAt.getTime();
+
+  await pauseRace(tournament, null, NOW);
+  const pausedDecision = await processRaceTimersUnlocked(tournament, NOW + 10 * 60_000);
+  assert.equal(pausedDecision.type, 'globally_paused');
+  assert.equal(tournament.stage2.currentTurn, 0);
+
+  const pausedDurationMs = 2 * 60_000;
+  await resumeRace(tournament, null, NOW + pausedDurationMs);
+  assert.equal(tournament.stage2.paused, false);
+  assert.equal(tournament.stage2.totalTimeStartedAt.getTime(), originalTotalStart + pausedDurationMs);
+  assert.equal(tournament.stage2.turnStartedAt.getTime(), originalTurnStart + pausedDurationMs);
+  assert.equal(tournament.stage2.totalPausedDurationMs, pausedDurationMs);
+  assert.equal(getSaveCount(), 2);
 });
